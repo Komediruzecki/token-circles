@@ -213,6 +213,13 @@ All notable changes to Token Circles are documented here. The format is based on
   the first of `shared/orientation.ts` `nextSteps` with the facts the Worker can count (the
   subscription scan, the month in the red, the top category without a budget and the cushion read
   as "does not apply"). No amount, category or merchant name reaches the mail.
+- **Day 2 names the YNAB file that imports** (`renderWeekOneDay2`). It said "and so do YNAB
+  exports", as the welcome did before main's #674, which sent people to either file of YNAB's
+  Export Plan download; only the Register file imports. The YNAB part is its own two sentences
+  now, the welcome's: "So does the Register file in a YNAB plan export, with its accounts and
+  transfers. Its starting balances go to accounts that are new or still empty." Guard:
+  `worker/test/week-one-mails.test.ts` "the day-2 mail itself" fails without the change. No mail
+  was sent for it.
 - **The week-one stop link and its headers.** The week-one sender passes `rendered.listUnsubscribe`,
   which `renderMail` sets from `MailSpec.unsubUrl` (5.17.1), to `sendMail`'s `listUnsubscribe`
   (#648), so a week-one mail's stop link and its List-Unsubscribe header are the same URL. `sendMail`

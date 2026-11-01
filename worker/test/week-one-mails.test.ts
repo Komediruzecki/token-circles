@@ -9,7 +9,7 @@
  */
 import { env } from 'cloudflare:test';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { renderWeekOneDay7 } from '../src/emailTemplates';
+import { renderWeekOneDay2, renderWeekOneDay7 } from '../src/emailTemplates';
 import { runWeekOneMails, WEEK_ONE, WEEK_ONE_CRON } from '../src/weekOne';
 
 const NOW = new Date('2030-06-15T08:00:00Z');
@@ -483,6 +483,19 @@ describe('the batch', () => {
     expect(mails.map((m) => m.to)).toEqual([oldest.email, middle.email]);
     await run(new Date(NOW.getTime() + DAY), 2);
     expect(mailsTo(newest.email)).toHaveLength(1);
+  });
+});
+
+describe('the day-2 mail itself', () => {
+  it('names the YNAB file that imports, as the welcome does', () => {
+    // A register export imports with its accounts and transfers; the plan file beside it in the
+    // same download does not. "YNAB exports" sent people to either.
+    const { html, text } = renderWeekOneDay2();
+    const ynab =
+      'So does the Register file in a YNAB plan export, with its accounts and transfers. Its starting balances go to accounts that are new or still empty.';
+    expect(text).toContain(`Sparkasse import as they are. ${ynab} Any other CSV`);
+    expect(html).toContain(ynab);
+    expect(text).not.toContain('YNAB exports');
   });
 });
 

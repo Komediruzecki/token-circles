@@ -1238,7 +1238,7 @@ export function renderWeekOneDay2(
     headline: 'Your bank already has your year.',
     paragraphs: [
       "Most banks let you download your transactions as a CSV or Excel file. In online banking, open the account's transactions, look for Export or Download, and choose the last 12 months. A PDF statement won't import, so pick CSV or Excel.",
-      'Files from Revolut, N26, Wise, Erste, PBZ, ING, DKB and Sparkasse import as they are, and so do YNAB exports. Any other CSV or Excel file works once you match its columns. Rows you already have are skipped, so a longer range does no harm.',
+      'Files from Revolut, N26, Wise, Erste, PBZ, ING, DKB and Sparkasse import as they are. So does the Register file in a YNAB plan export, with its accounts and transfers. Its starting balances go to accounts that are new or still empty. Any other CSV or Excel file works once you match its columns. Rows you already have are skipped, so a longer range does no harm.',
     ],
     buttons: [{ label: 'Import statements', href: `${app}/#import` }],
     signOff: "Can't find your bank's export, or a file won't import? Reply to this mail.",
