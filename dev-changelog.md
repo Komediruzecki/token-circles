@@ -11,6 +11,32 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ### Fixed
 
+- **No badge is dated to a month still to come, and the Year in review's best month has begun**
+  (`frontend/src/core/achievements/evaluate.ts`, `frontend/src/core/achievements/review.ts`).
+  Follow-up to 5.17.5's "a month that has not begun is not tracked" (#675), which covered the
+  tracked-month badges but not the ones dated by a single entry.
+  - `evaluateAchievements`: First entry takes `earliestMonth` of the transaction dates, and the
+    volume badges (`hundred-entries` to `twenty-thousand-entries`) take `monthOfNth`, the month of
+    the Nth transaction by date. An entry dated ahead earned them now but dated them ahead:
+    December's entries alone, seen in October, gave First entry `earnedOn` 2026-12-01. The badge
+    is still earned (the entry exists); `earnedOn` is now clamped to the first day of today's
+    month, `firstDay(month > nowMonth ? nowMonth : month)`, in the loop that builds `earned`, so
+    the clamp covers every badge, including First import, First budget and Goal in sight, whose
+    `created_at` could run ahead of the evaluating device's clock.
+  - Unlock records are not rewritten: a badge already stored with a future `earnedOn` keeps it,
+    as `diffUnlocks` only adds (records.ts). A badge earned from now on is dated this month.
+  - `buildYearReview`: a month after today's month is skipped entirely in the per-month pass, so
+    it is neither counted as tracked (as #675 did) nor offered as `bestMonth`. A salary entered
+    ahead made December the best month in October. The current month still counts. The year's
+    `income`, `expenses`, `saved` and `entries` totals still include every entry dated in the
+    year, as before.
+  - Tests: `src/core/achievements/__tests__/evaluate.test.ts` "entries dated ahead" (First entry
+    and Hundred entries dated 2026-10-01 for December entries seen on 2026-10-15; no `earnedOn`
+    after this month, with an import log dated November) and
+    `src/core/achievements/__tests__/review.test.ts` "buildYearReview, the best month" (September
+    over a December salary, none when only December saved, the current month allowed). The first
+    five fail without the change.
+
 - **`vite build --outDir X` puts the export documents and version.json in X**
   (`frontend/vite.config.ts`, new `frontend/src/buildOutputFiles.ts`). The `copy-export-html` and
   `emit-version-json` plugins wrote to `resolve(__dirname, 'dist', ...)` whatever the outDir was.
