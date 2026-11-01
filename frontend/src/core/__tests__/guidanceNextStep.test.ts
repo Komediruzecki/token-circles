@@ -129,9 +129,11 @@ describe('once a year is on file', () => {
     expect(meter?.kind === 'bar' ? meter.share : null).toBeLessThan(1)
   })
 
-  it('never asks to sort a year with no spending in it', () => {
-    // A year of an income and three transfers a month between a current and a savings account,
-    // and no expense: nothing to sort, so the sorted check is not known, and not a step.
+  /**
+   * A year of an income and three transfers a month between a current and a savings account, and
+   * no expense: nothing to sort, so the sorted check is not known.
+   */
+  function yearWithNoSpending(): GuidanceFacts {
     const transactions: FactsEntry[] = []
     for (let i = 1; i <= 13; i++) {
       const date = new Date(Date.UTC(2026, 10 - i, 10)).toISOString().slice(0, 10)
@@ -161,9 +163,53 @@ describe('once a year is on file', () => {
     })
     expect(year.firm).toBe(true)
     expect(year.sortedShare).toBeNull()
-    const next = step(year, { freeMoney: false })
-    expect(next.id).not.toBe('sorted')
-    expect(next.title).not.toMatch(/sort/i)
+    return year
+  }
+
+  it('asks for the account the spending is paid from, for a year with no spending in it', () => {
+    const next = step(yearWithNoSpending(), { freeMoney: false })
+    expect(next).toMatchObject({
+      id: 'sorted',
+      circle: 1,
+      title: 'Add the account you spend from',
+      why: "There's no spending on file yet, so Clear picture has nothing to sort. Import the statements of the account you pay from.",
+      whyHere: "There's no spending on file yet, so there's nothing to sort.",
+      action: { kind: 'open', hash: '#import', label: 'Open Import' },
+      meter: null,
+      fine: null,
+    })
+    // Never a share of nothing.
+    expect(`${next.title} ${next.why}`).not.toMatch(/%/)
+  })
+
+  it('never says every circle is reached while one is not', () => {
+    // Clear picture met, and Paying your way's income check not known with no words of its own:
+    // no check from the current circle out has a step.
+    const f = facts({ income: null, ownIncome: null, spending: null })
+    const placed = placeCircle(f)
+    const placement = {
+      ...placed,
+      current: 2 as const,
+      circles: placed.circles.map((place) => ({
+        ...place,
+        reached: place.circle < 2,
+        checks: place.checks.map((check) =>
+          place.circle === 2
+            ? { ...check, met: null, unknown: 'not-on-file' as const, value: null, target: null }
+            : { ...check, met: true }
+        ),
+      })),
+      next: { circle: 2 as const, check: 'own-income' as const, unknown: 'not-on-file' as const },
+    }
+    const next = nextStepOf({ placement, facts: f, orientation: null, words })
+    expect(next.id).not.toBe('all-reached')
+    expect(next.title).not.toMatch(/reached all seven/)
+    expect(next).toMatchObject({
+      id: 'own-income',
+      circle: 2,
+      title: 'See what Paying your way still needs',
+      action: { kind: 'circles', hash: '#progress/2', label: 'Open Paying your way' },
+    })
   })
 
   it('closes the gap own income leaves, and says when support is left out', () => {

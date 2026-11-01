@@ -1969,8 +1969,8 @@ check')` first, as the cushion and debt cases do.
   file and no expense in it, the sorted check is not known (`sortedShare` null, `'not-on-file'`), and
   Clear picture's placement leaves it as the next check. Its step read the share as 0: "Sort the
   entries without a category", "0% of your spending has a category", a 0% meter and a link to an
-  empty list. A check not known is never a step (`circles.ts`), so the sorted case now gives no step
-  while it is not known, as the debt, income and cushion cases do, and the next step moves on.
+  empty list. A check not known is never a step to take (`circles.ts`), so the sorted case no
+  longer reads a share while it is not known; what it says instead is the entry below.
 - **Tests:** `guidanceNextStep.test.ts`, a year of 13 months of one income and three transfers
   between a current and a savings account, no expense: the step is not the sorted one. Fails
   before the change.
@@ -1988,6 +1988,21 @@ check')` first, as the cushion and debt cases do.
   before the change (2 tests). Release `s17-benchmarks-gate.spec.ts` lists both among its 13
   held-back lines. A production build before the change had both (one file each), none after, and
   all 13 again with `VITE_ENABLE_BENCHMARKS=true`.
+
+- **A year with no spending asks for the account you spend from, and "all seven circles" waits
+  for the seventh** (`shared/guidance/nextStep.ts`). With the sorted step gone, a firm year with no
+  spending had no step at all, and `nextStepOf` fell through to "You've reached all seven
+  circles." while the person was placed at Clear picture. The sorted check, not known for want of
+  spending, now has its own step: "Add the account you spend from", why "There's no spending on
+  file yet, so Clear picture has nothing to sort. Import the statements of the account you pay
+  from.", with Open Import; inside Clear picture's view it reads "There's no spending on file yet,
+  so there's nothing to sort." The fall-through no longer returns the all-reached step: with a
+  circle still to reach and no step from it out, the step is "See what <circle> still needs",
+  which opens that circle's view (`#progress/<n>`), whose checks say which is not known. Only a
+  placement with no current circle says all seven are reached.
+- **Tests:** `guidanceNextStep.test.ts`: the year of income and transfers with no expense gets the
+  new step, with no share in its words; a placement with Paying your way's income check not known
+  and no words for it gets the circle step, not all-reached. Both fail before the change.
 
 ### Prints
 

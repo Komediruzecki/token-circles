@@ -54,7 +54,7 @@ export type StepMeter =
   | { kind: 'bar'; share: number; left: string; right: string };
 
 export interface NextStep {
-  /** The check, the Getting started step, or `all-reached`. */
+  /** The check, the Getting started step, `circle-<n>` (circleStep), or `all-reached`. */
   id: string;
   /** The circle it serves, for its chip; null with every circle reached. */
   circle: CircleNumber | null;
@@ -161,6 +161,17 @@ const NO_ACCOUNT_STEP: StepWords = {
   fine: null,
 };
 
+const NO_SPENDING_STEP: StepWords = {
+  title: 'Add the account you spend from',
+  thenText: 'add the account you spend from',
+  why: "There's no spending on file yet, so Clear picture has nothing to sort. Import the statements of the account you pay from.",
+  // Clear picture's view shows the sorted check under it.
+  whyHere: "There's no spending on file yet, so there's nothing to sort.",
+  action: open('#import', 'Import'),
+  meter: null,
+  fine: null,
+};
+
 /** "One yearly bill on Bills comes to €600 a year: about €50 a month." */
 function yearlyWhy(facts: GuidanceFacts, words: LedgerWords): string {
   const bills = facts.yearlyBills!;
@@ -261,8 +272,9 @@ function stepFor(
       };
     }
     case 'sorted': {
-      // No spending in the year leaves nothing to sort: the check is not known, so not a step.
-      if (check.unknown !== null || facts.sortedShare === null) return null;
+      // No spending on file leaves nothing to sort, and the check not known. The likely cause is
+      // that the account the spending goes out of is not imported, so that is the step.
+      if (check.unknown !== null || facts.sortedShare === null) return NO_SPENDING_STEP;
       const share = facts.sortedShare;
       return {
         title: 'Sort the entries without a category',
@@ -482,6 +494,26 @@ const ALL_REACHED: NextStep = {
   fine: null,
 };
 
+/**
+ * The step when no check from the current circle out has one of its own (a check not known with no
+ * words for it): open that circle, whose checks say which one is not known yet.
+ */
+function circleStep(circle: CircleNumber, placement: Placement): NextStep {
+  const name = CIRCLE_NAMES[circle];
+  const next = placement.next?.circle === circle ? placement.next.check : null;
+  return {
+    id: next ?? `circle-${circle}`,
+    circle,
+    title: `See what ${name} still needs`,
+    why: `${name} has a check that what's on file can't settle yet. Its own view says which.`,
+    whyHere: 'The checks below say which one is not known yet.',
+    action: { kind: 'circles', hash: `#progress/${circle}`, label: `Open ${name}` },
+    meter: null,
+    then: null,
+    fine: null,
+  };
+}
+
 /** The step the circles point to now. */
 export function nextStepOf({ placement, facts, orientation, words }: NextStepInput): NextStep {
   const current = placement.current;
@@ -518,7 +550,9 @@ export function nextStepOf({ placement, facts, orientation, words }: NextStepInp
         step.words !== null
     );
   const [first, ...rest] = steps;
-  if (!first) return ALL_REACHED;
+  // A circle is still to reach, so never "all seven": with no step from it out, its view says what
+  // it reads.
+  if (!first) return circleStep(current, placement);
   // Checks that wait on the same thing (accounts that didn't load, an account to add) are one step.
   const later: string[] = [];
   for (const step of rest) {
