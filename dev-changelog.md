@@ -1965,6 +1965,16 @@ check')` first, as the cushion and debt cases do.
 - **Tests:** `guidanceNextStep.test.ts`, `guidanceCircleView.test.ts`. Fail before the change (2
   tests).
 
+- **No step to sort a year with no spending in it** (`shared/guidance/nextStep.ts`). With a year on
+  file and no expense in it, the sorted check is not known (`sortedShare` null, `'not-on-file'`), and
+  Clear picture's placement leaves it as the next check. Its step read the share as 0: "Sort the
+  entries without a category", "0% of your spending has a category", a 0% meter and a link to an
+  empty list. A check not known is never a step (`circles.ts`), so the sorted case now gives no step
+  while it is not known, as the debt, income and cushion cases do, and the next step moves on.
+- **Tests:** `guidanceNextStep.test.ts`, a year of 13 months of one income and three transfers
+  between a current and a savings account, no expense: the step is not the sorted one. Fails
+  before the change.
+
 ### Prints
 
 - **The seal is drawn once, for the browser and the Worker** (`shared/prints/seal.ts`,

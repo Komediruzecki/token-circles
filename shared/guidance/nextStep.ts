@@ -261,7 +261,9 @@ function stepFor(
       };
     }
     case 'sorted': {
-      const share = facts.sortedShare ?? 0;
+      // No spending in the year leaves nothing to sort: the check is not known, so not a step.
+      if (check.unknown !== null || facts.sortedShare === null) return null;
+      const share = facts.sortedShare;
       return {
         title: 'Sort the entries without a category',
         thenText: 'sort the entries without a category',

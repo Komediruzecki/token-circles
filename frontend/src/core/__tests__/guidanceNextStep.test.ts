@@ -7,14 +7,14 @@
 import { describe, expect, it } from 'vitest'
 import { regionName } from '../../../../shared/guidance/cards'
 import { placeCircle } from '../../../../shared/guidance/circles'
-import { EXPENSIVE_DEBT_NOTE } from '../../../../shared/guidance/facts'
+import { EXPENSIVE_DEBT_NOTE, guidanceFacts } from '../../../../shared/guidance/facts'
 import { nextStepOf, stepCircleName, thenLine } from '../../../../shared/guidance/nextStep'
 import { ASKED_ONCE } from '../../../../shared/guidance/questions'
 import { REGIONS } from '../../../../shared/guidance/region'
 import { orientationSteps } from '../../../../shared/orientation'
 import { BASE_FACTS as base, facts, words } from './guidanceFixtures'
 import type { PlaceOptions } from '../../../../shared/guidance/circles'
-import type { Debt, GuidanceFacts } from '../../../../shared/guidance/facts'
+import type { Debt, FactsEntry, GuidanceFacts } from '../../../../shared/guidance/facts'
 import type { OrientationFacts } from '../../../../shared/orientation'
 
 const debt = (over: Partial<Debt>): Debt => ({
@@ -127,6 +127,43 @@ describe('once a year is on file', () => {
     // Never drawn full while the check is not met.
     const meter = next.meter
     expect(meter?.kind === 'bar' ? meter.share : null).toBeLessThan(1)
+  })
+
+  it('never asks to sort a year with no spending in it', () => {
+    // A year of an income and three transfers a month between a current and a savings account,
+    // and no expense: nothing to sort, so the sorted check is not known, and not a step.
+    const transactions: FactsEntry[] = []
+    for (let i = 1; i <= 13; i++) {
+      const date = new Date(Date.UTC(2026, 10 - i, 10)).toISOString().slice(0, 10)
+      transactions.push({ date, type: 'income', amount: 2000, account_id: 1, category_id: null })
+      for (let k = 0; k < 3; k++) {
+        transactions.push({
+          date,
+          type: 'transfer',
+          amount: 100,
+          account_id: 1,
+          transfer_account_id: 2,
+        })
+      }
+    }
+    const year = guidanceFacts({
+      today: '2026-11-15',
+      region: 'EU27',
+      transactions,
+      categories: [],
+      accounts: [
+        { id: 1, type: 'giro', balance: 5000 },
+        { id: 2, type: 'savings', balance: 3000 },
+      ],
+      loans: [],
+      bills: [],
+      answers: {},
+    })
+    expect(year.firm).toBe(true)
+    expect(year.sortedShare).toBeNull()
+    const next = step(year, { freeMoney: false })
+    expect(next.id).not.toBe('sorted')
+    expect(next.title).not.toMatch(/sort/i)
   })
 
   it('closes the gap own income leaves, and says when support is left out', () => {
