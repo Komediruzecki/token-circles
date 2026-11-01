@@ -938,6 +938,10 @@ test.describe('onboarding wizard at phone width', () => {
               ]) {
                 const overflowX = getComputedStyle(el).overflowX
                 if (overflowX === 'visible' || overflowX === 'clip') continue
+                // A screen-reader-only label is a 1 px box that clips its text on purpose (an
+                // article link's "opens in a new tab"): nothing in it is on the screen.
+                const seen = el.getBoundingClientRect()
+                if (seen.width <= 1 && seen.height <= 1) continue
                 if (el.scrollWidth > el.clientWidth)
                   found.push(
                     `${String(el.className) || el.tagName} ${el.scrollWidth}>${el.clientWidth}`
