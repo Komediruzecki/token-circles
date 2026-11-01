@@ -7,6 +7,8 @@
  * columns, every transaction that is not a duplicate, every new category, no budgets from
  * spending. What is left to decide is where the statement goes, and that comes preselected: the
  * account the bank names, else the one setup just created, else a new account named for the bank.
+ * A file that names each row's account (YNAB's Register file) has nothing to decide: each row goes
+ * to its own account, and the step says which.
  *
  * A file it cannot import (a bank it does not know, a table of any other kind, one that does not
  * read) gets a way out instead of a dead end: setup finishes and the Import page opens with the
@@ -14,7 +16,7 @@
  */
 import { createSignal, createUniqueId, For, onCleanup, Show } from 'solid-js'
 import { listAdapters } from '../../core/bankImport'
-import { createImportFlow } from '../../features/import/importFlow'
+import { createImportFlow, namesItsAccounts } from '../../features/import/importFlow'
 import styles from './Onboarding.module.css'
 import type { BankId } from '../../core/bankImport'
 import type { BankFileRow, ImportSummary } from '../../features/import/importFlow'
@@ -94,6 +96,11 @@ export function createFirstImport(options: FirstImportOptions) {
   const [reading, setReading] = createSignal(false)
   const [problem, setProblem] = createSignal<'unknown' | 'unread' | null>(null)
   const [imported, setImported] = createSignal<ImportSummary | null>(null)
+  /**
+   * Where the last import's rows went, for a file that names its accounts: taken when it starts,
+   * since afterwards every row of the file reads as here already.
+   */
+  const [importedInto, setImportedInto] = createSignal<string[] | null>(null)
   // A later choice wins over an earlier one still reading.
   let generation = 0
   let picker: HTMLInputElement | undefined
@@ -120,6 +127,36 @@ export function createFirstImport(options: FirstImportOptions) {
     let count = 0
     for (const index of flow.selectedRows()) if (!skipped.has(index)) count++
     return count
+  }
+  /** The file names each row's account (YNAB's Register file): there is no account to choose. */
+  const namesAccounts = () => {
+    const row = statement()
+    return row !== null && namesItsAccounts(row)
+  }
+  /** The accounts such a file names, in its order. */
+  const fileAccounts = (): string[] => statement()?.meta.accounts ?? []
+  /**
+   * The accounts the new transactions go into: each one's own, and a transfer's other end. The
+   * same columns the mapping step reads accounts from.
+   */
+  const newRowAccounts = (): string[] => {
+    const mapping = flow.columnMapping()
+    const rows = flow.currentRows()
+    const skipped = new Set(flow.existingDuplicateIndices())
+    const names: string[] = []
+    const add = (cell: string | undefined) => {
+      const name = cell?.trim()
+      if (name && !names.includes(name)) names.push(name)
+    }
+    for (const index of flow.selectedRows()) {
+      const row = rows[index]
+      if (!row || skipped.has(index)) continue
+      if (mapping.means_of_payment !== undefined) add(row[mapping.means_of_payment])
+      const transfer =
+        mapping.type !== undefined && row[mapping.type]?.trim().toLowerCase() === 'transfer'
+      if (transfer && mapping.category !== undefined) add(row[mapping.category])
+    }
+    return names
   }
   /** The import itself is running (reading has its own state). */
   const importing = () => flow.loading() && !reading()
@@ -188,6 +225,7 @@ export function createFirstImport(options: FirstImportOptions) {
   const choose = async (picked: File) => {
     const mine = ++generation
     setImported(null)
+    setImportedInto(null)
     setProblem(null)
     setFile(picked)
     setReading(true)
@@ -229,6 +267,7 @@ export function createFirstImport(options: FirstImportOptions) {
 
   const importNow = async () => {
     if (state() !== 'ready' || flow.loading()) return
+    setImportedInto(namesAccounts() ? newRowAccounts() : null)
     await flow.handleImport('selected')
   }
 
@@ -239,6 +278,7 @@ export function createFirstImport(options: FirstImportOptions) {
     setFile(null)
     setProblem(null)
     setImported(null)
+    setImportedInto(null)
     setReading(false)
   }
 
@@ -274,9 +314,12 @@ export function createFirstImport(options: FirstImportOptions) {
     alreadyHere,
     importing,
     imported,
+    importedInto,
     problem,
     statement,
     targetChoices,
+    namesAccounts,
+    fileAccounts,
     dateRange,
     choose,
     setTarget,
@@ -352,12 +395,32 @@ export function FirstImportPanel(props: { importer: FirstImport }) {
     return range ? dateRangeText(range.from, range.to) : ''
   }
 
-  const categoriesLine = () => {
-    const names = importer.flow.newCategories()
-    if (names.length === 0) return ''
+  /** Up to three names, then how many more. */
+  const someOf = (names: readonly string[]) => {
     const shown = names.slice(0, 3)
     const more = names.length - shown.length
-    return `New categories: ${listed(more > 0 ? [...shown, `${more} more`] : shown)}.`
+    return listed(more > 0 ? [...shown, `${more} more`] : shown)
+  }
+
+  const categoriesLine = () => {
+    const names = importer.flow.newCategories()
+    return names.length === 0 ? '' : `New categories: ${someOf(names)}.`
+  }
+
+  /** Where the imported transactions went: the accounts a register named, else the one chosen. */
+  const doneLine = () => {
+    const summary = importer.imported()
+    if (!summary || summary.imported === 0) {
+      return 'Nothing new was imported: every transaction in it was here already.'
+    }
+    const into = importer.importedInto()
+    const where =
+      into && into.length > 0
+        ? into.length <= 3
+          ? listed(into)
+          : counted(into.length, 'account')
+        : (importer.statement()?.targetAccount ?? 'your account')
+    return `Imported ${counted(summary.imported, 'transaction')} into ${where}.`
   }
 
   return (
@@ -393,6 +456,11 @@ export function FirstImportPanel(props: { importer: FirstImport }) {
             <p class={styles.hint} data-test-id="onboarding-import-banks">
               Reads exports from {banks()}. Any other file goes to the Import page, where you match
               its columns.
+            </p>
+            <p class={styles.hint} data-test-id="onboarding-import-ynab">
+              Moving from YNAB? Choose the Register file from its Export Plan download here. Each
+              row goes to its own account, transfers stay transfers, and YNAB's starting balances go
+              to accounts that are new or still empty.
             </p>
           </>
         }
@@ -440,28 +508,35 @@ export function FirstImportPanel(props: { importer: FirstImport }) {
           </Show>
 
           <Show when={importer.state() === 'ready'}>
-            <label class={styles.field}>
-              <span class={styles.fieldLabel}>Goes into</span>
-              <select
-                class={styles.input}
-                data-test-id="onboarding-import-target"
-                disabled={importer.importing()}
-                onChange={(e) => {
-                  void importer.setTarget(e.currentTarget.value)
-                }}
-              >
-                <For each={importer.targetChoices()}>
-                  {(choice) => (
-                    <option
-                      value={choice.name}
-                      selected={choice.name === importer.statement()?.targetAccount}
-                    >
-                      {choice.isNew ? `New account: ${choice.name}` : choice.name}
-                    </option>
-                  )}
-                </For>
-              </select>
-            </label>
+            <Show when={importer.namesAccounts()}>
+              <p class={styles.hint} data-test-id="onboarding-import-accounts">
+                Each row goes to its own account: {someOf(importer.fileAccounts())}.
+              </p>
+            </Show>
+            <Show when={!importer.namesAccounts()}>
+              <label class={styles.field}>
+                <span class={styles.fieldLabel}>Goes into</span>
+                <select
+                  class={styles.input}
+                  data-test-id="onboarding-import-target"
+                  disabled={importer.importing()}
+                  onChange={(e) => {
+                    void importer.setTarget(e.currentTarget.value)
+                  }}
+                >
+                  <For each={importer.targetChoices()}>
+                    {(choice) => (
+                      <option
+                        value={choice.name}
+                        selected={choice.name === importer.statement()?.targetAccount}
+                      >
+                        {choice.isNew ? `New account: ${choice.name}` : choice.name}
+                      </option>
+                    )}
+                  </For>
+                </select>
+              </label>
+            </Show>
             <Show when={categoriesLine()}>
               <p class={styles.hint} data-test-id="onboarding-import-categories">
                 {categoriesLine()}
@@ -491,9 +566,7 @@ export function FirstImportPanel(props: { importer: FirstImport }) {
 
           <Show when={importer.state() === 'imported'}>
             <p class={styles.cardLine} data-test-id="onboarding-import-done">
-              {(importer.imported()?.imported ?? 0) > 0
-                ? `Imported ${counted(importer.imported()!.imported, 'transaction')} into ${importer.statement()?.targetAccount ?? 'your account'}.`
-                : 'Nothing new was imported: every transaction in it was here already.'}
+              {doneLine()}
             </p>
             <button
               type="button"

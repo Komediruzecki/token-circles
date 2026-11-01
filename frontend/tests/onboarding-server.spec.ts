@@ -45,6 +45,107 @@ const recordWrite = (
 
 const TIME = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/
 
+/**
+ * A YNAB Register file (Export Plan's download), hand-typed with made-up names and amounts: a
+ * starting balance per account, a pay cheque, groceries, and a transfer YNAB writes once per
+ * account. Three transactions come out of it.
+ */
+const YNAB_REGISTER = [
+  [
+    'Account',
+    'Flag',
+    'Date',
+    'Payee',
+    'Category Group/Category',
+    'Category Group',
+    'Category',
+    'Memo',
+    'Outflow',
+    'Inflow',
+    'Cleared',
+  ],
+  [
+    'Test Checking',
+    '',
+    '01/02/2026',
+    'Starting Balance',
+    'Inflow: Ready to Assign',
+    'Inflow',
+    'Ready to Assign',
+    '',
+    '$0.00',
+    '$1,250.00',
+    'Reconciled',
+  ],
+  [
+    'Test Savings',
+    '',
+    '01/02/2026',
+    'Starting Balance',
+    'Inflow: Ready to Assign',
+    'Inflow',
+    'Ready to Assign',
+    '',
+    '$0.00',
+    '$3,000.00',
+    'Reconciled',
+  ],
+  [
+    'Test Checking',
+    '',
+    '01/05/2026',
+    'Example Employer',
+    'Inflow: Ready to Assign',
+    'Inflow',
+    'Ready to Assign',
+    'Pay',
+    '$0.00',
+    '$2,400.00',
+    'Cleared',
+  ],
+  [
+    'Test Checking',
+    '',
+    '01/14/2026',
+    'Corner Grocer',
+    'Everyday: Groceries',
+    'Everyday',
+    'Groceries',
+    '',
+    '$54.20',
+    '$0.00',
+    'Cleared',
+  ],
+  [
+    'Test Checking',
+    '',
+    '01/20/2026',
+    'Transfer : Test Savings',
+    '',
+    '',
+    '',
+    'Top-up',
+    '$200.00',
+    '$0.00',
+    'Cleared',
+  ],
+  [
+    'Test Savings',
+    '',
+    '01/20/2026',
+    'Transfer : Test Checking',
+    '',
+    '',
+    '',
+    'Top-up',
+    '$0.00',
+    '$200.00',
+    'Cleared',
+  ],
+]
+  .map((cells) => cells.map((c) => `"${c}"`).join(','))
+  .join('\n')
+
 test.describe('the setup wizard on the account @smoke', () => {
   test.beforeEach(() => {
     test.setTimeout(120_000)
@@ -229,6 +330,77 @@ test.describe('the setup wizard on the account @smoke', () => {
       )
       expect(listed.ok(), `GET /api/transactions: ${String(listed.status())}`).toBeTruthy()
       expect(((await listed.json()) as { total: number }).total).toBe(7)
+    } finally {
+      await deleteAccount(ctx, email)
+    }
+  })
+
+  test('a YNAB Register file goes into the accounts it names, and none for the file, on the Worker', async ({
+    page,
+  }) => {
+    const ctx = page.context()
+    const { email } = await signUpAndIn(ctx)
+    try {
+      await bootSignedIn(ctx)
+      await page.goto(`${E2E_BASE}/#dashboard`, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+      await expect(page.getByTestId('onboarding-step-space')).toBeVisible({ timeout: 30_000 })
+      await page.getByTestId('onboarding-next').click()
+      await expect(page.getByTestId('onboarding-step-about')).toBeVisible({ timeout: 30_000 })
+      await page.getByTestId('onboarding-next').click()
+      await expect(page.getByTestId('onboarding-step-account')).toBeVisible({ timeout: 30_000 })
+      await page.getByTestId('onboarding-account-name').fill('Main Checking')
+      await page.getByTestId('onboarding-account-create').click()
+      await expect(page.getByTestId('onboarding-step-import')).toBeVisible({ timeout: 30_000 })
+
+      await expect(page.getByTestId('onboarding-import-ynab')).toContainText(
+        'Choose the Register file from its Export Plan download here.'
+      )
+      await page.getByTestId('onboarding-import-input').setInputFiles({
+        name: 'Test Plan as of 2026-01-31 Register.csv',
+        mimeType: 'text/csv',
+        buffer: Buffer.from(YNAB_REGISTER),
+      })
+      await expect(page.getByTestId('onboarding-import-file')).toHaveAttribute(
+        'data-state',
+        'ready',
+        { timeout: 30_000 }
+      )
+      // Nothing to choose: the file says where each row goes.
+      await expect(page.getByTestId('onboarding-import-target')).toHaveCount(0)
+      await expect(page.getByTestId('onboarding-import-accounts')).toHaveText(
+        'Each row goes to its own account: Test Checking and Test Savings.'
+      )
+      const importAll = page.getByTestId('onboarding-import-selected')
+      await expect(importAll).toHaveText('Import 3')
+      await importAll.click()
+      await expect(page.getByTestId('onboarding-step-subscriptions')).toBeVisible({
+        timeout: 30_000,
+      })
+
+      // On the Worker: the two accounts the file names beside the one setup made, which holds
+      // none of the rows, and no account for the file itself.
+      const accounts = (await (await ctx.request.get(`${E2E_BASE}/api/accounts`)).json()) as {
+        id: number
+        name: string
+      }[]
+      expect(accounts.map((a) => a.name).sort()).toEqual([
+        'Main Checking',
+        'Test Checking',
+        'Test Savings',
+      ])
+      const total = async (name: string) => {
+        const id = accounts.find((a) => a.name === name)!.id
+        const res = await ctx.request.get(`${E2E_BASE}/api/transactions?account_id=${String(id)}`)
+        expect(res.ok(), `GET /api/transactions: ${String(res.status())}`).toBeTruthy()
+        return ((await res.json()) as { total: number }).total
+      }
+      expect(await total('Main Checking')).toBe(0)
+      expect(await total('Test Checking')).toBe(3)
+
+      await page.getByTestId('onboarding-back').click()
+      await expect(page.getByTestId('onboarding-import-done')).toHaveText(
+        'Imported 3 transactions into Test Checking and Test Savings.'
+      )
     } finally {
       await deleteAccount(ctx, email)
     }

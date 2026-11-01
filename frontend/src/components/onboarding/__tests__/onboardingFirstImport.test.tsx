@@ -451,6 +451,176 @@ describe('back on the step after an import', () => {
   })
 })
 
+/**
+ * A YNAB Register file (Export Plan's download), hand-typed: two accounts, a starting balance
+ * each, a pay cheque, groceries and one transfer written as YNAB writes it, a row per account.
+ * Every name and amount is made up. Three transactions come out: the transfer imports once.
+ */
+const registerRow = (
+  account: string,
+  date: string,
+  payee: string,
+  [group, category]: [string, string],
+  memo: string,
+  outflow: string,
+  inflow: string
+) =>
+  [
+    account,
+    '',
+    date,
+    payee,
+    group ? `${group}: ${category}` : '',
+    group,
+    category,
+    memo,
+    outflow,
+    inflow,
+    'Cleared',
+  ]
+    .map((c) => `"${c}"`)
+    .join(',')
+const TO_ASSIGN: [string, string] = ['Inflow', 'Ready to Assign']
+const REGISTER = [
+  '"Account","Flag","Date","Payee","Category Group/Category","Category Group","Category","Memo","Outflow","Inflow","Cleared"',
+  registerRow(
+    'Test Checking',
+    '01/02/2026',
+    'Starting Balance',
+    TO_ASSIGN,
+    '',
+    '$0.00',
+    '$1,250.00'
+  ),
+  registerRow(
+    'Test Savings',
+    '01/02/2026',
+    'Starting Balance',
+    TO_ASSIGN,
+    '',
+    '$0.00',
+    '$3,000.00'
+  ),
+  registerRow(
+    'Test Checking',
+    '01/05/2026',
+    'Example Employer',
+    TO_ASSIGN,
+    'Pay',
+    '$0.00',
+    '$2,400.00'
+  ),
+  registerRow(
+    'Test Checking',
+    '01/14/2026',
+    'Corner Grocer',
+    ['Everyday', 'Groceries'],
+    '',
+    '$54.20',
+    '$0.00'
+  ),
+  registerRow(
+    'Test Checking',
+    '01/20/2026',
+    'Transfer : Test Savings',
+    ['', ''],
+    'Top-up',
+    '$200.00',
+    '$0.00'
+  ),
+  registerRow(
+    'Test Savings',
+    '01/20/2026',
+    'Transfer : Test Checking',
+    ['', ''],
+    'Top-up',
+    '$0.00',
+    '$200.00'
+  ),
+].join('\n')
+const REGISTER_NAME = 'Test Plan as of 2026-01-31 Register.csv'
+
+describe('a YNAB Register file', () => {
+  it('says on the picker which YNAB file to bring', async () => {
+    await openAt('import')
+
+    expect(byTestId('onboarding-import-ynab')?.textContent).toBe(
+      "Moving from YNAB? Choose the Register file from its Export Plan download here. Each row goes to its own account, transfers stay transfers, and YNAB's starting balances go to accounts that are new or still empty."
+    )
+  })
+
+  it('sends each row to the account it names, with no account to choose', async () => {
+    await openAt('import')
+    choose(REGISTER_NAME, REGISTER)
+    await readUntil('ready')
+
+    expect(byTestId('onboarding-import-meta')?.textContent).toBe('YNAB · 3 new transactions')
+    expect(byTestId('onboarding-import-target')).toBeNull()
+    expect(byTestId('onboarding-import-accounts')?.textContent).toBe(
+      'Each row goes to its own account: Test Checking and Test Savings.'
+    )
+    expect(footer()).toEqual([
+      { id: 'onboarding-import-skip', text: 'Skip' },
+      { id: 'onboarding-import-selected', text: 'Import 3' },
+    ])
+  })
+
+  it('makes only the accounts the file names, and says where the rows went', async () => {
+    await openAt('import')
+    choose(REGISTER_NAME, REGISTER)
+    await readUntil('ready')
+    byTestId('onboarding-import-selected')!.click()
+    await vi.waitFor(() => {
+      expect(onboardingStep()).toBe('subscriptions')
+    }, waitLong)
+
+    // No account for the file itself: no "YNAB" beside the two it names.
+    const made = await accounts()
+    expect(made.map((a) => a.name).sort()).toEqual(['Test Checking', 'Test Savings'])
+    expect(await transactions()).toHaveLength(3)
+
+    goToOnboardingStep('import')
+    await settle()
+    expect(byTestId('onboarding-import-done')?.textContent).toBe(
+      'Imported 3 transactions into Test Checking and Test Savings.'
+    )
+  })
+
+  it('leaves the account setup just made out of it', async () => {
+    await openAt('account')
+    const name = byTestId('onboarding-account-name') as HTMLInputElement
+    name.focus()
+    name.value = 'Main checking'
+    name.dispatchEvent(new Event('input', { bubbles: true }))
+    byTestId('onboarding-account-create')!.click()
+    await vi.waitFor(() => {
+      expect(onboardingStep()).toBe('import')
+    }, waitLong)
+
+    choose(REGISTER_NAME, REGISTER)
+    await readUntil('ready')
+    byTestId('onboarding-import-selected')!.click()
+    await vi.waitFor(() => {
+      expect(onboardingStep()).toBe('subscriptions')
+    }, waitLong)
+
+    const made = await accounts()
+    expect(made.map((a) => a.name).sort()).toEqual([
+      'Main checking',
+      'Test Checking',
+      'Test Savings',
+    ])
+    const main = made.find((a) => a.name === 'Main checking')!
+    expect((await transactions()).filter((t) => t.account_id === main.id)).toEqual([])
+
+    goToOnboardingStep('import')
+    await settle()
+    expect(byTestId('onboarding-import-done')?.textContent).toBe(
+      'Imported 3 transactions into Test Checking and Test Savings.'
+    )
+  })
+})
+
 describe('leaving setup at its subscriptions', () => {
   /** What Close asks there; then Stay. */
   const closeAsks = async (): Promise<string> => {

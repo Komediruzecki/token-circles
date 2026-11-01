@@ -348,6 +348,39 @@ All notable changes to Token Circles are documented here. The format is based on
     offers Open in Import, which finishes setup and hands the file to the Import page
     (`features/import/importHandoff.ts`; `Import.tsx` takes it once the page is active, on Bank
     Imports for a bank it knows, else on File Upload, which goes on to the column mapping), or Skip.
+  - **A YNAB Register file in the statement step.** Main's #674 made a Register file (Export
+    Plan's download) import each row into the account its Account column names
+    (`namesItsAccounts(row)` in `features/import/importFlow.ts`, true when the adapter's
+    `meta.accounts` is not empty); the account chosen for the file is only the fallback for a row
+    without one. The step still showed "Goes into" with the account it had preselected, "New
+    account: YNAB" on a profile with none, and after the import said "Imported 3 transactions into
+    YNAB." (or "into Main checking", the account setup had just made), though no row went there.
+    For such a file the step now drops "Goes into" for `onboarding-import-accounts`, "Each row goes
+    to its own account: Test Checking and Test Savings." (the file's accounts, up to three, then
+    "and N more"), and the done line names the accounts the new rows went into, each row's own
+    account and a transfer's other end, read from the dry run's rows when Import is tapped
+    (`importedInto` in `FirstImport.tsx`; afterwards every row of the file counts as here already),
+    or their count past three ("into 5 accounts"). A file that names no accounts keeps "Goes into"
+    and its done line as before.
+    - No empty account came of it, before or after: the preselected target stays on the file
+      (`flow.updateBankFile(0, { targetAccount })`) as the fallback, and the import creates
+      accounts only from the rows' accounts and transfer ends. The cases below asserted the
+      accounts before the change and passed that part: `Test Checking` and `Test Savings` only on
+      a fresh profile, and the account setup made has no transactions.
+    - The merge of 5.17.5 had dropped main's YNAB sentence from this step (main put it on the old
+      wizard's full importer). It is back on the picker as `onboarding-import-ynab`, under the
+      banks line, in main's words with one verb changed: "Choose the Register file" for "Drop":
+      the step's file input is hidden and its label is no drop target, so nothing can be dropped
+      there.
+    - Tests: `onboardingFirstImport.test.tsx` "a YNAB Register file" (4: the picker sentence; no
+      "Goes into" and the accounts line; only the two named accounts made and the done line; the
+      account setup made gets no rows and is not named). All four failed before the change (the
+      picker sentence missing, the select present, "into YNAB.", "into Main checking.").
+      E2E, cloud: `onboarding-server.spec.ts` "a YNAB Register file goes into the accounts it
+      names, and none for the file, on the Worker" (@smoke). Run on the code before the change
+      it failed at the picker sentence; with those checks taken out it showed "Main Checking" and
+      "New account: YNAB" in "Goes into", the Worker holding Main Checking (no rows), Test
+      Checking and Test Savings, and "Imported 3 transactions into Main Checking.".
   - **Badges wait for the wizard** (`core/achievementsStore.ts`). Badges earned while
     `onboardingOpen()` are held and announced when it closes, for the profile still in use, as one
     summary on a first run. Setup's own writes earn them (a first account, a first import); their
@@ -365,8 +398,9 @@ All notable changes to Token Circles are documented here. The format is based on
     primary fills still set white: a follow-up.
   - The tour menu's entry reads "Run setup again (your space, an account, a statement)"; it read
     "Run the Setup Wizard (accounts, imports, subscriptions)".
-  - **Tests**: unit `onboardingFirstImport.test.tsx` (16, two of them setup reopened at the
-    statement over accounts the profile has, two the leave question on the subscriptions),
+  - **Tests**: unit `onboardingFirstImport.test.tsx` (21, two of them setup reopened at the
+    statement over accounts the profile has, two the leave question on the subscriptions, four a
+    YNAB Register file),
     `firstImportCount.test.ts` (3), `firstImportDates.test.ts` (3), Escape on Done in
     `onboardingDoneStep.test.tsx`, `importOpensHandedFile.test.tsx` (3), three held-badge cases in `achievementsStore.test.ts`, two
     in `SubscriptionScan.test.tsx`, and the wizard's own suites rewritten
