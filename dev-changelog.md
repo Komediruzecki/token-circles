@@ -67,6 +67,21 @@ All notable changes to Token Circles are documented here. The format is based on
     a 1200 px target asks for `'start'`, a 300 px one for `'center'`, and an 820 px one asks for
     `'start'` on an 844 px screen with a 48 px `scroll-padding-top`. The first and third fail
     without the change.
+- **On a phone, the tip covers a tall target from the bottom, not over its heading**
+  (`frontend/src/components/spotlightPlacement.ts`, `Spotlight.tsx`). With the target scrolled to
+  its start, no side has room on a phone, so `placeTip` puts the tip against a screen edge. The top
+  edge hid less of the target than the bottom (219 - 48 = 171 rows against 207, since the strip
+  under the menu button is not target), so it won, and the 207-227 px tip sat at y 12 over the
+  heading the scroll had just shown: "Holdings" at y 77, the first category at 65, "Your Plan"
+  at 51. `placeTip` takes a new `fromStart` flag, set by Spotlight when `revealBlock` chose
+  `'start'`, and leaves the top edge out of the covering candidates then. On a phone the tip now
+  sits at y 625 (605 for the taller Retirement tip) and all three headings show, below the menu
+  button and clear of the tip. Desktop is unchanged: Retirement's tip still covers its left edge
+  (1%), which hides less than the bottom. The flag depends only on the target's height, so the tip
+  stays put while the person scrolls through the target.
+  - Tests: `spotlightPlacement.test.ts` "placeTip over a target scrolled to its start" and
+    `spotlightTipWiring.test.tsx` "Spotlight keeps the tip off the start of a tall target"; the
+    phone cases fail without the change.
 
 ## [5.17.5] — 2026-11-01
 

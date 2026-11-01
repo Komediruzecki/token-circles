@@ -6,7 +6,9 @@
  *      the whole tip, measured against the tip's real size, wins. A tip on a side never touches
  *      the target.
  *   2. When no side has room, the tip has to sit over the target. It goes against whichever edge
- *      of the screen hides the least of the target, so most of it stays visible.
+ *      of the screen hides the least of the target, so most of it stays visible. A target taller
+ *      than the screen has been scrolled to its start, and the top edge is not a candidate then:
+ *      the tip would sit on the heading the scroll brought into view.
  *
  * This replaced a rule that assumed a 140px tip (a phone's is about 207px) and centred the tip on
  * the screen for any target wider than 75% of it before trying a side at all. On a phone that
@@ -31,6 +33,12 @@ export interface TipPlacementInput {
    * screen at a fixed inset, so it can only go above, below or over the target, never beside it.
    */
   pinnedLeft?: number
+  /**
+   * The target is taller than the screen, so Spotlight scrolled it to its start rather than its
+   * centre. Covering it from the top edge would hide that start, its heading included, so the tip
+   * covers it from another edge.
+   */
+  fromStart?: boolean
 }
 
 export interface TipPosition {
@@ -134,10 +142,13 @@ export function placeTip(input: TipPlacementInput): TipPosition {
     if (pos) return pos
   }
 
-  // No side has room, so the tip covers some of the target. Ties keep the side order.
-  let best = againstScreenEdge(sides[0], input)
+  // No side has room, so the tip covers some of the target. Ties keep the side order. On a phone
+  // the top edge hid less of a tall target than the bottom (the strip under the menu button is
+  // not target), and so the tip sat on the heading that scrolling to the start had just shown.
+  const edges = input.fromStart ? sides.filter((side) => side !== 'top') : sides
+  let best = againstScreenEdge(edges[0], input)
   let bestHidden = hiddenArea(best, input)
-  for (const side of sides.slice(1)) {
+  for (const side of edges.slice(1)) {
     const pos = againstScreenEdge(side, input)
     const hidden = hiddenArea(pos, input)
     if (hidden < bestHidden) {

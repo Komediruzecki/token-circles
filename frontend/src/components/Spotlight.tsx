@@ -157,6 +157,7 @@ export default function Spotlight() {
         tip,
         preferred: step.placement,
         pinnedLeft: vw <= PHONE_MAX_WIDTH ? PHONE_TIP_INSET : undefined,
+        fromStart: revealBlock(rect.height) === 'start',
       })
     )
     setTooltipReady(true)

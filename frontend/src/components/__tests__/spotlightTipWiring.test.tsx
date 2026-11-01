@@ -214,3 +214,16 @@ describe('Spotlight opens a target that does not fit at its top', () => {
     expect(scrollBlocks.almost).toBe('start')
   })
 })
+
+describe('Spotlight keeps the tip off the start of a tall target', () => {
+  it('covers a target taller than the screen from the bottom on a phone', async () => {
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(207)
+    vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(320)
+    document.documentElement.style.scrollPaddingTop = '48px'
+    // Where Holdings lands once scrolled to its start: its heading is at about y 77.
+    anchor('holdings', { top: 48, left: 14, width: 362, height: 867 })
+    start([step('holdings', 'top')])
+    await settle(150)
+    expect(tipEl().style.top).toBe(`${844 - 12 - 207}px`)
+  })
+})
