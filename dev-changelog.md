@@ -282,6 +282,76 @@ null`).
     `spotlightTipWiring.test.tsx` "Spotlight keeps the tip off the start of a tall target"; the
     phone cases fail without the change.
 
+### Changed
+
+- **A captcha counts when it was solved on the app's own pages, for the form being sent**
+  (`worker/src/turnstile.ts`, `worker/src/request-origin.ts`, `worker/src/auth.ts`,
+  `worker/src/login-check.ts`, `worker/src/routes/auth.ts`, `email-code.ts`, `support.ts`, new
+  `shared/captchaActions.ts`; `frontend/src/components/Turnstile.tsx`, `CaptchaCheck.tsx`,
+  `LoginScreen.tsx`, `LoginModal.tsx`, `CheckInbox.tsx`, `EmailCodeLogin.tsx`,
+  `SupportContact.tsx`). The Worker reads `hostname` and `action` from Cloudflare's siteverify
+  answer, beside `success` and `challenge_ts`.
+  - `hostname` has to be a host of CORS_ORIGIN or APP_ORIGINS (`tokencircles.com` on prod,
+    `dev.tokencircles.com` on dev), or with APP_ENV=development a loopback host. `isAppHostname` in
+    `request-origin.ts` reads the same `appOrigins` list as the request-origin check, and
+    `isAllowedReturnTo` now reads that list too instead of a copy of it. The name is compared as it
+    comes, with only its ASCII letters lower-cased.
+  - Each widget names its form as Turnstile's `action`, and each route names the actions it takes:
+
+    | Action         | Widget                                           | Routes that take it                                                     |
+    | -------------- | ------------------------------------------------ | ----------------------------------------------------------------------- |
+    | `sign-in`      | sign-in screen and Sign In window, in every mode | POST /api/auth/login, /register, /forgot-password, /verify-email/resend |
+    | `confirm-link` | Check your inbox                                 | POST /api/auth/verify-email/resend                                      |
+    | `email-code`   | Email me a code                                  | POST /api/auth/email-code/request                                       |
+    | `support`      | Contact support                                  | POST /api/support/contact                                               |
+
+    One widget, one action. The sign-in screen and the Sign In window send four routes from one
+    widget, drawn once as before, so switching between signing in, creating an account, a reset
+    link and the confirm link asks for no new check, and the five-minute login check still covers
+    the next try after a switch.
+
+  - Any other answer gets the same 403 as a captcha Cloudflare did not pass, and the Worker writes a
+    `captcha_not_counted` warn line naming the field, so an app host missing from APP_ORIGINS shows
+    in Workers Logs. An `action` that is there counts only as a string naming one of the route's
+    forms. `captchaRejection` and its two 503s are unchanged.
+  - An empty or absent action still counts when the host is the app's. App tabs left open, and
+    builds the service worker keeps, from before this change send none, and the Worker and frontend
+    deploy apart. Each such check writes one `captcha_without_action` info line.
+  - Only a 2xx answer from siteverify can pass; any other status counts as no answer
+    (`unreachable`). Its error codes are still read, since Cloudflare answers a TURNSTILE_SECRET it
+    does not know with a 400 that names it (2026-11-01), and that keeps its 503.
+  - The five-minute login check (`login-check.ts`) verifies its token against the `sign-in`
+    action, so a check starts only from a token that counts.
+  - Development: with TURNSTILE_SECRET unset and APP_ENV=development the gate stays off. Cloudflare's
+    public test key pair answers `hostname: "example.com"` and no `action` whatever page the widget
+    was on (siteverify, 2026-11-01), so in development an answer marked
+    `metadata.result_with_testing_key` counts on any host. Other environments read it as any other
+    answer.
+  - Where the widget is drawn: the five forms above, on `tokencircles.com` and
+    `dev.tokencircles.com`. PR previews (`finance-manager-preview`, `*.workers.dev`) are built with
+    `--mode dev` and call `api.dev.tokencircles.com`, which takes requests only from
+    `dev.tokencircles.com` (`request-origin.ts`, CORS), so no preview signs in today. The about site
+    (`about.tokencircles.com`) runs its own Worker and posts nothing to this API.
+  - Next step, once the old builds are gone: when Workers Logs on prod show no
+    `captcha_without_action` line for two weeks after the release that ships this, make an empty
+    or absent action count as `other-action` in `countsHere` (`turnstile.ts`), with these with it:
+    - keep Cloudflare's test key pair counting in development whatever its action, since the pair
+      never sends one (the `testPair` case in `countsHere`, and its test);
+    - give the siteverify stub in `login-check.test.ts` the `sign-in` action;
+    - turn the empty-action cases in `captcha-fields.test.ts` into ones that expect the 403.
+  - Tests: `worker/test/captcha-fields.test.ts` runs the six routes against a stubbed siteverify:
+    each action a route takes counts on the app's host, and only those (`sign-in` alone on login,
+    register and reset; `confirm-link` or `sign-in` on the confirm link; `email-code` and `support`
+    on their own routes); only a named app host counts; an empty or absent action counts and is
+    noted. It also covers APP_ORIGINS, whole host names compared as they come (no trimming, ASCII
+    case only), the loopback hosts and the test key pair in development only, an action that is
+    not a string, a non-2xx siteverify answer, the 400 that names the key, the gate off with no
+    key, and the login check. 49 of its 70 cases fail without the change.
+    `captchaForms.test.tsx` "draws the widget for its form" (each of the seven screens) and "the
+    sign-in forms in every mode" (one widget across modes, in the screen and the window) fail
+    without it too. The siteverify stubs in `login-check.test.ts`, `support-captcha.test.ts` and
+    `auth-hardening.test.ts` now answer with the app's host.
+
 ## [5.17.5] — 2026-11-01
 
 ### Fixed

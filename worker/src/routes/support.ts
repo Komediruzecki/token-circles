@@ -4,6 +4,7 @@ import { sendMail } from '../email';
 import { renderSupportAck } from '../emailTemplates';
 import { enforce, clientIp, rateLimit } from '../ratelimit';
 import { captchaRejection, verifyTurnstileDetailed } from '../turnstile';
+import { CAPTCHA_ACTIONS } from '../../../shared/captchaActions';
 import { refusalOf } from '../../../shared/refusal';
 import { noProblems, supportProblems } from '../../../shared/signInSchema';
 
@@ -36,7 +37,7 @@ supportRoutes.post('/api/support/contact', async (c) => {
   // that: rotating IPs walk straight past it, and the cost lands on the sending domain's
   // reputation, which is what puts recipients on Resend's suppression list in the first place.
   // A captcha is what makes each attempt cost something. Same gate the auth routes already use.
-  const captcha = await verifyTurnstileDetailed(c, body.turnstileToken);
+  const captcha = await verifyTurnstileDetailed(c, body.turnstileToken, [CAPTCHA_ACTIONS.support]);
   if (!captcha.ok) return captchaRejection(c, captcha);
   const email = (body.email ?? '').trim();
   const message = (body.message ?? '').trim();

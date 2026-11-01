@@ -18,6 +18,7 @@
 import { createSignal, Show } from 'solid-js'
 import { render } from 'solid-js/web'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { CAPTCHA_ACTIONS } from '../../../../shared/captchaActions'
 import type { JSX } from 'solid-js'
 
 const CHECKING = "Checking you're human…"
@@ -343,7 +344,26 @@ const screens: Screen[] = [
   },
 ]
 
+/** The action of the widget that sends to each URL (shared/captchaActions.ts). */
+const ACTION_OF: Record<string, string> = {
+  '/api/auth/login': CAPTCHA_ACTIONS.signIn,
+  '/api/auth/register': CAPTCHA_ACTIONS.signIn,
+  '/api/auth/forgot-password': CAPTCHA_ACTIONS.signIn,
+  '/api/auth/verify-email/resend': CAPTCHA_ACTIONS.confirmLink,
+  '/api/auth/email-code/request': CAPTCHA_ACTIONS.emailCode,
+  '/api/support/contact': CAPTCHA_ACTIONS.support,
+}
+
 describe.each(screens)('the captcha when $name', (screen) => {
+  it('draws the widget for its form, by the action the route takes', async () => {
+    await screen.open()
+    expect(cf.widget().opts.action).toBe(ACTION_OF[screen.url])
+    cf.pass('token-1')
+    await press()
+    await until(() => sent.length > 0, 'the send')
+    expect(urls()).toEqual([screen.url])
+  })
+
   it('draws the widget only when Cloudflare wants a click', async () => {
     await screen.open()
     expect(cf.widget().opts.appearance).toBe('interaction-only')
@@ -735,6 +755,43 @@ describe('a browser Cloudflare cannot run in', () => {
     expect(host.querySelector('[data-test-id="login-error"]')?.textContent).toContain(
       "This browser can't run Cloudflare's verification"
     )
+  })
+})
+
+describe('the sign-in forms in every mode', () => {
+  it('keep one widget for signing in, so a solved check is not asked for again', async () => {
+    answers['/api/auth/forgot-password'] = () => json({ ok: true })
+    await signInScreen('login')
+    cf.pass('token-1')
+    byText('Create one').click()
+    await settle()
+    byText('Sign in').click()
+    await settle()
+    byText('Forgot password?').click()
+    await settle()
+    await press()
+    await until(() => sent.length > 0, 'the reset link request')
+    expect(widgets.map((w) => w.opts.action)).toEqual([CAPTCHA_ACTIONS.signIn])
+    expect(tokens('/api/auth/forgot-password')).toEqual(['token-1'])
+  })
+
+  it('keep one widget in the Sign In window, creating an account and sending the confirm link', async () => {
+    answers['/api/auth/login'] = () => json({ error: 'Invalid email or password' }, 401)
+    await signInDialog()
+    byText('Create one').click()
+    await settle()
+    byText('Sign in').click()
+    await settle()
+    cf.pass('token-1')
+    await press()
+    const offer = () => host.querySelector<HTMLButtonElement>('[data-test-id="send-confirm-link"]')
+    await until(() => offer() !== null, 'the offer of the confirm link')
+    offer()!.click()
+    await settle()
+    cf.pass('token-2')
+    await until(() => urls().includes('/api/auth/verify-email/resend'), 'the confirm link request')
+    expect(widgets.map((w) => w.opts.action)).toEqual([CAPTCHA_ACTIONS.signIn])
+    expect(tokens('/api/auth/verify-email/resend')).toEqual(['token-2'])
   })
 })
 

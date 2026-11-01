@@ -125,6 +125,23 @@ export function isAppOrigin(origin: string, env: Env): boolean {
   return appOrigins(env).has(origin) || (env.APP_ENV === 'development' && isLoopback(origin));
 }
 
+/**
+ * Whether `hostname` is a host the app is served from: the host of one of the origins it is
+ * deployed at (appOrigins), or, with APP_ENV=development, a loopback host (LOOPBACK). Cloudflare's
+ * siteverify answer names the host a captcha was solved on in this form, with no scheme or port
+ * (turnstile.ts). The name is taken as it comes, with only ASCII letters lower-cased: a URL's host
+ * is ASCII (punycode), so nothing else is folded to match one.
+ */
+export function isAppHostname(hostname: string, env: Env): boolean {
+  const host = hostname.replace(/[A-Z]/g, (letter) => letter.toLowerCase());
+  if (host === '') return false;
+  if (env.APP_ENV === 'development' && LOOPBACK.has(host)) return true;
+  for (const origin of appOrigins(env)) {
+    if (new URL(origin).hostname === host) return true;
+  }
+  return false;
+}
+
 /** The media type a Content-Type names, lower case, or null when there is none. */
 function mediaType(header: string | null): string | null {
   const type = (header ?? '').split(';')[0]!.trim().toLowerCase();
