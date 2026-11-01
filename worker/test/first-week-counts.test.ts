@@ -27,6 +27,24 @@ function at(base: string, seconds = 0): string {
 }
 
 const T = '2001-03-10 12:00:00';
+
+/**
+ * Migration 0033 dated the Welcome claim of every account that existed to the moment it ran, which
+ * the suite's own D1 recorded in d1_migrations as wrangler does. Set to a moment before March 2001
+ * here, so every account in March is one whose claim means it confirmed; restored afterwards.
+ */
+const MIGRATION_0033 = '0033_welcome_once.sql';
+const BEFORE_MARCH = '2001-02-20 00:00:00';
+let appliedAt0033 = '';
+
+const welcomeBegan = (appliedAt: string) =>
+  env.DB.prepare('UPDATE d1_migrations SET applied_at = ? WHERE name = ?')
+    .bind(appliedAt, MIGRATION_0033)
+    .run();
+
+/** May 2001: two accounts older than 0033, which ran on M, and two made after it. */
+const MAY = { from: '2001-05-01', to: '2001-05-31', now: '2001-06-30 00:00:00' };
+const M = '2001-05-10 00:00:00';
 const FIRST = '2001-03-01 00:00:00';
 const LAST = '2001-03-28 23:59:59';
 
@@ -128,6 +146,12 @@ async function countsAt(window: { from: string; to: string; now: string }) {
 }
 
 beforeAll(async () => {
+  const applied = await env.DB.prepare('SELECT applied_at FROM d1_migrations WHERE name = ?')
+    .bind(MIGRATION_0033)
+    .first<{ applied_at: string }>();
+  appliedAt0033 = applied!.applied_at;
+  await welcomeBegan(BEFORE_MARCH);
+
   // Confirmed exactly 24 h after signing up, imported exactly 24 h after, a budget exactly 7 days
   // after, a goal one second too late, and an account the import made.
   const u1 = await user('one', 'password', T);
@@ -190,9 +214,19 @@ beforeAll(async () => {
     await bill(p, createdAt);
     await account(p, 'Cash', createdAt);
   }
+
+  // Older than 0033: one made an hour before it ran and one nine days before, each with the claim
+  // 0033 wrote when it ran, and neither confirmed by anything that claim says. Made after it: one
+  // confirmed an hour after signing up, one never.
+  await welcome(await user('may-hour-before', 'password', at(M, -3600)), M);
+  await welcome(await user('may-days-before', 'password', at(M, -9 * DAY)), M);
+  const confirmed = await user('may-after', 'password', at(M, 2 * DAY));
+  await welcome(confirmed, at(M, 2 * DAY + 3600));
+  await user('may-after-unconfirmed', 'password', at(M, 3 * DAY));
 });
 
 afterAll(async () => {
+  await welcomeBegan(appliedAt0033);
   const profiles = profileIds.join(', ');
   const users = userIds.join(', ');
   await env.DB.batch([
@@ -214,6 +248,7 @@ const EXPECTED: FirstWeekCounts = {
   signups: 5,
   signupsPassword: 4,
   signupsGoogle: 1,
+  signupsAfter0033: 5,
   confirmedInDay: 2,
   importedInDay: 2,
   importedInWeek: 4,
@@ -251,6 +286,7 @@ describe('first-week counts', () => {
       signups: 1,
       signupsPassword: 0,
       signupsGoogle: 1,
+      signupsAfter0033: 1,
       confirmedInDay: 1,
       importedInDay: 0,
       importedInWeek: 1,
@@ -270,7 +306,9 @@ describe('first-week counts', () => {
     const text = formatCounts(await countsAt(WINDOW), { ...WINDOW, source: 'local D1' });
     expect(text).toContain('2001-03-01 to 2001-03-28');
     expect(text).toMatch(/Sign-ups\s+5\b/);
+    expect(text).toMatch(/ {2}after migration 0033 ran\s+5\n/);
     expect(text).toMatch(/Confirmed the address within a day\s+2\s+40%/);
+    expect(text).toContain('Confirmed counts only the accounts made after migration 0033 ran');
     expect(text).toMatch(/Imported within a day\s+2\s+40%/);
     expect(text).toMatch(/Imported within a week\s+4\s+80%/);
     expect(text).toMatch(/Set a budget\s+2\s+40%/);
@@ -281,6 +319,35 @@ describe('first-week counts', () => {
     expect(text).not.toContain(MAIL);
     for (const name of ['Checking', 'Wallet', 'Savings', 'Cushion', 'Rent', 'Groceries']) {
       expect(text).not.toMatch(new RegExp(`\\b${name}\\b`));
+    }
+  });
+});
+
+describe('confirmed within a day, across migration 0033', () => {
+  it('leaves out an account older than 0033, whose claim is dated when 0033 ran', async () => {
+    await welcomeBegan(M);
+    try {
+      const counts = await countsAt(MAY);
+      // The account made an hour before 0033 ran is not one that confirmed within a day.
+      expect(counts.confirmedInDay).toBe(1);
+      expect(counts).toMatchObject({ signups: 4, signupsAfter0033: 2 });
+      // Its share is of the accounts made after 0033, not of every sign-up.
+      expect(formatCounts(counts, { ...MAY, source: 'local D1' })).toMatch(
+        /Confirmed the address within a day\s+1\s+50%/
+      );
+    } finally {
+      await welcomeBegan(BEFORE_MARCH);
+    }
+  });
+
+  it('counts no account as confirmed when the database has no record of 0033', async () => {
+    const hide = (from: string, to: string) =>
+      env.DB.prepare('UPDATE d1_migrations SET name = ? WHERE name = ?').bind(to, from).run();
+    await hide(MIGRATION_0033, `${MIGRATION_0033}.hidden`);
+    try {
+      expect(await countsAt(WINDOW)).toMatchObject({ confirmedInDay: 0, signupsAfter0033: 0 });
+    } finally {
+      await hide(`${MIGRATION_0033}.hidden`, MIGRATION_0033);
     }
   });
 });

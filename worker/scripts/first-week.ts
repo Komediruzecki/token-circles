@@ -25,7 +25,13 @@
  *   claim is the one record of when an address was confirmed: every way of confirming writes it in
  *   the same batch, and a Google sign-up writes it at once (worker/src/welcome.ts, and weekOne.ts,
  *   which counts its day 0 from the same row). Migration 0033 dated the claim of every account
- *   that existed when it ran to that moment, so an account older than 0033 reads as confirmed then.
+ *   that existed when it ran to that moment, so for an account older than 0033 the claim says when
+ *   0033 ran, not when it confirmed. This count, and its share, are therefore only of the accounts
+ *   made after 0033 ran, which is d1_migrations.applied_at for '0033_welcome_once.sql':
+ *   `wrangler d1 migrations apply` writes that row in the same request as the migration, as the
+ *   test pool's applyD1Migrations does. A database with no such row counts no account here. An
+ *   account made after 0033 but before the code that writes the claim was deployed (minutes, on a
+ *   deploy) has a claim only if it confirmed after that deploy.
  * - Imported within a day / a week: import_logs.created_at, through profiles.user_id. The client
  *   writes one log after each import that went through.
  *
@@ -80,6 +86,9 @@ export interface FirstWeekCounts {
   signups: number;
   signupsPassword: number;
   signupsGoogle: number;
+  /** Made after migration 0033 ran: the accounts whose Welcome claim means they confirmed. */
+  signupsAfter0033: number;
+  /** Of signupsAfter0033 only. */
   confirmedInDay: number;
   importedInDay: number;
   importedInWeek: number;
@@ -101,6 +110,7 @@ const COLUMNS: Record<keyof FirstWeekCounts, string> = {
   signups: 'signups',
   signupsPassword: 'signups_password',
   signupsGoogle: 'signups_google',
+  signupsAfter0033: 'signups_after_0033',
   confirmedInDay: 'confirmed_in_day',
   importedInDay: 'imported_in_day',
   importedInWeek: 'imported_in_week',
@@ -133,6 +143,9 @@ const inProfiles = (table: string, where: string): string =>
   `EXISTS (SELECT 1 FROM profiles p JOIN ${table} x ON x.profile_id = p.id ` +
   `WHERE p.user_id = c.id AND ${where})`;
 
+/** The migration that dated every existing account's Welcome claim to the moment it ran. */
+export const WELCOME_MIGRATION = '0033_welcome_once.sql';
+
 /** The import logs' details as JSON, or an empty object where a log has none that parses. */
 const LOG_DETAILS = `CASE WHEN json_valid(il.details) THEN il.details ELSE '{}' END`;
 
@@ -148,8 +161,9 @@ export function firstWeekSql({ from, to, now }: FirstWeekWindow): string {
     `SELECT 1 FROM import_logs il, json_each(${LOG_DETAILS}, '$.created_accounts') made ` +
     `WHERE il.profile_id = x.profile_id AND lower(trim(made.value)) = lower(trim(x.name)))`;
   const flags = [
-    `EXISTS (SELECT 1 FROM reminder_dedup r WHERE r.user_id = c.id AND r.dedup_key = 'welcome' ` +
-      `AND ${within('r.sent_at', DAY_SECONDS)}) AS confirmed_in_day`,
+    'c.after_0033',
+    `(c.after_0033 AND EXISTS (SELECT 1 FROM reminder_dedup r WHERE r.user_id = c.id ` +
+      `AND r.dedup_key = 'welcome' AND ${within('r.sent_at', DAY_SECONDS)})) AS confirmed_in_day`,
     `${inProfiles('import_logs', within('x.created_at', DAY_SECONDS))} AS imported_in_day`,
     `${inProfiles('import_logs', within('x.created_at', WEEK_SECONDS))} AS imported_in_week`,
     `${inProfiles('bills', within('x.created_at', WEEK_SECONDS))} AS bill_in_week`,
@@ -167,7 +181,9 @@ export function firstWeekSql({ from, to, now }: FirstWeekWindow): string {
     `COALESCE(SUM(${expression}), 0) AS ${column}`;
   return [
     'WITH cohort AS (',
-    `SELECT id, auth_provider, unixepoch(created_at) AS t0 FROM users`,
+    `SELECT id, auth_provider, unixepoch(created_at) AS t0, IFNULL(unixepoch(created_at) > (` +
+      `SELECT unixepoch(applied_at) FROM d1_migrations WHERE name = '${WELCOME_MIGRATION}'), 0) ` +
+      `AS after_0033 FROM users`,
     `WHERE unixepoch(created_at) BETWEEN unixepoch('${from}') AND unixepoch('${to}', '+1 day') - 1`,
     '), flags AS (',
     `SELECT c.id, c.auth_provider, c.t0, ${flags.join(', ')} FROM cohort c`,
@@ -176,6 +192,7 @@ export function firstWeekSql({ from, to, now }: FirstWeekWindow): string {
     [
       sum(`auth_provider = 'password'`, 'signups_password'),
       sum(`auth_provider = 'google'`, 'signups_google'),
+      sum('after_0033', 'signups_after_0033'),
       sum('confirmed_in_day', 'confirmed_in_day'),
       sum('imported_in_day', 'imported_in_day'),
       sum('imported_in_week', 'imported_in_week'),
@@ -258,7 +275,12 @@ export function formatCounts(
     line('Sign-ups', String(n)),
     line('  with a password', String(counts.signupsPassword)),
     line('  with Google', String(counts.signupsGoogle)),
-    row('Confirmed the address within a day', counts.confirmedInDay),
+    line('  after migration 0033 ran', String(counts.signupsAfter0033)),
+    line(
+      'Confirmed the address within a day',
+      String(counts.confirmedInDay),
+      share(counts.confirmedInDay, counts.signupsAfter0033)
+    ),
     row('Imported within a day', counts.importedInDay),
     row('Imported within a week', counts.importedInWeek),
     notRecorded('Prints pressed'),
@@ -280,7 +302,9 @@ export function formatCounts(
     'Cloud accounts only: local-first data stays in the browser and never reaches the server.',
     'Within a day: from the sign-up instant (users.created_at, UTC) to 86,400 s (24 h) after it,',
     'both ends included. Within a week: the same, to 604,800 s (7 days) after it.',
-    'Shares are of sign-ups. Confirmed reads the Welcome claim (reminder_dedup, welcome), which',
-    'every way of confirming an address writes; a Google sign-up writes it at once.',
+    'Shares are of sign-ups, except Confirmed. Confirmed reads the Welcome claim (reminder_dedup,',
+    'welcome), which every way of confirming an address writes; a Google sign-up writes it at once.',
+    'Confirmed counts only the accounts made after migration 0033 ran (d1_migrations), and its share',
+    'is of those: 0033 dated the claim of every older account to the moment it ran.',
   ].join('\n');
 }

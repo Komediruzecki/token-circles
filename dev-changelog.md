@@ -2256,7 +2256,7 @@ check')` first, as the cushion and debt cases do.
   the step-to-table map). Day 0 is `users.created_at`; within a day is 0 to 86,400 s after it and
   within a week 0 to 604,800 s, both ends included, compared with `unixepoch()`. Confirmed reads
   the Welcome claim, `reminder_dedup (user_id, 'welcome').sent_at`, the day 0 the week-one mails
-  count from; an account older than migration 0033 reads as confirmed when 0033 ran. Imports read
+  count from, for the accounts made after migration 0033 ran (below). Imports read
   `import_logs.created_at`; the steps read `bills`, `budgets` and `budgets_zero_based`,
   `savings_goals` and `accounts` (`created_at`, an account an import made left out by its name in
   the log's `created_accounts`), and `transactions.updated_at` for an entry with a category edited
@@ -2273,6 +2273,23 @@ check')` first, as the cushion and debt cases do.
   profile, and import-made accounts; the guard against an UPDATE, DELETE, INSERT, DROP, two
   statements, comments hiding a write, a CTE that deletes, a PRAGMA and an ATTACH; and the command's
   arguments and wrangler calls with a stub runner. Each fails without the change.
+
+- **Confirmed within a day counts only the accounts made after migration 0033 ran**
+  (`worker/scripts/first-week.ts`). 0033 wrote a Welcome claim for every account that existed,
+  dated when it ran, so for a window that starts before 0033 an account made up to a day before it
+  read as confirmed within a day and an older one as not confirmed, whatever either did. The query
+  reads the moment from `d1_migrations.applied_at` for `0033_welcome_once.sql`, the row
+  `wrangler d1 migrations apply` writes in the same request as the migration (the test pool's
+  `applyD1Migrations` writes the same table), still in the one SELECT `readOnlyRefusal` lets
+  through. The table prints a new line, `after migration 0033 ran`, under the sign-ups; Confirmed's
+  share is of those accounts, and the notes under the table say so. A database with no row for
+  0033 counts no account as confirmed. An account made between 0033 and the deploy whose code
+  writes the claim has one only if it confirmed after the deploy, as the deploy notes say.
+- **Tests:** `worker/test/first-week-counts.test.ts` sets 0033's `applied_at` for the suite and
+  restores it after: in a window 0033 ran inside, an account made an hour before it and one nine
+  days before, each with the claim 0033 dated, count as neither confirmed nor counted, while one
+  made after it and confirmed an hour later counts (1 of 2, 50%); with no row for 0033, nothing
+  counts. Fails before the change (5 tests).
 
 ### Fixed
 
