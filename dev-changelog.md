@@ -11,6 +11,108 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ### Fixed
 
+- **A row with a Means of Payment books from it and keeps its Category as its category, in both
+  storage modes** (`frontend/src/core/storage/handlers/importFlow.ts`,
+  `worker/src/routes/imports.ts`, `shared/importRowChecks.ts`,
+  `frontend/src/features/import/importFlow.ts`). The canonical import table uses Category for a
+  row's category and, on a Transfer row, for the account the money went to. Both importers seed
+  their account map with every account the profile has and resolved Category against it on every
+  row, so a category named like an account was read as that account. Found in the YNAB review; the
+  app's own CSV/sheet import did the same, so it predates YNAB.
+  - Scope: only rows that have a Means of Payment change. A row with an empty Means of Payment
+    resolves exactly as on main in each mode: local-first books it into an account its Category
+    names, with the type from the sign when the value is set to Account; the Worker stores no
+    account and the Category's account as `transfer_account_id`, which recompute credits for an
+    income only.
+  - A Transfer row: Category is the destination account (`transfer_account_id`), as before.
+  - A non-transfer row with a Means of Payment books from that account, with its own Type (then the
+    category type, then the sign), and Category is its category, even when an account has that
+    name or the import sets the value to Account (`categoryTypes`: the mapping step, IB auto-detect,
+    classifyCategory keywords).
+    - Local-first booked it against the category's account: an expense in "Vacation" paid from
+      Checking left Vacation -80 and Checking 0. With the value set to Account it also took the
+      type from the sign, so "Expense, 500, IB, Checking" was an income into IB.
+    - The Worker kept the balance but stored a stray `transfer_account_id` and `category_id` NULL.
+      `transferAccountId` now comes from Category only on a transfer or a row without a Means of
+      Payment.
+  - Categories to create: both importers left out every name an account has, and the values set
+    to Account, so "Vacation" was never offered and the row stayed uncategorised in the cloud. Now
+    a Transfer row's value is left out, a Means-of-Payment row's value is offered, and a row
+    without one keeps main's exclusions. The Import page also dropped every value set to Account
+    from the preview's list, so such a value used as a category was not approved whenever another
+    new category gated the run; it now shows the list the importer sends. The Worker creates such
+    a name with the keyword type guess, never as an 'account'-typed category.
+  - Accounts to create: a value set to Account becomes an account only where a row uses it as one:
+    a Means of Payment, a Transfer's destination, or the Category of a row with no Means of
+    Payment (`usedAsAccount`, and the preview's `new_accounts`). A value only rows paid from another
+    account use is their category, with no empty account beside it.
+  - One note per such value, not per row (`markedAccountUsedAsCategoryNote`, an `ImportNote` with
+    no row index, shown under "About this import"). After an import: `"Library" is set to Account
+in the mapping step, but its 3 rows have Checking as their Means of Payment, so they came off
+Checking in the Library category. Set Library to Expense. To move the money into Library
+instead, delete this import under Recent Imports, change these rows' Type to Transfer, and
+import again.`
+    - The preview (the wizard's dry run, where the note is read) says what the import will do
+      ("will come off") and to change the Type before importing, and counts the category as made,
+      since it offers it.
+    - Undo, not a re-import, because the duplicate key includes the type: a re-import as
+      transfers over the stored expenses doubles the payment (measured: Checking -400,
+      Savings 200). "Delete import" exists in both modes (`/api/import-logs/:id`), and every
+      import path writes the log it deletes.
+    - Only expenses get the transfer advice: a transfer takes the money out of the paying account,
+      which an income never came from. Incomes read "went into", a mix "were booked to".
+    - A Means of Payment that names no account (an API caller's unmarked "Cash") is not called the
+      account paid from: `Cash is not an account, so they were left with no account, in the
+Library category.`
+    - One row reads "its row has Checking as its Means of Payment, so it ...", without the count.
+      A gated run that left the category unmade reads "with no category". It does not say who set
+      the value, since classifyCategory may have.
+  - Re-imports in local-first: duplicate detection keys on the resolved account and type, which
+    this changes for Means-of-Payment rows stored before, and a connected source re-sends every
+    row. Such a row also tries the key the old rule gave (the category's account, the sign's type
+    when the value is set to Account, else its own type), and counts a match only against a
+    stored row an import wrote (it has an `import_id`; the wizard stamps one since July 2026). Its
+    category is not compared: the person may have moved the earlier copy to another category
+    since, and comparing it booked that row twice (Checking -80 and Vacation -80). A row typed in
+    by hand in that account is never taken for one. An imported row really paid from that account,
+    with the same day, text and amount, still is: nothing stored tells it from the earlier copy.
+    The Worker needs no such key: its account and type for these rows did not change.
+  - YNAB: the adapter's decline of a category named like an account (#674) is unchanged and is not
+    repeated here. A declined row does not reach the importer with an empty Category: the adapter
+    keeps the category its keyword rules give, falling back to "Other"
+    (`shared/bankImport/adapters/ynab.ts`, for the import CSV and the register alike).
+  - Unchanged here, for maff to decide:
+    - the rule for a row with no Means of Payment whose Category names an account (Type then sign,
+      sign only, or not into the account); today local-first books it by sign and the Worker
+      credits only an income;
+    - the keywords classifyCategory reads as accounts ("ib" in Library, "rev" in Review,
+      "saving", "invest");
+    - booking a row with a Means of Payment and a Category set to Account as a transfer into that
+      account;
+    - repairing stored rows: a local-first row booked against the category's account keeps that
+      `account_id`; a cloud row keeps its stray `transfer_account_id`, and an old account-less
+      income in such a category keeps crediting that account on every recompute;
+    - a local-first re-import over an imported row really paid from the category's account, on
+      the same day with the same text and amount: it counts as a duplicate of the earlier copy.
+  - Tests: `frontend/src/core/storage/__tests__/importFlow.categoryNamedLikeAccount.test.ts` and
+    `worker/test/import-category-named-like-account.test.ts` (an expense in a category named like
+    an account, with and without a Type column; a value set to Account on a row paid from Checking,
+    with its category, its note and no account made; the round-2 sheet of ten rows paid from
+    Checking with Library, Savings, Investments and Review; a value set to Account that is also a
+    transfer target; the transfer unchanged; the preview's lists; rows with no Means of Payment as
+    on main; a Means of Payment that names no account), the local-first re-import cases
+    (old-shaped rows found, one stored with no category found, one moved to another category
+    since found, a row typed in by hand never taken, an imported real payment from that account
+    taken), `frontend/src/core/__tests__/markedAccountUsedAsCategoryNote.test.ts` (every variant
+    of the note),
+    `frontend/src/features/import/__tests__/markedAccountCategory.test.ts` (the Import page offers
+    and creates a marked transfer target as a category), and a v1 case in
+    `worker/test/v1-import-bank.test.ts` for an app-shaped CSV.
+    `worker/test/import-balance-recompute.test.ts`'s double-credit test plants the
+    income-with-both-ids row an earlier import wrote and calls POST
+    /api/accounts/recompute-balances; it still fails (600 for 500) with the recompute's
+    `account_id IS NULL` condition removed.
+
 - **No badge is dated to a month still to come, and the Year in review's best month has begun**
   (`frontend/src/core/achievements/evaluate.ts`, `frontend/src/core/achievements/review.ts`).
   Follow-up to 5.17.5's "a month that has not begun is not tracked" (#675), which covered the
