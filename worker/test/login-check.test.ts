@@ -96,6 +96,9 @@ beforeEach(async () => {
       return Response.json({
         success: true,
         'error-codes': [],
+        // Solved on the app's page (CORS_ORIGIN). No action: siteverify is asked on behalf of
+        // every route here, and a check that names none counts on each (captcha-fields.test.ts).
+        hostname: new URL(CHECKED.CORS_ORIGIN!).hostname,
         ...(solveTime === 'missing'
           ? {}
           : {

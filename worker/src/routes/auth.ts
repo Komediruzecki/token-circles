@@ -63,6 +63,7 @@ import { clearRateLimit, enforce, clientIp, rateLimit } from '../ratelimit';
 import { getTotpForLogin, issueTwofaChallengeCookie } from '../twofa';
 import { logAuthEvent } from '../authlog';
 import { captchaRejection, verifyTurnstileDetailed } from '../turnstile';
+import { CAPTCHA_ACTIONS } from '../../../shared/captchaActions';
 import { checkSignInTry, coverNextTry, endLoginCheck, useUpLoginChecks } from '../login-check';
 import { refusalOf } from '../../../shared/refusal';
 import {
@@ -327,7 +328,7 @@ authRoutes.post('/api/auth/register', async (c) => {
     password?: string;
     turnstileToken?: string;
   };
-  const captcha = await verifyTurnstileDetailed(c, body.turnstileToken);
+  const captcha = await verifyTurnstileDetailed(c, body.turnstileToken, [CAPTCHA_ACTIONS.signIn]);
   if (!captcha.ok) return captchaRejection(c, captcha);
   const email = (body.email ?? '').trim().toLowerCase();
   const password = body.password ?? '';
@@ -528,7 +529,7 @@ authRoutes.post('/api/auth/forgot-password', async (c) => {
     email?: string;
     turnstileToken?: string;
   };
-  const captcha = await verifyTurnstileDetailed(c, body.turnstileToken);
+  const captcha = await verifyTurnstileDetailed(c, body.turnstileToken, [CAPTCHA_ACTIONS.signIn]);
   if (!captcha.ok) return captchaRejection(c, captcha);
   const email = (body.email ?? '').trim().toLowerCase();
   const refused = addressProblems({ email });
@@ -768,7 +769,12 @@ authRoutes.post('/api/auth/verify-email/resend', async (c) => {
     email?: string;
     turnstileToken?: string;
   };
-  const captcha = await verifyTurnstileDetailed(c, body.turnstileToken);
+  const captcha = await verifyTurnstileDetailed(
+    c,
+    body.turnstileToken,
+    // Check your inbox, and the sign-in forms' confirm step (one widget for all their modes).
+    [CAPTCHA_ACTIONS.confirmLink, CAPTCHA_ACTIONS.signIn]
+  );
   if (!captcha.ok) return captchaRejection(c, captcha);
   const email = (body.email ?? '').trim().toLowerCase();
   const refused = addressProblems({ email });
