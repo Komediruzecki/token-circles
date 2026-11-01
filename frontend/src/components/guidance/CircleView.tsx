@@ -56,7 +56,7 @@ import { AnswerChips, EnoughAmount, SavedElsewhereQuestion } from './CircleQuest
 import styles from './CircleView.module.css'
 import NextStepCard from './NextStepCard'
 import { createAnswerSave, Question, SaveProblem, TickList } from './questionParts'
-import { regionReasonText } from './regionWords'
+import { COMPARE_TITLE, regionReasonText } from './regionWords'
 import { HouseholdQuestion } from './SpaceQuestions'
 import type { JSX } from 'solid-js'
 import type {
@@ -431,7 +431,7 @@ export default function CircleView(props: CircleViewProps): JSX.Element {
                 data-test-id="circle-compare"
               >
                 <h3 id="circle-compare-title" class={styles.partTitle}>
-                  How you compare
+                  {COMPARE_TITLE}
                 </h3>
                 <p class={styles.partLead} data-test-id="circle-compare-region">
                   {regionReasonText(view().region)}{' '}

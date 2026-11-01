@@ -45,10 +45,13 @@ async function serveCandidate(page: Page, fetched: string[]): Promise<void> {
 }
 
 /**
- * Held-back copy, a few lines of each part: the free-money questions (DE, HR, UK, US), setup's
- * region and household questions, the housing card's tenure question, and how the region was set.
- * A production build compiles them out (__BENCHMARKS_SHOWN__ in vite.config.ts), so they are in no
- * file it ships, fetched or not.
+ * Held-back copy, a few lines of each part that a production build compiles out
+ * (__BENCHMARKS_SHOWN__ in vite.config.ts): the free-money questions (DE, HR, UK, US), setup's
+ * region and household questions and the lead of its About this space, the housing card's tenure
+ * question, how the region was set, and the How you compare heading. These lines are in no file it
+ * ships, fetched or not. Not every held-back word is: the benchmark cards' own chunk (cards-*.js,
+ * with benchmarks.json) still ships, never fetched while the gate is closed, and short labels inside
+ * the gated components, such as the cards' "Where this comes from", are only hidden at run time.
  */
 const HELD_BACK = [
   'Entgeltumwandlung',
@@ -62,6 +65,8 @@ const HELD_BACK = [
   'How do you live?',
   'Rent social housing',
   'going by your base currency',
+  'Both are optional. They pick the official figures we compare your numbers with.',
+  'How you compare',
 ]
 
 async function go(page: Page, hash: string): Promise<void> {

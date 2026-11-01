@@ -1,6 +1,7 @@
 /**
  * The words for the space questions and the region a profile is compared with: the questions as
- * guidance.md section 5.5 writes them, and how the region was set (shared/guidance/region.ts).
+ * guidance.md section 5.5 writes them, how the region was set (shared/guidance/region.ts), and the
+ * lines around them that only the benchmarks need (setup's About this space, How you compare).
  */
 import type { RegionAnswer } from '../../../../shared/guidance/answers'
 import type { Region, RegionChoice } from '../../../../shared/guidance/region'
@@ -18,6 +19,14 @@ export const REGION_WHY = HELD_BACK_COPY
   ? 'We compare your numbers with official statistics for that place.'
   : ''
 export const HOUSEHOLD_QUESTION = HELD_BACK_COPY ? 'Who does this space cover?' : ''
+
+/** Setup's About this space, over the two questions: what they are for. */
+export const SPACE_QUESTIONS_LEAD = HELD_BACK_COPY
+  ? 'Both are optional. They pick the official figures we compare your numbers with.'
+  : ''
+
+/** The heading over a circle's benchmark cards on Progress. */
+export const COMPARE_TITLE = HELD_BACK_COPY ? 'How you compare' : ''
 
 /** The answers to "Where do you live?", in the question's order. */
 export const REGION_CHOICES: readonly { value: Exclude<RegionAnswer, 'skipped'>; label: string }[] =

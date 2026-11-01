@@ -49,6 +49,7 @@ import { getStorageMode, setStorageMode } from '../../core/storage/storageFactor
 import { handFileToImport } from '../../features/import/importHandoff'
 import { Field, FormNotice } from '../form'
 import { currentNextSteps, NextSteps } from '../GettingStarted'
+import { SPACE_QUESTIONS_LEAD } from '../guidance/regionWords'
 import { SpaceQuestions } from '../guidance/SpaceQuestions'
 import { LogoMark } from '../Logo'
 import { SubscriptionScanPanel } from '../SubscriptionScan'
@@ -716,7 +717,7 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
         About this space
       </h2>
       <p class={styles.lead} data-test-id="onboarding-space-questions-lead">
-        Both are optional. They pick the official figures we compare your numbers with.
+        {SPACE_QUESTIONS_LEAD}
       </p>
       <div class={styles.stack}>
         <SpaceQuestions

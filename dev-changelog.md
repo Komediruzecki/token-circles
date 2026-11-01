@@ -1975,6 +1975,20 @@ check')` first, as the cushion and debt cases do.
   between a current and a savings account, no expense: the step is not the sorted one. Fails
   before the change.
 
+- **Two more held-back lines are compiled out of a production build**
+  (`frontend/src/components/guidance/regionWords.ts`, `components/onboarding/OnboardingWizard.tsx`,
+  `components/guidance/CircleView.tsx`). Setup's About this space lead, "Both are optional. They
+  pick the official figures we compare your numbers with.", shipped in `OnboardingWizard-*.js`, and
+  the "How you compare" heading in `Progress-*.js`, although each shows only with the benchmarks
+  gate open. Both are now `SPACE_QUESTIONS_LEAD` and `COMPARE_TITLE` in `regionWords.ts`, behind
+  the same `__BENCHMARKS_SHOWN__` test as the region questions. The benchmark cards' own chunk is
+  unchanged, and short labels inside the gated components (the cards' "Where this comes from")
+  still ship, hidden at run time; s17's note now says so.
+- **Tests:** `guidanceGate.test.ts` reads both with the constant false, true and undefined; fails
+  before the change (2 tests). Release `s17-benchmarks-gate.spec.ts` lists both among its 13
+  held-back lines. A production build before the change had both (one file each), none after, and
+  all 13 again with `VITE_ENABLE_BENCHMARKS=true`.
+
 ### Prints
 
 - **The seal is drawn once, for the browser and the Worker** (`shared/prints/seal.ts`,

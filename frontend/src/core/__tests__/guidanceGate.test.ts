@@ -67,6 +67,8 @@ describe('the copy it holds back', () => {
     expect(words.REGION_CHOICES).toEqual([])
     expect(words.regionReasonText(germany)).toBe('')
     expect(words.householdText(1, 0)).toBe('')
+    expect(words.SPACE_QUESTIONS_LEAD).toBe('')
+    expect(words.COMPARE_TITLE).toBe('')
     // What every build asks stays.
     expect(questions.CARD_QUESTION).toBe('Do you carry a balance on a credit card or overdraft?')
   })
@@ -83,6 +85,10 @@ describe('the copy it holds back', () => {
       expect(words.REGION_CHOICES).toHaveLength(6)
       expect(words.regionReasonText(germany)).toBe('Compared with Germany, from your answer.')
       expect(words.householdText(1, 0)).toBe('1 adult, no children.')
+      expect(words.SPACE_QUESTIONS_LEAD).toBe(
+        'Both are optional. They pick the official figures we compare your numbers with.'
+      )
+      expect(words.COMPARE_TITLE).toBe('How you compare')
     }
   })
 })
