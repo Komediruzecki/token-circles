@@ -9,6 +9,8 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ## [Unreleased]
 
+## [5.17.5] — 2026-11-01
+
 ### Fixed
 
 - **A month that has not begun is not tracked** (`frontend/src/core/achievements/evaluate.ts`,
@@ -75,6 +77,8 @@ All notable changes to Token Circles are documented here. The format is based on
     either side: 8 (phone) and 5 (desktop) both before and after; the share hidden fell from
     6-15% to 1-2% on desktop and from 21-34% to 3-24% on a phone. Six desktop steps whose
     centred tip did not cover anything now sit below their target instead of mid-screen.
+    The release walk on main (73dfec5a, with #676's scroll padding in) counted 6 phone steps
+    with no room, not 8, and still none covered with room on either width.
   - `frontend/scripts/walk-tours.mjs` now measures every step's tip against its highlight, waits
     for both to hold still, fails the gate when a tip covers its target where there was room for
     both (`TIP` lines), reports the no-room cases, and writes all rects to `PLACEMENT_JSON`.
