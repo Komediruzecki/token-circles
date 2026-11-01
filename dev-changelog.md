@@ -11,6 +11,45 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ### Fixed
 
+- **`vite build --outDir X` puts the export documents and version.json in X**
+  (`frontend/vite.config.ts`, new `frontend/src/buildOutputFiles.ts`). The `copy-export-html` and
+  `emit-version-json` plugins wrote to `resolve(__dirname, 'dist', ...)` whatever the outDir was.
+  With no `frontend/dist/` the build failed with ENOENT on `export.html`; with one, it passed while
+  `export.html`, `export-monthly.html`, `chart.umd.min.js` and `version.json` went into `dist/` and
+  X shipped without them. A default `vite build` was never affected, so deploys were not either.
+  - Both plugins moved to `src/buildOutputFiles.ts` (`standaloneFilesPlugin`, `versionJsonPlugin`),
+    beside `crawlerPolicy.ts`, and read `config.build.outDir` in `configResolved`, resolved against
+    `config.root`, as `crawlerPolicyPlugin` already did. `copy-export-html` is now `apply: 'build'`
+    too; it only ever had a `writeBundle` hook, so `vite dev` sees no change.
+  - Nothing in the repo builds with `--outDir`: CI, the deploys and the release suite's two-tab
+    case (`cp -r dist <builds>/rc`, `frontend/tests/release/README.md`) all build into `dist/`. The
+    builds it did reach were ad hoc ones under agent-out (`scratch/phase4/dist-defer`,
+    `dist-noshelf`, `outdir-check`), which have no `version.json` and no export documents.
+  - A default build is unchanged: on origin/main's config and on this one, `vite build` writes the
+    same file list, and `index.html`, `sw.js` and the three export files are byte-identical.
+  - Test: `src/__tests__/buildOutputFiles.test.ts` runs both plugins' `configResolved` and
+    `writeBundle` against a temporary root with `outDir: 'custom-out'`, and expects all four files
+    there and an empty `dist/` beside the root and beside the source folder; a second case builds
+    into an absolute outDir with no `dist/` at all. With the old destination the first fails on
+    `ENOENT ... custom-out/export.html` and the second on `ENOENT ... frontend/dist/export.html`.
+  - The service worker's precache had the same bug. The `VitePWA` options set
+    `globDirectory: 'dist'`, so `--outDir X` precached whatever `frontend/dist/` held instead of X:
+    with no `dist/`, 7 entries (icons and the manifest, which the plugin adds itself) and a
+    "glob patterns doesn't match any files" warning per pattern; with an older build there, that
+    build's hashed file names. The option is gone. vite-plugin-pwa 1.3.0 defaults it to
+    `resolve(viteConfig.root, viteConfig.build.outDir)` (`resolveOptions` in its `dist/index.js`),
+    which for a default build is the same `frontend/dist`.
+    - Builds: a default build precaches 138 entries on origin/main's config and on this one, and
+      the two `sw.js` files are byte-identical. `--outDir X` with no `dist/` now precaches the same
+      138 entries into X's `sw.js` (it was 7), with no glob warnings.
+    - Test: `src/__tests__/buildOutDir.test.ts` runs a real `vite build --outDir <tmp>` (about 6 s)
+      and expects the four files in it, every `assets/*.{js,css}` in X precached and every
+      precached URL present in X, and `frontend/dist` exactly as it was before the build. With
+      `globDirectory: 'dist'` put back and no `dist/` (as in CI's Test job, which does not build
+      first) it fails on `expected [ Array(7) ] to include 'assets/Accounts-D3RV6rc2.css'`. A
+      local `dist/` built from the same source has the same hashed names, so there it cannot tell
+      the two folders apart and passes.
+
 - **The Dashboard tour's Charts step has charts to point at** (`frontend/src/features/Dashboard.tsx`,
   `frontend/src/core/spotlightStore.ts`). Its anchor, `data-tour="dashboard-charts"` on the
   net-worth and cash-flow charts grid, renders inside `<Show when={showMore()}>`, and Show more
