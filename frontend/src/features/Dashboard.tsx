@@ -2,7 +2,7 @@
  * Dashboard Component
  */
 
-import { batch, createSignal, For, Show } from 'solid-js'
+import { batch, createEffect, createSignal, For, Show } from 'solid-js'
 import BadgeRail from '../components/BadgeRail'
 import CalcTracer, { isCalcTracerEnabled } from '../components/CalcTracer'
 import { getCategorySvg } from '../components/CategoryIcon'
@@ -31,6 +31,7 @@ import { loadWidgetPrefs } from '../core/dashboardWidgets'
 import { entityVersion } from '../core/dataVersions'
 import { refetchOnActive } from '../core/pageVisibility'
 import { usePeriod } from '../core/periodStore'
+import { spotlightActive, spotlightStep, tourSteps } from '../core/spotlightStore'
 import { theme } from '../core/theme'
 import { toRange, toYYYYMM } from '../utils/period'
 import { daysToDue, dueDateLabel, dueInWords, nextDue } from './billDue'
@@ -89,6 +90,15 @@ export default function Dashboard() {
     setShowMore(next)
     localStorage.setItem('dashboard_showMore', next ? '1' : '0')
   }
+
+  // The tour's Charts step points at the charts below Show more, which a new account has never
+  // opened: the step found nothing and showed its missing-target notice. Open them when the tour
+  // gets there. Not saved: the toggle remembers what the person chose, and the tour did not choose.
+  createEffect(() => {
+    if (!spotlightActive()) return
+    const step = tourSteps()[spotlightStep()]
+    if (step?.targetSelector === '[data-tour="dashboard-charts"]') setShowMore(true)
+  })
 
   const prefs = loadWidgetPrefs()
   const [visibleWidgets, setVisibleWidgets] = createSignal<string[]>(prefs.visible)

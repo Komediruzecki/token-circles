@@ -9,6 +9,41 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- **The Dashboard tour's Charts step has charts to point at** (`frontend/src/features/Dashboard.tsx`,
+  `frontend/src/core/spotlightStore.ts`). Its anchor, `data-tour="dashboard-charts"` on the
+  net-worth and cash-flow charts grid, renders inside `<Show when={showMore()}>`, and Show more
+  starts closed (`dashboard_showMore` unset). On any dashboard that had not opened it, the step
+  found no target, waited out Spotlight's 6 s and showed the missing-target notice.
+  - The Dashboard now has an effect that calls `setShowMore(true)` while a tour (its own or the
+    full tour) is on a step targeting `[data-tour="dashboard-charts"]`. It does not write
+    `dashboard_showMore`: the toggle stores what the person chose. Same pattern as Loans, which
+    leaves a loan's page for the overview when its tour needs it.
+  - Opened rather than re-anchored: the step's copy names the net-worth timeline, which only that
+    grid has. The overview deck above it (`data-tour="overview-deck"`) has no net-worth chart, so
+    anchoring there would have needed new copy for a different part of the page. The copy now names
+    what the highlight covers, "Your net worth over time and 12 months of income against expenses,
+    kept under Show more", and no longer mentions category breakdowns, a widget further down that
+    the highlight does not reach.
+  - Test: `src/features/__tests__/dashboardTourCharts.test.tsx` renders the Dashboard on an empty
+    account with Show more closed, walks the Dashboard tour to Charts, and expects the anchor in
+    the DOM, the toggle reading Show less and `dashboard_showMore` still `'0'`. It fails without the
+    effect.
+- **The tour walk judges each step by its own highlight** (`frontend/scripts/walk-tours.mjs`).
+  It slept 1.2 s after Next and then read whatever glow rect was on screen. A step whose target
+  had not appeared yet still showed the previous step's highlight then, so the walk passed
+  Dashboard / Charts as "ok" at the metric cards' size (990x191 desktop, 384x716 phone) and
+  counted it only as "tip not shown after 3s" (unmeasured).
+  - New `waitForStep(n)` polls until the tip's counter reads "Step n of" and the engine has
+    decided: the tip shown (target found) or the missing-target notice. Budget `STEP_SETTLE_MS`,
+    9 s, past Spotlight's 6 s. A notice is a MISS ("app reports target missing"); no decision in
+    the budget is a MISS too ("no decision about its target after 9s"), never a pass.
+  - Proof: on the unfixed anchor the new walk fails at both widths with `GATE: FAILED` and
+    `MISS step 4: Charts no-highlight [target-missing banner]`; with the fix it passes, Charts at
+    990x531 on desktop and 384x963 on a phone. Full walks: 53 steps, 0 MISS, and nothing left
+    unmeasured (it was 1, this step, at each width).
+
 ## [5.17.5] — 2026-11-01
 
 ### Fixed

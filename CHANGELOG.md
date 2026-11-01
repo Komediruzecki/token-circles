@@ -8,6 +8,10 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **The Dashboard tour's Charts step shows the charts.** Before, on a dashboard where Show more had never been opened, it pointed at nothing.
+
 ## [5.17.5] — 2026-11-01
 
 ### Fixed

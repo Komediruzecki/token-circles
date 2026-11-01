@@ -75,7 +75,7 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
         'dashboard-charts',
         'dashboard',
         'Charts',
-        'Income vs expense trends, the net-worth timeline, and category breakdowns. Hover for details.',
+        'Your net worth over time and 12 months of income against expenses, kept under Show more. Hover for details.',
         'top'
       ),
     ],
