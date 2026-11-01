@@ -66,9 +66,11 @@ Stated plainly because these are the things most often assumed about an app in
 this category, and repeating them as fact would mislead someone.
 
 - It does not connect to a bank account live. Statements are imported. Eight
-  banks have native importers — Revolut, Wise, N26, Erste, PBZ, ING, Sparkasse
-  and DKB — it reads the YNAB interchange CSV, and anything else can be
-  column-mapped once from Excel or CSV.
+  banks have native importers: Revolut, Wise, N26, Erste, PBZ, ING, Sparkasse
+  and DKB. It also reads the register YNAB exports, with their accounts and
+  transfers (starting balances go to accounts that are new or still empty),
+  and the CSV YNAB imports. Anything else can be column-mapped once from Excel
+  or CSV.
 - It gives no investment, tax or financial advice, and executes no trades or
   transfers. It reports on what you put into it.
 - Receipt OCR is decided but not built. Do not describe it as a feature.

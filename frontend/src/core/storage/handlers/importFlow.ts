@@ -6,12 +6,13 @@ import {
   importedAccountTypeError,
   readAccountType,
 } from '../../../../../shared/accountSchema'
-import { profileCategoryKey } from '../../../../../shared/bankImport/categoryAliases'
 import { kindForName } from '../../../../../shared/guidance/kinds'
 import { parseImportCsv } from '../../../../../shared/importCsv'
 import {
   checkImportRowNumbers,
+  existingAccountStartingBalance,
   MISSING_DATE_WARNING,
+  startingBalanceKeptNote,
   unreadableNumbersReason,
 } from '../../../../../shared/importRowChecks'
 import { importRowLabel } from '../../../../../shared/importRowLabel'
@@ -28,7 +29,7 @@ import { computeBalanceDeltas, getDB } from '../idb'
 import { adapter, json, refuse } from './helpers'
 import { readUploadWithin, uploadReader } from './uploadRead'
 import type { AccountType } from '../../../../../shared/accountSchema'
-import type { ImportRowWarning } from '../../../../../shared/importRowChecks'
+import type { ImportNote, ImportRowWarning } from '../../../../../shared/importRowChecks'
 
 const pad2 = (n: number): string => String(n).padStart(2, '0')
 
@@ -132,8 +133,6 @@ const resolvedDedupKey = (
 
 /** Distinct category-column values in `rows` that do NOT match an existing category
  *  (case-insensitive) in the active profile — the categories an import would create.
- *  A name the bank-import rules used to give counts as the name they give now
- *  (profileCategoryKey), so a space holding 'Salary Eur' is not offered 'Salary'.
  *  Excludes values that already name an existing account or are flagged as 'account'
  *  type (those become accounts, not categories), mirroring the worker preview. Used to
  *  ask the user for confirmation before creating categories (audit B5). */
@@ -155,8 +154,7 @@ async function detectNewCategories(
     const raw = toStr(row.category).trim()
     if (!raw) continue
     const lower = raw.toLowerCase()
-    const catKey = profileCategoryKey(raw, (k) => existingCat.has(k))
-    if (existingCat.has(catKey) || existingAcct.has(lower) || seen.has(lower)) continue
+    if (existingCat.has(lower) || existingAcct.has(lower) || seen.has(lower)) continue
     if (catTypeLower[lower] === 'account') continue
     seen.add(lower)
     out.push(raw)
@@ -503,7 +501,7 @@ export async function importExecute(body: unknown): Promise<Response> {
     // pre-resolution deduped subset.
     const clean = rows
     const skipped: { index: number; reason: string; label?: string }[] = []
-    const warnings: ImportRowWarning[] = []
+    const warnings: Array<ImportRowWarning | ImportNote> = []
     const validatedRows: Array<{
       index: number
       row: Record<string, unknown>
@@ -726,7 +724,63 @@ export async function importExecute(body: unknown): Promise<Response> {
       configuredAccounts.add(catLower)
     }
 
+    // A starting balance given for an account that already exists: an unused one takes it, one in
+    // use keeps its own and the import says so. Mirrors the Worker (existingAccountStartingBalance).
+    // A value that does not read as a number is left alone, as it always was for existing accounts.
+    const startingBalanceUpdates: Array<{
+      record: Record<string, unknown>
+      amount: number
+      date: string
+    }> = []
+    let profileTransactions: Record<string, unknown>[] | null = null
+    for (const [rawName, rawBalance] of Object.entries(accountBalances)) {
+      const name = rawName.trim()
+      const lower = name.toLowerCase()
+      const id = accountIdMap.get(lower)
+      if (id === undefined || !toStr(rawBalance).trim()) continue
+      if (clean.length > 0 && !validAccountNames.has(lower)) continue
+      const amount = parseImportNumber(toStr(rawBalance).trim())
+      if (amount === null) continue
+      const record = existingAccounts.find((a) => (a as Record<string, unknown>).id === id) as
+        Record<string, unknown> | undefined
+      if (!record) continue
+      profileTransactions ??= (await db.getAllFromIndex(
+        'transactions',
+        'by_profile',
+        profileId
+      )) as Record<string, unknown>[]
+      const outcome = existingAccountStartingBalance(
+        {
+          startingBalance:
+            typeof record.starting_balance === 'number' ? record.starting_balance : 0,
+          hasTransactions: profileTransactions.some(
+            (t) => t.account_id === id || t.transfer_account_id === id
+          ),
+        },
+        amount
+      )
+      if (outcome === 'keep') warnings.push({ reason: startingBalanceKeptNote(name, amount) })
+      if (outcome === 'apply') {
+        startingBalanceUpdates.push({
+          record,
+          amount,
+          date: acctBalanceDates[lower] || localToday(),
+        })
+      }
+    }
+
     if (!dryRun) {
+      for (const { record, amount, date } of startingBalanceUpdates) {
+        const before = typeof record.starting_balance === 'number' ? record.starting_balance : 0
+        const balance = typeof record.balance === 'number' ? record.balance : 0
+        // Balances here move by deltas, not a recompute: shift by what the starting balance moved.
+        await db.put('accounts', {
+          ...record,
+          starting_balance: amount,
+          starting_date: date,
+          balance: balance + (amount - before),
+        })
+      }
       for (const config of accountConfigs) {
         const account = {
           name: config.name,
@@ -820,11 +874,7 @@ export async function importExecute(body: unknown): Promise<Response> {
       if (rawCat) {
         // Use lowered version only for matching; store original case in DB
         const catLower = rawCat.toLowerCase().trim()
-        // The category the row files under: its own name, or the old name a rule used to give
-        // when the space still has a category under it (shared/bankImport/categoryAliases.ts).
-        const nameOf = (c: { name: string }) => c.name.toLowerCase().trim()
-        const catKey = profileCategoryKey(rawCat, (k) => categories.some((c) => nameOf(c) === k))
-        let cat = categories.find((c) => nameOf(c) === catKey)
+        let cat = categories.find((c) => c.name.toLowerCase().trim() === catLower)
         // Auto-create category if not found. In dry-run we never mutate (preview only).
         // When category creation is gated (audit B5), only create approved names — an
         // unapproved category imports uncategorized (category_id null), not skipped.

@@ -2125,7 +2125,8 @@ check')` first, as the cushion and debt cases do.
   and a divider's own margin adds to it, so the heading lands 18 px under the button. The
   breakpoint is the button's, 768 px, not 640: at 700 the heading sat under it too.
   `prints-layout.spec.ts` "the Prints heading sits clear of the menu button", at 390 and 700,
-  fails without the rule, and at 700 with it at 640 px.
+  fails without the rule, and at 700 with it at 640 px. Main shipped the same rule in 5.17.5 as
+  #676, for Tags' rules; the merge of 5.17.5 keeps main's copy, which has the same value.
 - **The tour's Prints step points at the seal** (`PrintsShelf.tsx`). Its `data-tour` anchor was
   the whole shelf, which at 390 by 844 with 26 prints is 1016 px tall, and 1550 px with Month by
   month open. A spotlight taller than the screen put the tip over the shelf's words, and
@@ -2140,30 +2141,394 @@ check')` first, as the cushion and debt cases do.
 
 ### Fixed
 
-- **The Croatian bank-import rules give default category names.** `DEFAULT_CATEGORY_RULES` in
-  `shared/bankImport/categoryRules.ts` gave three personal labels that a newcomer's first import
-  offered under New categories: `Car (Gas)` is now `Transportation` (its keywords are fuel
-  stations), `Apartment (Bills)` is now `Utilities` (electricity, gas, water, waste, telecoms, the
-  building reserve fund and insurance) and `Salary Eur` is now `Salary` (pay, allowances,
-  payroll). All three are default categories. Keywords are unchanged.
-  - Aliases: `shared/bankImport/categoryAliases.ts` holds `RETIRED_RULE_CATEGORY_NAMES` (old name
-    to new) and `profileCategoryKey(name, has)`, which returns the folded name an import looks a
-    row's category up by. When the profile has a category under the old name, the old name wins,
-    even with the default of the new name beside it, so a space built from the old rules keeps
-    getting those rows and is never offered or given a second category. Otherwise the row's own
-    name is the key. One old name per new name, and an entry stays for good.
-  - Both runtimes match there and only there: local-first in `detectNewCategories` and the row
-    loop of `importExecute` (`frontend/src/core/storage/handlers/importFlow.ts`), the Worker in
-    `executeImport` (`worker/src/routes/imports.ts`, the new-category scan and the row loop), which
-    also serves the v1 API, MCP, email and sheet-sync imports. Account lookups keep the row's own
-    name. No migration and no stored category is renamed; a rule set saved in the rules editor
-    keeps the names it was saved with.
-  - Tests: `frontend/src/core/bankImport/__tests__/ruleCategoryNames.test.ts` fails when a rule
-    gives a name that is neither a default category nor on its list of general names, when a
-    retired name comes back, or when two old names share one new name.
+- **Saving the badge record no longer makes Dashboard, Progress and About this space read their
+  settings again.** The badge store (`frontend/src/core/achievementsStore.ts`) keeps the unlocks
+  and dismissed advice cards in the settings under `achievements` (`achievements:<profile>` in
+  local-first) and saves them with `PUT /api/settings` after every evaluation that earns a badge.
+  `apiFetch` bumped the `settings` counter for it like any settings write, so the circles
+  (`core/guidance.ts`, which follow `settings` and `portfolio`) asked for `GET /api/settings` and
+  `GET /api/portfolio/holdings` again on the next show of Dashboard or Progress, and About this
+  space for its settings on the next show of Settings, though none of them reads that key. Release
+  case `s04-import.spec.ts` 4.2 (cloud) failed on it whenever the evaluation that follows the
+  case's account arrangement landed after Dashboard was hidden: its last check saw those two GETs
+  on showing Dashboard. `invalidateForRequest` (`core/dataVersions.ts`) now takes the request body
+  from `apiFetch`, and a write to `/api/settings` whose body is a JSON object holding only keys in
+  `SETTINGS_ONLY_THEIR_STORE_READS` (`achievements`, a `:<digits>` suffix ignored) bumps nothing.
+  Any other key in the same body, a body that is not a JSON object, an empty object, or any other
+  settings route bumps `settings` as before. The list fails safe: a key missing from it costs a
+  refetch, never a stale page. Guards: `core/__tests__/dataVersions.test.ts` (the three badge-key
+  shapes bump nothing; mixed keys and unreadable bodies still bump),
+  `core/__tests__/apiFetch.test.ts` (both storage modes, through `apiFetch`) and
+  `core/__tests__/guidanceStore.test.ts` (the circles on Dashboard read neither settings nor
+  holdings after a badge save, and read settings after a currency save). All six fail without the
+  change.
+
+- **The circles follow a save of the retirement plan.** They work invested money out with the
+  plan's safe withdrawal rate, read from `retirement_settings` in `GET /api/settings`. The planner
+  saves the plan with `PUT /api/retirement/settings` (worker/src/routes/retirement-goals.ts, and
+  `/retirement/settings` in the local router), which bumps the `retirement` counter, while
+  `useGuidance` (`frontend/src/core/guidance.ts`) followed only `settings`, `portfolio` and the
+  profile. Dashboard and Progress kept the rate they first read until another settings or
+  portfolio write, or a profile switch. Badge saves had refreshed it by accident until the fix
+  above. `useGuidance` now follows `entityVersion('retirement')` too. It does not follow
+  `retirement-goals`: a goal holds no part of the plan. The planner is the only other reader of the
+  plan and applies its own save's answer. Guard: `core/__tests__/guidanceStore.test.ts` "follows a
+  retirement plan save, and not a retirement goal write" fails without the change ("expected 4 to
+  be 3").
+
+- **A badge refresh asked for while an evaluation runs gets one more evaluation.**
+  `refreshAchievements` (`frontend/src/core/achievementsStore.ts`) handed a call for the profile
+  whose evaluation was running that same running evaluation. AchievementsHost asks 1.2 s after a
+  write, so a write that landed after the running evaluation had read its lists (a second
+  `POST /api/accounts`, say) got an answer from before it, and nothing evaluated again until the
+  next write. The snapshot that Getting started, the circles and Progress read kept the old
+  account list, and a badge the write earned waited for the next write. The badges' half shipped
+  in 5.17.4. The setup wizard's done step (`OnboardingWizard.tsx` `loadNextSteps`) awaits
+  the same call to count what was just imported. Now such a call gets one further run, started
+  when the running one ends (settled or rejected). Every call made meanwhile shares it, and a call
+  during the further run queues one more after it, so asks fold and never loop. If another profile
+  is active when the running one ends, the further run is dropped and answers `[]`; the switch's
+  own refresh evaluates the new profile, as before. Guards in
+  `core/__tests__/achievementsStore.test.ts`, "a refresh asked for while an evaluation is
+  running": the running evaluation is held on its settings read, the accounts change, and a
+  refresh is asked for. Without the change the snapshot ends with `['Rainy day']` instead of
+  `['Rainy day', 'Holiday']`, and the fold case sees one settings read instead of two. Two more
+  cases pin that a switch drops the old profile's further run and that a run nobody asked again
+  during starts nothing. User-facing line in CHANGELOG.md under Fixed. Main has the same change
+  as #672, whose case checks that a budget added mid-run earns `first-budget`; the merge keeps
+  both cases here, and this entry stands for both.
+
+- **A month that has not begun is not tracked** (`shared/trackedMonths.ts`,
+  `core/achievements/evaluate.ts`, `core/achievements/review.ts`). `trackedMonthsOf(dates, today)`
+  leaves out every month after `today`'s, and the badges' evaluation passes its own today. So
+  `evaluation.trackedMonths`, and everything that reads it, holds no month still to come. Three
+  entries dated in December, put in early in October, had made December a tracked month. The
+  prints, which read that list, started a plate there ("1 of 12 months", "Eleven more tracked
+  months in a row finish it."), as the phase 4 review found.
+  - What changes for the badges: each counts months only up to this one. That covers One month,
+    A quarter, Half a year, A year and Two to Twenty years (months in a row); Saver x3, Saver x6
+    and A perfect year (saving months); Named everything, Reconciled and The full picture (their
+    first such month); The comeback (runs of months); Every month of a year; and the average
+    monthly spending that Rainy day measures a goal against. A badge reached through a month
+    still to come could be earned early and dated to that month; now it waits for the month.
+    Badges already earned stay earned, as the unlock records only add.
+  - Unchanged: the streak, which counts back from this month; Held the line, Clean sweep and Six
+    months under, which read finished months only; and First entry and the entry counts, which
+    count entries, not months. Getting started and the circles already stopped at this month
+    (`trackedMonthsInYearWindow`, `windowMonths`).
+  - The year in review counts its tracked months the same way; its totals still hold every entry
+    dated in the year.
+  - Guard: `core/__tests__/trackedMonths.test.ts` "a month that has not begun" fails without the
+    change, for the badges, the prints and the year in review each.
+  - Main shipped the same fix in 5.17.5 as #675, with its own filter in `evaluate.ts` and
+    `review.ts`. The merge of 5.17.5 keeps this branch's `trackedMonthsOf(dates, today)` in their
+    place, so the rule lives in one file, and #675's cases in `evaluate.test.ts` and
+    `review.test.ts` pass on it. Its CHANGELOG.md line is the one under 5.17.5, so this entry has
+    no line of its own there.
+
+### Lines for CHANGELOG.md when the benchmarks gate opens
+
+The production build holds back the benchmarks and the questions that choose their figures
+(`frontend/src/core/guidanceGate.ts`). The app shows CHANGELOG.md in production
+(`ChangelogModal.tsx`), so a line for a held piece would announce it there. These lines are written
+and reviewed with their commits and wait here; the commit that opens the gate moves them into
+CHANGELOG.md's [Unreleased].
+
+Added:
+
+- **Setup asks where you live and who the space covers**, to choose the official figures your numbers are compared with. Change the answers in Settings.
+- **Your savings rate, cushion and debts beside the official figures where you live.** Breathing room, Solid ground and Room to choose show the typical range, where you sit in it, and the source and year of every figure.
+- **Paying your way compares groceries, eating out, transport and housing** with what households where you live spend: the first three as shares of your spending, housing as a share of your take-home pay.
+- **Your subscriptions beside the usual count**, and in the UK and US beside the usual monthly spend, inside Paying your way.
+
+Changed:
+
+- **The savings rate shows the typical range where you live**, which is your target until you set your own.
+
+## [5.17.5] — 2026-11-01
+
+### Fixed
+
+- **A month that has not begun is not tracked** (`frontend/src/core/achievements/evaluate.ts`,
+  `frontend/src/core/achievements/review.ts`). `evaluateAchievements` built `tracked` from every
+  month holding `TRACKED_MONTH_MIN_TRANSACTIONS` entries, with no upper bound, so three bills dated
+  in December and put in during October made December a tracked month. Its filter now also needs
+  `m <= nowMonth`; `buildYearReview` counts its `trackedMonths` only for `month <= today`'s month.
+  The current month still counts, including entries dated later in it than today.
+  - Badges that change: everything derived from `tracked` counts months only up to this one. That
+    is One month to Twenty years (months in a row), Saver x3, Saver x6 and A perfect year (saving
+    months), Named everything, Reconciled and The full picture (first such month), The comeback
+    (runs), Every month of a year, and the average monthly spending Rainy day measures a goal
+    against. Before, a run or a calendar year completed by a month still to come was earned early
+    and dated to that month (twelve tracked months of 2026 seen on 2026-10-15 earned `a-year` and
+    `every-month`, both dated 2026-12-01).
+  - Unchanged: the streak and Progress's record strip, which count back from this month
+    (`currentStreak`, `streakStrip`) and so never reached a later month; Held the line, Clean
+    sweep and Six months under, which already read finished months only (`m >= nowMonth`);
+    First entry and the entry counts, which count entries, not months; the Year in review's
+    totals, which still hold every entry dated in the year.
+  - Badges already earned stay earned: `diffUnlocks` (`records.ts`) only adds to the stored
+    `achievements` setting, so an unlock recorded with a future `earnedOn` keeps it.
+  - Tests: `evaluate.test.ts` "a month that has not begun" (not tracked; completes no run or year
+    badge; the current month still counts; nothing is taken back) and `review.test.ts`
+    "buildYearReview, months that have not begun". The not-tracked, no-badge and review
+    month-to-come cases fail without the change; the current-month cases fail if the bound is
+    made strict (`<`).
+- **A section scrolled to the top lands below the menu button** (`components/Layout.module.css`).
+  Up to 768 px the menu button is fixed at the top left (x and y 12 to 48). Tags' "Add rule" /
+  "N rules" button scrolls the Rules divider (`#tags-sec-rules`) to the top with
+  `scrollIntoView({ block: 'start' })`; the divider's 18 px scroll margin put it at y 18 and the
+  word "Rules" at x 29 to 74, y 21 to 47, under the button. `.main`'s 56 px top padding clears
+  the button only at the top of the page, so fragments and focus shared the problem. The root now
+  has `scroll-padding-top: calc(env(safe-area-inset-top, 0px) + 48px)` while the button shows, and
+  the divider's margin adds to it: the divider lands at y 66 and the heading at y 69, 21 px under
+  the button. The breakpoint is the button's, 768 px, not 640: at 700 the heading sat under it
+  too. The only other `block: 'start'` caller, SectionRail, shows from 1280 px only. Ported from
+  5d27a9eb on the first-week branch. `menu-button-clearance.spec.ts`, at 390 and 700, fails
+  without the rule, and at 700 with it at 640 px.
+- **The tour's tip sits beside its target, not over it.** `bestPlacement` in
+  `frontend/src/components/Spotlight.tsx` centred the tip on the screen for any target wider than
+  75% (or taller than 55%) of it before trying a side, and sized every side check for a 140px tip;
+  the real tip measures 167-247px. On a 390x844 phone that put the tip over the middle of most
+  full-width targets.
+  - Placement is now the pure `placeTip` in `frontend/src/components/spotlightPlacement.ts`
+    (viewport, target rect, tip size, preferred side, optional pinned left edge in; side and
+    position out). It tries the step's preferred side, then bottom, top, right, left, and takes the
+    first with room for the whole tip (8px gap, 12px screen margin), so a side placement never
+    touches the target. With no room anywhere, the tip goes against the screen edge that hides the
+    least of the target (`placement: 'over'`).
+  - `Spotlight.tsx` passes the tip's measured `offsetWidth`/`offsetHeight` (fallback 247px, the
+    tallest tip measured). At 480px wide and under the tip's left edge is pinned at 16px by the
+    component (`PHONE_MAX_WIDTH`, `PHONE_TIP_INSET`) instead of by `left: 16px !important` in
+    `Spotlight.module.css`, so `placeTip` knows it cannot go beside a target there.
+  - Scroll pull-back: `updatePositions` runs from the window scroll handler and called
+    `scrollIntoView` whenever the target was within 80px of an edge, so a target taller than the
+    screen (Retirement "Your assumptions": 1200px desktop, 2503px phone) pulled the page back on
+    every scroll. Measured with a probe: a 400px scroll returned to the step's position within 2s
+    at both widths. The target is now scrolled into view once, when the step finds it; the same
+    probe keeps the scroll.
+  - Measured with the tour walk on 2026-11-01, steps whose tip covered its target although the
+    screen had room beside it: 390x844 12 of 53 before, 0 after; 1280x800 10 of 53 before, 0
+    after (Loans "What if" was covered 100% on desktop and 82% on a phone). Steps with no room
+    either side: 8 (phone) and 5 (desktop) both before and after; the share hidden fell from
+    6-15% to 1-2% on desktop and from 21-34% to 3-24% on a phone. Six desktop steps whose
+    centred tip did not cover anything now sit below their target instead of mid-screen.
+    The release walk on main (73dfec5a, with #676's scroll padding in) counted 6 phone steps
+    with no room, not 8, and still none covered with room on either width.
+  - `frontend/scripts/walk-tours.mjs` now measures every step's tip against its highlight, waits
+    for both to hold still, fails the gate when a tip covers its target where there was room for
+    both (`TIP` lines), reports the no-room cases, and writes all rects to `PLACEMENT_JSON`.
+  - Tests: `frontend/src/components/__tests__/spotlightPlacement.test.ts` (20: full-width targets
+    with room below, room above, neither; a sweep of full-width bands; preferred side; measured
+    height; 12px margin on each side; pinned tip; a 320px screen) and `spotlightTipWiring.test.tsx`
+    (7: measured and fallback height, the phone pin, no pull-back on scroll, one reveal per step,
+    no scroll for a target already in view). 18 and 3 of them failed against the old code; 15
+    mutations of the new guards were each caught.
+
+## [5.17.4] — 2026-10-31
+
+### Fixed
+
+- **A register exported from YNAB is read as one.** `ynabAdapter.detect()`
+  (`shared/bankImport/adapters/ynab.ts`) knew only the CSV YNAB _imports_
+  (`Date,Payee,[Category,]Memo,Outflow,Inflow`, `Date,Payee,Memo,Amount`) or "ynab" in the file
+  name, and `sniffDelimiter` only ',' or ';' (its header normaliser also deleted tabs). A file
+  YNAB _exports_ fell to manual mapping, though the welcome mail and the onboarding step said
+  YNAB exports import as they are; with "ynab" in its name it imported every row into the one
+  account picked, each transfer twice (spending plus income) and each starting balance as income.
+  - Detection: the header's delimiter is sniffed (tab, ';' or ',', most frequent in line 1), and a
+    header with `Date`, `Payee`, `Outflow`, `Inflow` plus one of `Account`, `Flag`, `Cleared`,
+    `Category Group/Category` is the register (0.97). The three import shapes keep their scores.
+  - Rows: `transformRegister` books each row through `buildTxn` with the row's `Account` as the
+    target account (keyword transfer rules off: YNAB has already said what is a transfer). A
+    `Transfer : <account>` payee becomes one transfer via the new exported
+    `transferTxn` (`shared/bankImport/classify.ts`, extracted from `buildTxn`); its mirror half
+    (same date, accounts swapped, sign flipped) is dropped, counted per key so two equal transfers
+    on a day stay two, and a half without its mirror still imports as a transfer. `Starting
+Balance` rows are not transactions: `parse()` puts them in the new
+    `StatementMeta.startingBalances` (by account, amount and date) with the new
+    `StatementMeta.accounts`. `Inflow: Ready to Assign` is dropped as a category so keyword rules
+    categorise income; `Split (n/m) ` memo markers are stripped; zero rows are skipped. Amounts
+    read only the span from first to last digit, so `1.234,56 kr.` is not read with `.` as the
+    decimal point.
+  - Import page (`frontend/src/features/import/importFlow.ts`, `ImportDataEntry.tsx`): a file with
+    `meta.accounts` needs no target account (`rowsMissingAccount`, new `namesItsAccounts`) and
+    shows "Accounts from the file: ..." instead of the picker; `processFiles` no longer warns that
+    no target account was chosen for it. `offerStartingBalances` pre-fills the mapping step's
+    starting balance and date for those accounts, editable, only where empty.
+  - API (`worker/src/routes/v1.ts`): such a file marks its accounts and its transfer destinations
+    as accounts, passes the starting balances to `executeImport`, and no longer creates an empty
+    account named after the adapter. Without this, its rows landed with `account_id` NULL.
+  - Copy: the welcome mail (`worker/src/emailTemplates.ts`), the onboarding import step and
+    `frontend/public/llms.txt` now name the Register file and what comes with it. The onboarding
+    sentence moved out of the Coming soon box, where it was not coming soon.
+  - Sources (read 2026-10-31): YNAB "How to Export Plan Data" (updated 2026-08-18; CSV, or TSV for
+    comma-decimal currencies; file names), "Transfer Transactions" (updated 2026-09-24; a transfer
+    shows in both registers), "The Starting Balance" (updated 2026-07-28; the payee name);
+    parse-ynab-export 1.0.6 on npm (2022; the header, a TSV sample with `kr 30,00`, `€144,36`,
+    `Transfer : ` payees, `Split (1/2) ` memos); csv_to_ynab_json.py, gist StephenBrown2
+    (2026-04-03; `Inflow` / `Ready to Assign`, `- Register.csv` in the zip, transfer pairing);
+    de_ynab 0.6.1 on hex.pm (2024-10-08; transfers as two rows, `Starting Balance`); the
+    beancount.io YNAB preset page (TSV, `84,23€`, both columns written as `$0.00`). Not confirmed,
+    so not handled: a `Payment : ` payee for credit-card payments, and YNAB 4's thirteen-column
+    register.
+  - Tests: `frontend/src/core/bankImport/__tests__/ynabRegister.test.ts` (detection by header with
+    each delimiter and a BOM, rows by account, transfer pairing, starting balances, Ready to
+    Assign, splits, comma decimals, `kr.`, zero rows, `processFiles` warnings),
+    `frontend/src/features/import/__tests__/ynabExportFlow.test.tsx` (the Bank Imports flow on
+    local-first from drop to stored accounts, transfer and balances, and the row showing the
+    file's accounts),
+    `rowsMissingAccount.test.ts`, and in `worker/test/v1-import-bank.test.ts` and
+    `email-verification.test.ts`.
+
+- **YNAB import, review fixes.** Found in review of the entry above, each with a test that failed
+  first (`ynabRegister.test.ts`, `ynabExportFlow.test.tsx`, `v1-import-bank.test.ts`).
+  - Identical rows: a register row's dedup key now ends in its occurrence number among identical
+    emitted rows (mirror halves not counted), so two same-day $3 rows or two equal transfers are
+    two rows the preview keeps selected, while a second copy of the file still matches one for
+    one. The import CSV path keeps its old key on purpose (documented there).
+  - A category named like an account (one the file names, as an Account value or a
+    `Transfer : X` payee, or one the profile already has, case-blind) is not used, in the
+    register and in the CSV YNAB imports: the canonical Category is also a transfer's
+    destination, and both executors resolve a category that is an account's name to that
+    account; the local one books an income or expense against it, so `Goals: Vacation` took
+    spending from Checking out of Vacation.
+    Keyword rules categorise those rows, and the file warns, naming the categories. The profile's
+    names reach `parse()` through `ParseDeps.knownAccounts` (for the warning) and `transform()`
+    through `ctx.knownAccounts`.
+  - `StatementMeta.warnings`: what an adapter skipped or changed, prefixed with the file name by
+    `processFiles`, and now also shown in the preview (`fetchDryRunPreview`), since the upload
+    step that listed bank warnings is gone by then. The preview lists notes without a row index
+    (these, and the starting-balance note) under their own heading, "About this import", not
+    under "Imported with changes". YNAB uses it for rows skipped for an unreadable date, rows
+    whose cells past the header hold content (an unquoted `$1,250.00`; extra cells that are all
+    empty are a trailing separator and the row is read), and the category clash.
+  - Amounts: the number span keeps a separator just before the first digit (`.50`, `-.50` read
+    100 times too large after f09677e3, on the import CSV path too). The decimal separator is
+    decided once per file from every amount cell (`makeAmountReader`), like the date order. A
+    cell proves its decimal separator when both appear, when it leads (`.50`), when the other one
+    repeats (`1.234.567`), or when the whole part is `0` or longer than three digits (`0.500`,
+    `1234,567`). A file of a currency without decimals proves it by a zero written with a sign
+    and no separator (`¥0`, `0 kr.`, as the register writes its unused column); a file that
+    proves nothing reads a dot as a decimal point and a comma as thousands, so three-decimal
+    dinars (`12.345`, `KD1.500`) are never read 1000 times too large; cells that prove both
+    fall back to per-cell `parseFlexibleNumber`. Register amounts are netted to 6 decimals, not
+    2, so mills survive. Rerunning the reviewer's 22-spelling comparison against 9be97465: the
+    `.50` diffs are gone; the 6 left are amounts with a comma that are not quoted in a comma file,
+    which 9be97465 misread (`$1,250.00` as 1) and which are now skipped with the warning above.
+    A one-row file whose spilled cell is empty (`1.234,56,`) cannot be told from a trailing
+    separator and is misread as 9be97465 misread it.
+  - `normalizeDate` (`shared/bankImport/parse.ts`) reads `YYYY/MM/DD` and `YYYY.MM.DD`.
+  - A register without an Account column records its Starting Balance under key `''`, which
+    `processFiles` (`withTargetAccount`) moves to the account chosen for the file; the v1 route
+    passes starting balances whenever there are any.
+  - YNAB 4's register (Check Number, Master Category, Sub Category or Running Balance) is not
+    read: `detect()` returns 0 for it, whatever the file is called.
+  - Starting balance for an existing account: both executors (`executeImport` in
+    `worker/src/routes/imports.ts`, `importExecute` in
+    `frontend/src/core/storage/handlers/importFlow.ts`) apply an offered starting balance (and
+    its date) to an existing account whose starting balance is 0 and which has no transactions;
+    one in use keeps its own and the response's `warnings` carries a note without an `index`
+    (`existingAccountStartingBalance`, `startingBalanceKeptNote`, `ImportNote` in
+    `shared/importRowChecks.ts`). The same amount as the account has is neither applied nor
+    reported. A value that is not a number is ignored for existing accounts, as before.
+  - The starting-balance rule applies to every import that sends account balances, the app's
+    CSV and Sheets mapping step too: an unused existing account takes the typed balance; a used
+    one keeps its own and the preview says so.
+  - The import log's `rows_with_warnings` (`frontend/src/features/import/importFlow.ts`, both
+    storage modes) counts warnings with a row index only, so a kept starting balance no longer
+    shows in Recent Imports as a row imported with a warning. The daily Sheets sync
+    (`worker/src/import-sync.ts`) sends no account balances, so its count has no notes in it.
+  - v1 (`worker/src/routes/v1.ts`): for a file that names its accounts, both ends of every
+    transfer row are marked as accounts, so a one-account selection's incoming transfer creates
+    its source account instead of being skipped.
+  - `processFiles`: the unknown-transfer-end warning is not raised for a file that names its
+    accounts, and is reworded to "The import creates them as new accounts.", true on the upload
+    step and in the preview alike. It said those transfers "import one-sided until you create the
+    account(s)"; on the Import page the mapping step lists both ends as accounts and the import
+    creates them, so the transfer has both ends (a Revolut top-up resolved to a new account by a
+    counterpart rule, `ynabExportFlow.test.tsx`). In the v1 API no non-YNAB adapter resolves a
+    counterpart (the Worker has no saved rules), so the warning only arises in the app.
+  - The Bank Imports file picker accepts `.tsv` / `text/tab-separated-values`. The File Upload
+    picker does not: its reader (`shared/importCsv.ts`) splits on commas only.
+  - Copy: the welcome mail, onboarding, `llms.txt` and CHANGELOG say starting balances go to
+    accounts that are new or still empty. The `llms.txt` importer bullet is rewritten without
+    em dashes.
+
+- **The bank-import rules give default category names, and each rule remembers the names it gave
+  before.** A newcomer's first import offered every name the built-in rules give that the space did
+  not have yet, and some were personal labels or a second name beside a default. In
+  `shared/bankImport/categoryRules.ts`, Croatian fuel (`Car (Gas)`) and parking (`Transport`) and
+  Worldwide rides (`Transport`) and fuel (`Fuel`) now give `Transportation`; Croatian bills
+  (`Apartment (Bills)`: electricity, gas, water, waste, telecoms, the building reserve fund and
+  insurance) give `Utilities`; Croatian pay (`Salary Eur`) gives `Salary`; and both pharmacy rules
+  (`Health`) give `Healthcare`. All are defaults a fresh space already has. `badminton` is no
+  longer a Croatian transport keyword: it was one person's own rule, and those rows now fall to
+  `Other`. Worldwide `Income` stays: besides `salary`, `payroll` and `wages` it matches `refund`,
+  `reimbursement` and `direct deposit`, which are money in but not pay, so folding it into `Salary`
+  would misfile them. No migration, and no stored category is renamed.
+  - Mechanism: `CategoryRule.formerly` (`shared/bankImport/types.ts`) lists the names a rule gave
+    before, oldest first. `ruleCategory(rule, categoryNames)` gives the first of them the space has
+    a category under (case-blind and trimmed, spelled as the space spells it), and otherwise the
+    rule's category. `matchRule` returns the winning rule instead of its name; `matchCategory`
+    takes the space's names, and `categorize` takes `{ categoryNames, fallback }`. `buildTxn`
+    passes `TransformContext.categoryNames`, which `processFiles` takes as
+    `ProcessOptions.categoryNames`. Any number of rules can fold into one name this way; Restaurant
+    and Dining into Eating out can follow.
+  - Why not the name-level alias #671 first shipped: `shared/bankImport/categoryAliases.ts`
+    (`RETIRED_RULE_CATEGORY_NAMES`, `profileCategoryKey`) mapped a new name back to one old name
+    when execute looked a row's category up. Once the fuel and parking rules both give
+    `Transportation`, a row carries only that name, and nothing can tell whether it stands for
+    `Car (Gas)` or `Transport`. With the rules folded and the alias kept, a space holding both filed
+    parking under `Car (Gas)`, and a space holding only `Transport` was offered `Transportation`
+    (both seen failing in the tests below). The alias is deleted and its three names are in
+    `formerly`. Both execute paths (`frontend/src/core/storage/handlers/importFlow.ts`,
+    `worker/src/routes/imports.ts`) match a row's own name again, byte for byte as before #671, so a
+    sheet, CSV, email or MCP row that names `Salary` is filed under `Salary`, not under a
+    `Salary Eur` beside it.
+  - Callers that run the rules pass the space's category names. The Bank Imports tab and the
+    onboarding wizard (`frontend/src/features/import/importFlow.ts`, both storage modes) read
+    `GET /api/categories` before running the rules, keep the active profile's by `profile_id`
+    (local-first answers for every profile in the household), and stop with "Couldn't read your
+    categories" rather than file rows by a guess. The Worker's `/api/v1/import`, which MCP's import
+    tool also uses, reads the profile's names from D1 (`worker/src/routes/v1.ts`).
+  - Saved rule sets keep the names they were saved with, and each rule's `formerly` too. The rules
+    editor carries it through its drafts beside the category the rule was loaded with
+    (`CategoryRuleDraft.formerly` and `loadedCategory`). The save drops it only when the category
+    saved differs from that one, trimmed and case-blind (`savedFormerNames` in
+    `frontend/src/core/bankImport/rulesCheck.ts`), so a category typed over and typed back keeps it.
+  - Earlier built-in rules stored in the browser: a mapping switch stored a full copy of the
+    group's built-in rules, and so did a save with nothing changed. The copy read as an edit, so the
+    renames above would never have reached anyone who switched, and the next switch warned that
+    edits would be lost. `frontend/src/core/bankImport/earlierBuiltInRules.ts` keeps each group's
+    earlier built-in rules exactly as git has them (Croatian as 5.3.0 to 5.17.3 shipped it and as
+    main had it after #671, Worldwide as 5.3.5 to 5.17.3 shipped it), and `loadCategoryRules` reads
+    a stored set that deep-equals one of them as that group's rules now. `saveCategoryRules` keeps
+    no copy of a group's built-in rules any more, so that list holds only what earlier versions
+    stored, and the next change to the built-in rules reaches everyone who never edited theirs.
+  - Tests: `frontend/src/core/bankImport/__tests__/ruleFormerNames.test.ts` covers the engine, both
+    groups and badminton. `ruleCategoryNames.test.ts` fails when a rule gives a name that is neither
+    a default nor on its list of general names, gives a name any rule gave before, or forgets one,
+    and when a general name is a near-duplicate of a default however it is cased, spaced or
+    punctuated. `earlierBuiltInRules.test.ts` stores frozen copies of each earlier version
+    (`__tests__/fixtures`, written from `git show`): they load as the rules now and are the copies
+    the app keeps, and saving the built-in rules stores nothing.
+    `frontend/src/features/import/__tests__/bankImportRuleCategories.test.tsx` drives the real flow
+    in local-first: a fresh profile, one made from the old rules, one holding a 5.17.3 copy of the
+    rules, a household whose other profile holds the old names, and an unreadable category list.
     `frontend/src/core/storage/__tests__/importFlow.ruleCategoryNames.test.ts` and
-    `worker/test/import-rule-category-names.test.ts` run fake rows categorized by the real rules
-    through a fresh space and through spaces holding the old names, with and without the defaults.
+    `worker/test/import-rule-category-names.test.ts` run a fake Revolut statement through a fresh
+    space, one holding the old names with and without the defaults, one with only `Transport`, and
+    a row that names its own category; the Worker file also runs `/api/v1/import`.
+    `bankRulesForm.test.tsx` covers the editor: former names kept on an unchanged save and on a
+    category typed back, dropped on another category, and a mapping switch that asks nothing over
+    any version's built-in rules.
+
+- **The bank rules editor suggests the active profile's categories.** `loadBankCategories`
+  (`frontend/src/features/import/importFlow.ts`) listed every name `GET /api/categories` returned,
+  and in local-first that list answers for every profile the household view shows. It now takes
+  `importCategoryNames`, which keeps the active profile's by `profile_id`: the names the import
+  files rows by. Test: `bankImportRuleCategories.test.tsx`, a household of two profiles.
 
 - **Text on a primary fill reads `--on-primary`.** White on the dark theme's `--primary` (#6e9bff)
   is 2.69:1 and on `--primary-hover` 2.06:1, under WCAG AA's 4.5:1 for text; the instrument deck's
@@ -2216,88 +2581,23 @@ check')` first, as the cushion and debt cases do.
     two exceptions are named with their reasons, and a third case fails when an exception no longer
     matches anything.
 
-- **Saving the badge record no longer makes Dashboard, Progress and About this space read their
-  settings again.** The badge store (`frontend/src/core/achievementsStore.ts`) keeps the unlocks
-  and dismissed advice cards in the settings under `achievements` (`achievements:<profile>` in
-  local-first) and saves them with `PUT /api/settings` after every evaluation that earns a badge.
-  `apiFetch` bumped the `settings` counter for it like any settings write, so the circles
-  (`core/guidance.ts`, which follow `settings` and `portfolio`) asked for `GET /api/settings` and
-  `GET /api/portfolio/holdings` again on the next show of Dashboard or Progress, and About this
-  space for its settings on the next show of Settings, though none of them reads that key. Release
-  case `s04-import.spec.ts` 4.2 (cloud) failed on it whenever the evaluation that follows the
-  case's account arrangement landed after Dashboard was hidden: its last check saw those two GETs
-  on showing Dashboard. `invalidateForRequest` (`core/dataVersions.ts`) now takes the request body
-  from `apiFetch`, and a write to `/api/settings` whose body is a JSON object holding only keys in
-  `SETTINGS_ONLY_THEIR_STORE_READS` (`achievements`, a `:<digits>` suffix ignored) bumps nothing.
-  Any other key in the same body, a body that is not a JSON object, an empty object, or any other
-  settings route bumps `settings` as before. The list fails safe: a key missing from it costs a
-  refetch, never a stale page. Guards: `core/__tests__/dataVersions.test.ts` (the three badge-key
-  shapes bump nothing; mixed keys and unreadable bodies still bump),
-  `core/__tests__/apiFetch.test.ts` (both storage modes, through `apiFetch`) and
-  `core/__tests__/guidanceStore.test.ts` (the circles on Dashboard read neither settings nor
-  holdings after a badge save, and read settings after a currency save). All six fail without the
-  change.
-
-- **The circles follow a save of the retirement plan.** They work invested money out with the
-  plan's safe withdrawal rate, read from `retirement_settings` in `GET /api/settings`. The planner
-  saves the plan with `PUT /api/retirement/settings` (worker/src/routes/retirement-goals.ts, and
-  `/retirement/settings` in the local router), which bumps the `retirement` counter, while
-  `useGuidance` (`frontend/src/core/guidance.ts`) followed only `settings`, `portfolio` and the
-  profile. Dashboard and Progress kept the rate they first read until another settings or
-  portfolio write, or a profile switch. Badge saves had refreshed it by accident until the fix
-  above. `useGuidance` now follows `entityVersion('retirement')` too. It does not follow
-  `retirement-goals`: a goal holds no part of the plan. The planner is the only other reader of the
-  plan and applies its own save's answer. Guard: `core/__tests__/guidanceStore.test.ts` "follows a
-  retirement plan save, and not a retirement goal write" fails without the change ("expected 4 to
-  be 3").
-
 - **A badge refresh asked for while an evaluation runs gets one more evaluation.**
   `refreshAchievements` (`frontend/src/core/achievementsStore.ts`) handed a call for the profile
   whose evaluation was running that same running evaluation. AchievementsHost asks 1.2 s after a
-  write, so a write that landed after the running evaluation had read its lists (a second
-  `POST /api/accounts`, say) got an answer from before it, and nothing evaluated again until the
-  next write. The snapshot that Getting started, the circles and Progress read kept the old
-  account list, and a badge the write earned waited for the next write. This was already in 5.17.3
-  for the badges. The setup wizard's done step (`OnboardingWizard.tsx` `loadNextSteps`) awaits
-  the same call to count what was just imported. Now such a call gets one further run, started
-  when the running one ends (settled or rejected). Every call made meanwhile shares it, and a call
-  during the further run queues one more after it, so asks fold and never loop. If another profile
-  is active when the running one ends, the further run is dropped and answers `[]`; the switch's
-  own refresh evaluates the new profile, as before. Guards in
-  `core/__tests__/achievementsStore.test.ts`, "a refresh asked for while an evaluation is
-  running": the running evaluation is held on its settings read, the accounts change, and a
-  refresh is asked for. Without the change the snapshot ends with `['Rainy day']` instead of
-  `['Rainy day', 'Holiday']`, and the fold case sees one settings read instead of two. Two more
-  cases pin that a switch drops the old profile's further run and that a run nobody asked again
-  during starts nothing. User-facing line in CHANGELOG.md under Fixed. Main has the same change
-  as #672, whose case checks that a budget added mid-run earns `first-budget`; the merge keeps
-  both cases here, and this entry stands for both.
-
-- **A month that has not begun is not tracked** (`shared/trackedMonths.ts`,
-  `core/achievements/evaluate.ts`, `core/achievements/review.ts`). `trackedMonthsOf(dates, today)`
-  leaves out every month after `today`'s, and the badges' evaluation passes its own today. So
-  `evaluation.trackedMonths`, and everything that reads it, holds no month still to come. Three
-  entries dated in December, put in early in October, had made December a tracked month. The
-  prints, which read that list, started a plate there ("1 of 12 months", "Eleven more tracked
-  months in a row finish it."), as the phase 4 review found.
-  - What changes for the badges: each counts months only up to this one. That covers One month,
-    A quarter, Half a year, A year and Two to Twenty years (months in a row); Saver x3, Saver x6
-    and A perfect year (saving months); Named everything, Reconciled and The full picture (their
-    first such month); The comeback (runs of months); Every month of a year; and the average
-    monthly spending that Rainy day measures a goal against. A badge reached through a month
-    still to come could be earned early and dated to that month; now it waits for the month.
-    Badges already earned stay earned, as the unlock records only add.
-  - Unchanged: the streak, which counts back from this month; Held the line, Clean sweep and Six
-    months under, which read finished months only; and First entry and the entry counts, which
-    count entries, not months. Getting started and the circles already stopped at this month
-    (`trackedMonthsInYearWindow`, `windowMonths`).
-  - The year in review counts its tracked months the same way; its totals still hold every entry
-    dated in the year.
-  - Guard: `core/__tests__/trackedMonths.test.ts` "a month that has not begun" fails without the
-    change, for the badges, the prints and the year in review each.
-  - Main carries the same fix in its own layout as #675 (in `evaluate.ts` and `review.ts`, with
-    `shared/trackedMonths.ts` left as it is), whose CHANGELOG.md line reaches this branch with
-    the next merge of main, so this entry has no line of its own there.
+  write, so a write that landed after the running evaluation had read its lists (a budget saved a
+  second or so after another change, say) got an answer from before it, and nothing evaluated
+  again until the next write: the badge it earned, and the snapshot Progress reads, waited for
+  that write. Now such a call gets one further run, started when the running one ends (settled or
+  rejected). Every call made meanwhile shares it, and a call during the further run queues one
+  more after it, so asks fold and never loop. If another profile is active when the running one
+  ends, the further run is dropped and answers `[]`; the switch's own refresh evaluates the new
+  profile, as before. Guards in `frontend/src/core/__tests__/achievementsStore.test.ts`, "a
+  refresh asked for while an evaluation is running": the running evaluation is held on its
+  settings read, a first budget is added, and a refresh is asked for. Against the old store it
+  fails with "expected [] to include 'first-budget'", and the fold case sees one settings read
+  instead of two. Two more cases pin that a switch drops the old profile's further run and that a
+  run nobody asked again during starts nothing. feat/first-week carries the same change as
+  d3a1f32f, where the test checks the account list Getting started reads instead of a badge.
 
 ### Tests
 
@@ -2311,25 +2611,6 @@ check')` first, as the cushion and debt cases do.
   fix and with a probe after each sign-in, all eight cases met the wizard: three failed at the
   Logout wait, five at the probe. `setNewPassword` now boots with the account, and the confirm-link
   cases call the new `markSetupDecided(context, email)`.
-
-### Lines for CHANGELOG.md when the benchmarks gate opens
-
-The production build holds back the benchmarks and the questions that choose their figures
-(`frontend/src/core/guidanceGate.ts`). The app shows CHANGELOG.md in production
-(`ChangelogModal.tsx`), so a line for a held piece would announce it there. These lines are written
-and reviewed with their commits and wait here; the commit that opens the gate moves them into
-CHANGELOG.md's [Unreleased].
-
-Added:
-
-- **Setup asks where you live and who the space covers**, to choose the official figures your numbers are compared with. Change the answers in Settings.
-- **Your savings rate, cushion and debts beside the official figures where you live.** Breathing room, Solid ground and Room to choose show the typical range, where you sit in it, and the source and year of every figure.
-- **Paying your way compares groceries, eating out, transport and housing** with what households where you live spend: the first three as shares of your spending, housing as a share of your take-home pay.
-- **Your subscriptions beside the usual count**, and in the UK and US beside the usual monthly spend, inside Paying your way.
-
-Changed:
-
-- **The savings rate shows the typical range where you live**, which is your target until you set your own.
 
 ## [5.17.3] — 2026-10-30
 

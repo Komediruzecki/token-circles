@@ -275,3 +275,209 @@ describe('POST /api/v1/import - bank adapters first', () => {
     expect(total?.n).toBe(0);
   });
 });
+
+/**
+ * A register exported from YNAB names the account of every row, records each transfer in both
+ * accounts and each account's opening balance as a "Starting Balance" row. Header and conventions:
+ * shared/bankImport/adapters/ynab.ts. Every name and amount is made up.
+ */
+const YNAB_REGISTER = [
+  [
+    'Account',
+    'Flag',
+    'Date',
+    'Payee',
+    'Category Group/Category',
+    'Category Group',
+    'Category',
+    'Memo',
+    'Outflow',
+    'Inflow',
+    'Cleared',
+  ],
+  [
+    'Test Checking',
+    '',
+    '01/02/2026',
+    'Starting Balance',
+    'Inflow: Ready to Assign',
+    'Inflow',
+    'Ready to Assign',
+    '',
+    '$0.00',
+    '$1,250.00',
+    'Reconciled',
+  ],
+  [
+    'Test Checking',
+    '',
+    '01/14/2026',
+    'Corner Grocer',
+    'Everyday: Groceries',
+    'Everyday',
+    'Groceries',
+    '',
+    '$54.20',
+    '$0.00',
+    'Cleared',
+  ],
+  [
+    'Test Checking',
+    '',
+    '01/20/2026',
+    'Transfer : Test Savings',
+    '',
+    '',
+    '',
+    'Monthly top-up',
+    '$200.00',
+    '$0.00',
+    'Cleared',
+  ],
+  [
+    'Test Savings',
+    '',
+    '01/20/2026',
+    'Transfer : Test Checking',
+    '',
+    '',
+    '',
+    'Monthly top-up',
+    '$0.00',
+    '$200.00',
+    'Cleared',
+  ],
+]
+  .map((cells) => cells.map((c) => `"${c}"`).join(','))
+  .join('\n');
+
+describe('POST /api/v1/import - a YNAB register export', () => {
+  beforeEach(seed);
+
+  it("books every row in the account it names, with that account's starting balance", async () => {
+    const res = await post({ body: YNAB_REGISTER, filename: 'Register.csv' });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, any>;
+    expect(body.parsedBy).toBe('bank:ynab');
+    expect(body.accountsCreated).toBe(2);
+    expect(body.warnings.join(' ')).not.toMatch(/no target account chosen/i);
+
+    const accounts = await env.DB.prepare(
+      'SELECT name, balance, starting_balance, starting_date FROM accounts WHERE profile_id = ? ORDER BY name'
+    )
+      .bind(PROFILE_ID)
+      .all<{ name: string; balance: number; starting_balance: number; starting_date: string }>();
+    expect(accounts.results).toEqual([
+      { name: 'Erste Current', balance: 0, starting_balance: 0, starting_date: null },
+      {
+        name: 'Test Checking',
+        balance: 995.8,
+        starting_balance: 1250,
+        starting_date: '2026-01-02',
+      },
+      {
+        name: 'Test Savings',
+        balance: 200,
+        starting_balance: 0,
+        starting_date: expect.any(String),
+      },
+    ]);
+
+    const rows = await env.DB.prepare(
+      `SELECT t.type, t.amount, a.name AS account, d.name AS destination
+         FROM transactions t
+         LEFT JOIN accounts a ON a.id = t.account_id
+         LEFT JOIN accounts d ON d.id = t.transfer_account_id
+        WHERE t.profile_id = ? ORDER BY t.date`
+    )
+      .bind(PROFILE_ID)
+      .all();
+    expect(rows.results).toEqual([
+      { type: 'expense', amount: 54.2, account: 'Test Checking', destination: null },
+      { type: 'transfer', amount: 200, account: 'Test Checking', destination: 'Test Savings' },
+    ]);
+  });
+});
+
+// Review findings, 2026-10-31. Each case failed on f09677e3.
+const ynabFile = (rows: string[][]) =>
+  [YNAB_REGISTER.split('\n')[0], ...rows.map((cells) => cells.map((c) => `"${c}"`).join(','))].join(
+    '\n'
+  );
+const ynabRow = (account: string, date: string, payee: string, out: string, inn: string) => [
+  account,
+  '',
+  date,
+  payee,
+  '',
+  '',
+  '',
+  '',
+  out,
+  inn,
+  'Cleared',
+];
+
+describe('POST /api/v1/import - YNAB review findings', () => {
+  beforeEach(seed);
+
+  it('creates the account an incoming transfer came from, for a one-account selection', async () => {
+    const res = await post({
+      body: ynabFile([
+        ynabRow('Test Savings', '01/20/2026', 'Transfer : Test Checking', '$0.00', '$200.00'),
+      ]),
+      filename: 'Selected Transactions for Test Plan.csv',
+    });
+    const body = (await res.json()) as Record<string, any>;
+    expect(body.imported).toBe(1);
+    expect(body.skipped).toBe(0);
+    const rows = await env.DB.prepare(
+      `SELECT t.type, t.amount, a.name AS account, d.name AS destination
+         FROM transactions t
+         LEFT JOIN accounts a ON a.id = t.account_id
+         LEFT JOIN accounts d ON d.id = t.transfer_account_id
+        WHERE t.profile_id = ?`
+    )
+      .bind(PROFILE_ID)
+      .all();
+    expect(rows.results).toEqual([
+      { type: 'transfer', amount: 200, account: 'Test Checking', destination: 'Test Savings' },
+    ]);
+  });
+
+  it('gives an existing empty account its starting balance, and keeps one in use, saying so', async () => {
+    await env.DB.prepare(
+      "INSERT INTO accounts (name, type, currency, balance, profile_id, starting_balance) VALUES ('Test Checking', 'giro', 'EUR', 0, ?, 0), ('Test Savings', 'giro', 'EUR', 40, ?, 40)"
+    )
+      .bind(PROFILE_ID, PROFILE_ID)
+      .run();
+    const res = await post({
+      body: ynabFile([
+        ynabRow('Test Checking', '01/02/2026', 'Starting Balance', '$0.00', '$1,250.00'),
+        ynabRow('Test Savings', '01/02/2026', 'Starting Balance', '$0.00', '$3,000.00'),
+        ynabRow('Test Checking', '01/14/2026', 'Corner Grocer', '$54.20', '$0.00'),
+        ynabRow('Test Savings', '01/15/2026', 'Bank Interest', '$0.00', '$1.00'),
+      ]),
+      filename: 'Register.csv',
+    });
+    const body = (await res.json()) as Record<string, any>;
+    expect(body.imported).toBe(2);
+    expect(body.warnings.map((w: { reason: string }) => w.reason)).toContain(
+      'Test Savings already has a starting balance or transactions, so the starting balance of 3000.00 in this import was not applied to it.'
+    );
+    const accounts = await env.DB.prepare(
+      "SELECT name, balance, starting_balance, starting_date FROM accounts WHERE profile_id = ? AND name LIKE 'Test %' ORDER BY name"
+    )
+      .bind(PROFILE_ID)
+      .all();
+    expect(accounts.results).toEqual([
+      {
+        name: 'Test Checking',
+        balance: 1195.8,
+        starting_balance: 1250,
+        starting_date: '2026-01-02',
+      },
+      { name: 'Test Savings', balance: 41, starting_balance: 40, starting_date: null },
+    ]);
+  });
+});

@@ -11,15 +11,7 @@ import type { ParseDeps } from './xlsx';
 
 /** Supported bank identifiers. Extend by adding an adapter + a registry entry. */
 export type BankId =
-  | 'revolut'
-  | 'erste'
-  | 'pbz'
-  | 'ynab'
-  | 'n26'
-  | 'wise'
-  | 'ing'
-  | 'sparkasse'
-  | 'dkb';
+  'revolut' | 'erste' | 'pbz' | 'ynab' | 'n26' | 'wise' | 'ing' | 'sparkasse' | 'dkb';
 
 /**
  * Transaction type in the app's canonical vocabulary. `/api/import/execute`
@@ -64,6 +56,23 @@ export interface StatementMeta {
   /** Last 4 digits of the account/card, when present in the statement. */
   accountLast4?: string;
   holder?: string;
+  /**
+   * The accounts a multi-account export assigns its rows to (YNAB's register names one per
+   * row). When present, each row imports into its own account and the file needs no target
+   * account chosen for it.
+   */
+  accounts?: string[];
+  /**
+   * Opening balances the export records as rows rather than as transactions (YNAB's
+   * "Starting Balance"), by account name. They are not income: the import offers them as
+   * the starting balance of each account it creates.
+   */
+  startingBalances?: Record<string, { amount: number; date: string }>;
+  /**
+   * What the adapter skipped or changed while reading the file, in words for the person
+   * importing it. `processFiles` prefixes each with the file name.
+   */
+  warnings?: string[];
 }
 
 /** A parsed statement: the raw data rows plus sniffed metadata. */
@@ -84,6 +93,13 @@ export interface DetectInput {
 /** A category keyword rule: match any keyword in the text → assign `category`. */
 export interface CategoryRule {
   category: string;
+  /**
+   * The names this rule gave before `category`, oldest first. A space that has a category under
+   * one of them keeps getting this rule's rows there (categoryRules.ts, `ruleCategory`). The
+   * built-in rules list them, and a rule set the user saves keeps them until the user gives the
+   * rule another category.
+   */
+  formerly?: string[];
   keywords: string[];
 }
 export type CategoryRuleSet = CategoryRule[];
@@ -107,6 +123,12 @@ export interface TransformContext {
   /** The app account this statement belongs to (auto-resolved or user-picked). */
   targetAccount: string;
   categoryRules: CategoryRuleSet;
+  /**
+   * The names of the categories the space being imported into has. A rule gives a name it gave
+   * before (`CategoryRule.formerly`) where the space has a category under it. Left out, every
+   * rule gives the name it gives now.
+   */
+  categoryNames?: readonly string[];
   transferRules: TransferRuleSet;
   /** The user's known account names — for counterpart resolution + account typing. */
   knownAccounts: string[];

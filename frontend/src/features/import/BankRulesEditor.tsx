@@ -41,6 +41,14 @@ interface BankRuleValues {
   counterparts: CounterpartDraft[]
 }
 
+/** A rule the form and the flow can each own: its former names copied, not shared. */
+const copyRule = (rule: CategoryRuleDraft): CategoryRuleDraft => ({
+  category: rule.category,
+  keywords: rule.keywords,
+  ...(rule.formerly ? { formerly: [...rule.formerly] } : {}),
+  ...(rule.loadedCategory !== undefined ? { loadedCategory: rule.loadedCategory } : {}),
+})
+
 export function BankRulesEditor(props: { flow: ImportFlow; onRecalculate?: () => void }) {
   const flow = props.flow
   // Unique per instance: the Import page and the onboarding wizard can both be
@@ -65,10 +73,7 @@ export function BankRulesEditor(props: { flow: ImportFlow; onRecalculate?: () =>
 
   /** The flow's drafts, as the form holds them. */
   const drafts = (): BankRuleValues => ({
-    categoryRules: flow.categoryRuleDraft.map((rule) => ({
-      category: rule.category,
-      keywords: rule.keywords,
-    })),
+    categoryRules: flow.categoryRuleDraft.map(copyRule),
     transferKeywords: flow.transferKeywordDraft(),
     counterparts: flow.counterpartDraft.map((counterpart) => ({
       signature: counterpart.signature,
@@ -116,12 +121,16 @@ export function BankRulesEditor(props: { flow: ImportFlow; onRecalculate?: () =>
   const setRules = (rules: CategoryRuleDraft[]) => {
     batch(() => {
       form.set('categoryRules', rules)
-      flow.setCategoryRuleDraft(reconcile(rules.map((rule) => ({ ...rule }))))
+      flow.setCategoryRuleDraft(reconcile(rules.map(copyRule)))
     })
   }
-  const setRule = (index: number, field: keyof CategoryRuleDraft, text: string) => {
+  const setRule = (index: number, field: 'category' | 'keywords', text: string) => {
     setRules(
-      form.values.categoryRules.map((rule, i) => (i === index ? { ...rule, [field]: text } : rule))
+      // The names a rule gave before stay through any typing: the save decides whether its
+      // category is another one (savedFormerNames).
+      form.values.categoryRules.map((rule, i) =>
+        i === index ? { ...copyRule(rule), [field]: text } : rule
+      )
     )
   }
   const setCounterparts = (counterparts: CounterpartDraft[]) => {

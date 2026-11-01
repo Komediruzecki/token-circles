@@ -45,25 +45,7 @@ export function buildTxn(raw: RawTxn, ctx: TransformContext): CanonicalTxn {
   if (looksTransfer) {
     const counterpart = resolveCounterpart(text, ctx.transferRules);
     if (counterpart && counterpart.toLowerCase() !== ctx.targetAccount.toLowerCase()) {
-      // Two-sided transfer. Direction is taken from the amount's sign as seen from
-      // the target account: negative → money leaves the target (target = source),
-      // positive → money enters the target (target = destination). The app's
-      // execute links means_of_payment → account_id (source) and the account-named
-      // category → transfer_account_id (destination).
-      const outbound = raw.amount < 0;
-      return {
-        date: raw.date,
-        type: 'Transfer',
-        meansOfPayment: outbound ? ctx.targetAccount : counterpart,
-        category: outbound ? counterpart : ctx.targetAccount,
-        amount: Math.abs(raw.amount),
-        currency: raw.currency,
-        description: raw.description,
-        beneficiary: raw.beneficiary,
-        payor: raw.payor,
-        notes: raw.notes,
-        dedupKey: dedupKeyOf(raw, ctx),
-      };
+      return transferTxn(raw, ctx, counterpart);
     }
     // Transfer suspected but the counterpart account is unknown. Import as signed
     // income/expense so the one account we do know stays balanced, and flag it in
@@ -77,9 +59,36 @@ export function buildTxn(raw: RawTxn, ctx: TransformContext): CanonicalTxn {
   return incomeExpense(raw, ctx, raw.notes);
 }
 
+/**
+ * A two-sided transfer between the target account and `counterpart`. Direction is taken
+ * from the amount's sign as seen from the target account: negative → money leaves the
+ * target (target = source), positive → money enters the target (target = destination).
+ * The app's execute links means_of_payment → account_id (source) and the account-named
+ * category → transfer_account_id (destination). Exported for adapters whose files name
+ * the other account outright (YNAB's "Transfer : <account>" payee), so no rule guesses it.
+ */
+export function transferTxn(raw: RawTxn, ctx: TransformContext, counterpart: string): CanonicalTxn {
+  const outbound = raw.amount < 0;
+  return {
+    date: raw.date,
+    type: 'Transfer',
+    meansOfPayment: outbound ? ctx.targetAccount : counterpart,
+    category: outbound ? counterpart : ctx.targetAccount,
+    amount: Math.abs(raw.amount),
+    currency: raw.currency,
+    description: raw.description,
+    beneficiary: raw.beneficiary,
+    payor: raw.payor,
+    notes: raw.notes,
+    dedupKey: dedupKeyOf(raw, ctx),
+  };
+}
+
 function incomeExpense(raw: RawTxn, ctx: TransformContext, notes?: string): CanonicalTxn {
   const type: CanonicalTxn['type'] = raw.amount < 0 ? 'Expense' : 'Income';
-  const category = categorize([raw.description, raw.counterparty], ctx.categoryRules);
+  const category = categorize([raw.description, raw.counterparty], ctx.categoryRules, {
+    categoryNames: ctx.categoryNames,
+  });
   return {
     date: raw.date,
     type,

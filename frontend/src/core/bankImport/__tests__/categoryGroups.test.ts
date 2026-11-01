@@ -63,7 +63,7 @@ describe('worldwide category matching', () => {
     expect(matchCategory('AMAZON PRIME MEMBERSHIP', w)).toBe('Subscriptions')
     expect(matchCategory('amazon marketplace', w)).toBe('Shopping')
     expect(matchCategory('UBER EATS', w)).toBe('Dining')
-    expect(matchCategory('uber trip 123', w)).toBe('Transport')
+    expect(matchCategory('uber trip 123', w)).toBe('Transportation')
   })
 
   // Regression guard: a bare "rent" keyword substring-matched "current" — a very

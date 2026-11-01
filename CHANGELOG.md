@@ -37,12 +37,27 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
-- **A first import from a Croatian bank uses standard category names.** Fuel, utility bills and pay now go under Transportation, Utilities and Salary instead of Car (Gas), Apartment (Bills) and Salary Eur. If you already have those three, your imports keep filing there.
 - **A category called Groceries shows a shopping cart, and one named for a meal shows a knife and fork** (Eating out, Restaurant, Dining, Breakfast, Lunch, Dinner, Meals), and an import that creates one gives it the same icon. Before, they showed a coffee mug, and Eating out a plain tick. An icon you picked stays, and so does the mug an earlier import gave a category while you were signed in. Coffee and Cafe keep the mug.
 - **The subscription scan keeps up with a long history.** With a few thousand entries, Scan transactions on Bills and the setup wizard's subscriptions step held the page for over a second. They now find the same subscriptions in a small part of that time.
-- **Buttons in the dark theme are easier to read.** Their labels are now dark on the blue fill instead of white, and so are the active filters, tabs, page numbers and badges that share that blue.
 - **The plan name on a subscription the scan finds is easier to read.** In the light theme, "Standard" beside Netflix was blue on a pale blue tint at 4.0:1. It's a darker blue now, on Bills and in setup.
-- **Something you add a second or so after another change now counts straight away.** A badge it earns shows up, and Getting started sees a second account, where before both waited for your next change.
+- **Getting started sees an account you add a second or so after another change straight away.** Before, it waited for your next change, as badges did until 5.17.4.
+
+## [5.17.5] — 2026-11-01
+
+### Fixed
+
+- **Entries dated ahead wait for their month.** Bills put in early for a month that hasn't begun no longer make it a tracked month, for your badges or the Year in review, so a badge like A year or Every month of a year can't be earned before its last month begins.
+- **On a phone, the tour's tip no longer covers what it points at.** It sits above or below the highlighted part of the page whenever there is room, and a step no longer drags the page back when you scroll during it.
+
+## [5.17.4] — 2026-10-31
+
+### Fixed
+
+- **A file exported from YNAB imports with its accounts.** Drop the Register file from YNAB's Export Plan download on Bank Imports, with commas or tabs, and each row goes to its own account, each transfer arrives once, and starting balances go to accounts that are new or still empty.
+- **A first bank import files into the standard categories.** Fuel, parking and fares go under Transportation, pharmacies and clinics under Healthcare, bills under Utilities and pay under Salary, instead of new Car (Gas), Transport, Fuel, Health, Apartment (Bills) or Salary Eur categories; if you already have one of those, its rows keep going there.
+- **The bank import rules suggest only your profile's categories.** In local-first household view the Category field also listed the other profiles' categories.
+- **Buttons in the dark theme are easier to read.** Their labels are now dark on the blue fill instead of white, and so are the active filters, tabs, page numbers and badges that share that blue.
+- **A badge you earn a second or so after another change shows up straight away.** Before, it waited for your next change.
 
 ## [5.17.3] — 2026-10-30
 

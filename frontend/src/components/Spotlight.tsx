@@ -14,74 +14,17 @@ import {
   tourSteps,
 } from '../core/spotlightStore'
 import styles from './Spotlight.module.css'
-import type { SpotlightStep } from '../core/spotlightStore'
+import { placeTip } from './spotlightPlacement'
 
-const GAP = 8
 const TOOLTIP_WIDTH = 320
-
-function bestPlacement(
-  step: SpotlightStep,
-  targetRect: DOMRect
-): { placement: string; top: number; left: number } {
-  const vw = window.innerWidth
-  const vh = window.innerHeight
-  const tw = TOOLTIP_WIDTH
-  const th = 140
-
-  // If target is huge (most of the viewport), center the tooltip
-  const tooBig = targetRect.height > vh * 0.55 || targetRect.width > vw * 0.75
-  if (tooBig) {
-    return { placement: 'center', top: vh / 2 - th / 2, left: vw / 2 - tw / 2 }
-  }
-
-  const pref = step.placement || 'bottom'
-  const placements = [pref, 'bottom', 'top', 'right', 'left'].filter(
-    (v, i, a) => a.indexOf(v) === i
-  )
-
-  for (const p of placements) {
-    let top = 0
-    let left = 0
-
-    switch (p) {
-      case 'bottom':
-        top = targetRect.bottom + GAP
-        left = targetRect.left + targetRect.width / 2 - tw / 2
-        break
-      case 'top':
-        top = targetRect.top - th - GAP
-        left = targetRect.left + targetRect.width / 2 - tw / 2
-        break
-      case 'right':
-        top = targetRect.top + targetRect.height / 2 - th / 2
-        left = targetRect.right + GAP
-        break
-      case 'left':
-        top = targetRect.top + targetRect.height / 2 - th / 2
-        left = targetRect.left - tw - GAP
-        break
-    }
-
-    // Clamp to viewport
-    const minPad = 12
-    if (left < minPad) left = minPad
-    if (left + tw > vw - minPad) left = vw - tw - minPad
-    if (top < minPad) top = minPad
-    if (top + th > vh - minPad) top = vh - th - minPad
-
-    // Check if it fits and doesn't overlap the target center
-    const tx = targetRect.left + targetRect.width / 2
-    const ty = targetRect.top + targetRect.height / 2
-    const overlapsCenter = left < tx && left + tw > tx && top < ty && top + th > ty
-
-    if (top > 0 && left > 0 && top + th < vh && left + tw < vw && !overlapsCenter) {
-      return { placement: p, top, left }
-    }
-  }
-
-  // Fallback: center
-  return { placement: 'center', top: vh / 2 - th / 2, left: vw / 2 - tw / 2 }
-}
+// What the tip measures when it cannot be measured (not laid out yet, or no layout at all as in
+// jsdom). The tallest tip the tour walk measured on main on 2026-11-01, Settings tabs at both
+// widths: erring tall only makes a side look too small, never lets the tip run over the target.
+const TOOLTIP_FALLBACK_HEIGHT = 247
+// At this width and under, the tip spans the screen this far in from each edge (its width is set
+// to match in Spotlight.module.css), so it can go above, below or over a target, never beside it.
+const PHONE_MAX_WIDTH = 480
+const PHONE_TIP_INSET = 16
 
 export default function Spotlight() {
   const [highlight, setHighlight] = createSignal({
@@ -135,6 +78,10 @@ export default function Spotlight() {
     })
   }
 
+  // Whether this step has had its one chance to scroll its target into view. Reset when the step
+  // starts; see the end of updatePositions.
+  let revealed = false
+
   const updatePositions = () => {
     const step = currentStep()
     if (!step) return
@@ -181,11 +128,29 @@ export default function Spotlight() {
       visible: true,
     })
 
-    const tp = bestPlacement(step, rect)
-    setTooltip(tp)
+    // Measured every time: the tip's height follows its copy, from 167px to 247px on the tours
+    // as they are. offsetWidth/Height ignore the entry transform, so mid-animation is fine.
+    const tip = {
+      width: tooltipRef?.offsetWidth || TOOLTIP_WIDTH,
+      height: tooltipRef?.offsetHeight || TOOLTIP_FALLBACK_HEIGHT,
+    }
+    const vw = window.innerWidth
+    setTooltip(
+      placeTip({
+        viewport: { width: vw, height: window.innerHeight },
+        target: rect,
+        tip,
+        preferred: step.placement,
+        pinnedLeft: vw <= PHONE_MAX_WIDTH ? PHONE_TIP_INSET : undefined,
+      })
+    )
     setTooltipReady(true)
 
-    // Scroll target into view if needed
+    // Bring the target into view once, when the step first finds it. This runs from the scroll
+    // handler too, and checking there pulled the page back on every scroll: a target taller than
+    // the screen can never sit 80px clear of both edges, so a user could not scroll through it.
+    if (revealed) return
+    revealed = true
     const margin = 80
     if (rect.top < margin || rect.bottom > window.innerHeight - margin) {
       target.scrollIntoView({ behavior: 'smooth', block: 'center' })
@@ -210,6 +175,7 @@ export default function Spotlight() {
 
     const selector = step.targetSelector
     const runStep = stepIdx()
+    revealed = false
     setTargetMissing(false)
     setTooltipReady(false)
 
