@@ -48,6 +48,42 @@ All notable changes to Token Circles are documented here. The format is based on
   too. The only other `block: 'start'` caller, SectionRail, shows from 1280 px only. Ported from
   5d27a9eb on the first-week branch. `menu-button-clearance.spec.ts`, at 390 and 700, fails
   without the rule, and at 700 with it at 640 px.
+- **The tour's tip sits beside its target, not over it.** `bestPlacement` in
+  `frontend/src/components/Spotlight.tsx` centred the tip on the screen for any target wider than
+  75% (or taller than 55%) of it before trying a side, and sized every side check for a 140px tip;
+  the real tip measures 167-247px. On a 390x844 phone that put the tip over the middle of most
+  full-width targets.
+  - Placement is now the pure `placeTip` in `frontend/src/components/spotlightPlacement.ts`
+    (viewport, target rect, tip size, preferred side, optional pinned left edge in; side and
+    position out). It tries the step's preferred side, then bottom, top, right, left, and takes the
+    first with room for the whole tip (8px gap, 12px screen margin), so a side placement never
+    touches the target. With no room anywhere, the tip goes against the screen edge that hides the
+    least of the target (`placement: 'over'`).
+  - `Spotlight.tsx` passes the tip's measured `offsetWidth`/`offsetHeight` (fallback 247px, the
+    tallest tip measured). At 480px wide and under the tip's left edge is pinned at 16px by the
+    component (`PHONE_MAX_WIDTH`, `PHONE_TIP_INSET`) instead of by `left: 16px !important` in
+    `Spotlight.module.css`, so `placeTip` knows it cannot go beside a target there.
+  - Scroll pull-back: `updatePositions` runs from the window scroll handler and called
+    `scrollIntoView` whenever the target was within 80px of an edge, so a target taller than the
+    screen (Retirement "Your assumptions": 1200px desktop, 2503px phone) pulled the page back on
+    every scroll. Measured with a probe: a 400px scroll returned to the step's position within 2s
+    at both widths. The target is now scrolled into view once, when the step finds it; the same
+    probe keeps the scroll.
+  - Measured with the tour walk on 2026-11-01, steps whose tip covered its target although the
+    screen had room beside it: 390x844 12 of 53 before, 0 after; 1280x800 10 of 53 before, 0
+    after (Loans "What if" was covered 100% on desktop and 82% on a phone). Steps with no room
+    either side: 8 (phone) and 5 (desktop) both before and after; the share hidden fell from
+    6-15% to 1-2% on desktop and from 21-34% to 3-24% on a phone. Six desktop steps whose
+    centred tip did not cover anything now sit below their target instead of mid-screen.
+  - `frontend/scripts/walk-tours.mjs` now measures every step's tip against its highlight, waits
+    for both to hold still, fails the gate when a tip covers its target where there was room for
+    both (`TIP` lines), reports the no-room cases, and writes all rects to `PLACEMENT_JSON`.
+  - Tests: `frontend/src/components/__tests__/spotlightPlacement.test.ts` (20: full-width targets
+    with room below, room above, neither; a sweep of full-width bands; preferred side; measured
+    height; 12px margin on each side; pinned tip; a 320px screen) and `spotlightTipWiring.test.tsx`
+    (7: measured and fallback height, the phone pin, no pull-back on scroll, one reveal per step,
+    no scroll for a target already in view). 18 and 3 of them failed against the old code; 15
+    mutations of the new guards were each caught.
 
 ## [5.17.4] — 2026-10-31
 

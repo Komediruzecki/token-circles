@@ -41,13 +41,16 @@
 //   CHROMIUM              chromium executable path (falls back to /opt/pw-browsers/chromium)
 //   WORKER_MAX_UPTIME_MS  recycle the Worker between tours once it is this old (default 60000);
 //                         0 leaves only crash recovery
+//   PLACEMENT_JSON        write every step's viewport, highlight and tip rects to this file
 //
 // Exit codes:
-//   0  every step of every tour spotlighted a visible element
-//   1  at least one step MISSed — a real tour regression, listed under "Failures"
+//   0  every step of every tour spotlighted a visible element, and no tip covered its target
+//      where the screen had room for both
+//   1  at least one step MISSed or was covered by its own tip — a real tour regression, listed
+//      under "Failures"
 //   2  the Worker could not be kept alive long enough to prove the tours either way
 // ============================================================
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { chromium } from '@playwright/test'
 import { WorkerDownError, WorkerSupervisor } from './lib/worker-supervisor.mjs'
@@ -59,10 +62,99 @@ const STATE_PATH = 'tests/.auth/state.json'
 const MOBILE = process.env.MOBILE === '1'
 const ONLY = process.env.TOUR || ''
 const WORKER_MAX_UPTIME_MS = Number(process.env.WORKER_MAX_UPTIME_MS ?? 60000)
+const PLACEMENT_JSON = process.env.PLACEMENT_JSON || ''
 
 // A spotlight rect smaller than this is a mis-anchored step (a collapsed or zero-size
 // element), not a real highlight.
 const MIN_HIGHLIGHT_PX = 14
+
+// How far the tip must stay from the highlight's edge to count as beside it, and from the screen
+// edge to count as on screen. The highlight is the target padded by 6px and the engine keeps the
+// tip 8px off the target and 12px off the screen edge, so the tip needs 12 + 2 = 14px of slack
+// past its own size on one side of the highlight. Below that, covering part of the target is the
+// only option there is, and the step is reported but not failed.
+const ROOM_EDGE_PX = 14
+
+/*
+ * Where the tip sits relative to what it points at.
+ *
+ * A spotlight can land on the right element and still be useless: on a phone the tip used to sit
+ * on top of a full-width target, hiding the very thing the step describes. That is invisible to
+ * the highlight-size check above, so measure it: the tip's rect against the highlight's visible
+ * part, and whether the screen had room to put the tip beside it instead.
+ */
+async function readPlacement() {
+  return page
+    .evaluate(() => {
+      const tip = document.querySelector('[class*="stepCounter"]')?.parentElement
+      const glow = document.querySelector('svg[class*="backdropSvg"] rect[stroke-width="2"]')
+      if (!tip || !glow) return null
+      const t = tip.getBoundingClientRect()
+      const num = (a) => Number(glow.getAttribute(a))
+      return {
+        // The tip fades in with a translate, and until it has its visible class it can still be
+        // sitting where the last step put it.
+        shown: /visible/.test(tip.className),
+        vw: window.innerWidth,
+        vh: window.innerHeight,
+        tip: { x: t.x, y: t.y, w: t.width, h: t.height },
+        target: { x: num('x'), y: num('y'), w: num('width'), h: num('height') },
+      }
+    })
+    .catch(() => null)
+}
+
+/**
+ * The placement once it has stopped moving.
+ *
+ * A step can still be scrolling its target into view, or waiting for a lazy page to mount it,
+ * when the walk's fixed settle time runs out, and one reading then compares the new tip with the
+ * last step's target. Read until two readings 150ms apart agree, for up to 3s. Null with
+ * `shown: false` means the tip never appeared in that time: the step was still waiting for its
+ * target, and the highlight on screen is the previous step's.
+ */
+async function measurePlacement() {
+  const key = (g) =>
+    g?.shown ? [g.tip.x, g.tip.y, g.target.x, g.target.y, g.target.h].map(Math.round).join() : ''
+  let last = await readPlacement()
+  for (let waited = 0; waited < 3000; waited += 150) {
+    await page.waitForTimeout(150)
+    const now = await readPlacement()
+    if (key(now) && key(now) === key(last)) {
+      const { shown, ...geo } = now
+      return { geo, shown }
+    }
+    last = now
+  }
+  return { geo: null, shown: !!last?.shown }
+}
+
+/** The covered area, and whether a tip of this size fits on any side of the target. */
+function judgePlacement({ vw, vh, tip, target }) {
+  // Only the part of the target on screen can be covered or seen.
+  const vis = {
+    l: Math.max(0, target.x),
+    t: Math.max(0, target.y),
+    r: Math.min(vw, target.x + target.w),
+    b: Math.min(vh, target.y + target.h),
+  }
+  const ow = Math.min(vis.r, tip.x + tip.w) - Math.max(vis.l, tip.x)
+  const oh = Math.min(vis.b, tip.y + tip.h) - Math.max(vis.t, tip.y)
+  // One pixel of slack for sub-pixel rounding at a shared edge.
+  const covered = ow > 1 && oh > 1 ? Math.round(ow * oh) : 0
+  const visArea = Math.max(0, vis.r - vis.l) * Math.max(0, vis.b - vis.t)
+  const fitsV = tip.h <= vh - 2 * 12
+  const fitsH = tip.w <= vw - 2 * 12
+  const room = {
+    above: fitsH && target.y - ROOM_EDGE_PX >= tip.h,
+    below: fitsH && vh - (target.y + target.h) - ROOM_EDGE_PX >= tip.h,
+    left: fitsV && target.x - ROOM_EDGE_PX >= tip.w,
+    right: fitsV && vw - (target.x + target.w) - ROOM_EDGE_PX >= tip.w,
+  }
+  const hasRoom = room.above || room.below || room.left || room.right
+  const pct = visArea > 0 ? Math.round((covered / visArea) * 100) : 0
+  return { covered, pct, hasRoom, room }
+}
 
 // How many times one tour may be re-walked after the Worker died under it. Three is enough for
 // two crashes back to back; a tour that cannot survive three fresh workers is reported as
@@ -237,6 +329,14 @@ async function openTourModal() {
 
 let totalSteps = 0
 let missing = 0
+/** Steps whose tip covered their target although the screen had room for both. */
+let covering = 0
+/** Steps whose tip covered their target because nothing else fitted. Reported, never failed. */
+let coveringNoRoom = 0
+/** Steps whose tip or highlight was still moving after 3s, so nothing could be said about them. */
+let unsettled = 0
+/** Every measured step, for PLACEMENT_JSON. */
+const placements = []
 const failures = []
 /** Tours the Worker never stayed up long enough to prove either way. Not the same as a failure. */
 const unproven = []
@@ -314,10 +414,40 @@ async function walkTour({ id, label }) {
         `${label} / step ${i + 1} "${title}": ${flagged ? 'app reports target missing' : 'no visible highlight'}`
       )
     }
+
+    // A missed step has no target to cover, so only a found one is measured.
+    const measured = ok ? await measurePlacement() : { geo: null, shown: false }
+    const geo = measured.geo
+    const verdict = geo ? judgePlacement(geo) : null
+    let placementNote = ''
+    if (ok && !geo) {
+      unsettled++
+      placementNote = measured.shown
+        ? '  tip still moving after 3s, placement not measured'
+        : '  tip not shown after 3s: still waiting for its target, placement not measured'
+    }
+    if (geo && verdict) {
+      const r = (o) => `${Math.round(o.x)},${Math.round(o.y)} ${Math.round(o.w)}x${Math.round(o.h)}`
+      placements.push({ tour: id, step: i + 1, title, ...geo, ...verdict })
+      placementNote = `  tip ${r(geo.tip)} over target ${r(geo.target)}`
+      if (verdict.covered > 0 && verdict.hasRoom) {
+        covering++
+        const sides = Object.keys(verdict.room).filter((k) => verdict.room[k])
+        failures.push(
+          `${label} / step ${i + 1} "${title}": the tip covers ${verdict.pct}% of its target ` +
+            `although there is room ${sides.join('/')} it`
+        )
+        placementNote += ` COVERS ${verdict.pct}% (room ${sides.join('/')})`
+      } else if (verdict.covered > 0) {
+        coveringNoRoom++
+        placementNote += ` covers ${verdict.pct}% (no room beside it)`
+      }
+    }
+    const stepOk = ok && !(verdict && verdict.covered > 0 && verdict.hasRoom)
     console.log(
-      `  ${ok ? 'ok  ' : 'MISS'}  step ${i + 1}: ${title}  ` +
+      `  ${stepOk ? 'ok  ' : ok ? 'TIP ' : 'MISS'}  step ${i + 1}: ${title}  ` +
         `${box ? `${Math.round(box.width)}x${Math.round(box.height)}` : 'no-highlight'}` +
-        `${flagged ? ' [target-missing banner]' : ''}`
+        `${flagged ? ' [target-missing banner]' : ''}${placementNote}`
     )
 
     const next = page.locator('[class*="tooltip"] [class*="btnPrimary"]').last()
@@ -351,7 +481,15 @@ async function walkTour({ id, label }) {
  */
 async function walkTourResilient(t) {
   for (let attempt = 1; attempt <= MAX_TOUR_ATTEMPTS; attempt++) {
-    const mark = { totalSteps, missing, failures: failures.length }
+    const mark = {
+      totalSteps,
+      missing,
+      covering,
+      coveringNoRoom,
+      unsettled,
+      failures: failures.length,
+      placements: placements.length,
+    }
     try {
       // Inside the try: a Worker that dies during the recycle or the reload is the same event as
       // one that dies mid-tour, and gets the same retry rather than an unhandled rejection.
@@ -362,7 +500,11 @@ async function walkTourResilient(t) {
       if (!(err instanceof WorkerDownError)) throw err
       totalSteps = mark.totalSteps
       missing = mark.missing
+      covering = mark.covering
+      coveringNoRoom = mark.coveringNoRoom
+      unsettled = mark.unsettled
       failures.length = mark.failures
+      placements.length = mark.placements
       console.log(`[worker] "${t.label}" was interrupted: ${err.message}`)
       if (attempt === MAX_TOUR_ATTEMPTS) break
       // Counted after the break, so the number is re-walks and not interruptions — the last
@@ -421,6 +563,21 @@ await worker.stop()
 
 console.log(`\nTOTAL steps: ${totalSteps}, steps without a visible spotlight: ${missing}`)
 console.log(
+  `Tip placement: ${covering} step(s) cover their target although there is room beside it, ` +
+    `${coveringNoRoom} cover it because nothing else fits, ${unsettled} could not be measured (tip hidden or still moving).`
+)
+if (PLACEMENT_JSON) {
+  writeFileSync(
+    PLACEMENT_JSON,
+    JSON.stringify(
+      { mobile: MOBILE, covering, coveringNoRoom, unsettled, steps: placements },
+      null,
+      2
+    )
+  )
+  console.log(`Placements written to ${PLACEMENT_JSON}`)
+}
+console.log(
   `Worker: ${worker.summary()}, ${workerRetries} tour re-walk${workerRetries === 1 ? '' : 's'}. ` +
     `None of that is a tour failure.`
 )
@@ -444,15 +601,24 @@ if (unproven.length) {
  * tested" — and reading the second as the first is the whole confusion this script was rewritten
  * to end. So say which one it is.
  */
-if (missing > 0) {
-  console.log(`\nGATE: FAILED — ${missing} step(s) MISSed. This is a real tour regression.`)
+if (missing > 0 || covering > 0) {
+  const what = [
+    missing > 0 ? `${missing} step(s) MISSed` : '',
+    covering > 0 ? `${covering} tip(s) covered their target with room to spare` : '',
+  ]
+    .filter(Boolean)
+    .join(', ')
+  console.log(`\nGATE: FAILED — ${what}. This is a real tour regression.`)
 } else if (unproven.length) {
   console.log(
     `\nGATE: UNPROVEN — the Worker would not stay up, so ${unproven.length} tour(s) were never ` +
       `walked. NOT a pass, and NOT a tour failure. Re-run.`
   )
 } else {
-  console.log('\nGATE: PASSED — every step of every tour spotlighted a visible element.')
+  console.log(
+    '\nGATE: PASSED — every step of every tour spotlighted a visible element, and no tip ' +
+      'covered its target where there was room beside it.'
+  )
 }
 await browser.close()
-process.exit(missing > 0 ? 1 : unproven.length > 0 ? 2 : 0)
+process.exit(missing > 0 || covering > 0 ? 1 : unproven.length > 0 ? 2 : 0)
