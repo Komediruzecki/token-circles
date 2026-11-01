@@ -6,7 +6,7 @@ describe('classifyCategory', () => {
     expect(classifyCategory('Revolut')).toBe('account')
   })
 
-  it('classifies WRev (abbreviation) as account via "rev" keyword', () => {
+  it('classifies WRev (abbreviation) as account: read split at its capitals, it holds "rev"', () => {
     expect(classifyCategory('WRev')).toBe('account')
   })
 
@@ -83,5 +83,70 @@ describe('classifyCategory', () => {
     expect(classifyCategory('REVOLUT')).toBe('account')
     expect(classifyCategory('salary')).toBe('income')
     expect(classifyCategory('PAYPAL')).toBe('account')
+  })
+})
+
+describe('classifyCategory matches whole words, not parts of words', () => {
+  it.each(['Library', 'Review', 'Otherwise', 'Likewise', 'Fiber internet', 'Contribution'])(
+    '%s is an expense: no account keyword is a whole word in it',
+    (name) => {
+      expect(classifyCategory(name)).toBe('expense')
+    }
+  )
+
+  it.each(['Accountant', 'Sewage', 'Concurrent'])(
+    '%s is an expense: "account", "wage" and "current" are only part of the word',
+    (name) => {
+      expect(classifyCategory(name)).toBe('expense')
+    }
+  )
+
+  it.each([
+    'IB',
+    'IB account',
+    'IBKR',
+    'Interactive Brokers',
+    'Revolut',
+    'Rev',
+    'Wise',
+    'N26',
+    'Checking account',
+    'Brokerage',
+    'Trading212',
+    'Girokonto',
+  ])('%s is an account', (name) => {
+    expect(classifyCategory(name)).toBe('account')
+  })
+
+  it.each(['Investments', 'Investment'])('%s stays an account', (name) => {
+    expect(classifyCategory(name)).toBe('account')
+  })
+
+  it.each(['Wages', 'Wage', 'Royalties', 'Royalty', 'Dividends', 'Refunds', 'Pay cheque'])(
+    '%s stays income',
+    (name) => {
+      expect(classifyCategory(name)).toBe('income')
+    }
+  )
+
+  it('a multi-word account name beats a single income word in it', () => {
+    expect(classifyCategory('Credit card account')).toBe('account')
+    expect(classifyCategory('Credit')).toBe('income')
+  })
+
+  it('finds word edges at non-ASCII letters, where JS \\b does not', () => {
+    // An ASCII \b sees the accented letter as a word edge, so it finds "ib" in Ibérica and "rev"
+    // in Revêtement. Both are one word each.
+    expect(classifyCategory('Ibérica')).toBe('expense')
+    expect(classifyCategory('Revêtement de sol')).toBe('expense')
+    // Plaća and račun are whole words next to the keywords, which still match.
+    expect(classifyCategory('Revolut račun')).toBe('account')
+    expect(classifyCategory('Plaća')).toBe('expense')
+  })
+
+  it('reads punctuation and separators as word edges', () => {
+    expect(classifyCategory('IB/Interactive')).toBe('account')
+    expect(classifyCategory('e-wallet')).toBe('account')
+    expect(classifyCategory('Wise (EUR)')).toBe('account')
   })
 })
