@@ -143,7 +143,10 @@ export default defineConfig(({ command, mode }) => {
                 // Deliberately absent: icon-512.png and og-image.jpg, which are read by the OS
                 // install sheet and by crawlers, never by the page, and neither goes through the
                 // worker.
-                globDirectory: 'dist',
+                //
+                // No `globDirectory`: the plugin defaults it to the build's resolved outDir. A
+                // hard-coded 'dist' made `vite build --outDir X` precache whatever was in dist/
+                // (nothing, or an older build's hashed files) instead of X.
                 globPatterns: [
                   'assets/**/*.{js,css}',
                   'manifest.webmanifest',
