@@ -26,6 +26,21 @@ const TOOLTIP_FALLBACK_HEIGHT = 247
 const PHONE_MAX_WIDTH = 480
 const PHONE_TIP_INSET = 16
 
+/**
+ * How to scroll a step's target into view: centred when it fits on the screen, from its top when
+ * it does not.
+ *
+ * Centring a target taller than the screen opened it at its middle, with its heading and first
+ * rows scrolled off the top: Retirement's assumptions, the category list and, on a phone,
+ * Holdings. 'start' shows where it begins. The room is what is left under the root's
+ * scroll-padding-top, the strip a phone keeps clear for the menu button (Layout.module.css):
+ * scrollIntoView stops below it, so that strip is no room to show the target in.
+ */
+function revealBlock(targetHeight: number): ScrollLogicalPosition {
+  const padTop = parseFloat(window.getComputedStyle(document.documentElement).scrollPaddingTop) || 0
+  return targetHeight > window.innerHeight - padTop ? 'start' : 'center'
+}
+
 export default function Spotlight() {
   const [highlight, setHighlight] = createSignal({
     top: 0,
@@ -153,7 +168,7 @@ export default function Spotlight() {
     revealed = true
     const margin = 80
     if (rect.top < margin || rect.bottom > window.innerHeight - margin) {
-      target.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      target.scrollIntoView({ behavior: 'smooth', block: revealBlock(rect.height) })
     }
   }
 

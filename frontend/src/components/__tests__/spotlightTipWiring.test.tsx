@@ -26,6 +26,8 @@ const PHONE = { width: 390, height: 844 }
 let host: HTMLDivElement | undefined
 let dispose: (() => void) | undefined
 let scrollCalls: string[]
+/** Where each scrollIntoView asked its target to land, by data-tour key. */
+let scrollBlocks: Record<string, ScrollLogicalPosition | undefined>
 const anchors: HTMLElement[] = []
 const saved = { w: window.innerWidth, h: window.innerHeight }
 
@@ -73,8 +75,14 @@ const start = (steps: SpotlightStep[]) => {
 
 beforeEach(() => {
   scrollCalls = []
-  Element.prototype.scrollIntoView = function (this: Element) {
-    scrollCalls.push(this.getAttribute('data-tour') ?? '?')
+  scrollBlocks = {}
+  Element.prototype.scrollIntoView = function (
+    this: Element,
+    arg?: boolean | ScrollIntoViewOptions
+  ) {
+    const key = this.getAttribute('data-tour') ?? '?'
+    scrollCalls.push(key)
+    scrollBlocks[key] = typeof arg === 'object' ? arg.block : undefined
   }
   Object.defineProperty(window, 'innerWidth', { configurable: true, value: PHONE.width })
   Object.defineProperty(window, 'innerHeight', { configurable: true, value: PHONE.height })
@@ -92,6 +100,7 @@ afterEach(() => {
   Object.defineProperty(window, 'innerWidth', { configurable: true, value: saved.w })
   Object.defineProperty(window, 'innerHeight', { configurable: true, value: saved.h })
   vi.restoreAllMocks()
+  document.documentElement.style.scrollPaddingTop = ''
 })
 
 describe('Spotlight measures its tip', () => {
@@ -171,5 +180,37 @@ describe('Spotlight scrolls a target into view once per step', () => {
     start([step('card')])
     await settle(150)
     expect(scrollCalls).toEqual([])
+  })
+})
+
+/*
+ * Where a target lands. Centring one taller than the screen opened it at its middle, with its
+ * heading scrolled off the top: Retirement's assumptions at both widths, the category list and
+ * Holdings on a phone. One that does not fit now opens at its top; one that fits stays centred.
+ */
+describe('Spotlight opens a target that does not fit at its top', () => {
+  it('scrolls a target taller than the screen to its start', async () => {
+    anchor('tall', { top: 300, left: 25, width: 340, height: 1200 })
+    start([step('tall')])
+    await settle(150)
+    expect(scrollBlocks.tall).toBe('start')
+  })
+
+  it('centres a target that fits on the screen', async () => {
+    anchor('card', { top: 900, left: 25, width: 340, height: 300 })
+    start([step('card')])
+    await settle(150)
+    expect(scrollBlocks.card).toBe('center')
+  })
+
+  it('does not count the strip kept clear for the menu button as room', async () => {
+    // A phone keeps 48px under the root's scroll-padding-top for the menu button, so an 820px
+    // target fits the 844px screen but not the 796px left under the button. Centred, its top
+    // would sit 36px down, under the button.
+    document.documentElement.style.scrollPaddingTop = '48px'
+    anchor('almost', { top: 600, left: 25, width: 340, height: 820 })
+    start([step('almost')])
+    await settle(150)
+    expect(scrollBlocks.almost).toBe('start')
   })
 })
