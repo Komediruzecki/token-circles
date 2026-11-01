@@ -224,6 +224,14 @@ export default function Dashboard() {
 
   const isWidgetVisible = (id: string) => visibleWidgets().includes(id)
 
+  // The tour's Summary metrics step points at the metric cards, which a person can hide in Views:
+  // the step then found nothing and showed its missing-target notice. Show them while the tour is
+  // on that step, and only then. Not saved: Views stores what the person chose, and the tour did
+  // not choose.
+  const tourOnMetrics = () =>
+    spotlightActive() &&
+    tourSteps()[spotlightStep()]?.targetSelector === '[data-tour="dashboard-metrics"]'
+
   // Cash-flow Sankey (income → categories) for the selected month — the same
   // instrument as on Analytics, following the dashboard's period navigator.
   const [sankeyData, setSankeyData] = createSignal<SankeyData | null>(null)
@@ -548,8 +556,8 @@ export default function Dashboard() {
         </div>
       ) : metrics() ? (
         <>
-          {/* Metrics Grid — always visible */}
-          <Show when={isWidgetVisible('metrics')}>
+          {/* Metrics Grid: hideable in Views, shown for the tour's Summary metrics step */}
+          <Show when={isWidgetVisible('metrics') || tourOnMetrics()}>
             <div
               class={styles.metricsGrid}
               data-test-id="dashboard-metrics"

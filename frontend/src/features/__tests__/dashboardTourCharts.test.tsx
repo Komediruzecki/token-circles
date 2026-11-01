@@ -1,14 +1,21 @@
 /**
- * The Dashboard tour's Charts step has charts to point at.
+ * The Dashboard tour's Charts and Summary metrics steps have something to point at.
  *
+ * Charts:
  * Its anchor, the net-worth and cash-flow charts, sits below "Show more", which starts closed. On
  * an account that had never opened it, the step found nothing, waited out the engine's 6s and
  * showed the missing-target notice. The tour walk still passed it: it judged the step 1.2s in, by
  * the highlight the Summary metrics step had left on screen.
  *
  * The page now opens Show more when the tour reaches that step, and leaves the person's saved
- * choice alone. The account here is empty (every total zero, no history), which is the state the
- * targeting contract says an anchor must render in too.
+ * choice alone.
+ *
+ * Summary metrics: its anchor is the metric cards, which a person can hide in Views. With them
+ * hidden the step found nothing and showed the missing-target notice. The page now shows the cards
+ * while the tour is on that step, and only then; the saved Views choice is not touched.
+ *
+ * The account here is empty (every total zero, no history), which is the state the targeting
+ * contract says an anchor must render in too.
  */
 import { render } from 'solid-js/web'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -63,8 +70,10 @@ vi.mock('../../core/api', async (importOriginal) => {
 })
 
 const CHARTS = '[data-tour="dashboard-charts"]'
+const METRICS = '[data-tour="dashboard-metrics"]'
 const dashboardTour = SPOTLIGHT_TOURS.find((t) => t.id === 'dashboard')!
 const chartsStep = dashboardTour.steps.findIndex((s) => s.targetSelector === CHARTS)
+const metricsStep = dashboardTour.steps.findIndex((s) => s.targetSelector === METRICS)
 
 let host: HTMLDivElement
 let dispose: (() => void) | undefined
@@ -132,5 +141,52 @@ describe("the Dashboard tour's Charts step", () => {
       'Show less'
     )
     expect(localStorage.getItem('dashboard_showMore')).toBe('0')
+  })
+})
+
+describe("the Dashboard tour's Summary metrics step", () => {
+  const hiddenMetrics = JSON.stringify({
+    visibleWidgets: ALL_WIDGET_IDS.filter((id) => id !== 'metrics'),
+  })
+
+  it('is a step of the Dashboard tour, between the period bar and Charts', () => {
+    expect(metricsStep).toBeGreaterThan(0)
+    expect(metricsStep).toBeLessThan(chartsStep)
+  })
+
+  it('shows metric cards hidden in Views while the tour is on it, and only then', async () => {
+    localStorage.setItem(WIDGET_STORAGE_KEY, hiddenMetrics)
+    const { default: Dashboard } = await import('../Dashboard')
+    dispose = render(() => <Dashboard />, host)
+    setTourSteps(dashboardTour.steps)
+    setSpotlightStep(metricsStep - 1)
+    setSpotlightActive(true)
+
+    // The page has loaded, and the step before keeps the cards hidden, as the person chose.
+    await vi.waitFor(() => {
+      expect(host.querySelector('[data-test-id="dashboard-show-more"]')).not.toBeNull()
+    })
+    expect(host.querySelector(METRICS)).toBeNull()
+
+    setSpotlightStep(metricsStep)
+    await vi.waitFor(() => {
+      expect(host.querySelector(METRICS)).not.toBeNull()
+    })
+    expect(host.querySelector('[data-test-id="dashboard-metric-networth"]')).not.toBeNull()
+
+    // Past the step, and once the tour is over, the page is back to the person's own choice.
+    setSpotlightStep(metricsStep + 1)
+    await vi.waitFor(() => {
+      expect(host.querySelector(METRICS)).toBeNull()
+    })
+    setSpotlightStep(metricsStep)
+    await vi.waitFor(() => {
+      expect(host.querySelector(METRICS)).not.toBeNull()
+    })
+    endSpotlight()
+    await vi.waitFor(() => {
+      expect(host.querySelector(METRICS)).toBeNull()
+    })
+    expect(localStorage.getItem(WIDGET_STORAGE_KEY)).toBe(hiddenMetrics)
   })
 })

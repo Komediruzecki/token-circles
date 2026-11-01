@@ -12,6 +12,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - **A badge earned through an entry dated ahead is dated this month.** Before, December's bills put in during October dated First entry to December, and the Year in review could name a month that hadn't begun as its best.
 - **The Dashboard tour's Charts step shows the charts.** Before, on a dashboard where Show more had never been opened, it pointed at nothing.
+- **The Dashboard tour's Summary metrics step shows the metric cards, even if you hid them in Views.** They appear for that step only, and your Views choice stays as you saved it.
 
 ## [5.17.5] — 2026-11-01
 
