@@ -22,6 +22,7 @@
  * the four over a grid of inputs.
  */
 
+import { articleUrl } from '../../shared/articles.ts';
 import {
   CONFIRM_LINK_SIGN_IN,
   notYourSignUp,
@@ -1224,7 +1225,10 @@ export function renderSupportAck(opts: { ticketId: string; assetOrigin?: string 
 /** The footer link of the week-one mails: it stops these two and nothing else. */
 export const WEEK_ONE_UNSUB_LABEL = 'Stop first-week mails';
 
-/** Day 2: how to get a year of statements out of the bank, for an account with no import yet. */
+/**
+ * Day 2: how to get a year of statements out of the bank, for an account with no import yet. The
+ * quieter second button opens the about site's article with each bank's steps.
+ */
 export function renderWeekOneDay2(
   opts: { appUrl?: string; assetOrigin?: string; unsubUrl?: string | null } = {}
 ): RenderedEmail {
@@ -1240,7 +1244,10 @@ export function renderWeekOneDay2(
       "Most banks let you download your transactions as a CSV or Excel file. In online banking, open the account's transactions, look for Export or Download, and choose the last 12 months. A PDF statement won't import, so pick CSV or Excel.",
       'Files from Revolut, N26, Wise, Erste, PBZ, ING, DKB and Sparkasse import as they are. So does the Register file in a YNAB plan export, with its accounts and transfers. Its starting balances go to accounts that are new or still empty. Any other CSV or Excel file works once you match its columns. Rows you already have are skipped, so a longer range does no harm.',
     ],
-    buttons: [{ label: 'Import statements', href: `${app}/#import` }],
+    buttons: [
+      { label: 'Import statements', href: `${app}/#import` },
+      { label: 'Steps for your bank', href: articleUrl('bank-year') },
+    ],
     signOff: "Can't find your bank's export, or a file won't import? Reply to this mail.",
     reason: `You are getting this because your ${BRAND} account is new and has no import yet. There are two first-week mails at most.`,
     unsubUrl: opts.unsubUrl,

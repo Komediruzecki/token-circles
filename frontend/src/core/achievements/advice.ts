@@ -8,6 +8,7 @@ import { budgetsForMonth } from './budgets'
 import { bucketByMonth, sumTypes } from './evaluate'
 import { biggestUnbudgeted, monthInTheRed, uncategorisedIn } from './monthFacts'
 import { addMonths, monthOf } from './months'
+import type { ArticleId } from '../../../../shared/articles'
 import type { CircleNumber } from '../../../../shared/guidance/circles'
 import type { EvaluateInput, Tx } from './evaluate'
 
@@ -31,6 +32,8 @@ export interface AdviceCard {
   /** The number the card is built from, already formatted. */
   figure: string
   link?: { page: string; label: string }
+  /** The article on about.tokencircles.com that answers the card's question (shared/articles.ts). */
+  article?: ArticleId
   /** Ranking weight within a tone; bigger is more urgent. */
   weight: number
   /** About a month already finished. Ranked after what is still happening this month. */
@@ -176,6 +179,7 @@ function inTheRed(input: AdviceInput, byMonth: Map<string, Tx[]>): Advice[] {
       detail: 'A month in the red breaks a saving streak. Worth a look at where it went.',
       figure: `${money(out - income)} over`,
       link: { page: 'analytics', label: 'Analytics' },
+      article: 'one-month',
       weight: out - income,
       past: true,
     },

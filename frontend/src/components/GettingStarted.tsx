@@ -27,6 +27,7 @@ import {
 } from '../core/gettingStarted'
 import { orientationFactsOnce } from '../core/orientationOnce'
 import styles from './GettingStarted.module.css'
+import ArticleLink from './guidance/ArticleLink'
 import type { JSX } from 'solid-js'
 import type { OrientationStep } from '../../../shared/orientation'
 import type { AchievementsSnapshot } from '../core/achievementsStore'
@@ -92,6 +93,9 @@ export function NextSteps(props: {
             <p class={styles.reason} data-test-id="next-step-reason">
               {step.reason}
             </p>
+            <Show when={step.article}>
+              {(article) => <ArticleLink article={article()} class={styles.article} />}
+            </Show>
           </li>
         )}
       </For>

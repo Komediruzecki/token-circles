@@ -62,6 +62,7 @@ describe('import-year', () => {
       title: 'Import the rest of your year',
       reason: '4 of the last 13 months are tracked. A month counts once it holds 3 entries.',
       link: { hash: '#import', label: 'Import' },
+      article: 'bank-year',
     })
     expect(only({ trackedMonthsInYear: 1 }).reason).toBe(
       '1 of the last 13 months is tracked. A month counts once it holds 3 entries.'
@@ -155,6 +156,7 @@ describe('heavy-month', () => {
       title: 'See what put September in the red',
       reason: 'September spent more than it earned.',
       link: { hash: '#transactions?period=2026-09', label: 'Transactions' },
+      article: 'one-month',
     })
   })
 
@@ -189,6 +191,7 @@ describe('cushion', () => {
       title: 'Build a one-month cushion',
       reason: 'The money you can reach covers 28 days of what you need.',
       link: { hash: '#goals', label: 'Goals' },
+      article: 'first-cushion',
     })
   })
 

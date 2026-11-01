@@ -15,6 +15,7 @@ import {
   YEAR_ON_FILE_MONTHS,
   YEAR_WINDOW_MONTHS,
 } from './trackedMonths';
+import type { ArticleId } from './articles';
 
 export type OrientationStepId =
   | 'import-year'
@@ -68,6 +69,8 @@ export interface OrientationStep {
   reason: string;
   /** Where the step is done: a hash route, and the page's name. */
   link: { hash: string; label: string };
+  /** The article on about.tokencircles.com that answers the step's why (shared/articles.ts). */
+  article?: ArticleId;
 }
 
 /** How many steps are shown at once. */
@@ -129,11 +132,13 @@ const RULES: Rule[] = [
             title: 'Import a year of statements',
             reason: `None of ${window} is tracked yet. ${counts}`,
             link: { hash: '#import', label: 'Import' },
+            article: 'bank-year',
           }
         : {
             title: 'Import the rest of your year',
             reason: `${n} of ${window} ${n === 1 ? 'is' : 'are'} tracked. ${counts}`,
             link: { hash: '#import', label: 'Import' },
+            article: 'bank-year',
           };
     },
   },
@@ -193,6 +198,7 @@ const RULES: Rule[] = [
         reason: `${month} spent more than it earned.`,
         // Analytics shows a year at a time; Transactions shows the month.
         link: { hash: `#transactions?period=${heavyMonth}`, label: 'Transactions' },
+        article: 'one-month',
       };
     },
   },
@@ -212,6 +218,7 @@ const RULES: Rule[] = [
             ? `The money you can reach doesn't cover a day of ${what}.`
             : `The money you can reach covers ${days} ${days === 1 ? 'day' : 'days'} of ${what}.`,
         link: { hash: '#goals', label: 'Goals' },
+        article: 'first-cushion',
       };
     },
   },

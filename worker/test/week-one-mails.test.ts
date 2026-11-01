@@ -205,6 +205,21 @@ describe('day 2', () => {
     expect(mail!.html).toContain(stop.replace('&', '&amp;'));
   });
 
+  it("offers each bank's steps as the quieter second button, on the about site's article", async () => {
+    const a = await account();
+    await run();
+
+    const [mail] = mailsTo(a.email);
+    // The address comes from the app's one list of articles (shared/articles.ts).
+    const steps = 'https://about.tokencircles.com/articles/getting-a-year-out-of-your-bank/';
+    expect(mail!.html).toMatch(
+      /<a class="tc-btn" href="[^"]+\/#import"[^>]*>Import statements<\/a>/
+    );
+    const second = /<a class="tc-btn2" href="([^"]+)"[^>]*>([^<]+)<\/a>/.exec(mail!.html);
+    expect(second?.slice(1)).toEqual([steps, 'Steps for your bank']);
+    expect(mail!.text).toContain(`Steps for your bank: ${steps}`);
+  });
+
   it('goes to a paid account the same way', async () => {
     const a = await account({ plan: 'advanced' });
     await run();

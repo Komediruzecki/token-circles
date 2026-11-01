@@ -33,6 +33,7 @@ import type { Debt, GuidanceFacts } from './facts';
 import type { LedgerWords } from './ledger';
 import type { QuestionId } from './questions';
 import type { OrientationStep } from '../orientation';
+import type { ArticleId } from '../articles';
 
 export type NextStepWords = LedgerWords;
 
@@ -70,6 +71,8 @@ export interface NextStep {
   then: string | null;
   /** Under a question: that it is asked once, and where to change it. */
   fine: string | null;
+  /** The article on about.tokencircles.com that answers the step's why (shared/articles.ts). */
+  article?: ArticleId;
 }
 
 /** One step's words, before the circle and the "Then:" line are added. */
@@ -83,6 +86,8 @@ interface StepWords {
   action: StepAction | null;
   meter: StepMeter | null;
   fine: string | null;
+  /** `NextStep.article`. */
+  article?: ArticleId;
 }
 
 const open = (hash: string, page: string): StepAction => ({
@@ -248,6 +253,7 @@ function stepFor(
           right: 'A year',
         },
         fine: null,
+        article: 'bank-year',
       };
     }
     case 'sorted': {
@@ -313,6 +319,7 @@ function stepFor(
         action: open('#goals', 'Goals'),
         meter: cushionMeter(facts, FIRST_CUSHION_MONTHS, met),
         fine: null,
+        article: 'first-cushion',
       };
     }
     case 'free-money': {
@@ -495,6 +502,7 @@ export function nextStepOf({ placement, facts, orientation, words }: NextStepInp
           : null,
       then: thenLine(rest.slice(0, 2).map((step) => lowerFirst(step.title))),
       fine: null,
+      article: first.article,
     };
   }
   const steps = unmetFrom(placement)
@@ -522,6 +530,7 @@ export function nextStepOf({ placement, facts, orientation, words }: NextStepInp
     meter: first.words.meter,
     then: thenLine(later),
     fine: first.words.fine,
+    article: first.words.article,
   };
 }
 

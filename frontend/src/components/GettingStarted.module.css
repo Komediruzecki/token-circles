@@ -124,3 +124,8 @@
     min-height: 44px;
   }
 }
+
+/* The article that answers a step's why (ArticleLink), under its reason. */
+.step .article {
+  margin: -6px 0 -10px;
+}

@@ -21,6 +21,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Your next step on Dashboard.** Once Getting started is hidden or a full year is on file, Dashboard shows the one step your circles point to, with a link to all seven.
 - **Progress has a tour**: what the page holds, Your next step and the seven circles, one stop each.
 - **Prints on Progress.** Every twelve tracked months in a row make a print: your year drawn as a seal, one petal a month, with no amounts on it. Tap a petal to see its month, or share a print as an image.
+- **Three short articles answer the why behind a step.** Getting started, Your next step, the circles and Worth a look on Progress link to them on about.tokencircles.com, in a new tab: Getting a year out of your bank under the import step (the day-2 mail links it too), Why one month lies under a month in the red and the months on file, and Your first cushion under the cushion step and its check.
 
 ### Changed
 

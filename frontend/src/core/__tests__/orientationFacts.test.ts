@@ -279,6 +279,7 @@ describe('the cushion', () => {
       title: 'Build a one-month cushion',
       reason: 'The money you can reach covers 29 days of what you need.',
       link: { hash: '#goals', label: 'Goals' },
+      article: 'first-cushion',
     })
     expect(steps(300).map((step) => step.id)).not.toContain('cushion')
   })

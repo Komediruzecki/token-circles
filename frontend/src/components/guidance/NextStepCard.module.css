@@ -231,3 +231,8 @@
   outline: 2px solid var(--primary);
   outline-offset: 2px;
 }
+
+/* The article that answers the step's why (ArticleLink), straight under it. */
+.card .article {
+  margin: -4px 0 -10px;
+}

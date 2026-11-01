@@ -1273,3 +1273,39 @@ describe('a circle view says each figure once', () => {
     })
   }
 })
+
+describe('the articles a circle links to', () => {
+  const articles = (c: ParentNode) =>
+    [...c.querySelectorAll<HTMLAnchorElement>('[data-test-id="article-link"]')].map(
+      (a) => a.dataset.article
+    )
+
+  it("links Clear picture's months on file to why one month lies", () => {
+    guidance.set!(viewOf(facts()))
+    const c = mount(() => <Progress />)
+    go('#progress/1')
+    const numbers = q(c, '[data-test-id="circle-numbers"]')
+    expect(articles(numbers)).toEqual(['one-month'])
+    const row = numbers.querySelector('[data-test-id="article-link"]')!.parentElement!
+    expect(row.querySelector('dt')!.textContent).toBe('Months on file')
+  })
+
+  it('links a month of essentials once, from the step, while the cushion is the step', () => {
+    guidance.set!(viewOf(facts({ liquid: 1000, essentials: 2000, cushionMonths: 0.5 })))
+    const c = mount(() => <Progress />)
+    go('#progress/3')
+    const view = q(c, '[data-test-id="circle-view"]')
+    expect(articles(q(view, '[data-test-id="next-step-card"]'))).toEqual(['first-cushion'])
+    expect(articles(q(view, '[data-test-id="circle-checks"]'))).toEqual([])
+  })
+
+  it('links it from the check once the cushion is no longer the step', () => {
+    guidance.set!(viewOf(facts()))
+    const c = mount(() => <Progress />)
+    go('#progress/3')
+    const view = q(c, '[data-test-id="circle-view"]')
+    expect(view.querySelector('[data-test-id="next-step-card"]')).toBeNull()
+    expect(articles(view)).toEqual(['first-cushion'])
+    expect(articles(q(view, '[data-check="first-cushion"]'))).toEqual(['first-cushion'])
+  })
+})

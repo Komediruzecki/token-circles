@@ -345,7 +345,7 @@ describe("the person's numbers", () => {
 
   it('gives Clear picture its months, its share and what has no category', () => {
     expect(numbers(facts({ uncategorisedEntries: 4 }), 1).rows).toEqual([
-      { label: 'Months on file', value: '12 of 12' },
+      { label: 'Months on file', value: '12 of 12', article: 'one-month' },
       { label: 'Spending sorted', value: '96%' },
       { label: 'Entries without a category', value: '4' },
     ])

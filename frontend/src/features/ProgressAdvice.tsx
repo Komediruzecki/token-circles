@@ -9,6 +9,7 @@
  */
 import { createEffect, createMemo, createSignal, createUniqueId, For, Show } from 'solid-js'
 import { CIRCLE_NAMES } from '../../../shared/guidance/circles'
+import ArticleLink from '../components/guidance/ArticleLink'
 import { circleHash } from '../core/progressRoute'
 import styles from './ProgressPage.module.css'
 import type { JSX } from 'solid-js'
@@ -84,6 +85,9 @@ export default function AdviceList(props: {
                 >
                   Counts toward {CIRCLE_NAMES[card.circle]}
                 </a>
+                <Show when={card.article}>
+                  {(article) => <ArticleLink article={article()} class={styles.adviceArticle} />}
+                </Show>
                 <div class={styles.adviceFoot}>
                   <span class={styles.figure}>{card.figure}</span>
                   <Show when={card.link}>

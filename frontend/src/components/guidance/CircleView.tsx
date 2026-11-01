@@ -48,6 +48,7 @@ import { asOneWrite } from '../../core/dataVersions'
 import { saveAnswers } from '../../core/guidanceAnswers'
 import { circleHash } from '../../core/progressRoute'
 import { setSettingsTab } from '../../core/settingsStore'
+import ArticleLink from './ArticleLink'
 import BenchmarkCards from './BenchmarkCards'
 import CircleGlyph from './CircleGlyph'
 import ledger from './CircleLedger.module.css'
@@ -328,6 +329,11 @@ export default function CircleView(props: CircleViewProps): JSX.Element {
                           <Show when={check().needed}>
                             <p class={styles.checkNeeded}>{check().needed}</p>
                           </Show>
+                          <Show when={check().article}>
+                            {(article) => (
+                              <ArticleLink article={article()} class={styles.checkArticle} />
+                            )}
+                          </Show>
                           <Show
                             when={asks(ASKED_UNDER[check().id]) ? ASKED_UNDER[check().id] : null}
                           >
@@ -369,6 +375,11 @@ export default function CircleView(props: CircleViewProps): JSX.Element {
                                   <a class={styles.numberLink} href={link().hash}>
                                     {link().label}
                                   </a>
+                                )}
+                              </Show>
+                              <Show when={number.article}>
+                                {(article) => (
+                                  <ArticleLink article={article()} class={styles.numberArticle} />
                                 )}
                               </Show>
                             </div>

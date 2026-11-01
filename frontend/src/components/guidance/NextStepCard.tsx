@@ -21,6 +21,7 @@ import {
 import { refreshAchievements } from '../../core/achievementsStore'
 import { takeAnswers } from '../../core/guidance'
 import { saveAnswers } from '../../core/guidanceAnswers'
+import ArticleLink from './ArticleLink'
 import CircleGlyph from './CircleGlyph'
 import styles from './NextStepCard.module.css'
 import { AmountForm, Choices } from './questionParts'
@@ -180,6 +181,9 @@ export default function NextStepCard(props: NextStepCardProps): JSX.Element {
             {why()}
           </p>
         )}
+      </Show>
+      <Show when={props.step.article}>
+        {(article) => <ArticleLink article={article()} class={styles.article} />}
       </Show>
 
       <Show when={question() === 'card'}>

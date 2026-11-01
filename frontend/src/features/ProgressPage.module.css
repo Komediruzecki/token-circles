@@ -319,3 +319,15 @@
     grid-template-columns: repeat(6, minmax(0, 1fr));
   }
 }
+
+/* A card's article (ArticleLink), under its Counts toward line, and a block as that line is:
+   inline, the line box's strut held it 19 px under the line's words whatever its top margin. Its
+   box rises into the empty bottom of the line's 48 px target, up to the words. */
+.advice-card .advice-article {
+  display: flex;
+  width: fit-content;
+  margin: -16px 0 4px;
+}
+.advice-article + .advice-foot {
+  margin-top: 0;
+}

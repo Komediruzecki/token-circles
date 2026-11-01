@@ -85,6 +85,25 @@ describe('buildAdvice', () => {
     expect(red!.title).toContain('August 2026')
   })
 
+  it('links a month in the red to why one month lies, and no other card to an article', () => {
+    const cards = buildAdvice(
+      make({
+        transactions: [
+          ...month('2026-08', 3, { amount: 900 }),
+          tx('2026-08-25', { type: 'income', amount: 100 }),
+          ...month('2026-09', 3, { amount: 900 }),
+          tx('2026-09-20', { category_id: null }),
+        ],
+      })
+    )
+    expect(cards.map((c) => c.kind)).toEqual(
+      expect.arrayContaining(['in-the-red', 'uncategorised'])
+    )
+    for (const card of cards) {
+      expect(card.article).toBe(card.kind === 'in-the-red' ? 'one-month' : undefined)
+    }
+  })
+
   it('counts uncategorised entries in the current month only', () => {
     const cards = buildAdvice(
       make({

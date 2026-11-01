@@ -67,6 +67,7 @@ describe('before a year is on file', () => {
       meter: { kind: 'cells', on: 7, left: '7 of 12 months on file', right: 'A year' },
       then: 'Then: sort the 30 entries without a category, and build a one-month cushion.',
       fine: null,
+      article: 'bank-year',
     })
     expect(stepCircleName(next)).toBe('Clear picture')
   })

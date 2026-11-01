@@ -2180,6 +2180,33 @@ check')` first, as the cushion and debt cases do.
   for the empty plate, a plate, the first print and 26 prints. The tour walk passes at 1280 and
   at 390.
 
+### Articles
+
+- **The articles the app links to, in one list** (`shared/articles.ts`). `ARTICLES` maps an
+  `ArticleId` (`bank-year`, `one-month`, `first-cushion`) to the title and path of an article on
+  about.tokencircles.com, and `articleUrl(id)` gives its address. `ABOUT_SITE` is that origin, and
+  `LegalLinks.tsx`'s `MARKETING_SITE` now reads it. The articles live in disjoint-colliders,
+  `packages/tokencircles/src/pages/articles/<name>.md`, whose tests pin the three file names as
+  `articleLinks.test.ts` pins the paths here: a rename has to land on both sides.
+- **A surface names its article by id**, in an optional field that is absent everywhere else:
+  `OrientationStep.article` (import-year `bank-year`, heavy-month `one-month`, cushion
+  `first-cushion`), `NextStep.article` (year-on-file `bank-year`, first-cushion `first-cushion`,
+  and Getting started's article while the step is Getting started's), `NumberRow.article` (circle
+  1's Months on file, `one-month`), `CheckRow.article` (circle 3's A month of essentials,
+  `first-cushion`, left out while the step on the same view is the first cushion, so the view
+  links the article once) and `AdviceCard.article` (a month in the red, `one-month`).
+- **`ArticleLink`** (`components/guidance/ArticleLink.tsx`) draws one: the article's title after a
+  page icon, opening in a new tab with `rel="noopener noreferrer"`, "(article, opens in a new tab)"
+  for screen readers, and a target at least 44 px tall whose negative margins keep the spacing
+  around it. Getting started and Your next step put it under the step's reason, the circle view
+  under the check's line or the number's link, and Worth a look under the card's why line.
+- **The day-2 mail has a second button**, Steps for your bank, to `articleUrl('bank-year')`, as
+  the quieter of the two. At 640 px the two share a row in the 600 px card; at 375 px they stack.
+- **Tests:** `core/__tests__/articleLinks.test.ts` (the list, and every id each surface gives),
+  `components/guidance/__tests__/articleLinks.test.tsx` (where each surface puts the link),
+  `progressCircles.test.tsx` (the circle view), `advice.test.ts` and `week-one-mails.test.ts`
+  (the second button, read from the mail the cron sends). Each fails without the change.
+
 ### Fixed
 
 - **Saving the badge record no longer makes Dashboard, Progress and About this space read their

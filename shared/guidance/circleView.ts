@@ -23,6 +23,7 @@ import type { Check, CheckId, CircleNumber, CirclePlace } from './circles';
 import type { GuidanceFacts } from './facts';
 import type { LedgerWords } from './ledger';
 import type { NextStep } from './nextStep';
+import type { ArticleId } from '../articles';
 
 export type CheckState = 'met' | 'not-yet' | 'not-known';
 
@@ -43,6 +44,11 @@ export interface CheckRow {
   waiting: string | null;
   /** "Needed to reach {name}" for a required check. */
   needed: string | null;
+  /**
+   * The article that explains how the check counts (shared/articles.ts). Left out while Your next
+   * step on the same view is about the check: the step links it there.
+   */
+  article?: ArticleId;
 }
 
 export const WAITING_ON_ANSWER = 'Waiting on your answer';
@@ -197,7 +203,12 @@ function rowFor(
       } else if (facts.accountsKnown && liquid === null) {
         detail = NO_ACCOUNT;
       }
-      return { ...base, title: 'A month of essentials', detail };
+      return {
+        ...base,
+        title: 'A month of essentials',
+        detail,
+        ...(here ? {} : { article: 'first-cushion' as const }),
+      };
     }
     case 'free-money': {
       const question = freeMoneyQuestion(facts.region);
@@ -321,6 +332,8 @@ export interface NumberRow {
   note?: string;
   /** Where it is set, as a link under it. */
   link?: { hash: string; label: string };
+  /** The article that explains it (shared/articles.ts), as a link under it. */
+  article?: ArticleId;
 }
 
 export interface CircleNumbers {
@@ -381,7 +394,11 @@ export function circleNumbers(
       return {
         lead,
         rows: [
-          { label: 'Months on file', value: `${Math.min(facts.monthsInYear, 12)} of 12` },
+          {
+            label: 'Months on file',
+            value: `${Math.min(facts.monthsInYear, 12)} of 12`,
+            article: 'one-month',
+          },
           {
             label: 'Spending sorted',
             value:
