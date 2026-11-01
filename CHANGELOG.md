@@ -38,16 +38,20 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
-- **An imported row is booked to the account in its Means of Payment column and keeps its category, even when that category shares a name with one of your accounts.** Local-first booked such a row against the account its category named, and the cloud dropped its category.
-- **The Import page no longer guesses that a category called Library, Review or Otherwise is an account.** It reads account names like IB, Rev and Wise only as whole words, and guesses that "Credit card account" is an account rather than income.
-- **A badge earned through an entry dated ahead is dated this month.** Before, December's bills put in during October dated First entry to December, and the Year in review could name a month that hadn't begun as its best.
-- **The Dashboard tour's Charts step shows the charts.** Before, on a dashboard where Show more had never been opened, it pointed at nothing.
-- **The Dashboard tour's Summary metrics step shows the metric cards, even if you hid them in Views.** They appear for that step only, and your Views choice stays as you saved it.
 - **A category called Groceries shows a shopping cart, and one named for a meal shows a knife and fork** (Eating out, Restaurant, Dining, Breakfast, Lunch, Dinner, Meals), and an import that creates one gives it the same icon. Before, they showed a coffee mug, and Eating out a plain tick. An icon you picked stays, and so does the mug an earlier import gave a category while you were signed in. Coffee and Cafe keep the mug.
 - **The subscription scan keeps up with a long history.** With a few thousand entries, Scan transactions on Bills and the setup wizard's subscriptions step held the page for over a second. They now find the same subscriptions in a small part of that time.
 - **The plan name on a subscription the scan finds is easier to read.** In the light theme, "Standard" beside Netflix was blue on a pale blue tint at 4.0:1. It's a darker blue now, on Bills and in setup.
 - **A first bank import files restaurants, cafes and takeaways under Eating out**, instead of a new Restaurant or Dining category. If you already have one of those, its rows keep going there.
 - **Setup after the demo makes a space of your own.** Keeping your data in this browser after running the demo opened Example Low Income's dashboard, and running setup again in the demo renamed that example. Setup now makes your space a new profile and lets you remove the three example profiles or keep them.
+
+## [5.17.6] — 2026-11-01
+
+### Fixed
+
+- **An imported row is booked to the account in its Means of Payment column and keeps its category, even when that category shares a name with one of your accounts.** Local-first booked such a row against the account its category named, and the cloud dropped its category.
+- **The Import page no longer guesses that a category called Library, Review or Otherwise is an account.** It reads account names like IB, Rev and Wise only as whole words, and guesses that "Credit card account" is an account rather than income.
+- **A badge earned through an entry dated ahead is dated this month.** Before, December's bills put in during October dated First entry to December, and the Year in review could name a month that hadn't begun as its best.
+- **The Dashboard tour's Charts and Summary metrics steps show what they point at.** Charts pointed at nothing until Show more had been opened, and Summary metrics found no cards if you had hidden them in Views. The tour now shows both without changing your saved Show more and Views choices.
 
 ## [5.17.5] — 2026-11-01
 

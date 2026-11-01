@@ -2371,6 +2371,144 @@ check')` first, as the cushion and debt cases do.
 
 ### Fixed
 
+- **Saving the badge record no longer makes Dashboard, Progress and About this space read their
+  settings again.** The badge store (`frontend/src/core/achievementsStore.ts`) keeps the unlocks
+  and dismissed advice cards in the settings under `achievements` (`achievements:<profile>` in
+  local-first) and saves them with `PUT /api/settings` after every evaluation that earns a badge.
+  `apiFetch` bumped the `settings` counter for it like any settings write, so the circles
+  (`core/guidance.ts`, which follow `settings` and `portfolio`) asked for `GET /api/settings` and
+  `GET /api/portfolio/holdings` again on the next show of Dashboard or Progress, and About this
+  space for its settings on the next show of Settings, though none of them reads that key. Release
+  case `s04-import.spec.ts` 4.2 (cloud) failed on it whenever the evaluation that follows the
+  case's account arrangement landed after Dashboard was hidden: its last check saw those two GETs
+  on showing Dashboard. `invalidateForRequest` (`core/dataVersions.ts`) now takes the request body
+  from `apiFetch`, and a write to `/api/settings` whose body is a JSON object holding only keys in
+  `SETTINGS_ONLY_THEIR_STORE_READS` (`achievements`, a `:<digits>` suffix ignored) bumps nothing.
+  Any other key in the same body, a body that is not a JSON object, an empty object, or any other
+  settings route bumps `settings` as before. The list fails safe: a key missing from it costs a
+  refetch, never a stale page. Guards: `core/__tests__/dataVersions.test.ts` (the three badge-key
+  shapes bump nothing; mixed keys and unreadable bodies still bump),
+  `core/__tests__/apiFetch.test.ts` (both storage modes, through `apiFetch`) and
+  `core/__tests__/guidanceStore.test.ts` (the circles on Dashboard read neither settings nor
+  holdings after a badge save, and read settings after a currency save). All six fail without the
+  change.
+
+- **The circles follow a save of the retirement plan.** They work invested money out with the
+  plan's safe withdrawal rate, read from `retirement_settings` in `GET /api/settings`. The planner
+  saves the plan with `PUT /api/retirement/settings` (worker/src/routes/retirement-goals.ts, and
+  `/retirement/settings` in the local router), which bumps the `retirement` counter, while
+  `useGuidance` (`frontend/src/core/guidance.ts`) followed only `settings`, `portfolio` and the
+  profile. Dashboard and Progress kept the rate they first read until another settings or
+  portfolio write, or a profile switch. Badge saves had refreshed it by accident until the fix
+  above. `useGuidance` now follows `entityVersion('retirement')` too. It does not follow
+  `retirement-goals`: a goal holds no part of the plan. The planner is the only other reader of the
+  plan and applies its own save's answer. Guard: `core/__tests__/guidanceStore.test.ts` "follows a
+  retirement plan save, and not a retirement goal write" fails without the change ("expected 4 to
+  be 3").
+
+- **A badge refresh asked for while an evaluation runs gets one more evaluation.**
+  `refreshAchievements` (`frontend/src/core/achievementsStore.ts`) handed a call for the profile
+  whose evaluation was running that same running evaluation. AchievementsHost asks 1.2 s after a
+  write, so a write that landed after the running evaluation had read its lists (a second
+  `POST /api/accounts`, say) got an answer from before it, and nothing evaluated again until the
+  next write. The snapshot that Getting started, the circles and Progress read kept the old
+  account list, and a badge the write earned waited for the next write. The badges' half shipped
+  in 5.17.4. The setup wizard's done step (`OnboardingWizard.tsx` `loadNextSteps`) awaits
+  the same call to count what was just imported. Now such a call gets one further run, started
+  when the running one ends (settled or rejected). Every call made meanwhile shares it, and a call
+  during the further run queues one more after it, so asks fold and never loop. If another profile
+  is active when the running one ends, the further run is dropped and answers `[]`; the switch's
+  own refresh evaluates the new profile, as before. Guards in
+  `core/__tests__/achievementsStore.test.ts`, "a refresh asked for while an evaluation is
+  running": the running evaluation is held on its settings read, the accounts change, and a
+  refresh is asked for. Without the change the snapshot ends with `['Rainy day']` instead of
+  `['Rainy day', 'Holiday']`, and the fold case sees one settings read instead of two. Two more
+  cases pin that a switch drops the old profile's further run and that a run nobody asked again
+  during starts nothing. Main has the same change as #672, whose case checks that a budget added
+  mid-run earns `first-budget`; the merge keeps both cases here, and this entry stands for both.
+  No line in CHANGELOG.md: it had one under Fixed ("Getting started sees an account you add a
+  second or so after another change straight away"), but Getting started ships for the first
+  time in this release, so no one saw it wait, and the badges' half has its line under 5.17.4.
+
+- **A month that has not begun is not tracked** (`shared/trackedMonths.ts`,
+  `core/achievements/evaluate.ts`, `core/achievements/review.ts`). `trackedMonthsOf(dates, today)`
+  leaves out every month after `today`'s, and the badges' evaluation passes its own today. So
+  `evaluation.trackedMonths`, and everything that reads it, holds no month still to come. Three
+  entries dated in December, put in early in October, had made December a tracked month. The
+  prints, which read that list, started a plate there ("1 of 12 months", "Eleven more tracked
+  months in a row finish it."), as the phase 4 review found.
+  - What changes for the badges: each counts months only up to this one. That covers One month,
+    A quarter, Half a year, A year and Two to Twenty years (months in a row); Saver x3, Saver x6
+    and A perfect year (saving months); Named everything, Reconciled and The full picture (their
+    first such month); The comeback (runs of months); Every month of a year; and the average
+    monthly spending that Rainy day measures a goal against. A badge reached through a month
+    still to come could be earned early and dated to that month; now it waits for the month.
+    Badges already earned stay earned, as the unlock records only add.
+  - Unchanged: the streak, which counts back from this month; Held the line, Clean sweep and Six
+    months under, which read finished months only; and First entry and the entry counts, which
+    count entries, not months. Getting started and the circles already stopped at this month
+    (`trackedMonthsInYearWindow`, `windowMonths`).
+  - The year in review counts its tracked months the same way; its totals still hold every entry
+    dated in the year.
+  - Guard: `core/__tests__/trackedMonths.test.ts` "a month that has not begun" fails without the
+    change, for the badges, the prints and the year in review each.
+  - Main shipped the same fix in 5.17.5 as #675, with its own filter in `evaluate.ts` and
+    `review.ts`. The merge of 5.17.5 keeps this branch's `trackedMonthsOf(dates, today)` in their
+    place, so the rule lives in one file, and #675's cases in `evaluate.test.ts` and
+    `review.test.ts` pass on it. Its CHANGELOG.md line is the one under 5.17.5, so this entry has
+    no line of its own there.
+
+- **The restaurant and dining rules give the default Eating out.** In
+  `shared/bankImport/categoryRules.ts` the Croatian `Restaurant` rule and the Worldwide `Dining`
+  rule now give `Eating out`, the default this branch puts in place of Food, with
+  `formerly: ['Restaurant']` and `formerly: ['Dining']`. A newcomer's first import offered either
+  name as a new category beside the default; it now files those rows under Eating out. A space that
+  has a category under the old name keeps getting the rule's rows there, through
+  `ruleCategory(rule, categoryNames)` as #673 set up, and each rule keeps to its own old name: the
+  Croatian rule never files under a space's Dining, nor the Worldwide one under its Restaurant.
+  Keywords are unchanged, so the Worldwide rule's `cafe`, `coffee` and `starbucks` rows go to
+  Eating out as they went to Dining. No migration, and no stored category is renamed.
+  - Stored copies: `frontend/src/core/bankImport/earlierBuiltInRules.ts` gains `CROATIAN_5_17_5`
+    and `WORLDWIDE_5_17_5`, each group's built-in rules as 5.17.4 and 5.17.5 shipped them (git
+    show `v5.17.5`, unchanged since `v5.17.4`). `loadCategoryRules` reads a stored set equal to
+    either as the group's rules now, so a copy of them runs the fold and the mapping prompt sees no
+    edit.
+  - Tests: `ruleFormerNames.test.ts` "restaurants and takeaways" (Eating out in a default space,
+    the old name in a space that has it, never the other rule's old name);
+    `ruleCategoryNames.test.ts` drops `Restaurant` and `Dining` from the general names and lists
+    them as retired, so a rule that gives either again fails; `earlierBuiltInRules.test.ts` loads
+    the two 5.17.5 fixtures (`__tests__/fixtures/built-in-rules-*-v5.17.5.json`, written from
+    `git show v5.17.5`) as the rules now and files a restaurant and a pizza under Eating out
+    through them; `importFlow.ruleCategoryNames.test.ts` (local-first) and
+    `worker/test/import-rule-category-names.test.ts` (the Bank Imports tab on the Worker and
+    `POST /api/v1/import`) file a made-up restaurant line under Eating out with no new category,
+    and under Restaurant in a space that has it. Without the change every Eating out case fails;
+    the two import cases for a space that has Restaurant pass before and after, as the guard that
+    the fold keeps it. `categoryGroups.test.ts` expects Eating out for `UBER EATS`.
+
+### Lines for CHANGELOG.md when the benchmarks gate opens
+
+The production build holds back the benchmarks and the questions that choose their figures
+(`frontend/src/core/guidanceGate.ts`). The app shows CHANGELOG.md in production
+(`ChangelogModal.tsx`), so a line for a held piece would announce it there. These lines are written
+and reviewed with their commits and wait here; the commit that opens the gate moves them into
+CHANGELOG.md's [Unreleased].
+
+Added:
+
+- **Setup asks where you live and who the space covers**, to choose the official figures your numbers are compared with. Change the answers in Settings.
+- **Your savings rate, cushion and debts beside the official figures where you live.** Breathing room, Solid ground and Room to choose show the typical range, where you sit in it, and the source and year of every figure.
+- **Paying your way compares groceries, eating out, transport and housing** with what households where you live spend: the first three as shares of your spending, housing as a share of your take-home pay.
+- **Your subscriptions beside the usual count**, and in the UK and US beside the usual monthly spend, inside Paying your way.
+
+Changed:
+
+- **The savings rate shows the typical range where you live**, which is your target until you set your own.
+
+## [5.17.6] — 2026-11-01
+
+### Fixed
+
 - **A row with a Means of Payment books from it and keeps its Category as its category, in both
   storage modes** (`frontend/src/core/storage/handlers/importFlow.ts`,
   `worker/src/routes/imports.ts`, `shared/importRowChecks.ts`,
@@ -2681,121 +2819,6 @@ null`).
     `spotlightTipWiring.test.tsx` "Spotlight keeps the tip off the start of a tall target"; the
     phone cases fail without the change.
 
-- **Saving the badge record no longer makes Dashboard, Progress and About this space read their
-  settings again.** The badge store (`frontend/src/core/achievementsStore.ts`) keeps the unlocks
-  and dismissed advice cards in the settings under `achievements` (`achievements:<profile>` in
-  local-first) and saves them with `PUT /api/settings` after every evaluation that earns a badge.
-  `apiFetch` bumped the `settings` counter for it like any settings write, so the circles
-  (`core/guidance.ts`, which follow `settings` and `portfolio`) asked for `GET /api/settings` and
-  `GET /api/portfolio/holdings` again on the next show of Dashboard or Progress, and About this
-  space for its settings on the next show of Settings, though none of them reads that key. Release
-  case `s04-import.spec.ts` 4.2 (cloud) failed on it whenever the evaluation that follows the
-  case's account arrangement landed after Dashboard was hidden: its last check saw those two GETs
-  on showing Dashboard. `invalidateForRequest` (`core/dataVersions.ts`) now takes the request body
-  from `apiFetch`, and a write to `/api/settings` whose body is a JSON object holding only keys in
-  `SETTINGS_ONLY_THEIR_STORE_READS` (`achievements`, a `:<digits>` suffix ignored) bumps nothing.
-  Any other key in the same body, a body that is not a JSON object, an empty object, or any other
-  settings route bumps `settings` as before. The list fails safe: a key missing from it costs a
-  refetch, never a stale page. Guards: `core/__tests__/dataVersions.test.ts` (the three badge-key
-  shapes bump nothing; mixed keys and unreadable bodies still bump),
-  `core/__tests__/apiFetch.test.ts` (both storage modes, through `apiFetch`) and
-  `core/__tests__/guidanceStore.test.ts` (the circles on Dashboard read neither settings nor
-  holdings after a badge save, and read settings after a currency save). All six fail without the
-  change.
-
-- **The circles follow a save of the retirement plan.** They work invested money out with the
-  plan's safe withdrawal rate, read from `retirement_settings` in `GET /api/settings`. The planner
-  saves the plan with `PUT /api/retirement/settings` (worker/src/routes/retirement-goals.ts, and
-  `/retirement/settings` in the local router), which bumps the `retirement` counter, while
-  `useGuidance` (`frontend/src/core/guidance.ts`) followed only `settings`, `portfolio` and the
-  profile. Dashboard and Progress kept the rate they first read until another settings or
-  portfolio write, or a profile switch. Badge saves had refreshed it by accident until the fix
-  above. `useGuidance` now follows `entityVersion('retirement')` too. It does not follow
-  `retirement-goals`: a goal holds no part of the plan. The planner is the only other reader of the
-  plan and applies its own save's answer. Guard: `core/__tests__/guidanceStore.test.ts` "follows a
-  retirement plan save, and not a retirement goal write" fails without the change ("expected 4 to
-  be 3").
-
-- **A badge refresh asked for while an evaluation runs gets one more evaluation.**
-  `refreshAchievements` (`frontend/src/core/achievementsStore.ts`) handed a call for the profile
-  whose evaluation was running that same running evaluation. AchievementsHost asks 1.2 s after a
-  write, so a write that landed after the running evaluation had read its lists (a second
-  `POST /api/accounts`, say) got an answer from before it, and nothing evaluated again until the
-  next write. The snapshot that Getting started, the circles and Progress read kept the old
-  account list, and a badge the write earned waited for the next write. The badges' half shipped
-  in 5.17.4. The setup wizard's done step (`OnboardingWizard.tsx` `loadNextSteps`) awaits
-  the same call to count what was just imported. Now such a call gets one further run, started
-  when the running one ends (settled or rejected). Every call made meanwhile shares it, and a call
-  during the further run queues one more after it, so asks fold and never loop. If another profile
-  is active when the running one ends, the further run is dropped and answers `[]`; the switch's
-  own refresh evaluates the new profile, as before. Guards in
-  `core/__tests__/achievementsStore.test.ts`, "a refresh asked for while an evaluation is
-  running": the running evaluation is held on its settings read, the accounts change, and a
-  refresh is asked for. Without the change the snapshot ends with `['Rainy day']` instead of
-  `['Rainy day', 'Holiday']`, and the fold case sees one settings read instead of two. Two more
-  cases pin that a switch drops the old profile's further run and that a run nobody asked again
-  during starts nothing. Main has the same change as #672, whose case checks that a budget added
-  mid-run earns `first-budget`; the merge keeps both cases here, and this entry stands for both.
-  No line in CHANGELOG.md: it had one under Fixed ("Getting started sees an account you add a
-  second or so after another change straight away"), but Getting started ships for the first
-  time in this release, so no one saw it wait, and the badges' half has its line under 5.17.4.
-
-- **A month that has not begun is not tracked** (`shared/trackedMonths.ts`,
-  `core/achievements/evaluate.ts`, `core/achievements/review.ts`). `trackedMonthsOf(dates, today)`
-  leaves out every month after `today`'s, and the badges' evaluation passes its own today. So
-  `evaluation.trackedMonths`, and everything that reads it, holds no month still to come. Three
-  entries dated in December, put in early in October, had made December a tracked month. The
-  prints, which read that list, started a plate there ("1 of 12 months", "Eleven more tracked
-  months in a row finish it."), as the phase 4 review found.
-  - What changes for the badges: each counts months only up to this one. That covers One month,
-    A quarter, Half a year, A year and Two to Twenty years (months in a row); Saver x3, Saver x6
-    and A perfect year (saving months); Named everything, Reconciled and The full picture (their
-    first such month); The comeback (runs of months); Every month of a year; and the average
-    monthly spending that Rainy day measures a goal against. A badge reached through a month
-    still to come could be earned early and dated to that month; now it waits for the month.
-    Badges already earned stay earned, as the unlock records only add.
-  - Unchanged: the streak, which counts back from this month; Held the line, Clean sweep and Six
-    months under, which read finished months only; and First entry and the entry counts, which
-    count entries, not months. Getting started and the circles already stopped at this month
-    (`trackedMonthsInYearWindow`, `windowMonths`).
-  - The year in review counts its tracked months the same way; its totals still hold every entry
-    dated in the year.
-  - Guard: `core/__tests__/trackedMonths.test.ts` "a month that has not begun" fails without the
-    change, for the badges, the prints and the year in review each.
-  - Main shipped the same fix in 5.17.5 as #675, with its own filter in `evaluate.ts` and
-    `review.ts`. The merge of 5.17.5 keeps this branch's `trackedMonthsOf(dates, today)` in their
-    place, so the rule lives in one file, and #675's cases in `evaluate.test.ts` and
-    `review.test.ts` pass on it. Its CHANGELOG.md line is the one under 5.17.5, so this entry has
-    no line of its own there.
-
-- **The restaurant and dining rules give the default Eating out.** In
-  `shared/bankImport/categoryRules.ts` the Croatian `Restaurant` rule and the Worldwide `Dining`
-  rule now give `Eating out`, the default this branch puts in place of Food, with
-  `formerly: ['Restaurant']` and `formerly: ['Dining']`. A newcomer's first import offered either
-  name as a new category beside the default; it now files those rows under Eating out. A space that
-  has a category under the old name keeps getting the rule's rows there, through
-  `ruleCategory(rule, categoryNames)` as #673 set up, and each rule keeps to its own old name: the
-  Croatian rule never files under a space's Dining, nor the Worldwide one under its Restaurant.
-  Keywords are unchanged, so the Worldwide rule's `cafe`, `coffee` and `starbucks` rows go to
-  Eating out as they went to Dining. No migration, and no stored category is renamed.
-  - Stored copies: `frontend/src/core/bankImport/earlierBuiltInRules.ts` gains `CROATIAN_5_17_5`
-    and `WORLDWIDE_5_17_5`, each group's built-in rules as 5.17.4 and 5.17.5 shipped them (git
-    show `v5.17.5`, unchanged since `v5.17.4`). `loadCategoryRules` reads a stored set equal to
-    either as the group's rules now, so a copy of them runs the fold and the mapping prompt sees no
-    edit.
-  - Tests: `ruleFormerNames.test.ts` "restaurants and takeaways" (Eating out in a default space,
-    the old name in a space that has it, never the other rule's old name);
-    `ruleCategoryNames.test.ts` drops `Restaurant` and `Dining` from the general names and lists
-    them as retired, so a rule that gives either again fails; `earlierBuiltInRules.test.ts` loads
-    the two 5.17.5 fixtures (`__tests__/fixtures/built-in-rules-*-v5.17.5.json`, written from
-    `git show v5.17.5`) as the rules now and files a restaurant and a pizza under Eating out
-    through them; `importFlow.ruleCategoryNames.test.ts` (local-first) and
-    `worker/test/import-rule-category-names.test.ts` (the Bank Imports tab on the Worker and
-    `POST /api/v1/import`) file a made-up restaurant line under Eating out with no new category,
-    and under Restaurant in a space that has it. Without the change every Eating out case fails;
-    the two import cases for a space that has Restaurant pass before and after, as the guard that
-    the fold keeps it. `categoryGroups.test.ts` expects Eating out for `UBER EATS`.
-
 ### Changed
 
 - **A captcha counts when it was solved on the app's own pages, for the form being sent**
@@ -2865,25 +2888,6 @@ null`).
     sign-in forms in every mode" (one widget across modes, in the screen and the window) fail
     without it too. The siteverify stubs in `login-check.test.ts`, `support-captcha.test.ts` and
     `auth-hardening.test.ts` now answer with the app's host.
-
-### Lines for CHANGELOG.md when the benchmarks gate opens
-
-The production build holds back the benchmarks and the questions that choose their figures
-(`frontend/src/core/guidanceGate.ts`). The app shows CHANGELOG.md in production
-(`ChangelogModal.tsx`), so a line for a held piece would announce it there. These lines are written
-and reviewed with their commits and wait here; the commit that opens the gate moves them into
-CHANGELOG.md's [Unreleased].
-
-Added:
-
-- **Setup asks where you live and who the space covers**, to choose the official figures your numbers are compared with. Change the answers in Settings.
-- **Your savings rate, cushion and debts beside the official figures where you live.** Breathing room, Solid ground and Room to choose show the typical range, where you sit in it, and the source and year of every figure.
-- **Paying your way compares groceries, eating out, transport and housing** with what households where you live spend: the first three as shares of your spending, housing as a share of your take-home pay.
-- **Your subscriptions beside the usual count**, and in the UK and US beside the usual monthly spend, inside Paying your way.
-
-Changed:
-
-- **The savings rate shows the typical range where you live**, which is your target until you set your own.
 
 ## [5.17.5] — 2026-11-01
 
