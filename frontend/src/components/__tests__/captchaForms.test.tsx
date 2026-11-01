@@ -211,6 +211,8 @@ afterEach(() => {
   dispose?.()
   dispose = undefined
   host.remove()
+  // A confirm link noted as waiting would open the next sign-in screen on its finishing page.
+  localStorage.removeItem('tc:email-link-waiting')
   appendSpy.mockRestore()
   delete window.turnstile
   vi.unstubAllEnvs()
@@ -253,6 +255,27 @@ async function signInDialog() {
   await show(() => <LoginModal onClose={() => undefined} onSuccess={() => undefined} />)
   type(field('#login-modal-email'), 'someone@example.com')
   type(field('#login-modal-password'), 'a-long-enough-password')
+}
+
+/**
+ * The page a confirm link opens where it can't sign in by itself: the address and its password, sent
+ * to the ordinary sign-in. Its read of what the link waits for is not one of the form's sends.
+ */
+async function finishSignUp() {
+  vi.doMock('../SupportContact', () => ({ default: () => null }))
+  vi.doMock('../EmailCodeLogin', () => ({ default: () => null }))
+  vi.doMock('../../core/storage/storageFactory', () => ({
+    getStorageMode: () => 'self-hosted',
+    setStorageMode: () => undefined,
+  }))
+  answers['/api/auth/email-link'] = () => json({ waiting: 'confirm', email: 's•••@example.com' })
+  window.location.hash = '#everified_error=signin_required'
+  ;(await import('../../core/emailVerification')).consumeEmailVerifyRedirect()
+  const { default: LoginScreen } = await import('../LoginScreen')
+  await show(() => <LoginScreen />)
+  sent.length = 0
+  type(field('#finish-signup-email'), 'someone@example.com')
+  type(field('input[name="password"]'), 'a-long-enough-password')
 }
 
 async function supportForm() {
@@ -333,6 +356,13 @@ const screens: Screen[] = [
     open: signInDialog,
     url: '/api/auth/login',
     idle: 'Sign in',
+    sending: 'Signing in…',
+  },
+  {
+    name: 'finishing sign-up from a confirm link',
+    open: finishSignUp,
+    url: '/api/auth/login',
+    idle: 'Confirm and sign in',
     sending: 'Signing in…',
   },
   {

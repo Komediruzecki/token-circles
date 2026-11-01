@@ -1,6 +1,5 @@
 import { createSignal, Match, onMount, Switch } from 'solid-js'
 import { CAPTCHA_ACTIONS } from '../../../shared/captchaActions'
-import { signInProblems } from '../../../shared/signInSchema'
 import { api } from '../core/api'
 import { ApiError } from '../core/apiError'
 import { clearLinkWaiting, linkWaiting, noteAddressConfirmed } from '../core/emailVerification'
@@ -8,7 +7,7 @@ import CaptchaCheck from './CaptchaCheck'
 import { createCaptchaGate } from './captchaGate'
 import { createForm, Field, FormNotice, NOT_SENT, SubmitButton } from './form'
 import layoutStyles from './Layout.module.css'
-import { reloadIntoTheApp, SIGN_IN_FAILED } from './signInForm'
+import { reloadIntoTheApp, SIGN_IN_FAILED, signInChecks } from './signInForm'
 import styles from './SignInSteps.module.css'
 import type { FieldErrors } from '../../../shared/refusal'
 import type { SignInMode } from './signInForm'
@@ -72,7 +71,8 @@ export default function FinishSignUp(props: {
 
   const form = createForm<{ email: string; password: string }, 'second-factor'>({
     initial: { email: '', password: '' },
-    check: (values): FieldErrors => signInProblems(values),
+    // The sign-in form's checks, as the sign-in this sends to: an address in the format.
+    check: (values): FieldErrors => signInChecks('login', values),
     blocked: captcha.asking,
     send: async (values): Promise<'second-factor'> => {
       // The marker this page finishes the link with has run out: nothing it sends can finish it.

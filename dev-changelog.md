@@ -162,6 +162,19 @@ All notable changes to Token Circles are documented here. The format is based on
     of them checks that the route answers the masked address and the page shows no full one; the
     two that sign up in the browser that opens the link now land signed in.
 
+- **The page that finishes a confirm link names the sign-in on its captcha, and checks the address
+  as the sign-in form does** (`frontend/src/components/FinishSignUp.tsx`). Main's #683 has each
+  captcha widget name the form it is drawn for, and the Worker's login takes only the sign-in
+  action; this page, new on this branch, sends to that login and now passes
+  `CAPTCHA_ACTIONS.signIn` (the merge with main did not compile without it). Its check was
+  `signInProblems`, empty fields only, so an address not in the format went to the Worker and came
+  back as a wrong password; it now runs the sign-in form's `signInChecks('login', ...)`, which
+  marks it first and keeps the empty-field messages as they were.
+- **Tests:** `captchaForms.test.tsx` runs its per-screen suite on this page too (the widget's
+  action, the box, a held press, a refused send), and clears the waiting link it notes;
+  "draws the widget for its form" fails without the action. `finishSignUp.test.tsx` "marks an
+  address not in the format" fails before the change.
+
 ### Mails
 
 - **Confirm and the Welcome are two mails, and the Welcome goes once** (`worker/src/welcome.ts`,

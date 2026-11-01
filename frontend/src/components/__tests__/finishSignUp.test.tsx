@@ -218,6 +218,16 @@ describe('a confirm link opened in a browser it did not sign in', () => {
     expect(logins()).toEqual([])
   })
 
+  it('marks an address not in the format, as the sign-in form does, and sends nothing', async () => {
+    await mount()
+    fill('not-an-address')
+    await submit()
+
+    expect(marked(address()!)).toBe(true)
+    expect(describedBy(address()!)).toEqual([SAY.emailFormat])
+    expect(logins()).toEqual([])
+  })
+
   it('sends an address the link is not for as typed, to the same sign-in', async () => {
     answers['/api/auth/login'] = () => json({ id: 9, email: 'someone.else@example.com' })
     await mount()
