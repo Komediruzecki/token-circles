@@ -1,6 +1,6 @@
 /**
  * A value the mapping step marks as an account (a transfer's destination, or a name
- * classifyCategory reads as one, like "Library") is still the category of a row paid from another
+ * classifyCategory reads as one, like "Savings") is still the category of a row paid from another
  * account. The preview offered it as a category to create and then dropped it on the page, so when
  * any other category was new the run was gated, it was not approved, and the row imported with no
  * category. The page now offers what the importer offers, through the real local-first router.

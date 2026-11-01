@@ -2368,6 +2368,45 @@ Library category.`
     /api/accounts/recompute-balances; it still fails (600 for 500) with the recompute's
     `account_id IS NULL` condition removed.
 
+- **The Import page's category type guess matches whole words, not parts of words**
+  (`frontend/src/core/categoryClassifier.ts`). `classifyCategory` pre-sets each category's type in
+  the mapping step, and it matched keywords with `lower.includes(kw)`, so "ib" found Library,
+  Contribution and Fiber, "rev" found Review, "wise" found Otherwise and Likewise, "account" found
+  Accountant, "current" found Concurrent, and the income keyword "wage" found Sewage. Since the
+  entry above, an Account mark on a row with a Means of Payment only adds a note, but on a row
+  without one it still decides whether the row books into an account, so the wrong guess moved
+  money.
+  - Words: the name is lowercased and split on every run of characters that are neither a letter
+    nor a digit in any script (`/[^\p{L}\p{N}]+/u`), and a keyword matches when it equals a whole
+    word, or a phrase equals a run of whole words. JS `\b` was not used because it knows only
+    ASCII letters: `/\bib\b/` finds "ib" in "Ibérica" and `/\brev\b/` finds "rev" in
+    "Revêtement". A camel-case name is also read split at its capitals (`WRev` reads as "w rev",
+    which the existing test pins as an account), while the unsplit reading keeps `PayPal`
+    matching "paypal".
+  - Forms: plurals and the forms the old substrings were there to catch are spelled out in the
+    lists instead of matched by stem: salaries, revenues, dividends, refunds, bonuses, paychecks,
+    pay cheques, royalty/royalties (was the stem `royalt`), reimbursements, investments,
+    accounts, wallets, portfolios, brokers, brokerage, and `ibkr`, `trading212` and `girokonto`,
+    which the substrings `ib`, `trading` and `giro` used to find. The lists are now everything
+    that matches.
+  - Precedence: account phrases of more than one word (`current account`, `giro account`,
+    `checking account`, `savings account`, `investment account` and `credit card account`, the
+    list as it was) are checked before the income keywords, then single account words. So "Credit
+    card account" is an account; it was income through "credit". So is "Savings account
+    interest". A name without one of those phrases keeps the old order: income first.
+  - Left as they were: a bare "Credit", "Credit card" or "Interest" is income, "Savings" and
+    "Brokerage fees" are accounts, and only English income words are known, so "Plaća" is an
+    expense. A saved source's `categoryTypes` are restored as saved and never reclassified
+    (`applySavedMapping`), so a source set up before this change keeps its types.
+  - Not changed: `worker/src/routes/imports.ts` keeps its own `INCOME_KEYWORDS` copy with substring
+    matching, used only to pick income or expense for a category it creates from a value the
+    import marked as an account or left unmarked.
+  - Tests: `frontend/src/core/__tests__/categoryClassifier.test.ts` adds the whole-word cases, the
+    precedence case and a non-ASCII case; 11 of its 53 tests fail on main's classifier. Each of the
+    phrase tier, the camel-case reading and the Unicode split fails a test when removed.
+    `frontend/src/features/import/__tests__/savedSourceCategoryTypes.test.ts` shows a saved
+    source's types win over the fresh guess, and fails if `applySavedMapping` reclassifies them.
+
 - **No badge is dated to a month still to come, and the Year in review's best month has begun**
   (`frontend/src/core/achievements/evaluate.ts`, `frontend/src/core/achievements/review.ts`).
   Follow-up to 5.17.5's "a month that has not begun is not tracked" (#675), which covered the
