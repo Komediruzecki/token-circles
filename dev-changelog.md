@@ -2235,9 +2235,11 @@ check')` first, as the cushion and debt cases do.
   refresh is asked for. Without the change the snapshot ends with `['Rainy day']` instead of
   `['Rainy day', 'Holiday']`, and the fold case sees one settings read instead of two. Two more
   cases pin that a switch drops the old profile's further run and that a run nobody asked again
-  during starts nothing. User-facing line in CHANGELOG.md under Fixed. Main has the same change
-  as #672, whose case checks that a budget added mid-run earns `first-budget`; the merge keeps
-  both cases here, and this entry stands for both.
+  during starts nothing. Main has the same change as #672, whose case checks that a budget added
+  mid-run earns `first-budget`; the merge keeps both cases here, and this entry stands for both.
+  No line in CHANGELOG.md: it had one under Fixed ("Getting started sees an account you add a
+  second or so after another change straight away"), but Getting started ships for the first
+  time in this release, so no one saw it wait, and the badges' half has its line under 5.17.4.
 
 - **A month that has not begun is not tracked** (`shared/trackedMonths.ts`,
   `core/achievements/evaluate.ts`, `core/achievements/review.ts`). `trackedMonthsOf(dates, today)`
