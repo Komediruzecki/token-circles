@@ -11,6 +11,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixed
 
 - **Entries dated ahead wait for their month.** Bills put in early for a month that hasn't begun no longer make it a tracked month, for your badges or the Year in review, so a badge like A year or Every month of a year can't be earned before its last month begins.
+- **On a phone, Tags' Add rule button shows the Rules heading in full.** It used to scroll the heading up under the menu button in the top corner; now it stops just below it, as does anything else the page scrolls to the top.
 
 ## [5.17.4] — 2026-10-31
 

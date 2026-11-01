@@ -36,6 +36,18 @@ All notable changes to Token Circles are documented here. The format is based on
     "buildYearReview, months that have not begun". The not-tracked, no-badge and review
     month-to-come cases fail without the change; the current-month cases fail if the bound is
     made strict (`<`).
+- **A section scrolled to the top lands below the menu button** (`components/Layout.module.css`).
+  Up to 768 px the menu button is fixed at the top left (x and y 12 to 48). Tags' "Add rule" /
+  "N rules" button scrolls the Rules divider (`#tags-sec-rules`) to the top with
+  `scrollIntoView({ block: 'start' })`; the divider's 18 px scroll margin put it at y 18 and the
+  word "Rules" at x 29 to 74, y 21 to 47, under the button. `.main`'s 56 px top padding clears
+  the button only at the top of the page, so fragments and focus shared the problem. The root now
+  has `scroll-padding-top: calc(env(safe-area-inset-top, 0px) + 48px)` while the button shows, and
+  the divider's margin adds to it: the divider lands at y 66 and the heading at y 69, 21 px under
+  the button. The breakpoint is the button's, 768 px, not 640: at 700 the heading sat under it
+  too. The only other `block: 'start'` caller, SectionRail, shows from 1280 px only. Ported from
+  5d27a9eb on the first-week branch. `menu-button-clearance.spec.ts`, at 390 and 700, fails
+  without the rule, and at 700 with it at 640 px.
 
 ## [5.17.4] — 2026-10-31
 
