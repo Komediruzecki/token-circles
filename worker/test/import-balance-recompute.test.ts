@@ -6,6 +6,9 @@
  * credited transfer_account_id too (its inTransfer query matched
  * type IN ('income','transfer')), double-crediting the income across two accounts.
  *
+ * An import no longer writes such a row (only a transfer reads Category as an account), but
+ * imports before that did, so the recompute keeps the rule, and the first test plants one.
+ *
  * Runs against the real worker in workerd via Miniflare (D1 from worker/migrations/).
  * Worker deps can't install in the CI sandbox — run locally with `pnpm -C worker test`.
  */
@@ -46,13 +49,17 @@ async function balanceOf(name: string): Promise<number> {
 
 describe('import balance recompute — no double-credit', () => {
   it('an income row with account_id AND transfer_account_id credits only account_id', async () => {
+    // Savings exists: the import below makes no account of a value that only names a category.
+    await env.DB.prepare(
+      "INSERT INTO accounts (name, type, currency, balance, starting_balance, profile_id) VALUES ('Savings', 'savings', 'EUR', 500, 500, 900)"
+    ).run();
     const res = await SELF.fetch('https://example.com/api/import/execute', {
       method: 'POST',
       headers: { Cookie: cookie, 'Content-Type': 'application/json', 'X-Profile-Id': '900' },
       body: JSON.stringify({
         // Row columns: [means_of_payment, category, type, amount].
-        // Both "Checking" and "Savings" are flagged account-typed, so they are
-        // created as accounts and resolved to account_id / transfer_account_id.
+        // "Checking" is flagged account-typed and created; the income resolves account_id from
+        // it, and "Savings" is its category.
         rows: [['Checking', 'Savings', 'income', '100']],
         mapping: { means_of_payment: 0, category: 1, type: 2, amount: 3 },
         categoryTypes: { Checking: 'account', Savings: 'account' },
@@ -60,6 +67,17 @@ describe('import balance recompute — no double-credit', () => {
       }),
     });
     expect(res.status).toBe(200);
+    // The row an earlier import wrote: the Category's account as transfer_account_id too.
+    await env.DB.prepare(
+      `UPDATE transactions SET transfer_account_id =
+         (SELECT id FROM accounts WHERE name = 'Savings' AND profile_id = 900)
+       WHERE profile_id = 900`
+    ).run();
+    const recompute = await SELF.fetch('https://example.com/api/accounts/recompute-balances', {
+      method: 'POST',
+      headers: { Cookie: cookie, 'X-Profile-Id': '900' },
+    });
+    expect(recompute.status).toBe(200);
 
     // The income lands in the Means-of-Payment account (account_id): 1000 + 100.
     expect(await balanceOf('Checking')).toBeCloseTo(1100, 2);

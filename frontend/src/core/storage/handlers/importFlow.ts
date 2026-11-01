@@ -10,6 +10,7 @@ import { parseImportCsv } from '../../../../../shared/importCsv'
 import {
   checkImportRowNumbers,
   existingAccountStartingBalance,
+  markedAccountUsedAsCategoryNote,
   MISSING_DATE_WARNING,
   startingBalanceKeptNote,
   unreadableNumbersReason,
@@ -130,11 +131,16 @@ const resolvedDedupKey = (
   currency: string
 ): string => `${date}\x00${desc}\x00${accountId ?? ''}\x00${type}\x00${currency}`
 
+/** The type of a row booked into the account its Category names, from that account's side. */
+const signedType = (amount: number): 'income' | 'expense' => (amount > 0 ? 'income' : 'expense')
+
 /** Distinct category-column values in `rows` that do NOT match an existing category
  *  (case-insensitive) in the active profile — the categories an import would create.
- *  Excludes values that already name an existing account or are flagged as 'account'
- *  type (those become accounts, not categories), mirroring the worker preview. Used to
- *  ask the user for confirmation before creating categories (audit B5). */
+ *  Excludes a Transfer row's value (the account the money went to), mirroring the worker preview.
+ *  On a row with a Means of Payment the value is a category, even when an account has that name or
+ *  the import marks it as one. On a row without one it is left out, as before, when it names an
+ *  existing account or is flagged as 'account' type: that row books into the account. Used to ask
+ *  the user for confirmation before creating categories (audit B5). */
 async function detectNewCategories(
   rows: Record<string, unknown>[],
   categoryTypes: Record<string, string> = {}
@@ -152,9 +158,15 @@ async function detectNewCategories(
   for (const row of rows) {
     const raw = toStr(row.category).trim()
     if (!raw) continue
+    if (toStr(row.type).trim().toLowerCase() === 'transfer') continue
     const lower = raw.toLowerCase()
-    if (existingCat.has(lower) || existingAcct.has(lower) || seen.has(lower)) continue
-    if (catTypeLower[lower] === 'account') continue
+    if (existingCat.has(lower) || seen.has(lower)) continue
+    if (
+      !toStr(row.means_of_payment).trim() &&
+      (existingAcct.has(lower) || catTypeLower[lower] === 'account')
+    ) {
+      continue
+    }
     seen.add(lower)
     out.push(raw)
   }
@@ -197,9 +209,13 @@ async function detectNewAccounts(
      * calls a transfer names an account in both columns whatever anyone marked: there is no
      * reading of "transfer to Groceries" that makes Groceries a category.
      */
+    // A value set to Account is an account to create only where a row books into it: as a
+    // transfer's destination, or as the account of a row with no Means of Payment. A row paid
+    // from another account only uses it as its category.
     const category = toStr(row.category).trim()
     const isTransfer = toStr(row.type).trim().toLowerCase() === 'transfer'
-    if (category && (catTypeLower[category.toLowerCase()] === 'account' || isTransfer)) {
+    const marked = catTypeLower[category.toLowerCase()] === 'account'
+    if (category && (isTransfer || (marked && !toStr(row.means_of_payment).trim()))) {
       offer(category)
     }
     offer(toStr(row.means_of_payment))
@@ -590,7 +606,7 @@ export async function importExecute(body: unknown): Promise<Response> {
     // identically because it has date but no time). A re-import still dedupes: the
     // existing copies consume the incoming ones one-for-one.
     const existingTxns = await db.getAllFromIndex('transactions', 'by_profile', profileId)
-    const dedupBuckets = new Map<string, number[]>()
+    const dedupBuckets = new Map<string, { amount: number; imported: boolean }[]>()
     for (const t of existingTxns) {
       const k = resolvedDedupKey(
         normalizeDate(t.date) || toStr(t.date),
@@ -599,10 +615,13 @@ export async function importExecute(body: unknown): Promise<Response> {
         toStr(t.type),
         normalizeCurrencyCode(t.currency, defaultCurrency)
       )
-      const amt = Math.abs(Number(t.amount))
+      const entry = {
+        amount: Math.abs(Number(t.amount)),
+        imported: typeof t.import_id === 'string' && t.import_id !== '',
+      }
       const bucket = dedupBuckets.get(k)
-      if (bucket) bucket.push(amt)
-      else dedupBuckets.set(k, [amt])
+      if (bucket) bucket.push(entry)
+      else dedupBuckets.set(k, [entry])
     }
     const duplicates: number[] = []
     // Names of records this import actually created (reused ones excluded) — reported
@@ -663,6 +682,19 @@ export async function importExecute(body: unknown): Promise<Response> {
         .map((name) => name.trim().toLowerCase())
         .filter(Boolean)
     )
+    // The values some row books into or from: every Means of Payment, a transfer's destination,
+    // and the Category of a row with no Means of Payment. A value set to Account that only rows
+    // paid from another account use is their category, and gets no empty account beside it.
+    const usedAsAccount = new Set(
+      validRows
+        .flatMap((row) => {
+          const mop = toStr(row.means_of_payment).trim()
+          const isTransfer = toStr(row.type).trim().toLowerCase() === 'transfer'
+          return [mop, isTransfer || !mop ? toStr(row.category) : '']
+        })
+        .map((name) => name.trim().toLowerCase())
+        .filter(Boolean)
+    )
     // The names as the sheet spells them: the lowercased maps above are for lookups only, and an
     // account created from one would otherwise be named in lower case.
     for (const [rawName, catType] of Object.entries(categoryTypes)) {
@@ -672,7 +704,7 @@ export async function importExecute(body: unknown): Promise<Response> {
       if (
         configuredAccounts.has(catLower) ||
         accountIdMap.has(catLower) ||
-        (clean.length > 0 && !validAccountNames.has(catLower))
+        (clean.length > 0 && !usedAsAccount.has(catLower))
       ) {
         configuredAccounts.add(catLower)
         continue
@@ -836,27 +868,43 @@ export async function importExecute(body: unknown): Promise<Response> {
     // write balance update per row are O(N) sequential round-trips; batching
     // makes it O(N) inserts + O(A) account updates in one atomic transaction.
     const toInsert: Record<string, unknown>[] = []
+    // Values set to Account that rows with a Means of Payment use as their category: one note
+    // each, after the rows (markedAccountUsedAsCategoryNote).
+    const usedAsCategory = new Map<
+      string,
+      {
+        name: string
+        rows: number
+        paidFrom: string[]
+        notAccounts: string[]
+        categorised: boolean
+        types: string[]
+      }
+    >()
 
     for (const validated of validatedRows) {
       const { index: i, row, date, amount, amountLocal, exchangeRate } = validated
       const description = toStr(row.description)
-      // Determine transaction type.
+      // Determine transaction type, in the Worker's order (executeImport).
       // An explicit "transfer" always wins — a transfer between two accounts is a
       // transfer regardless of sign, and the category names the destination account
       // (e.g. bank imports: means_of_payment = source, category = destination).
-      // Otherwise, for account-type categories (IB, Revolut, etc.), the type is from
-      // the account's perspective: positive amount = money INTO account (income),
-      // negative = money OUT (expense). Bank statement types are ignored for accounts
-      // because the bank's perspective (e.g. "Expense" for a deposit) is inverted.
+      // A row with a Means of Payment books from that account, so its Type is read from that
+      // account's side as written. A row with none resolves as it always did (`asBefore`): it
+      // books into an account its Category names, and when that value is set to Account its type
+      // is from that account's side, by the sign of the amount, whatever the Type column says.
+      // Which rule such a row should follow is a separate decision.
       let type = 'expense'
       const rawType = toStr(row.type).trim().toLowerCase()
       const catName = toStr(row.category).toLowerCase().trim()
       const catType = catTypes[catName]
+      const mopValue = toStr(row.means_of_payment).trim().toLowerCase()
+      const asBefore = rawType !== 'transfer' && mopValue === ''
 
       if (rawType === 'transfer') {
         type = 'transfer'
-      } else if (catType === 'account') {
-        type = amount < 0 ? 'expense' : amount > 0 ? 'income' : 'expense'
+      } else if (asBefore && catType === 'account') {
+        type = signedType(amount)
       } else if (rawType === 'income' || rawType === 'expense') {
         type = rawType
       } else if (catType && (catType === 'income' || catType === 'expense')) {
@@ -869,7 +917,6 @@ export async function importExecute(body: unknown): Promise<Response> {
       let accountId: number | null = null
       let transferAccountId: number | null = null
       const rawCat = toStr(row.category)
-      const mopValue = toStr(row.means_of_payment).trim().toLowerCase()
       if (rawCat) {
         // Use lowered version only for matching; store original case in DB
         const catLower = rawCat.toLowerCase().trim()
@@ -923,16 +970,15 @@ export async function importExecute(body: unknown): Promise<Response> {
           newlyCreatedCategories.push(storedName)
         }
         if (cat) categoryId = cat.id
-        // Map category to account: for transfers on account-type categories,
-        // the account is the DESTINATION (money arriving from external source,
-        // e.g. selling stock → proceeds arrive at brokerage account).
-        // For income/expense, the account is the primary account.
+        // A transfer reads its Category as the account the money went to. A row with a Means of
+        // Payment books from that account, and its Category is its category, even when an
+        // account has that name or the import sets it to Account: read as an account there, an
+        // expense in "Vacation" paid from Checking was booked against an account called
+        // Vacation, and Checking never moved. A row without one books into the account, as
+        // before. Mirrors the Worker (executeImport).
         if (accountIdMap.has(catLower)) {
-          if (type === 'transfer') {
-            transferAccountId = accountIdMap.get(catLower)!
-          } else {
-            accountId = accountIdMap.get(catLower)!
-          }
+          if (type === 'transfer') transferAccountId = accountIdMap.get(catLower)!
+          else if (asBefore) accountId = accountIdMap.get(catLower)!
         }
       }
 
@@ -1034,12 +1080,57 @@ export async function importExecute(body: unknown): Promise<Response> {
         currency
       )
       const absAmount = Math.abs(amount)
-      const dupBucket = dedupBuckets.get(dedupKey)
-      const matchAt = dupBucket ? dupBucket.findIndex((a) => Math.abs(a - absAmount) < 0.01) : -1
-      if (matchAt !== -1) {
-        dupBucket!.splice(matchAt, 1)
+      // An earlier import booked a row with a Means of Payment into the account its Category
+      // names, with the type from that account's side when the value was set to Account. A
+      // re-import (a connected source re-sends every row) must find that copy too, or it adds the
+      // row again. Only a row an import wrote (it carries an import_id) can be that copy, so a row
+      // typed in by hand in that account is never taken for it. Its category is not compared:
+      // the person may have moved it to another since.
+      const oldRuleAccountId =
+        type !== 'transfer' && !asBefore ? accountIdMap.get(catName) : undefined
+      const oldRuleKey =
+        oldRuleAccountId === undefined
+          ? null
+          : resolvedDedupKey(
+              date,
+              description.toLowerCase().trim(),
+              oldRuleAccountId,
+              catType === 'account' ? signedType(amount) : type,
+              currency
+            )
+      const takeMatch = (key: string | null, oldRule: boolean): boolean => {
+        const bucket = key === null ? undefined : dedupBuckets.get(key)
+        const at = bucket
+          ? bucket.findIndex(
+              (e) => Math.abs(e.amount - absAmount) < 0.01 && (!oldRule || e.imported)
+            )
+          : -1
+        if (at === -1) return false
+        bucket!.splice(at, 1)
+        return true
+      }
+      if (takeMatch(dedupKey, false) || (oldRuleKey !== dedupKey && takeMatch(oldRuleKey, true))) {
         duplicates.push(i)
         continue
+      }
+      if (type !== 'transfer' && !asBefore && catType === 'account') {
+        const name = rawCat.trim()
+        const seen = usedAsCategory.get(name.toLowerCase()) ?? {
+          name,
+          rows: 0,
+          paidFrom: [] as string[],
+          notAccounts: [] as string[],
+          categorised: categoryId !== null,
+          types: [] as string[],
+        }
+        const paidFrom =
+          resolvedAccountId !== null ? accountNameById.get(resolvedAccountId) : undefined
+        const list = paidFrom !== undefined ? seen.paidFrom : seen.notAccounts
+        const from = paidFrom ?? toStr(row.means_of_payment).trim()
+        seen.rows++
+        if (!list.includes(from)) list.push(from)
+        if (!seen.types.includes(type)) seen.types.push(type)
+        usedAsCategory.set(name.toLowerCase(), seen)
       }
 
       const transaction = {
@@ -1075,6 +1166,17 @@ export async function importExecute(body: unknown): Promise<Response> {
       } else {
         imported.push(-1)
       }
+    }
+
+    for (const found of usedAsCategory.values()) {
+      warnings.push({
+        reason: markedAccountUsedAsCategoryNote({
+          ...found,
+          // A preview offers the category for the import to make.
+          categorised: found.categorised || dryRun,
+          preview: dryRun,
+        }),
+      })
     }
 
     if (!dryRun && toInsert.length > 0) {
