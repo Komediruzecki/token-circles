@@ -30,6 +30,38 @@ All notable changes to Token Circles are documented here. The format is based on
     account with Show more closed, walks the Dashboard tour to Charts, and expects the anchor in
     the DOM, the toggle reading Show less and `dashboard_showMore` still `'0'`. It fails without the
     effect.
+- **The Dashboard tour's Summary metrics step has its cards to point at when they are hidden in
+  Views** (`frontend/src/features/Dashboard.tsx`). Its anchor, `data-tour="dashboard-metrics"` on
+  the metric cards grid, renders inside `<Show when={isWidgetVisible('metrics')}>`. With the cards
+  switched off in Views the step found no target, waited out Spotlight's 6 s and showed the
+  missing-target notice.
+  - New `tourOnMetrics()`: true while a tour (the Dashboard's own or the full tour) is on a step
+    targeting `[data-tour="dashboard-metrics"]`. The grid renders when
+    `isWidgetVisible('metrics') || tourOnMetrics()`. Nothing is written to `dashboard_widgets`;
+    Views stores what the person chose. Same idea as the Charts step's Show more (#678), with one
+    difference: the cards go away again when the tour leaves the step. Show more is a toggle on the
+    page, so leaving it open costs one click; hidden cards could only be hidden again through Views,
+    whose checkbox would still say they were off.
+  - Shown rather than re-anchored or skipped. The step's copy names net worth, income, expenses and
+    the month-over-month change, which only these cards show; the header or the overview deck
+    would put that copy over something else. Skipping would need a per-step condition in the tour
+    engine and would change the step count mid-tour, and a tour is where someone who switched the
+    cards off can see what they hold before deciding to keep them off.
+  - Empty state: the cards render with every total at zero, so the anchor is there on a new
+    account too. It is missing only while the page loads (the skeleton) and on "Failed to load
+    data", where none of the Dashboard's anchors below the period bar render.
+  - Test: `src/features/__tests__/dashboardTourCharts.test.tsx`, new case "shows metric cards
+    hidden in Views while the tour is on it, and only then". On an empty account with `metrics` left
+    out of `dashboard_widgets`, it expects no cards on the step before, the anchor on the Summary
+    metrics step, no cards on the step after or once the tour ends, and `dashboard_widgets`
+    unchanged. Without the fix it fails at the Summary metrics step (`expected null not to be
+null`).
+  - Walk (`TOUR=dashboard pnpm run test:tours`, seeded fixture, hidden by adding
+    `dashboard_widgets` without `metrics` to the saved session's localStorage): before the fix,
+    `MISS step 3: Summary metrics no-highlight [target-missing banner]` and `GATE: FAILED` at
+    1280x800 and with `MOBILE=1`. After it, 4 of 4 steps ok and `GATE: PASSED` in all four runs,
+    shown and hidden at both widths. Summary metrics measures 990x191 on desktop and 384x716 on a
+    phone either way, and Charts 990x531 and 384x963.
 - **The tour walk judges each step by its own highlight** (`frontend/scripts/walk-tours.mjs`).
   It slept 1.2 s after Next and then read whatever glow rect was on screen. A step whose target
   had not appeared yet still showed the previous step's highlight then, so the walk passed
