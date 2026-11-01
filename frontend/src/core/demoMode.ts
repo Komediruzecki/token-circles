@@ -22,6 +22,21 @@ export const DEMO_PROFILE_NAME: Record<DemoTier, string> = {
   high: 'Example High Income',
 }
 
+/**
+ * The example profiles' names, in the order the seed adds them. They are known by name only: the
+ * seed marks nothing else on them.
+ */
+export const EXAMPLE_PROFILE_NAMES: readonly string[] = [
+  DEMO_PROFILE_NAME.low,
+  DEMO_PROFILE_NAME.mid,
+  DEMO_PROFILE_NAME.high,
+]
+
+/** Whether a local profile is one of the example profiles the demo seeds. */
+export function isExampleProfileName(name: string | null | undefined): boolean {
+  return typeof name === 'string' && EXAMPLE_PROFILE_NAMES.includes(name)
+}
+
 /** Tier used when `?demo` is present but empty or unrecognized. */
 const DEFAULT_TIER: DemoTier = 'mid'
 

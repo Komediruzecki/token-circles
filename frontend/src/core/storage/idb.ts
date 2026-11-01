@@ -687,14 +687,16 @@ export class IndexedDBAdapter implements StorageAdapter {
     }
 
     // A deleted profile's settings go with it, as they do on the Worker: its retirement plan, its
-    // badges and its guidance answers, the ones kept per profile (shared/profileSettings.ts). Left
-    // behind, they stayed in every backup.
+    // badges and its guidance answers, the ones kept per profile (shared/profileSettings.ts), and
+    // the emergency fund plan the example seed keeps under a key of its own. Left behind, they
+    // stayed in every settings read and every backup.
     if (options.deleteProfiles && transactionStores.includes('settings')) {
       const settingsStore = tx.objectStore('settings')
       for (const profileId of pidSet) {
         for (const key of PROFILE_SETTING_KEYS) {
           await settingsStore.delete(localProfileSettingKey(key, profileId))
         }
+        await settingsStore.delete(emergencyFundConfigKey(profileId))
       }
     }
 
@@ -1976,6 +1978,11 @@ export async function seedDefaultCategories(profileId: number): Promise<void> {
 
 // ── Demo Profile Seeding ──────────────────────────────────────────────────────
 
+/** Where the example seed keeps a profile's emergency fund plan; deleting the profile removes it. */
+export function emergencyFundConfigKey(profileId: number): string {
+  return `emergency_fund_config_${String(profileId)}`
+}
+
 const DEMO_PROFILES = [
   { name: 'Example Low Income', income: 2500, spendFraction: 0.95 },
   { name: 'Example Mid Income', income: 5500, spendFraction: 0.82 },
@@ -2602,7 +2609,7 @@ export async function seedDemoProfiles(): Promise<void> {
     // ── Emergency fund config ──
     const monthlyExpenses = Math.round(profile.income * profile.spendFraction)
     await db.put('settings', {
-      key: `emergency_fund_config_${profileId}`,
+      key: emergencyFundConfigKey(profileId),
       value: JSON.stringify({ monthly_expenses: monthlyExpenses, profile_id: profileId }),
     })
   }
