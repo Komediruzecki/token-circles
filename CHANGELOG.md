@@ -47,8 +47,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **The subscription scan keeps up with a long history.** With a few thousand entries, Scan transactions on Bills and the setup wizard's subscriptions step held the page for over a second. They now find the same subscriptions in a small part of that time.
 - **The plan name on a subscription the scan finds is easier to read.** In the light theme, "Standard" beside Netflix was blue on a pale blue tint at 4.0:1. It's a darker blue now, on Bills and in setup.
 - **A first bank import files restaurants, cafes and takeaways under Eating out**, instead of a new Restaurant or Dining category. If you already have one of those, its rows keep going there.
-- **Keeping your data in this browser after the demo starts with a space of your own.** Signed in, "Keep my data in this browser only" on a browser that had run the demo opened Example Low Income's dashboard. Setup now opens on your space's name, makes it a new profile, and removes the three example profiles and everything in them, or keeps them in the profile switcher if you choose.
-- **Running setup again in the demo no longer turns Example Low Income into your space.** Setup makes your space a new profile, with the same choice about the examples, instead of renaming the example and keeping its accounts and entries.
+- **Setup after the demo makes a space of your own.** Keeping your data in this browser after running the demo opened Example Low Income's dashboard, and running setup again in the demo renamed that example. Setup now makes your space a new profile and lets you remove the three example profiles or keep them.
 
 ## [5.17.5] — 2026-11-01
 
