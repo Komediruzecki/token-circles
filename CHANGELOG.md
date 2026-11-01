@@ -8,13 +8,14 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [5.17.6] — 2026-11-01
+
 ### Fixed
 
 - **An imported row is booked to the account in its Means of Payment column and keeps its category, even when that category shares a name with one of your accounts.** Local-first booked such a row against the account its category named, and the cloud dropped its category.
 - **The Import page no longer guesses that a category called Library, Review or Otherwise is an account.** It reads account names like IB, Rev and Wise only as whole words, and guesses that "Credit card account" is an account rather than income.
 - **A badge earned through an entry dated ahead is dated this month.** Before, December's bills put in during October dated First entry to December, and the Year in review could name a month that hadn't begun as its best.
-- **The Dashboard tour's Charts step shows the charts.** Before, on a dashboard where Show more had never been opened, it pointed at nothing.
-- **The Dashboard tour's Summary metrics step shows the metric cards, even if you hid them in Views.** They appear for that step only, and your Views choice stays as you saved it.
+- **The Dashboard tour's Charts and Summary metrics steps show what they point at.** Charts pointed at nothing until Show more had been opened, and Summary metrics found no cards if you had hidden them in Views. The tour now shows both without changing your saved Show more and Views choices.
 
 ## [5.17.5] — 2026-11-01
 

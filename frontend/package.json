@@ -1,6 +1,6 @@
 {
   "name": "finance-manager-frontend",
-  "version": "5.17.5",
+  "version": "5.17.6",
   "type": "module",
   "description": "Finance Manager Frontend - SolidJS + TypeScript",
   "author": "Komediruzecki",

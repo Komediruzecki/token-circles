@@ -9,6 +9,8 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ## [Unreleased]
 
+## [5.17.6] — 2026-11-01
+
 ### Fixed
 
 - **A row with a Means of Payment books from it and keeps its Category as its category, in both
