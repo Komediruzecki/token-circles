@@ -43,6 +43,45 @@ All notable changes to Token Circles are documented here. The format is based on
     `MISS step 4: Charts no-highlight [target-missing banner]`; with the fix it passes, Charts at
     990x531 on desktop and 384x963 on a phone. Full walks: 53 steps, 0 MISS, and nothing left
     unmeasured (it was 1, this step, at each width).
+- **A tour step whose target is taller than the screen opens at its top**
+  (`frontend/src/components/Spotlight.tsx`). `updatePositions` scrolled every target that was not
+  80 px clear of both edges with `scrollIntoView({ block: 'center' })`, so a target taller than
+  the screen opened at its middle with its heading scrolled off the top. New `revealBlock` picks
+  `'start'` when the target is taller than the room left under the root's `scroll-padding-top`
+  and `'center'` otherwise. That padding is the 48 px a phone keeps for the menu button (#676),
+  which `scrollIntoView` stops below, so the target's start lands under the button, not behind it.
+  - Measured with the walk (seeded fixture, `scripts/walk-tours.mjs` plus a local probe of the
+    anchor and its first heading), for every step whose target is taller than the screen. Share of
+    the target on the first screen, before and after:
+    - Desktop 1280x800, Retirement / Your assumptions (1188 px): 67% before, 67% after. Its
+      heading "Your Plan" was at y -191, off screen; now at y 3, showing.
+    - Phone 390x844, Portfolio / Holdings (867 px): 96% before, 92% after. The heading "Holdings"
+      moves from y 42 (against the menu button, which ends at 48) to y 77.
+    - Phone, Categories / Your categories (1196 px): 71% before, 67% after. The first row was at
+      y -135, off screen; now at y 65.
+    - Phone, Retirement / Your assumptions (2491 px): 34% before, 32% after. "Your Plan" was at
+      y -796; now at y 51.
+    - The share drops a few points on a phone because the 48 px strip under the menu button is no
+      longer counted as target; what is on screen is now the top of it.
+  - Tests: `spotlightTipWiring.test.tsx` "Spotlight opens a target that does not fit at its top":
+    a 1200 px target asks for `'start'`, a 300 px one for `'center'`, and an 820 px one asks for
+    `'start'` on an 844 px screen with a 48 px `scroll-padding-top`. The first and third fail
+    without the change.
+- **On a phone, the tip covers a tall target from the bottom, not over its heading**
+  (`frontend/src/components/spotlightPlacement.ts`, `Spotlight.tsx`). With the target scrolled to
+  its start, no side has room on a phone, so `placeTip` puts the tip against a screen edge. The top
+  edge hid less of the target than the bottom (219 - 48 = 171 rows against 207, since the strip
+  under the menu button is not target), so it won, and the 207-227 px tip sat at y 12 over the
+  heading the scroll had just shown: "Holdings" at y 77, the first category at 65, "Your Plan"
+  at 51. `placeTip` takes a new `fromStart` flag, set by Spotlight when `revealBlock` chose
+  `'start'`, and leaves the top edge out of the covering candidates then. On a phone the tip now
+  sits at y 625 (605 for the taller Retirement tip) and all three headings show, below the menu
+  button and clear of the tip. Desktop is unchanged: Retirement's tip still covers its left edge
+  (1%), which hides less than the bottom. The flag depends only on the target's height, so the tip
+  stays put while the person scrolls through the target.
+  - Tests: `spotlightPlacement.test.ts` "placeTip over a target scrolled to its start" and
+    `spotlightTipWiring.test.tsx` "Spotlight keeps the tip off the start of a tall target"; the
+    phone cases fail without the change.
 
 ## [5.17.5] — 2026-11-01
 

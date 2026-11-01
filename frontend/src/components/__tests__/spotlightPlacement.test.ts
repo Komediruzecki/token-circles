@@ -251,3 +251,43 @@ describe('placeTip on desktop', () => {
     expect(p).toEqual({ placement: 'top', top: 700 - 8 - 207, left: 340 })
   })
 })
+
+/*
+ * A target taller than the screen is scrolled to its start, which on a phone lands 48px down,
+ * under the strip kept for the menu button. The walk measured Holdings, the category list and
+ * Retirement's assumptions there: the tip took the top edge, because the strip is not target and
+ * so the top edge hid less, and it sat on the heading the scroll had just shown.
+ */
+describe('placeTip over a target scrolled to its start', () => {
+  const pinned = { viewport: PHONE, tip: TIP, pinnedLeft: 16 }
+  // Holdings on a phone: 867px tall, its top at 48.
+  const tall = rect(48, 14, 362, 867)
+
+  it('covers it from the bottom edge, leaving its start on show', () => {
+    const p = placeTip({ ...pinned, target: tall, preferred: 'top', fromStart: true })
+    expect(p).toEqual({ placement: 'over', top: 844 - 12 - 207, left: 16 })
+    expect(p.top).toBeGreaterThan(tall.top + 100)
+  })
+
+  it('took the top edge without it, because the top hides less', () => {
+    // Pinned to the top the tip hides 219 - 48 = 171 rows; pinned to the bottom, 207.
+    const p = placeTip({ ...pinned, target: tall, preferred: 'top' })
+    expect(p.top).toBe(12)
+  })
+
+  it('still sits beside it when there is a side with room', () => {
+    // Desktop, Retirement's assumptions: 1188px tall at x 290, so 278px to its left is too narrow
+    // for a 320px tip and it covers the left edge, hiding 42 columns rather than a full width.
+    const target = rect(0, 290, 940, 1188)
+    const p = placeTip({ viewport: DESKTOP, tip: TIP, target, preferred: 'top', fromStart: true })
+    expect(p.placement).toBe('over')
+    expect(p.left).toBe(12)
+  })
+
+  it('leaves a target that fits alone', () => {
+    // The case above where the top edge hides less: fromStart is only ever set for a tall target.
+    const target = rect(100, 0, 390, 740)
+    const p = placeTip({ viewport: PHONE, target, tip: TIP, preferred: 'bottom', fromStart: false })
+    expect(p.top).toBe(12)
+  })
+})
