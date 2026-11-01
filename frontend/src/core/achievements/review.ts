@@ -29,10 +29,12 @@ export function buildYearReview(input: {
 
   let bestMonth: YearReview['bestMonth'] = null
   let trackedMonths = 0
-  // Tracked as the badges count it: a month after this one is not, whatever is dated in it.
+  // Tracked as the badges count it: a month after this one is not, whatever is dated in it. Nor
+  // is it the best month: a salary entered ahead would make December the best month in October.
   const thisMonth = input.today.slice(0, 7)
   for (const [month, list] of byMonth) {
-    if (month <= thisMonth && list.length >= TRACKED_MONTH_MIN_TRANSACTIONS) trackedMonths++
+    if (month > thisMonth) continue
+    if (list.length >= TRACKED_MONTH_MIN_TRANSACTIONS) trackedMonths++
     const saved = sumTypes(list, ['income']) - sumTypes(list, ['expense', 'deduction'])
     if (saved > 0 && (bestMonth === null || saved > bestMonth.saved)) bestMonth = { month, saved }
   }

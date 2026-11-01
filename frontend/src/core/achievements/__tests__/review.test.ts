@@ -54,3 +54,31 @@ describe('buildYearReview, months that have not begun', () => {
     expect(r.trackedMonths).toBe(1)
   })
 })
+
+describe('buildYearReview, the best month', () => {
+  it('is a month that has begun, not one holding a salary entered ahead', () => {
+    const transactions = [
+      ...month('2026-09', 3, { amount: 100 }),
+      tx('2026-09-28', { type: 'income', amount: 400 }),
+      tx('2026-12-28', { type: 'income', amount: 5000 }),
+    ]
+    const r = buildYearReview({ transactions, today: '2026-10-15' })
+    expect(r.bestMonth).toEqual({ month: '2026-09', saved: 100 })
+  })
+
+  it('is none when only a month still to come saved', () => {
+    const r = buildYearReview({
+      transactions: [tx('2026-12-28', { type: 'income', amount: 5000 })],
+      today: '2026-10-15',
+    })
+    expect(r.bestMonth).toBeNull()
+  })
+
+  it('can be the current month', () => {
+    const r = buildYearReview({
+      transactions: [tx('2026-10-28', { type: 'income', amount: 500 })],
+      today: '2026-10-01',
+    })
+    expect(r.bestMonth).toEqual({ month: '2026-10', saved: 500 })
+  })
+})
