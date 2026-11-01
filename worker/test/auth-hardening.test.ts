@@ -18,6 +18,7 @@ import {
   verifyTurnstile,
   verifyTurnstileDetailed,
 } from '../src/turnstile';
+import { CAPTCHA_ACTIONS } from '../../shared/captchaActions';
 
 // ── S7: PBKDF2 at 100k iterations (the Cloudflare Workers cap) ─────────────────────────────────────────────
 
@@ -73,17 +74,27 @@ function fakeCtx(envOverrides: Record<string, unknown>): Context<AppEnv> {
 
 describe('turnstile fail-closed when secret unset (audit S9)', () => {
   it('fails closed in production (APP_ENV != development) with no secret', async () => {
-    expect(await verifyTurnstile(fakeCtx({ APP_ENV: 'production' }), undefined)).toBe(false);
+    expect(
+      await verifyTurnstile(fakeCtx({ APP_ENV: 'production' }), undefined, [CAPTCHA_ACTIONS.signIn])
+    ).toBe(false);
     // Even a non-empty token can't pass when the secret is unset in a deployed env.
-    expect(await verifyTurnstile(fakeCtx({ APP_ENV: 'production' }), 'some-token')).toBe(false);
+    expect(
+      await verifyTurnstile(fakeCtx({ APP_ENV: 'production' }), 'some-token', [
+        CAPTCHA_ACTIONS.signIn,
+      ])
+    ).toBe(false);
   });
 
   it('an unset APP_ENV is treated as non-development → fails closed', async () => {
-    expect(await verifyTurnstile(fakeCtx({}), undefined)).toBe(false);
+    expect(await verifyTurnstile(fakeCtx({}), undefined, [CAPTCHA_ACTIONS.signIn])).toBe(false);
   });
 
   it('passes in local development with no secret', async () => {
-    expect(await verifyTurnstile(fakeCtx({ APP_ENV: 'development' }), undefined)).toBe(true);
+    expect(
+      await verifyTurnstile(fakeCtx({ APP_ENV: 'development' }), undefined, [
+        CAPTCHA_ACTIONS.signIn,
+      ])
+    ).toBe(true);
   });
 });
 
@@ -179,7 +190,9 @@ describe('a secret that does not match the site key', () => {
       { APP_ENV: 'dev', TURNSTILE_SECRET: 'secret-for-the-other-widget' },
       { success: false, 'error-codes': ['invalid-input-secret'] }
     );
-    const result = await verifyTurnstileDetailed(ctx, 'a-token-from-widget-b');
+    const result = await verifyTurnstileDetailed(ctx, 'a-token-from-widget-b', [
+      CAPTCHA_ACTIONS.signIn,
+    ]);
     expect(result).toEqual({
       ok: false,
       reason: 'secret-rejected',
@@ -196,7 +209,7 @@ describe('a secret that does not match the site key', () => {
       { APP_ENV: 'dev', TURNSTILE_SECRET: 'the-right-secret' },
       { success: false, 'error-codes': ['timeout-or-duplicate'] }
     );
-    const result = await verifyTurnstileDetailed(ctx, 'a-stale-token');
+    const result = await verifyTurnstileDetailed(ctx, 'a-stale-token', [CAPTCHA_ACTIONS.signIn]);
     expect(result).toEqual({ ok: false, reason: 'rejected', codes: ['timeout-or-duplicate'] });
 
     captchaRejection(ctx, result);
@@ -206,11 +219,17 @@ describe('a secret that does not match the site key', () => {
 
   it('passes a genuine success through', async () => {
     const { ctx } = fetchingCtx(
-      { APP_ENV: 'dev', TURNSTILE_SECRET: 'the-right-secret' },
-      { success: true }
+      {
+        APP_ENV: 'dev',
+        TURNSTILE_SECRET: 'the-right-secret',
+        CORS_ORIGIN: 'https://dev.tokencircles.com',
+      },
+      { success: true, hostname: 'dev.tokencircles.com', action: CAPTCHA_ACTIONS.signIn }
     );
-    expect(await verifyTurnstileDetailed(ctx, 'a-good-token')).toEqual({ ok: true });
-    expect(await verifyTurnstile(ctx, 'a-good-token')).toBe(true);
+    expect(await verifyTurnstileDetailed(ctx, 'a-good-token', [CAPTCHA_ACTIONS.signIn])).toEqual({
+      ok: true,
+    });
+    expect(await verifyTurnstile(ctx, 'a-good-token', [CAPTCHA_ACTIONS.signIn])).toBe(true);
   });
 
   it('fails closed when siteverify cannot be reached', async () => {
@@ -222,7 +241,7 @@ describe('a secret that does not match the site key', () => {
       env: { APP_ENV: 'dev', TURNSTILE_SECRET: 'x' },
       req: { header: () => undefined },
     } as unknown as Context<AppEnv>;
-    expect(await verifyTurnstileDetailed(ctx, 't')).toEqual({
+    expect(await verifyTurnstileDetailed(ctx, 't', [CAPTCHA_ACTIONS.signIn])).toEqual({
       ok: false,
       reason: 'unreachable',
       codes: [],

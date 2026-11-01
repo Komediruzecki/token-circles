@@ -723,18 +723,12 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
         setExistingDuplicates(null)
         return
       }
-      const rawList: string[] = Array.isArray(data?.new_categories) ? data.new_categories : []
-      // A value the user marked as an account must never be offered as a "category to
-      // create" — it becomes an account, not a category, and creating a same-named category
-      // is a confusing duplicate. Some backends don't filter these out of the preview, so
-      // drop them client-side (by name, case-insensitively).
-      const types = categoryTypes()
-      const accountNames = new Set(
-        Object.keys(types)
-          .filter((k) => types[k] === 'account')
-          .map((k) => k.toLowerCase())
-      )
-      const list = rawList.filter((c) => !accountNames.has(c.toLowerCase()))
+      // Offered as both importers offer them. A value marked as an account is left out there
+      // when it is one on the rows that use it (a transfer's destination, or the account of a
+      // row with no Means of Payment) and kept when it is the category of a row paid from
+      // another account. Dropping every marked value here left that row uncategorised whenever
+      // another new category gated the run.
+      const list: string[] = Array.isArray(data?.new_categories) ? data.new_categories : []
       setNewCategories(list)
       setApprovedCategories(new Set(list))
       setNewAccounts(Array.isArray(data?.new_accounts) ? data.new_accounts : [])

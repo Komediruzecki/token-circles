@@ -1,4 +1,5 @@
 import { createSignal, onCleanup, onMount, Show } from 'solid-js'
+import type { CaptchaAction } from '../../../shared/captchaActions'
 
 // Cloudflare Turnstile (CAPTCHA) widget for the public auth forms. Renders ONLY when
 // VITE_TURNSTILE_SITE_KEY is set; otherwise it's a no-op and the forms work unchanged — matching
@@ -150,6 +151,12 @@ export function captchaIsStuck(status: TurnstileStatus): boolean {
 }
 
 export default function Turnstile(props: {
+  /**
+   * The form this widget's checks are for, as Turnstile's `action`. Cloudflare's siteverify answer
+   * repeats it, and each Worker route counts a check made for a form it takes
+   * (shared/captchaActions.ts). Cloudflare reads it when the widget is drawn.
+   */
+  action: CaptchaAction
   onToken: (token: string) => void
   onStatus?: (status: TurnstileStatus) => void
   /**
@@ -198,6 +205,7 @@ export default function Turnstile(props: {
         }
         const id = window.turnstile.render(el, {
           sitekey: SITE_KEY,
+          action: props.action,
           appearance: props.appearance ?? 'always',
           // An unused token expires after 300 seconds. Cloudflare then fetches the next one by
           // itself; the expired-callback below only drops the old one, so it is never sent.

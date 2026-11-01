@@ -45,7 +45,17 @@ function stubFetch(captchaOk: boolean) {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
     if (url.includes('challenges.cloudflare.com')) {
       return new Response(
-        JSON.stringify({ success: captchaOk, 'error-codes': captchaOk ? [] : ['invalid-input'] }),
+        JSON.stringify(
+          captchaOk
+            ? // Solved on the app's page, for the support form.
+              {
+                success: true,
+                'error-codes': [],
+                hostname: new URL(ORIGIN).hostname,
+                action: 'support',
+              }
+            : { success: false, 'error-codes': ['invalid-input'] }
+        ),
         { status: 200 }
       );
     }

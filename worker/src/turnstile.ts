@@ -1,14 +1,21 @@
 import type { Context } from 'hono';
 import type { AppEnv } from './index';
+import { isAppHostname } from './request-origin';
+import type { CaptchaAction } from '../../shared/captchaActions';
 
 // Cloudflare Turnstile (CAPTCHA) verification for the public auth endpoints, layered on top of the
 // rate limiter. When TURNSTILE_SECRET is unset the gate is disabled ONLY in local development
 // (APP_ENV === 'development'); in any deployed environment an unset secret now FAILS CLOSED (S9) so
 // a misconfigured production can't silently drop the CAPTCHA — set the secret (and the frontend
 // VITE_TURNSTILE_SITE_KEY) to enforce it. When configured it also fails closed on a missing/invalid token.
+//
+// A passed check counts when it was solved on the app's own pages, for the form being sent: the
+// siteverify answer's `hostname` is one of the app's hosts, and its `action` is one the route
+// names (shared/captchaActions.ts), or none (verifyTurnstileDetailed).
 export async function verifyTurnstile(
   c: Context<AppEnv>,
-  token: string | undefined
+  token: string | undefined,
+  accepted: readonly CaptchaAction[]
 ): Promise<boolean> {
   const secret = c.env.TURNSTILE_SECRET;
   if (!secret) {
@@ -21,7 +28,7 @@ export async function verifyTurnstile(
     return false;
   }
   if (!token) return false;
-  return (await verifyTurnstileDetailed(c, token)).ok;
+  return (await verifyTurnstileDetailed(c, token, accepted)).ok;
 }
 
 /** Why a captcha did not pass. The first two are ours to fix; the rest are the caller's. */
@@ -30,6 +37,8 @@ export type TurnstileFailure =
   | 'secret-rejected' // Cloudflare says the secret is wrong or missing for this widget
   | 'no-token' // the client sent nothing
   | 'rejected' // expired, already used, or simply invalid
+  | 'other-host' // passed, and the answer names no host of the app's
+  | 'other-action' // passed, and the answer names a form other than the route's
   | 'unreachable'; // siteverify did not answer
 
 export type TurnstileResult =
@@ -44,6 +53,76 @@ export type TurnstileResult =
     }
   | { ok: false; reason: TurnstileFailure; codes: string[] };
 
+/** What siteverify answers, as far as it is read here. */
+interface SiteverifyAnswer {
+  success?: boolean;
+  'error-codes'?: string[];
+  challenge_ts?: unknown;
+  hostname?: unknown;
+  action?: unknown;
+  metadata?: { result_with_testing_key?: unknown };
+}
+
+/**
+ * Whether a passed check counts for this route, or which of its two fields says it does not.
+ *
+ * - `hostname` has to be one of the app's hosts: the hosts of CORS_ORIGIN and APP_ORIGINS, and in
+ *   development a loopback host (isAppHostname). Cloudflare's public test key pair answers for
+ *   example.com whatever page the widget was on, so in development an answer it marks as a test
+ *   (`metadata.result_with_testing_key`) counts on any host.
+ * - `action` has to be one of the route's (`accepted`), or empty or absent. App tabs, and builds
+ *   the service worker keeps, from before the forms named their action send none, and the frontend
+ *   deploys apart from the Worker. Each such check writes one `captcha_without_action` line, so the
+ *   action can be required once those builds are gone (dev-changelog.md). An action that is there
+ *   and is not a string names no form of the route's.
+ */
+function countsHere(
+  c: Context<AppEnv>,
+  data: SiteverifyAnswer,
+  accepted: readonly CaptchaAction[]
+): 'other-host' | 'other-action' | null {
+  const hostname = typeof data.hostname === 'string' ? data.hostname : '';
+  const testPair =
+    c.env.APP_ENV === 'development' && data.metadata?.result_with_testing_key === true;
+  const absent = data.action === undefined || data.action === '';
+  const said = typeof data.action === 'string' ? data.action : '';
+  const why =
+    !testPair && !isAppHostname(hostname, c.env)
+      ? 'other-host'
+      : !absent && !(accepted as readonly string[]).includes(said)
+        ? 'other-action'
+        : null;
+  if (why) {
+    // Which field, and what it said, so an app host missing from APP_ORIGINS is a look at the log.
+    console.warn(
+      JSON.stringify({
+        level: 'warn',
+        event: 'captcha_not_counted',
+        why,
+        hostname: hostname || null,
+        action: absent ? null : data.action,
+        accepted,
+        path: c.req.path,
+        requestId: c.req.header('cf-ray') ?? null,
+      })
+    );
+    return why;
+  }
+  if (absent) {
+    console.info(
+      JSON.stringify({
+        level: 'info',
+        event: 'captcha_without_action',
+        note: 'A captcha that names no form counted.',
+        accepted,
+        path: c.req.path,
+        requestId: c.req.header('cf-ray') ?? null,
+      })
+    );
+  }
+  return null;
+}
+
 /**
  * The same check, but it says WHY — because "the captcha failed" covers two very different
  * situations and only one of them is the user's to do anything about.
@@ -56,7 +135,8 @@ export type TurnstileResult =
  */
 export async function verifyTurnstileDetailed(
   c: Context<AppEnv>,
-  token: string | undefined
+  token: string | undefined,
+  accepted: readonly CaptchaAction[]
 ): Promise<TurnstileResult> {
   const secret = c.env.TURNSTILE_SECRET;
   if (!secret) {
@@ -74,12 +154,12 @@ export async function verifyTurnstileDetailed(
         remoteip: c.req.header('CF-Connecting-IP') ?? '',
       }),
     });
-    const data = (await res.json()) as {
-      success?: boolean;
-      'error-codes'?: string[];
-      challenge_ts?: unknown;
-    };
-    if (data.success === true) {
+    const data = (await res.json()) as SiteverifyAnswer;
+    // Only a 2xx answer can pass. Cloudflare answers a TURNSTILE_SECRET it does not know with a
+    // 400 that names it (measured 2026-11-01), so the codes below are read whatever the status.
+    if (data.success === true && res.ok) {
+      const why = countsHere(c, data, accepted);
+      if (why) return { ok: false, reason: why, codes: [] };
       const solved = typeof data.challenge_ts === 'string' ? Date.parse(data.challenge_ts) : NaN;
       return Number.isFinite(solved)
         ? { ok: true, solvedAt: Math.min(solved, Date.now()) }
@@ -97,6 +177,7 @@ export async function verifyTurnstileDetailed(
       );
       return { ok: false, reason: 'secret-rejected', codes };
     }
+    if (!res.ok) return { ok: false, reason: 'unreachable', codes };
     return { ok: false, reason: 'rejected', codes };
   } catch {
     return { ok: false, reason: 'unreachable', codes: [] }; // fail closed when the gate is configured

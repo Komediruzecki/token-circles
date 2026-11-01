@@ -2253,6 +2253,277 @@ check')` first, as the cushion and debt cases do.
 
 ### Fixed
 
+- **A row with a Means of Payment books from it and keeps its Category as its category, in both
+  storage modes** (`frontend/src/core/storage/handlers/importFlow.ts`,
+  `worker/src/routes/imports.ts`, `shared/importRowChecks.ts`,
+  `frontend/src/features/import/importFlow.ts`). The canonical import table uses Category for a
+  row's category and, on a Transfer row, for the account the money went to. Both importers seed
+  their account map with every account the profile has and resolved Category against it on every
+  row, so a category named like an account was read as that account. Found in the YNAB review; the
+  app's own CSV/sheet import did the same, so it predates YNAB.
+  - Scope: only rows that have a Means of Payment change. A row with an empty Means of Payment
+    resolves exactly as on main in each mode: local-first books it into an account its Category
+    names, with the type from the sign when the value is set to Account; the Worker stores no
+    account and the Category's account as `transfer_account_id`, which recompute credits for an
+    income only.
+  - A Transfer row: Category is the destination account (`transfer_account_id`), as before.
+  - A non-transfer row with a Means of Payment books from that account, with its own Type (then the
+    category type, then the sign), and Category is its category, even when an account has that
+    name or the import sets the value to Account (`categoryTypes`: the mapping step, IB auto-detect,
+    classifyCategory keywords).
+    - Local-first booked it against the category's account: an expense in "Vacation" paid from
+      Checking left Vacation -80 and Checking 0. With the value set to Account it also took the
+      type from the sign, so "Expense, 500, IB, Checking" was an income into IB.
+    - The Worker kept the balance but stored a stray `transfer_account_id` and `category_id` NULL.
+      `transferAccountId` now comes from Category only on a transfer or a row without a Means of
+      Payment.
+  - Categories to create: both importers left out every name an account has, and the values set
+    to Account, so "Vacation" was never offered and the row stayed uncategorised in the cloud. Now
+    a Transfer row's value is left out, a Means-of-Payment row's value is offered, and a row
+    without one keeps main's exclusions. The Import page also dropped every value set to Account
+    from the preview's list, so such a value used as a category was not approved whenever another
+    new category gated the run; it now shows the list the importer sends. The Worker creates such
+    a name with the keyword type guess, never as an 'account'-typed category.
+  - Accounts to create: a value set to Account becomes an account only where a row uses it as one:
+    a Means of Payment, a Transfer's destination, or the Category of a row with no Means of
+    Payment (`usedAsAccount`, and the preview's `new_accounts`). A value only rows paid from another
+    account use is their category, with no empty account beside it.
+  - One note per such value, not per row (`markedAccountUsedAsCategoryNote`, an `ImportNote` with
+    no row index, shown under "About this import"). After an import: `"Library" is set to Account
+in the mapping step, but its 3 rows have Checking as their Means of Payment, so they came off
+Checking in the Library category. Set Library to Expense. To move the money into Library
+instead, delete this import under Recent Imports, change these rows' Type to Transfer, and
+import again.`
+    - The preview (the wizard's dry run, where the note is read) says what the import will do
+      ("will come off") and to change the Type before importing, and counts the category as made,
+      since it offers it.
+    - Undo, not a re-import, because the duplicate key includes the type: a re-import as
+      transfers over the stored expenses doubles the payment (measured: Checking -400,
+      Savings 200). "Delete import" exists in both modes (`/api/import-logs/:id`), and every
+      import path writes the log it deletes.
+    - Only expenses get the transfer advice: a transfer takes the money out of the paying account,
+      which an income never came from. Incomes read "went into", a mix "were booked to".
+    - A Means of Payment that names no account (an API caller's unmarked "Cash") is not called the
+      account paid from: `Cash is not an account, so they were left with no account, in the
+Library category.`
+    - One row reads "its row has Checking as its Means of Payment, so it ...", without the count.
+      A gated run that left the category unmade reads "with no category". It does not say who set
+      the value, since classifyCategory may have.
+  - Re-imports in local-first: duplicate detection keys on the resolved account and type, which
+    this changes for Means-of-Payment rows stored before, and a connected source re-sends every
+    row. Such a row also tries the key the old rule gave (the category's account, the sign's type
+    when the value is set to Account, else its own type), and counts a match only against a
+    stored row an import wrote (it has an `import_id`; the wizard stamps one since July 2026). Its
+    category is not compared: the person may have moved the earlier copy to another category
+    since, and comparing it booked that row twice (Checking -80 and Vacation -80). A row typed in
+    by hand in that account is never taken for one. An imported row really paid from that account,
+    with the same day, text and amount, still is: nothing stored tells it from the earlier copy.
+    The Worker needs no such key: its account and type for these rows did not change.
+  - YNAB: the adapter's decline of a category named like an account (#674) is unchanged and is not
+    repeated here. A declined row does not reach the importer with an empty Category: the adapter
+    keeps the category its keyword rules give, falling back to "Other"
+    (`shared/bankImport/adapters/ynab.ts`, for the import CSV and the register alike).
+  - Unchanged here, for maff to decide:
+    - the rule for a row with no Means of Payment whose Category names an account (Type then sign,
+      sign only, or not into the account); today local-first books it by sign and the Worker
+      credits only an income;
+    - the keywords classifyCategory reads as accounts ("ib" in Library, "rev" in Review,
+      "saving", "invest");
+    - booking a row with a Means of Payment and a Category set to Account as a transfer into that
+      account;
+    - repairing stored rows: a local-first row booked against the category's account keeps that
+      `account_id`; a cloud row keeps its stray `transfer_account_id`, and an old account-less
+      income in such a category keeps crediting that account on every recompute;
+    - a local-first re-import over an imported row really paid from the category's account, on
+      the same day with the same text and amount: it counts as a duplicate of the earlier copy.
+  - Tests: `frontend/src/core/storage/__tests__/importFlow.categoryNamedLikeAccount.test.ts` and
+    `worker/test/import-category-named-like-account.test.ts` (an expense in a category named like
+    an account, with and without a Type column; a value set to Account on a row paid from Checking,
+    with its category, its note and no account made; the round-2 sheet of ten rows paid from
+    Checking with Library, Savings, Investments and Review; a value set to Account that is also a
+    transfer target; the transfer unchanged; the preview's lists; rows with no Means of Payment as
+    on main; a Means of Payment that names no account), the local-first re-import cases
+    (old-shaped rows found, one stored with no category found, one moved to another category
+    since found, a row typed in by hand never taken, an imported real payment from that account
+    taken), `frontend/src/core/__tests__/markedAccountUsedAsCategoryNote.test.ts` (every variant
+    of the note),
+    `frontend/src/features/import/__tests__/markedAccountCategory.test.ts` (the Import page offers
+    and creates a marked transfer target as a category), and a v1 case in
+    `worker/test/v1-import-bank.test.ts` for an app-shaped CSV.
+    `worker/test/import-balance-recompute.test.ts`'s double-credit test plants the
+    income-with-both-ids row an earlier import wrote and calls POST
+    /api/accounts/recompute-balances; it still fails (600 for 500) with the recompute's
+    `account_id IS NULL` condition removed.
+
+- **No badge is dated to a month still to come, and the Year in review's best month has begun**
+  (`frontend/src/core/achievements/evaluate.ts`, `frontend/src/core/achievements/review.ts`).
+  Follow-up to 5.17.5's "a month that has not begun is not tracked" (#675), which covered the
+  tracked-month badges but not the ones dated by a single entry.
+  - `evaluateAchievements`: First entry takes `earliestMonth` of the transaction dates, and the
+    volume badges (`hundred-entries` to `twenty-thousand-entries`) take `monthOfNth`, the month of
+    the Nth transaction by date. An entry dated ahead earned them now but dated them ahead:
+    December's entries alone, seen in October, gave First entry `earnedOn` 2026-12-01. The badge
+    is still earned (the entry exists); `earnedOn` is now clamped to the first day of today's
+    month, `firstDay(month > nowMonth ? nowMonth : month)`, in the loop that builds `earned`, so
+    the clamp covers every badge, including First import, First budget and Goal in sight, whose
+    `created_at` could run ahead of the evaluating device's clock.
+  - Unlock records are not rewritten: a badge already stored with a future `earnedOn` keeps it,
+    as `diffUnlocks` only adds (records.ts). A badge earned from now on is dated this month.
+  - `buildYearReview`: a month after today's month is skipped entirely in the per-month pass, so
+    it is neither counted as tracked (as #675 did) nor offered as `bestMonth`. A salary entered
+    ahead made December the best month in October. The current month still counts. The year's
+    `income`, `expenses`, `saved` and `entries` totals still include every entry dated in the
+    year, as before.
+  - Tests: `src/core/achievements/__tests__/evaluate.test.ts` "entries dated ahead" (First entry
+    and Hundred entries dated 2026-10-01 for December entries seen on 2026-10-15; no `earnedOn`
+    after this month, with an import log dated November) and
+    `src/core/achievements/__tests__/review.test.ts` "buildYearReview, the best month" (September
+    over a December salary, none when only December saved, the current month allowed). The first
+    five fail without the change.
+
+- **`vite build --outDir X` puts the export documents and version.json in X**
+  (`frontend/vite.config.ts`, new `frontend/src/buildOutputFiles.ts`). The `copy-export-html` and
+  `emit-version-json` plugins wrote to `resolve(__dirname, 'dist', ...)` whatever the outDir was.
+  With no `frontend/dist/` the build failed with ENOENT on `export.html`; with one, it passed while
+  `export.html`, `export-monthly.html`, `chart.umd.min.js` and `version.json` went into `dist/` and
+  X shipped without them. A default `vite build` was never affected, so deploys were not either.
+  - Both plugins moved to `src/buildOutputFiles.ts` (`standaloneFilesPlugin`, `versionJsonPlugin`),
+    beside `crawlerPolicy.ts`, and read `config.build.outDir` in `configResolved`, resolved against
+    `config.root`, as `crawlerPolicyPlugin` already did. `copy-export-html` is now `apply: 'build'`
+    too; it only ever had a `writeBundle` hook, so `vite dev` sees no change.
+  - Nothing in the repo builds with `--outDir`: CI, the deploys and the release suite's two-tab
+    case (`cp -r dist <builds>/rc`, `frontend/tests/release/README.md`) all build into `dist/`. The
+    builds it did reach were ad hoc ones under agent-out (`scratch/phase4/dist-defer`,
+    `dist-noshelf`, `outdir-check`), which have no `version.json` and no export documents.
+  - A default build is unchanged: on origin/main's config and on this one, `vite build` writes the
+    same file list, and `index.html`, `sw.js` and the three export files are byte-identical.
+  - Test: `src/__tests__/buildOutputFiles.test.ts` runs both plugins' `configResolved` and
+    `writeBundle` against a temporary root with `outDir: 'custom-out'`, and expects all four files
+    there and an empty `dist/` beside the root and beside the source folder; a second case builds
+    into an absolute outDir with no `dist/` at all. With the old destination the first fails on
+    `ENOENT ... custom-out/export.html` and the second on `ENOENT ... frontend/dist/export.html`.
+  - The service worker's precache had the same bug. The `VitePWA` options set
+    `globDirectory: 'dist'`, so `--outDir X` precached whatever `frontend/dist/` held instead of X:
+    with no `dist/`, 7 entries (icons and the manifest, which the plugin adds itself) and a
+    "glob patterns doesn't match any files" warning per pattern; with an older build there, that
+    build's hashed file names. The option is gone. vite-plugin-pwa 1.3.0 defaults it to
+    `resolve(viteConfig.root, viteConfig.build.outDir)` (`resolveOptions` in its `dist/index.js`),
+    which for a default build is the same `frontend/dist`.
+    - Builds: a default build precaches 138 entries on origin/main's config and on this one, and
+      the two `sw.js` files are byte-identical. `--outDir X` with no `dist/` now precaches the same
+      138 entries into X's `sw.js` (it was 7), with no glob warnings.
+    - Test: `src/__tests__/buildOutDir.test.ts` runs a real `vite build --outDir <tmp>` (about 6 s)
+      and expects the four files in it, every `assets/*.{js,css}` in X precached and every
+      precached URL present in X, and `frontend/dist` exactly as it was before the build. With
+      `globDirectory: 'dist'` put back and no `dist/` (as in CI's Test job, which does not build
+      first) it fails on `expected [ Array(7) ] to include 'assets/Accounts-D3RV6rc2.css'`. A
+      local `dist/` built from the same source has the same hashed names, so there it cannot tell
+      the two folders apart and passes.
+
+- **The Dashboard tour's Charts step has charts to point at** (`frontend/src/features/Dashboard.tsx`,
+  `frontend/src/core/spotlightStore.ts`). Its anchor, `data-tour="dashboard-charts"` on the
+  net-worth and cash-flow charts grid, renders inside `<Show when={showMore()}>`, and Show more
+  starts closed (`dashboard_showMore` unset). On any dashboard that had not opened it, the step
+  found no target, waited out Spotlight's 6 s and showed the missing-target notice.
+  - The Dashboard now has an effect that calls `setShowMore(true)` while a tour (its own or the
+    full tour) is on a step targeting `[data-tour="dashboard-charts"]`. It does not write
+    `dashboard_showMore`: the toggle stores what the person chose. Same pattern as Loans, which
+    leaves a loan's page for the overview when its tour needs it.
+  - Opened rather than re-anchored: the step's copy names the net-worth timeline, which only that
+    grid has. The overview deck above it (`data-tour="overview-deck"`) has no net-worth chart, so
+    anchoring there would have needed new copy for a different part of the page. The copy now names
+    what the highlight covers, "Your net worth over time and 12 months of income against expenses,
+    kept under Show more", and no longer mentions category breakdowns, a widget further down that
+    the highlight does not reach.
+  - Test: `src/features/__tests__/dashboardTourCharts.test.tsx` renders the Dashboard on an empty
+    account with Show more closed, walks the Dashboard tour to Charts, and expects the anchor in
+    the DOM, the toggle reading Show less and `dashboard_showMore` still `'0'`. It fails without the
+    effect.
+- **The Dashboard tour's Summary metrics step has its cards to point at when they are hidden in
+  Views** (`frontend/src/features/Dashboard.tsx`). Its anchor, `data-tour="dashboard-metrics"` on
+  the metric cards grid, renders inside `<Show when={isWidgetVisible('metrics')}>`. With the cards
+  switched off in Views the step found no target, waited out Spotlight's 6 s and showed the
+  missing-target notice.
+  - New `tourOnMetrics()`: true while a tour (the Dashboard's own or the full tour) is on a step
+    targeting `[data-tour="dashboard-metrics"]`. The grid renders when
+    `isWidgetVisible('metrics') || tourOnMetrics()`. Nothing is written to `dashboard_widgets`;
+    Views stores what the person chose. Same idea as the Charts step's Show more (#678), with one
+    difference: the cards go away again when the tour leaves the step. Show more is a toggle on the
+    page, so leaving it open costs one click; hidden cards could only be hidden again through Views,
+    whose checkbox would still say they were off.
+  - Shown rather than re-anchored or skipped. The step's copy names net worth, income, expenses and
+    the month-over-month change, which only these cards show; the header or the overview deck
+    would put that copy over something else. Skipping would need a per-step condition in the tour
+    engine and would change the step count mid-tour, and a tour is where someone who switched the
+    cards off can see what they hold before deciding to keep them off.
+  - Empty state: the cards render with every total at zero, so the anchor is there on a new
+    account too. It is missing only while the page loads (the skeleton) and on "Failed to load
+    data", where none of the Dashboard's anchors below the period bar render.
+  - Test: `src/features/__tests__/dashboardTourCharts.test.tsx`, new case "shows metric cards
+    hidden in Views while the tour is on it, and only then". On an empty account with `metrics` left
+    out of `dashboard_widgets`, it expects no cards on the step before, the anchor on the Summary
+    metrics step, no cards on the step after or once the tour ends, and `dashboard_widgets`
+    unchanged. Without the fix it fails at the Summary metrics step (`expected null not to be
+null`).
+  - Walk (`TOUR=dashboard pnpm run test:tours`, seeded fixture, hidden by adding
+    `dashboard_widgets` without `metrics` to the saved session's localStorage): before the fix,
+    `MISS step 3: Summary metrics no-highlight [target-missing banner]` and `GATE: FAILED` at
+    1280x800 and with `MOBILE=1`. After it, 4 of 4 steps ok and `GATE: PASSED` in all four runs,
+    shown and hidden at both widths. Summary metrics measures 990x191 on desktop and 384x716 on a
+    phone either way, and Charts 990x531 and 384x963.
+- **The tour walk judges each step by its own highlight** (`frontend/scripts/walk-tours.mjs`).
+  It slept 1.2 s after Next and then read whatever glow rect was on screen. A step whose target
+  had not appeared yet still showed the previous step's highlight then, so the walk passed
+  Dashboard / Charts as "ok" at the metric cards' size (990x191 desktop, 384x716 phone) and
+  counted it only as "tip not shown after 3s" (unmeasured).
+  - New `waitForStep(n)` polls until the tip's counter reads "Step n of" and the engine has
+    decided: the tip shown (target found) or the missing-target notice. Budget `STEP_SETTLE_MS`,
+    9 s, past Spotlight's 6 s. A notice is a MISS ("app reports target missing"); no decision in
+    the budget is a MISS too ("no decision about its target after 9s"), never a pass.
+  - Proof: on the unfixed anchor the new walk fails at both widths with `GATE: FAILED` and
+    `MISS step 4: Charts no-highlight [target-missing banner]`; with the fix it passes, Charts at
+    990x531 on desktop and 384x963 on a phone. Full walks: 53 steps, 0 MISS, and nothing left
+    unmeasured (it was 1, this step, at each width).
+- **A tour step whose target is taller than the screen opens at its top**
+  (`frontend/src/components/Spotlight.tsx`). `updatePositions` scrolled every target that was not
+  80 px clear of both edges with `scrollIntoView({ block: 'center' })`, so a target taller than
+  the screen opened at its middle with its heading scrolled off the top. New `revealBlock` picks
+  `'start'` when the target is taller than the room left under the root's `scroll-padding-top`
+  and `'center'` otherwise. That padding is the 48 px a phone keeps for the menu button (#676),
+  which `scrollIntoView` stops below, so the target's start lands under the button, not behind it.
+  - Measured with the walk (seeded fixture, `scripts/walk-tours.mjs` plus a local probe of the
+    anchor and its first heading), for every step whose target is taller than the screen. Share of
+    the target on the first screen, before and after:
+    - Desktop 1280x800, Retirement / Your assumptions (1188 px): 67% before, 67% after. Its
+      heading "Your Plan" was at y -191, off screen; now at y 3, showing.
+    - Phone 390x844, Portfolio / Holdings (867 px): 96% before, 92% after. The heading "Holdings"
+      moves from y 42 (against the menu button, which ends at 48) to y 77.
+    - Phone, Categories / Your categories (1196 px): 71% before, 67% after. The first row was at
+      y -135, off screen; now at y 65.
+    - Phone, Retirement / Your assumptions (2491 px): 34% before, 32% after. "Your Plan" was at
+      y -796; now at y 51.
+    - The share drops a few points on a phone because the 48 px strip under the menu button is no
+      longer counted as target; what is on screen is now the top of it.
+  - Tests: `spotlightTipWiring.test.tsx` "Spotlight opens a target that does not fit at its top":
+    a 1200 px target asks for `'start'`, a 300 px one for `'center'`, and an 820 px one asks for
+    `'start'` on an 844 px screen with a 48 px `scroll-padding-top`. The first and third fail
+    without the change.
+- **On a phone, the tip covers a tall target from the bottom, not over its heading**
+  (`frontend/src/components/spotlightPlacement.ts`, `Spotlight.tsx`). With the target scrolled to
+  its start, no side has room on a phone, so `placeTip` puts the tip against a screen edge. The top
+  edge hid less of the target than the bottom (219 - 48 = 171 rows against 207, since the strip
+  under the menu button is not target), so it won, and the 207-227 px tip sat at y 12 over the
+  heading the scroll had just shown: "Holdings" at y 77, the first category at 65, "Your Plan"
+  at 51. `placeTip` takes a new `fromStart` flag, set by Spotlight when `revealBlock` chose
+  `'start'`, and leaves the top edge out of the covering candidates then. On a phone the tip now
+  sits at y 625 (605 for the taller Retirement tip) and all three headings show, below the menu
+  button and clear of the tip. Desktop is unchanged: Retirement's tip still covers its left edge
+  (1%), which hides less than the bottom. The flag depends only on the target's height, so the tip
+  stays put while the person scrolls through the target.
+  - Tests: `spotlightPlacement.test.ts` "placeTip over a target scrolled to its start" and
+    `spotlightTipWiring.test.tsx` "Spotlight keeps the tip off the start of a tall target"; the
+    phone cases fail without the change.
+
 - **Saving the badge record no longer makes Dashboard, Progress and About this space read their
   settings again.** The badge store (`frontend/src/core/achievementsStore.ts`) keeps the unlocks
   and dismissed advice cards in the settings under `achievements` (`achievements:<profile>` in
@@ -2367,6 +2638,76 @@ check')` first, as the cushion and debt cases do.
     and under Restaurant in a space that has it. Without the change every Eating out case fails;
     the two import cases for a space that has Restaurant pass before and after, as the guard that
     the fold keeps it. `categoryGroups.test.ts` expects Eating out for `UBER EATS`.
+
+### Changed
+
+- **A captcha counts when it was solved on the app's own pages, for the form being sent**
+  (`worker/src/turnstile.ts`, `worker/src/request-origin.ts`, `worker/src/auth.ts`,
+  `worker/src/login-check.ts`, `worker/src/routes/auth.ts`, `email-code.ts`, `support.ts`, new
+  `shared/captchaActions.ts`; `frontend/src/components/Turnstile.tsx`, `CaptchaCheck.tsx`,
+  `LoginScreen.tsx`, `LoginModal.tsx`, `CheckInbox.tsx`, `EmailCodeLogin.tsx`,
+  `SupportContact.tsx`). The Worker reads `hostname` and `action` from Cloudflare's siteverify
+  answer, beside `success` and `challenge_ts`.
+  - `hostname` has to be a host of CORS_ORIGIN or APP_ORIGINS (`tokencircles.com` on prod,
+    `dev.tokencircles.com` on dev), or with APP_ENV=development a loopback host. `isAppHostname` in
+    `request-origin.ts` reads the same `appOrigins` list as the request-origin check, and
+    `isAllowedReturnTo` now reads that list too instead of a copy of it. The name is compared as it
+    comes, with only its ASCII letters lower-cased.
+  - Each widget names its form as Turnstile's `action`, and each route names the actions it takes:
+
+    | Action         | Widget                                           | Routes that take it                                                     |
+    | -------------- | ------------------------------------------------ | ----------------------------------------------------------------------- |
+    | `sign-in`      | sign-in screen and Sign In window, in every mode | POST /api/auth/login, /register, /forgot-password, /verify-email/resend |
+    | `confirm-link` | Check your inbox                                 | POST /api/auth/verify-email/resend                                      |
+    | `email-code`   | Email me a code                                  | POST /api/auth/email-code/request                                       |
+    | `support`      | Contact support                                  | POST /api/support/contact                                               |
+
+    One widget, one action. The sign-in screen and the Sign In window send four routes from one
+    widget, drawn once as before, so switching between signing in, creating an account, a reset
+    link and the confirm link asks for no new check, and the five-minute login check still covers
+    the next try after a switch.
+
+  - Any other answer gets the same 403 as a captcha Cloudflare did not pass, and the Worker writes a
+    `captcha_not_counted` warn line naming the field, so an app host missing from APP_ORIGINS shows
+    in Workers Logs. An `action` that is there counts only as a string naming one of the route's
+    forms. `captchaRejection` and its two 503s are unchanged.
+  - An empty or absent action still counts when the host is the app's. App tabs left open, and
+    builds the service worker keeps, from before this change send none, and the Worker and frontend
+    deploy apart. Each such check writes one `captcha_without_action` info line.
+  - Only a 2xx answer from siteverify can pass; any other status counts as no answer
+    (`unreachable`). Its error codes are still read, since Cloudflare answers a TURNSTILE_SECRET it
+    does not know with a 400 that names it (2026-11-01), and that keeps its 503.
+  - The five-minute login check (`login-check.ts`) verifies its token against the `sign-in`
+    action, so a check starts only from a token that counts.
+  - Development: with TURNSTILE_SECRET unset and APP_ENV=development the gate stays off. Cloudflare's
+    public test key pair answers `hostname: "example.com"` and no `action` whatever page the widget
+    was on (siteverify, 2026-11-01), so in development an answer marked
+    `metadata.result_with_testing_key` counts on any host. Other environments read it as any other
+    answer.
+  - Where the widget is drawn: the five forms above, on `tokencircles.com` and
+    `dev.tokencircles.com`. PR previews (`finance-manager-preview`, `*.workers.dev`) are built with
+    `--mode dev` and call `api.dev.tokencircles.com`, which takes requests only from
+    `dev.tokencircles.com` (`request-origin.ts`, CORS), so no preview signs in today. The about site
+    (`about.tokencircles.com`) runs its own Worker and posts nothing to this API.
+  - Next step, once the old builds are gone: when Workers Logs on prod show no
+    `captcha_without_action` line for two weeks after the release that ships this, make an empty
+    or absent action count as `other-action` in `countsHere` (`turnstile.ts`), with these with it:
+    - keep Cloudflare's test key pair counting in development whatever its action, since the pair
+      never sends one (the `testPair` case in `countsHere`, and its test);
+    - give the siteverify stub in `login-check.test.ts` the `sign-in` action;
+    - turn the empty-action cases in `captcha-fields.test.ts` into ones that expect the 403.
+  - Tests: `worker/test/captcha-fields.test.ts` runs the six routes against a stubbed siteverify:
+    each action a route takes counts on the app's host, and only those (`sign-in` alone on login,
+    register and reset; `confirm-link` or `sign-in` on the confirm link; `email-code` and `support`
+    on their own routes); only a named app host counts; an empty or absent action counts and is
+    noted. It also covers APP_ORIGINS, whole host names compared as they come (no trimming, ASCII
+    case only), the loopback hosts and the test key pair in development only, an action that is
+    not a string, a non-2xx siteverify answer, the 400 that names the key, the gate off with no
+    key, and the login check. 49 of its 70 cases fail without the change.
+    `captchaForms.test.tsx` "draws the widget for its form" (each of the seven screens) and "the
+    sign-in forms in every mode" (one widget across modes, in the screen and the window) fail
+    without it too. The siteverify stubs in `login-check.test.ts`, `support-captcha.test.ts` and
+    `auth-hardening.test.ts` now answer with the app's host.
 
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 

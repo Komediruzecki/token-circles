@@ -37,6 +37,7 @@ import { clearRateLimit, clientIp, enforce } from '../ratelimit';
 import { getTotpForLogin, issueTwofaChallengeCookie } from '../twofa';
 import { claimWelcomeOnConfirm, welcomeAfterAnswer, welcomeClaimed } from '../welcome';
 import { captchaRejection, verifyTurnstileDetailed } from '../turnstile';
+import { CAPTCHA_ACTIONS } from '../../../shared/captchaActions';
 import { refusalOf } from '../../../shared/refusal';
 import {
   addressProblems,
@@ -89,7 +90,9 @@ emailCodeRoutes.post('/api/auth/email-code/request', async (c) => {
     email?: string;
     turnstileToken?: string;
   };
-  const captcha = await verifyTurnstileDetailed(c, body.turnstileToken);
+  const captcha = await verifyTurnstileDetailed(c, body.turnstileToken, [
+    CAPTCHA_ACTIONS.emailCode,
+  ]);
   if (!captcha.ok) return captchaRejection(c, captcha);
   const email = (body.email ?? '').trim().toLowerCase();
   const refused = addressProblems({ email });

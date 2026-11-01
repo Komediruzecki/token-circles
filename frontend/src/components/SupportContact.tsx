@@ -1,4 +1,5 @@
 import { createSignal, Show } from 'solid-js'
+import { CAPTCHA_ACTIONS } from '../../../shared/captchaActions'
 import { supportProblems } from '../../../shared/signInSchema'
 import { apiErrorFrom, networkError } from '../core/apiError'
 import CaptchaCheck from './CaptchaCheck'
@@ -230,7 +231,11 @@ export default function SupportContact(props: { label?: string; prefillEmail?: s
                 {/* Invisible unless Cloudflare wants a click. It has to be rendered for a token to
                     exist at all — the send holds for one rather than the button being disabled by
                     it, and only a box waiting for a tick holds the button. */}
-                <CaptchaCheck gate={captcha} hintClass={styles.hint} />
+                <CaptchaCheck
+                  gate={captcha}
+                  action={CAPTCHA_ACTIONS.support}
+                  hintClass={styles.hint}
+                />
                 <div style={{ display: 'flex', gap: '8px', 'justify-content': 'flex-end' }}>
                   <button
                     type="button"

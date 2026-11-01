@@ -38,6 +38,10 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **An imported row is booked to the account in its Means of Payment column and keeps its category, even when that category shares a name with one of your accounts.** Local-first booked such a row against the account its category named, and the cloud dropped its category.
+- **A badge earned through an entry dated ahead is dated this month.** Before, December's bills put in during October dated First entry to December, and the Year in review could name a month that hadn't begun as its best.
+- **The Dashboard tour's Charts step shows the charts.** Before, on a dashboard where Show more had never been opened, it pointed at nothing.
+- **The Dashboard tour's Summary metrics step shows the metric cards, even if you hid them in Views.** They appear for that step only, and your Views choice stays as you saved it.
 - **A category called Groceries shows a shopping cart, and one named for a meal shows a knife and fork** (Eating out, Restaurant, Dining, Breakfast, Lunch, Dinner, Meals), and an import that creates one gives it the same icon. Before, they showed a coffee mug, and Eating out a plain tick. An icon you picked stays, and so does the mug an earlier import gave a category while you were signed in. Coffee and Cafe keep the mug.
 - **The subscription scan keeps up with a long history.** With a few thousand entries, Scan transactions on Bills and the setup wizard's subscriptions step held the page for over a second. They now find the same subscriptions in a small part of that time.
 - **The plan name on a subscription the scan finds is easier to read.** In the light theme, "Standard" beside Netflix was blue on a pale blue tint at 4.0:1. It's a darker blue now, on Bills and in setup.

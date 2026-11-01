@@ -19,6 +19,7 @@ import { logAuthEvent } from './authlog';
 import { CLEARED_KINDS, type ClearedKind } from '../../shared/accessCleared';
 import { claimWelcome, claimWelcomeOnConfirm, welcomeClaimed } from './welcome';
 import { sha256Hex } from './email-verification';
+import { appOrigins } from './request-origin';
 
 const encoder = new TextEncoder();
 
@@ -586,7 +587,8 @@ export async function startedInThisBrowser(request: Request, state: OAuthState):
 
 /**
  * Whether `returnTo` may be where a sign-in lands: its origin is the environment's app
- * (CORS_ORIGIN or one of APP_ORIGINS), or, in development only, the local app on port 3800, like
+ * (CORS_ORIGIN or one of APP_ORIGINS, read by appOrigins, the list the captcha's hosts come from
+ * too), or, in development only, the local app on port 3800, like
  * the other allowances local dev gets (no Secure on cookies, the captcha gate off).
  */
 export function isAllowedReturnTo(returnTo: string, env: Env): boolean {
@@ -598,11 +600,7 @@ export function isAllowedReturnTo(returnTo: string, env: Env): boolean {
   }
   const allowed = [
     ...(env.APP_ENV === 'development' ? ['http://localhost:3800', 'http://127.0.0.1:3800'] : []),
-    ...(env.CORS_ORIGIN ? [env.CORS_ORIGIN] : []),
-    ...(env.APP_ORIGINS ?? '')
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean),
+    ...appOrigins(env),
   ];
   return allowed.includes(origin);
 }

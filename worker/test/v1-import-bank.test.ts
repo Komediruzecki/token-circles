@@ -481,3 +481,48 @@ describe('POST /api/v1/import - YNAB review findings', () => {
     ]);
   });
 });
+
+describe('POST /api/v1/import - a category named like an account', () => {
+  beforeEach(seed);
+
+  it('books the row against its Means of Payment, in that category', async () => {
+    await env.DB.prepare(
+      "INSERT INTO accounts (name, type, currency, balance, profile_id) VALUES ('Vacation', 'savings', 'EUR', 0, ?)"
+    )
+      .bind(PROFILE_ID)
+      .run();
+    const res = await post({
+      body: [
+        'Date,Description,Amount,Category,Means of Payment,Type',
+        '2026-07-10,Travel Agent,-80,Vacation,Erste Current,Expense',
+      ].join('\n'),
+      filename: 'plain.csv',
+      query: { autoCreateCategories: 'true' },
+    });
+    const body = (await res.json()) as Record<string, any>;
+    expect(body.parsedBy).toBe('generic-csv');
+    expect(body.imported).toBe(1);
+    const rows = await env.DB.prepare(
+      `SELECT t.type, a.name AS account, d.name AS destination, c.name AS category
+         FROM transactions t
+         LEFT JOIN accounts a ON a.id = t.account_id
+         LEFT JOIN accounts d ON d.id = t.transfer_account_id
+         LEFT JOIN categories c ON c.id = t.category_id
+        WHERE t.profile_id = ?`
+    )
+      .bind(PROFILE_ID)
+      .all();
+    expect(rows.results).toEqual([
+      { type: 'expense', account: 'Erste Current', destination: null, category: 'Vacation' },
+    ]);
+    const balances = await env.DB.prepare(
+      'SELECT name, balance FROM accounts WHERE profile_id = ? ORDER BY name'
+    )
+      .bind(PROFILE_ID)
+      .all();
+    expect(balances.results).toEqual([
+      { name: 'Erste Current', balance: -80 },
+      { name: 'Vacation', balance: 0 },
+    ]);
+  });
+});

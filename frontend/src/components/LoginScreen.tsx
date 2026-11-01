@@ -1,4 +1,5 @@
 import { createSignal, onCleanup, onMount, Show } from 'solid-js'
+import { CAPTCHA_ACTIONS } from '../../../shared/captchaActions'
 import { takeAccessClearedNotice } from '../core/accessCleared'
 import { api } from '../core/api'
 import { displayVersion } from '../core/appVersion'
@@ -418,7 +419,11 @@ export default function LoginScreen() {
 
             {/* Invisible unless Cloudflare wants a click. It sits directly above the button so
                 that, on the rare occasion it does appear, it reads as part of submitting. */}
-            <CaptchaCheck gate={captcha} hintClass={styles.captchaHint} />
+            <CaptchaCheck
+              gate={captcha}
+              action={CAPTCHA_ACTIONS.signIn}
+              hintClass={styles.captchaHint}
+            />
 
             <SubmitButton
               busy={form.submitting()}

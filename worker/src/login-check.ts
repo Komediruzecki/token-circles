@@ -43,12 +43,15 @@ import { b64urlDecode, b64urlEncode, readCookies } from './auth';
 import * as db from './db';
 import { derivedHmacKey } from './derived-key';
 import { turnstileConfigured, verifyTurnstileDetailed, type TurnstileResult } from './turnstile';
+import { CAPTCHA_ACTIONS } from '../../shared/captchaActions';
 
 export const LOGIN_CHECK_COOKIE = 'fm_login_check';
 /** The one route that reads it. A cookie's Path is a prefix, and this one names only that route. */
 export const LOGIN_CHECK_PATH = '/api/auth/login';
 /** How long a solved check covers sign-in tries, counted from the solve. */
 export const LOGIN_CHECK_SECONDS = 5 * 60;
+/** The captcha actions POST /api/auth/login takes: the sign-in forms' widget (captchaActions.ts). */
+const SIGN_IN_FORMS = [CAPTCHA_ACTIONS.signIn] as const;
 /** How many sign-in tries one solved check covers, the one that carried its token included. */
 export const LOGIN_CHECK_TRIES = 5;
 /** The tries one check covers after the try that carried its token. */
@@ -190,14 +193,14 @@ export async function checkSignInTry(
   const carried = readCookies(c.req.raw, LOGIN_CHECK_COOKIE).some((v) => v !== '');
   if (!turnstileConfigured(c.env)) {
     // Off in local development and refused everywhere else (turnstile.ts). A check changes neither.
-    const result = await verifyTurnstileDetailed(c, token);
+    const result = await verifyTurnstileDetailed(c, token, SIGN_IN_FORMS);
     return result.ok
       ? { ok: true, by: 'off', carried }
       : { ok: false, result, why: `captcha:${result.reason}`, carried };
   }
   let refused: Extract<TurnstileResult, { ok: false }> | undefined;
   if (token) {
-    const result = await verifyTurnstileDetailed(c, token);
+    const result = await verifyTurnstileDetailed(c, token, SIGN_IN_FORMS);
     if (result.ok) return { ok: true, by: 'token', solvedAt: result.solvedAt, carried };
     refused = result;
   }

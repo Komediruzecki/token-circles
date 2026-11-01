@@ -34,6 +34,7 @@ import { useGuidance } from '../core/guidance'
 import { refetchOnActive } from '../core/pageVisibility'
 import { usePeriod } from '../core/periodStore'
 import { adoptBrowserGoal } from '../core/savingsGoal'
+import { spotlightActive, spotlightStep, tourSteps } from '../core/spotlightStore'
 import { theme } from '../core/theme'
 import { toRange, toYYYYMM } from '../utils/period'
 import { daysToDue, dueDateLabel, dueInWords, nextDue } from './billDue'
@@ -92,6 +93,15 @@ export default function Dashboard() {
     setShowMore(next)
     localStorage.setItem('dashboard_showMore', next ? '1' : '0')
   }
+
+  // The tour's Charts step points at the charts below Show more, which a new account has never
+  // opened: the step found nothing and showed its missing-target notice. Open them when the tour
+  // gets there. Not saved: the toggle remembers what the person chose, and the tour did not choose.
+  createEffect(() => {
+    if (!spotlightActive()) return
+    const step = tourSteps()[spotlightStep()]
+    if (step?.targetSelector === '[data-tour="dashboard-charts"]') setShowMore(true)
+  })
 
   const prefs = loadWidgetPrefs()
   const [visibleWidgets, setVisibleWidgets] = createSignal<string[]>(prefs.visible)
@@ -210,6 +220,14 @@ export default function Dashboard() {
   }
 
   const isWidgetVisible = (id: string) => visibleWidgets().includes(id)
+
+  // The tour's Summary metrics step points at the metric cards, which a person can hide in Views:
+  // the step then found nothing and showed its missing-target notice. Show them while the tour is
+  // on that step, and only then. Not saved: Views stores what the person chose, and the tour did
+  // not choose.
+  const tourOnMetrics = () =>
+    spotlightActive() &&
+    tourSteps()[spotlightStep()]?.targetSelector === '[data-tour="dashboard-metrics"]'
 
   // Cash-flow Sankey (income → categories) for the selected month — the same
   // instrument as on Analytics, following the dashboard's period navigator.
@@ -514,8 +532,8 @@ export default function Dashboard() {
         </div>
       ) : metrics() ? (
         <>
-          {/* Metrics Grid — always visible */}
-          <Show when={isWidgetVisible('metrics')}>
+          {/* Metrics Grid: hideable in Views, shown for the tour's Summary metrics step */}
+          <Show when={isWidgetVisible('metrics') || tourOnMetrics()}>
             <div
               class={styles.metricsGrid}
               data-test-id="dashboard-metrics"

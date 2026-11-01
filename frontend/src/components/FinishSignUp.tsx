@@ -1,4 +1,5 @@
 import { createSignal, Match, onMount, Switch } from 'solid-js'
+import { CAPTCHA_ACTIONS } from '../../../shared/captchaActions'
 import { signInProblems } from '../../../shared/signInSchema'
 import { api } from '../core/api'
 import { ApiError } from '../core/apiError'
@@ -228,7 +229,7 @@ export default function FinishSignUp(props: {
                 />
               )}
             </Field>
-            <CaptchaCheck gate={captcha} hintClass={styles.hint} />
+            <CaptchaCheck gate={captcha} action={CAPTCHA_ACTIONS.signIn} hintClass={styles.hint} />
             <SubmitButton
               data-test-id="finish-signup-submit"
               busy={form.submitting()}

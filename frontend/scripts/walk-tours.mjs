@@ -107,11 +107,10 @@ async function readPlacement() {
 /**
  * The placement once it has stopped moving.
  *
- * A step can still be scrolling its target into view, or waiting for a lazy page to mount it,
- * when the walk's fixed settle time runs out, and one reading then compares the new tip with the
- * last step's target. Read until two readings 150ms apart agree, for up to 3s. Null with
- * `shown: false` means the tip never appeared in that time: the step was still waiting for its
- * target, and the highlight on screen is the previous step's.
+ * A step that has found its target can still be scrolling it into view, and one reading then
+ * catches the tip and highlight mid-move. Read until two readings 150ms apart agree, for up to 3s.
+ * Null with `shown: false` means the tip was not shown in that time; waitForStep has normally
+ * ruled that out before this runs.
  */
 async function measurePlacement() {
   const key = (g) =>
@@ -154,6 +153,47 @@ function judgePlacement({ vw, vh, tip, target }) {
   const hasRoom = room.above || room.below || room.left || room.right
   const pct = visArea > 0 ? Math.round((covered / visArea) * 100) : 0
   return { covered, pct, hasRoom, room }
+}
+
+/*
+ * How long a step may take to settle. Spotlight.tsx gives a step 6s to find its target (a lazy page
+ * chunk and its first fetch can both still be in flight) before it raises the missing-target
+ * notice; the rest is slack for a loaded machine.
+ */
+const STEP_SETTLE_MS = 9000
+
+/**
+ * Wait for step `n` (1-based) to settle, and say how: 'found' (the tip is shown for it, so the
+ * engine resolved its target), 'missing' (the engine gave up and raised its notice), 'ended' (no
+ * tip at all: the tour is over), or, after STEP_SETTLE_MS, 'pending' (still waiting) or
+ * 'elsewhere' (the counter shows another step).
+ *
+ * The walk used to sleep 1.2s and then judge whatever was on screen. A step whose target had not
+ * appeared yet was still showing the PREVIOUS step's highlight then, so a missing target passed
+ * as "ok" at the old target's size, and the notice that came at 6s was never seen. The Dashboard
+ * tour's Charts step did exactly that: its anchor sat behind "Show more", and the walk passed it
+ * at the size of the metric cards. Only the counter says which step the tip is on, and the tip's
+ * visible class is set in the same update as the new step's highlight, so read both together.
+ */
+async function waitForStep(n) {
+  const deadline = Date.now() + STEP_SETTLE_MS
+  for (;;) {
+    const state = await page
+      .evaluate((want) => {
+        const counter = document.querySelector('[class*="stepCounter"]')
+        const tip = counter?.parentElement
+        if (!counter || !tip) return 'ended'
+        const at = Number(counter.textContent.match(/Step (\d+) of/)?.[1])
+        if (at !== want) return 'elsewhere'
+        // Checked first: the engine shows the tip WITH the notice when it gives up.
+        if (tip.querySelector('[class*="targetMissing"]')) return 'missing'
+        return /visible/.test(tip.className) ? 'found' : 'pending'
+      }, n)
+      .catch(() => 'pending')
+    if (state === 'found' || state === 'missing' || state === 'ended') return state
+    if (Date.now() > deadline) return state
+    await page.waitForTimeout(100)
+  }
 }
 
 // How many times one tour may be re-walked after the Worker died under it. Three is enough for
@@ -385,12 +425,13 @@ async function walkTour({ id, label }) {
   console.log(`\n### ${label} (${id})`)
   const seen = new Set()
   for (let i = 0; i < 40; i++) {
-    // Let the step settle: App.tsx navigates to requiredPage, the page chunk loads
-    // lazily, and Spotlight waits up to ~6s for its target via MutationObserver.
-    await page.waitForTimeout(1200)
+    // Let the step settle: App.tsx navigates to requiredPage, the page chunk loads lazily, and
+    // Spotlight waits up to ~6s for its target via MutationObserver. Judge the step only once
+    // the engine has decided about THIS step, never by what the last one left on screen.
+    const state = await waitForStep(i + 1)
     // Free — the watchdog has already noticed. Bail before grinding 40 steps through a dead app.
     worker.assertUp(`"${label}" step ${i + 1}`)
-    if (!(await tooltip.isVisible().catch(() => false))) break
+    if (state === 'ended') break
 
     const title = (
       (await page
@@ -403,19 +444,18 @@ async function walkTour({ id, label }) {
     if (seen.has(key)) break
     seen.add(key)
 
-    // Two independent signals: the app's own "target missing" banner, and the size of
-    // the SVG glow rect it draws around the resolved target.
-    const flagged = await page
-      .locator('[class*="targetMissing"]')
-      .isVisible()
-      .catch(() => false)
+    // Three signals: whether the engine found this step's target at all (the missing-target
+    // notice, or no decision within the budget), and the size of the SVG glow rect it draws
+    // around the target it found.
+    const flagged = state === 'missing'
+    const unresolved = state === 'pending' || state === 'elsewhere'
     const box = await page
       .locator('svg[class*="backdropSvg"] rect[stroke-width="2"]')
       .first()
       .boundingBox()
       .catch(() => null)
     const sized = !!box && box.width > MIN_HIGHLIGHT_PX && box.height > MIN_HIGHLIGHT_PX
-    const ok = !flagged && sized
+    const ok = state === 'found' && sized
 
     // Before recording a MISS, prove the API was alive for it. A page whose data never arrived
     // renders empty states, and an empty state has nothing to spotlight — which is a true
@@ -426,7 +466,12 @@ async function walkTour({ id, label }) {
     if (!ok) {
       missing++
       failures.push(
-        `${label} / step ${i + 1} "${title}": ${flagged ? 'app reports target missing' : 'no visible highlight'}`
+        `${label} / step ${i + 1} "${title}": ` +
+          (flagged
+            ? 'app reports target missing'
+            : unresolved
+              ? `no decision about its target after ${STEP_SETTLE_MS / 1000}s (${state})`
+              : 'no visible highlight')
       )
     }
 
@@ -462,7 +507,7 @@ async function walkTour({ id, label }) {
     console.log(
       `  ${stepOk ? 'ok  ' : ok ? 'TIP ' : 'MISS'}  step ${i + 1}: ${title}  ` +
         `${box ? `${Math.round(box.width)}x${Math.round(box.height)}` : 'no-highlight'}` +
-        `${flagged ? ' [target-missing banner]' : ''}${placementNote}`
+        `${flagged ? ' [target-missing banner]' : ''}${unresolved ? ` [${state}]` : ''}${placementNote}`
     )
 
     const next = page.locator('[class*="tooltip"] [class*="btnPrimary"]').last()

@@ -272,7 +272,10 @@ export function evaluateAchievements(input: EvaluateInput): Evaluation {
   const earned: Earned[] = []
   for (const def of ACHIEVEMENTS) {
     const month = when[def.id]
-    if (month) earned.push({ id: def.id, earnedOn: firstDay(month) })
+    // Earned now, so dated no later than now. First entry and the volume badges take the date of
+    // an entry, and an entry put in ahead (December's bills, seen in October) would otherwise date
+    // a badge to a month still to come.
+    if (month) earned.push({ id: def.id, earnedOn: firstDay(month > nowMonth ? nowMonth : month) })
   }
   return { earned, streak: currentStreak(trackedSet, nowMonth), trackedMonths: tracked }
 }

@@ -1,4 +1,5 @@
 import { createSignal, Show } from 'solid-js'
+import { CAPTCHA_ACTIONS } from '../../../shared/captchaActions'
 import { whereTheLinkSignsIn } from '../../../shared/confirmLinkSignIn'
 import { api } from '../core/api'
 import CaptchaCheck from './CaptchaCheck'
@@ -66,7 +67,7 @@ export default function CheckInbox(props: { email: string; onBack: () => void })
         </p>
       </Show>
       <form {...resend.attrs}>
-        <CaptchaCheck gate={captcha} hintClass={styles.hint} />
+        <CaptchaCheck gate={captcha} action={CAPTCHA_ACTIONS.confirmLink} hintClass={styles.hint} />
         <SubmitButton
           data-test-id="check-inbox-resend"
           busy={resend.submitting()}

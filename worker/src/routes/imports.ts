@@ -30,6 +30,7 @@ import {
   existingAccountStartingBalance,
   MISSING_DATE_WARNING,
   startingBalanceKeptNote,
+  markedAccountUsedAsCategoryNote,
   unreadableNumbersReason,
 } from '../../../shared/importRowChecks';
 import type { ImportNote, ImportRowWarning } from '../../../shared/importRowChecks';
@@ -512,6 +513,23 @@ export async function executeImport(
       .map((name) => name.trim().toLowerCase())
       .filter(Boolean)
   );
+  // The values some row books into or from: every Means of Payment, a transfer's destination, and
+  // the Category of a row with no Means of Payment. A value set to Account that only rows paid
+  // from another account use is their category, and gets no empty account beside it.
+  const usedAsAccount = new Set(
+    validRows
+      .flatMap((row) => {
+        const mop = String(pick(row, mapping, 'means_of_payment') || '').trim();
+        const isTransfer =
+          mapping.type !== undefined &&
+          String(pick(row, mapping, 'type') || '')
+            .trim()
+            .toLowerCase() === 'transfer';
+        return [mop, isTransfer || !mop ? String(pick(row, mapping, 'category') || '') : ''];
+      })
+      .map((name) => name.trim().toLowerCase())
+      .filter(Boolean)
+  );
   const accountValidationErrors: Array<{ field: string; reason: string }> = [];
   // The first account whose type is refused: the refusal names it.
   let refusedType: string | null = null;
@@ -519,7 +537,7 @@ export async function executeImport(
     .filter(
       ([name, type]) =>
         type === 'account' &&
-        (rowsArr.length === 0 || validAccountNames.has(String(name).trim().toLowerCase())) &&
+        (rowsArr.length === 0 || usedAsAccount.has(String(name).trim().toLowerCase())) &&
         !accountIdMap.has(String(name).trim().toLowerCase())
     )
     .map(([name]) => {
@@ -672,20 +690,6 @@ export async function executeImport(
   };
   await loadCategories();
 
-  let colorIndex = 0;
-  const newCats: string[] = [];
-  const seenNew = new Set<string>();
-  for (const row of validRows) {
-    const raw = pick(row, mapping, 'category');
-    if (!raw || !String(raw).trim()) continue;
-    const name = String(raw).trim();
-    const lower = name.toLowerCase();
-    // Skip names that already exist, are already queued, or are an account (Means-of-Payment /
-    // transfer target) — those must NOT become 'account'-typed categories.
-    if (categoryMap.has(lower) || seenNew.has(lower) || accountIdMap.has(lower)) continue;
-    seenNew.add(lower);
-    newCats.push(name);
-  }
   // Account-typed values that don't already name an existing account — the accounts a run
   // would CREATE. Surfaced so the preview can show new accounts (parity with the serverless
   // detectNewAccounts). accountIdMap holds the existing accounts, so "not in it" == new.
@@ -722,12 +726,34 @@ export async function executeImport(
     String(pick(row, mapping, 'type') || '')
       .trim()
       .toLowerCase() === 'transfer';
+  const rowHasMeansOfPayment = (row: Record<string, unknown>): boolean =>
+    String(pick(row, mapping, 'means_of_payment') || '').trim() !== '';
+
+  let colorIndex = 0;
+  const newCats: string[] = [];
+  const seenNew = new Set<string>();
+  for (const row of validRows) {
+    const raw = pick(row, mapping, 'category');
+    if (!raw || !String(raw).trim()) continue;
+    const name = String(raw).trim();
+    const lower = name.toLowerCase();
+    // A transfer's Category is the account the money went to, not a category. On a row with a
+    // Means of Payment it is one, even when an account has that name or the import sets it to
+    // Account. On a row without one it is left out, as before, when it names an account.
+    if (rowIsTransfer(row)) continue;
+    if (categoryMap.has(lower) || seenNew.has(lower)) continue;
+    if (!rowHasMeansOfPayment(row) && accountIdMap.has(lower)) continue;
+    seenNew.add(lower);
+    newCats.push(name);
+  }
 
   for (const row of validRows) {
     const raw = pick(row, mapping, 'category');
     const markedAccount =
       raw && String(raw).trim() && ctLower[String(raw).trim().toLowerCase()] === 'account';
-    if (markedAccount || rowIsTransfer(row)) offerAccount(raw);
+    // A value set to Account is an account to create only where a row books into it (see
+    // usedAsAccount); a row paid from another account only uses it as its category.
+    if ((markedAccount && !rowHasMeansOfPayment(row)) || rowIsTransfer(row)) offerAccount(raw);
     offerAccount(pick(row, mapping, 'means_of_payment'));
   }
   // Only create approved names when gating is on; unapproved values import uncategorized
@@ -740,9 +766,15 @@ export async function executeImport(
       catsToCreate.map((name) => {
         const color = NEW_CATEGORY_COLORS[colorIndex % NEW_CATEGORY_COLORS.length];
         colorIndex++;
+        // A name marked as an account is created as a category only for rows paid from another
+        // account; 'account' is no category type, so it takes the keyword guess.
+        const marked = categoryTypes && categoryTypes[name];
         const catType =
-          (categoryTypes && categoryTypes[name]) ||
-          (INCOME_KEYWORDS.some((kw) => name.toLowerCase().includes(kw)) ? 'income' : 'expense');
+          marked === 'income' || marked === 'expense'
+            ? marked
+            : INCOME_KEYWORDS.some((kw) => name.toLowerCase().includes(kw))
+              ? 'income'
+              : 'expense';
         // An expense category takes the kind its name suggests, as in local-first: "Restaurant"
         // is eating out (shared/guidance/kinds.ts). In the cloud, where a new account starts with
         // no categories, this is how most categories get one.
@@ -806,13 +838,25 @@ export async function executeImport(
     else dedupBuckets.set(k, [amt]);
   }
   const duplicateIndices: number[] = [];
+  // Values set to Account that rows with a Means of Payment use as their category: one note each,
+  // after the rows (markedAccountUsedAsCategoryNote).
+  const usedAsCategory = new Map<
+    string,
+    {
+      name: string;
+      rows: number;
+      paidFrom: string[];
+      notAccounts: string[];
+      categorised: boolean;
+      types: string[];
+    }
+  >();
 
   for (const validated of validatedRows) {
     const { index: ri, row, amountRaw, amount, amountLocal, exchangeRate } = validated;
     const catRaw = pick(row, mapping, 'category');
     const catName = catRaw ? String(catRaw).trim() : '';
     const catLower = catName.toLowerCase();
-    const categoryId = catLower && categoryMap.has(catLower) ? categoryMap.get(catLower)! : null;
 
     const dateRaw = pick(row, mapping, 'date') ?? today();
     const currency = normalizeCurrencyCode(pick(row, mapping, 'currency'), defaultCurrency);
@@ -848,12 +892,23 @@ export async function executeImport(
       validatedType = amountRaw < 0 ? 'expense' : amountRaw > 0 ? 'income' : 'expense';
     }
 
-    // account_id from Means of Payment (FROM), transfer_account_id from Category (TO).
+    // account_id from Means of Payment (FROM), transfer_account_id from Category (TO). A row with
+    // a Means of Payment reads its Category as an account only when it is a transfer. On any other
+    // such row it is the category, even when an account has that name or the import sets it to
+    // Account: read as an account there, an expense in "Vacation" paid from Checking kept a stray
+    // transfer_account_id and no category. A row with no Means of Payment resolves as it always
+    // did (the Category's account as transfer_account_id, which recompute credits for an income);
+    // which rule it should follow is a separate decision.
     const mopName = pick(row, mapping, 'means_of_payment') || '';
-    const accountId = mopName
+    const hasMeansOfPayment = String(mopName).trim() !== '';
+    const accountId = hasMeansOfPayment
       ? accountIdMap.get(String(mopName).trim().toLowerCase()) || null
       : null;
-    const transferAccountId = catLower ? accountIdMap.get(catLower) || null : null;
+    const transferAccountId =
+      (validatedType === 'transfer' || !hasMeansOfPayment) && catLower
+        ? accountIdMap.get(catLower) || null
+        : null;
+    const categoryId = catLower && categoryMap.has(catLower) ? categoryMap.get(catLower)! : null;
 
     const description = pick(row, mapping, 'description') || '';
     const parsedDate = parseDateString(dateRaw, todayStr);
@@ -920,6 +975,28 @@ export async function executeImport(
       duplicateIndices.push(ri);
       continue;
     }
+    if (
+      validatedType !== 'transfer' &&
+      hasMeansOfPayment &&
+      catLower !== '' &&
+      ctLower[catLower] === 'account'
+    ) {
+      const seen = usedAsCategory.get(catLower) ?? {
+        name: catName,
+        rows: 0,
+        paidFrom: [] as string[],
+        notAccounts: [] as string[],
+        categorised: categoryId !== null,
+        types: [] as string[],
+      };
+      const paidFrom = accountId !== null ? accountNameById.get(accountId) : undefined;
+      const list = paidFrom !== undefined ? seen.paidFrom : seen.notAccounts;
+      const from = paidFrom ?? String(mopName).trim();
+      seen.rows++;
+      if (!list.includes(from)) list.push(from);
+      if (!seen.types.includes(validatedType)) seen.types.push(validatedType);
+      usedAsCategory.set(catLower, seen);
+    }
 
     txStmts.push(
       DB.prepare(TX_SQL).bind(
@@ -941,6 +1018,17 @@ export async function executeImport(
         importId
       )
     );
+  }
+
+  for (const found of usedAsCategory.values()) {
+    warnings.push({
+      reason: markedAccountUsedAsCategoryNote({
+        ...found,
+        // A preview offers the category for the import to make.
+        categorised: found.categorised || dryRun,
+        preview: dryRun,
+      }),
+    });
   }
 
   // Preview mode: report what WOULD be created without mutating anything (B5/A2).

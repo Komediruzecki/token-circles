@@ -564,3 +564,33 @@ describe('a month that has not begun', () => {
     expect(newly.map((u) => u.id)).not.toContain('a-year')
   })
 })
+
+describe('entries dated ahead', () => {
+  // October 2026, with December's bills put in early.
+  const today = '2026-10-15'
+
+  it('earn First entry now, dated to this month rather than the month still to come', () => {
+    const r = evaluateAchievements(input({ transactions: month('2026-12', 3), today }))
+    expect(ids(r)).toContain('first-entry')
+    expect(on(r, 'first-entry')).toBe('2026-10-01')
+  })
+
+  it('earn a volume badge now, dated to this month when its entry is still to come', () => {
+    // 100 entries, four a month over 25 months ending 2026-12: the 100th is dated December.
+    const r = evaluateAchievements(input({ transactions: trackedRun('2026-12', 25, 4), today }))
+    expect(ids(r)).toContain('hundred-entries')
+    expect(on(r, 'hundred-entries')).toBe('2026-10-01')
+  })
+
+  it('date no badge after this month', () => {
+    const r = evaluateAchievements(
+      input({
+        transactions: trackedRun('2026-12', 25, 4),
+        importLogs: [{ created_at: '2026-11-02T09:00:00Z' }],
+        today,
+      })
+    )
+    expect(r.earned.length).toBeGreaterThan(0)
+    expect(r.earned.filter((e) => e.earnedOn > '2026-10-01')).toEqual([])
+  })
+})
