@@ -137,6 +137,7 @@ beforeEach(async () => {
 afterEach(() => {
   vi.restoreAllMocks()
   vi.unstubAllEnvs()
+  vi.unstubAllGlobals()
   dispose?.()
   dispose = undefined
   host.remove()
@@ -274,4 +275,104 @@ it('says on the switch that the examples are here, before anything changes', asy
   expect(localStorage.getItem('finance_storage_mode')).toBe('self-hosted')
   expect(localStorage.getItem(LOCAL_SETUP_PENDING_KEY)).toBeNull()
   expect(((await (await getDB()).getAll('profiles')) as unknown[]).length).toBe(3)
+})
+
+/** "Keep my data in this browser only" on an account's space step, confirmed, up to its reload. */
+async function switchToLocalOnly(): Promise<{ question: string; reloads: () => number }> {
+  let reloads = 0
+  vi.stubGlobal('location', {
+    reload: () => {
+      reloads += 1
+    },
+    href: 'https://app.example.com/',
+    pathname: '/',
+    search: '',
+    hash: '',
+  } as unknown as Location)
+  setStorageMode('self-hosted')
+  setCurrentProfile(null)
+  setProfiles([])
+  // What the account's session left: its own profile selected.
+  localStorage.setItem('currentProfileId', '77')
+  localStorage.setItem('selectedProfileIds', '[77]')
+  await openSpaceStep()
+  host.querySelector<HTMLButtonElement>('[data-test-id="onboarding-local-only"]')!.click()
+  await vi.waitFor(() => {
+    expect(confirmRequests()).toHaveLength(1)
+  })
+  const question = confirmRequests()[0].message
+  resolveConfirm(confirmRequests()[0].id, true)
+  await vi.waitFor(() => {
+    expect(reloads).toBe(1)
+  })
+  return { question, reloads: () => reloads }
+}
+
+it("opens the app on the person's own profile, not an example, when both are here", async () => {
+  const db = await getDB()
+  await db.add('profiles', { id: 4, name: 'Household', created_at: '2026-02-01T00:00:00.000Z' })
+  await db.add('profiles', { id: 5, name: 'Side business', created_at: '2026-03-01T00:00:00.000Z' })
+
+  const { question } = await switchToLocalOnly()
+
+  expect(question).toContain('your profiles "Household" and "Side business". You carry on with it')
+  expect(localStorage.getItem('finance_storage_mode')).toBe('serverless')
+  // App opens on the stored profile when the workspace has it (loadProfiles): the oldest own one.
+  expect(localStorage.getItem('currentProfileId')).toBe('4')
+  expect(JSON.parse(localStorage.getItem('selectedProfileIds') ?? '[]')).toEqual([4])
+})
+
+it('leaves the selection for the app to pick over the examples alone, as before', async () => {
+  const { question } = await switchToLocalOnly()
+
+  expect(question).toContain('This browser has the example profiles from the demo.')
+  expect(localStorage.getItem('finance_storage_mode')).toBe('serverless')
+  expect(localStorage.getItem('currentProfileId')).toBeNull()
+  expect(localStorage.getItem('selectedProfileIds')).toBeNull()
+  expect(localStorage.getItem(LOCAL_SETUP_PENDING_KEY)).toBe('1')
+})
+
+/** The region chip checked on About this space, or null for none. */
+const checkedRegion = () =>
+  host
+    .querySelector<HTMLInputElement>('[data-test-id="onboarding-space-region"] input:checked')
+    ?.closest('[data-test-id]')
+    ?.getAttribute('data-test-id') ?? null
+
+/** A profile's stored guidance answers, as local-first files them (guidanceAnswers.ts). */
+async function answersOf(profileId: number): Promise<Record<string, unknown> | null> {
+  const row = (await (await getDB()).get('settings', `guidance:${String(profileId)}`)) as
+    { value: string } | undefined
+  return row ? (JSON.parse(row.value) as Record<string, unknown>) : null
+}
+
+it('asks About this space afresh over an example, and saves the answer on the new space', async () => {
+  // About this space shows where the benchmarks do.
+  vi.stubEnv('MODE', 'development')
+  // The example the demo left on, with an answer of its own.
+  await (
+    await getDB()
+  ).put('settings', { key: 'guidance:1', value: JSON.stringify({ region: 'DE' }) })
+  const name = await openSpaceStep()
+  radio('keep')!.click()
+  nameAndContinue(name, 'Our flat')
+  await vi.waitFor(() => {
+    expect(host.querySelector('[data-test-id="onboarding-step-about"]')).not.toBeNull()
+  })
+  const ours = useAppState().currentProfile!.id
+  expect(ours).toBeGreaterThan(3)
+
+  // Nothing of the example's: the space is new.
+  expect(checkedRegion()).toBeNull()
+
+  host.querySelector<HTMLInputElement>('[data-test-id="onboarding-space-region-HR"] input')!.click()
+  expect(checkedRegion()).toBe('onboarding-space-region-HR')
+  host.querySelector<HTMLButtonElement>('[data-test-id="onboarding-next"]')!.click()
+  await vi.waitFor(() => {
+    expect(onboardingStep()).toBe('account')
+  })
+
+  expect(await answersOf(ours)).toMatchObject({ region: 'HR' })
+  // The example kept, with its own answer untouched.
+  expect(await answersOf(1)).toEqual({ region: 'DE' })
 })

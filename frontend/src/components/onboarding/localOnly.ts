@@ -24,8 +24,11 @@ export type LocalWorkspace =
   | { kind: 'none' }
   /** Only the demo's example profiles. */
   | { kind: 'examples' }
-  /** At least one profile of the person's own: their names, oldest first. */
-  | { kind: 'own'; names: string[] }
+  /**
+   * At least one profile of the person's own: their names and ids, oldest first. The switch opens
+   * the app on the first id, not on an example beside it.
+   */
+  | { kind: 'own'; names: string[]; ids: number[] }
 
 interface StoredProfile {
   id?: unknown
@@ -41,7 +44,7 @@ export function classifyLocalProfiles(rows: readonly StoredProfile[]): LocalWork
   if (named.length === 0) return { kind: 'none' }
   const own = named.filter((p) => !isExampleProfileName(p.name))
   if (own.length === 0) return { kind: 'examples' }
-  return { kind: 'own', names: own.map((p) => p.name) }
+  return { kind: 'own', names: own.map((p) => p.name), ids: own.map((p) => p.id) }
 }
 
 /** Read the profiles of this browser's local workspace without changing anything in it. */
@@ -95,6 +98,27 @@ export async function readLocalWorkspace(
       }
     }
   })
+}
+
+/**
+ * Leave the profile selection the reload into the local workspace opens on. The account's ids mean
+ * nothing there: stale ones would make the profile picker read empty or heal onto the wrong profile
+ * (as handleLogout's cleanup says). Over profiles of the person's own, the oldest is selected: the
+ * confirm says they carry on with them, and App, left to pick, opens the lowest id, an example
+ * where the examples are here too. Otherwise both keys go, and App picks.
+ *
+ * Only for the switch, just before its reload: App reads both keys at boot, so the write target
+ * and the profile shown start out together. Mid-session the wizard selects a profile through App
+ * (props.selectProfiles), never by writing these keys.
+ */
+export function leaveSelectionForLocalWorkspace(found: LocalWorkspace): void {
+  if (found.kind === 'own') {
+    localStorage.setItem('currentProfileId', String(found.ids[0]))
+    localStorage.setItem('selectedProfileIds', JSON.stringify([found.ids[0]]))
+    return
+  }
+  localStorage.removeItem('currentProfileId')
+  localStorage.removeItem('selectedProfileIds')
 }
 
 const quoted = (name: string) => `"${name}"`

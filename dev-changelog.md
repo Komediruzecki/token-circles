@@ -314,6 +314,22 @@ All notable changes to Token Circles are documented here. The format is based on
   `emergency_fund_config_<id>`, which `seedDemoProfiles` writes for each example and nothing reads:
   it stayed in every settings read and backup. It goes now (`emergencyFundConfigKey`, idb.ts). The
   delete leaves nothing on profile 0, so `fileUnfiledRows` ("Recovered entries") finds nothing.
+- **Follow-ups from the pre-merge review.** The marker (`LOCAL_SETUP_PENDING_KEY` and its three
+  helpers, moved to `core/onboardingFlag.ts` and re-exported from onboardingStore.ts so
+  `demoMode.ts` need not import the store) is also cleared by LoginScreen's `tryDemo`, by
+  `applyDemoModeFromUrl` and in the `isServerAccount` branch of `whereToOfferOnboarding`, so a
+  return to the account by `?plan=`, a confirm link, Sign in or Settings no longer leaves it to
+  open setup over a later demo. `readLocalWorkspace`'s `own` result carries the profiles' `ids`,
+  and `chooseLocalOnly` selects the oldest before its reload (`leaveSelectionForLocalWorkspace`,
+  localOnly.ts, so the wizard itself still writes neither key) instead of removing
+  `currentProfileId` and `selectedProfileIds`, which let App open the lowest id, Example Low
+  Income. Over an example (`overExample()`), the space step starts with no stored guidance
+  answers, so About this space no longer shows the example's region and saves `skipped` on the
+  new space. Tests: `demoMode.test.ts`,
+  `loginScreen.tryDemo.test.tsx`, `onboardingAfterLocalOnly.test.ts` (a real `account-1` boot that
+  never reads `/api/profiles` and drops the marker; a failed profiles read keeps it),
+  `onboardingOverExamples.test.tsx` and `localOnly.test.ts`, and `onboarding-server.spec.ts`
+  ("beside the examples, a profile of your own is what the app opens on").
 - **Tests.** `exampleProfilesRemoved.test.ts`: the real seed, then each example deleted through the
   router, leaves no row, balance history or setting naming them (failed on the
   `emergency_fund_config_` keys before). `onboardingAfterLocalOnly.test.ts`: the marker opens
