@@ -281,10 +281,13 @@ it('says on the switch that the examples are here, before anything changes', asy
 async function switchToLocalOnly(): Promise<{ question: string; reloads: () => number }> {
   let reloads = 0
   vi.stubGlobal('location', {
-    ...window.location,
     reload: () => {
       reloads += 1
     },
+    href: 'https://app.example.com/',
+    pathname: '/',
+    search: '',
+    hash: '',
   } as unknown as Location)
   setStorageMode('self-hosted')
   setCurrentProfile(null)
