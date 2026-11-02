@@ -6,6 +6,7 @@ import { displayVersion } from '../core/appVersion'
 import { linkWaiting, takeConfirmLinkProblem } from '../core/emailVerification'
 import { FORGOT_PASSWORD, hashRouteName } from '../core/hashRoute'
 import { afterHistoryStep, createHistoryStep } from '../core/historyStep'
+import { clearLocalSetupPending } from '../core/onboardingFlag'
 import { setStorageMode } from '../core/storage/storageFactory'
 import {
   conditionalMediationAvailable,
@@ -231,9 +232,11 @@ export default function LoginScreen() {
   }
 
   // Demo = client-only mode (seeded example profiles, no account). Switch storage mode to
-  // serverless and reload; the gate won't render in that mode. Switch back in Settings.
+  // serverless and reload; the gate won't render in that mode. Switch back in Settings. A
+  // local-only switch's setup still waiting (onboardingStore.ts) would open over the demo: it goes.
   const tryDemo = () => {
     setStorageMode('serverless')
+    clearLocalSetupPending()
     reloadPage()
   }
 

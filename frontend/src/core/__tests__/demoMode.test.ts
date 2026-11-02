@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest'
-import { DEMO_PROFILE_NAME, parseDemoTier, stripDemoParam } from '../demoMode'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { applyDemoModeFromUrl, DEMO_PROFILE_NAME, parseDemoTier, stripDemoParam } from '../demoMode'
+import { localSetupPending, markLocalSetupPending } from '../onboardingFlag'
 import type { DemoTier } from '../demoMode'
 
 // parseDemoTier is the pure seam: it turns a URL (?demo= or #demo=) into a tier.
@@ -89,5 +90,34 @@ describe('stripDemoParam', () => {
     expect(stripDemoParam(`${base}/#transactions?period=ytd`)).toBe('/#transactions?period=ytd')
     expect(stripDemoParam(`${base}/?foo=1#dashboard`)).toBe('/?foo=1#dashboard')
     expect(stripDemoParam(`${base}/`)).toBe('/')
+  })
+})
+
+describe('applyDemoModeFromUrl', () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  afterEach(() => {
+    window.history.replaceState(null, '', '/')
+    localStorage.clear()
+  })
+
+  it('drops a pending local-only setup, so the demo opens as the demo', () => {
+    localStorage.setItem('finance_storage_mode', 'self-hosted')
+    markLocalSetupPending()
+    window.history.replaceState(null, '', '/?demo=high')
+
+    expect(applyDemoModeFromUrl()).toBe('high')
+    expect(localStorage.getItem('finance_storage_mode')).toBe('serverless')
+    expect(localSetupPending()).toBe(false)
+  })
+
+  it('leaves the marker on a load that asks for no demo', () => {
+    markLocalSetupPending()
+    window.history.replaceState(null, '', '/#dashboard')
+
+    expect(applyDemoModeFromUrl()).toBeNull()
+    expect(localSetupPending()).toBe(true)
   })
 })

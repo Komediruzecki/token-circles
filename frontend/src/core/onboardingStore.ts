@@ -18,7 +18,10 @@
  * browser only" leaves a one-shot marker (LOCAL_SETUP_PENDING_KEY): the local workspace it reloads
  * into opens the wizard on its space step when it holds no profile of the person's own, only the
  * demo's example profiles, though they are far from pristine. The marker goes once the space is
- * saved or setup is left, and at once when the workspace has a profile of the person's own.
+ * saved or setup is left, and at once when the workspace has a profile of the person's own. It
+ * also goes when the demo is asked for (Continue with no account, a `?demo=` link) and when a
+ * signed-in account boots: a path back to the account that never passed setup leaves nothing that
+ * would later open setup over the demo.
  *
  * It can always be relaunched from Settings → About or the tour-selection modal.
  */
@@ -38,7 +41,9 @@ import { beginGettingStarted } from './gettingStarted'
 import {
   accountOnboardingOwner,
   BROWSER_WIDE_ONBOARDING_KEY,
+  clearLocalSetupPending,
   LOCAL_ONBOARDING_OWNER,
+  localSetupPending,
   onboardingFlagKey,
 } from './onboardingFlag'
 import type { OnboardingDecision, OnboardingStep } from '../../../shared/accountStateKeys'
@@ -47,6 +52,15 @@ import type { OnboardingDecision, OnboardingStep } from '../../../shared/account
 // live with the record's other names in shared/.
 export { ONBOARDING_STEPS }
 export type { OnboardingStep }
+
+// The local-only switch's marker lives with the flag's keys, so the demo's entry points
+// (demoMode.ts, LoginScreen) can drop it without importing this store.
+export {
+  clearLocalSetupPending,
+  LOCAL_SETUP_PENDING_KEY,
+  localSetupPending,
+  markLocalSetupPending,
+} from './onboardingFlag'
 
 /**
  * The steps the wizard shows, in order: every stored step but `welcome`, which no build writes any
@@ -116,39 +130,6 @@ export function forgetOnboardingStatus(of: string): void {
     localStorage.removeItem(keyOf(of))
   } catch {
     // Non-fatal: a pristine workspace may go without the offer.
-  }
-}
-
-/**
- * Set by the wizard's "Keep my data in this browser only" just before it reloads into the local
- * workspace, so that workspace offers setup for a space of the person's own (whereToOfferOnboarding).
- */
-export const LOCAL_SETUP_PENDING_KEY = 'finance_local_setup_pending'
-
-/** Ask the local workspace the next load opens to offer setup (chooseLocalOnly). */
-export function markLocalSetupPending(): void {
-  try {
-    localStorage.setItem(LOCAL_SETUP_PENDING_KEY, '1')
-  } catch {
-    // Non-fatal: the workspace opens as it would have before.
-  }
-}
-
-/** The space is saved, or setup was left: the marker has done its job. */
-export function clearLocalSetupPending(): void {
-  try {
-    localStorage.removeItem(LOCAL_SETUP_PENDING_KEY)
-  } catch {
-    // Non-fatal: the next load finds the space saved, or a decision kept, and asks again at most.
-  }
-}
-
-/** Whether a switch to local-only is still waiting for its space. */
-export function localSetupPending(): boolean {
-  try {
-    return localStorage.getItem(LOCAL_SETUP_PENDING_KEY) !== null
-  } catch {
-    return false
   }
 }
 
@@ -338,7 +319,12 @@ export async function whereToOfferOnboarding(): Promise<OnboardingStep | null> {
   // asked, even if another signs in before the answer.
   const asking = owner
   if (asking === null) return null
-  if (isServerAccount(asking)) return whereToOfferOnTheAccount(asking)
+  if (isServerAccount(asking)) {
+    // Back on the account by a path that never passed setup (a `?plan=` or confirm link, Sign in,
+    // Settings): the local workspace has no setup waiting, and a later demo opens as the demo.
+    clearLocalSetupPending()
+    return whereToOfferOnTheAccount(asking)
+  }
   if (localSetupPending()) {
     const own = await holdsOwnProfile()
     if (owner !== asking || own === null) return null

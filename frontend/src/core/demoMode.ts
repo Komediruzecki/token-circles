@@ -11,6 +11,7 @@
  * switched to a real account, and (b) records which income tier to open, which
  * App.tsx selects once the profiles have loaded.
  */
+import { clearLocalSetupPending } from './onboardingFlag'
 import { setStorageMode } from './storage/storageFactory'
 
 export type DemoTier = 'low' | 'mid' | 'high'
@@ -124,6 +125,8 @@ export function applyDemoModeFromUrl(): DemoTier | null {
   if (tier) {
     // Overrides a persisted 'self-hosted' choice from a previous sign-in.
     setStorageMode('serverless')
+    // A local-only switch's setup still waiting (onboardingStore.ts) would open over the demo.
+    clearLocalSetupPending()
     pendingTier = tier
     // The tier is captured above; drop ?demo= from the address bar so it doesn't
     // linger on every URL (demo mode + the chosen profile persist in localStorage).

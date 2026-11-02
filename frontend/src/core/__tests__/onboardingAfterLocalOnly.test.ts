@@ -202,4 +202,12 @@ describe('a boot on a signed-in account', () => {
     expect(sent).toContain('GET /api/account/state')
     expect(sent).not.toContain('GET /api/profiles')
   })
+
+  it('drops the marker, so a later demo opens as the demo', async () => {
+    markLocalSetupPending()
+    setOnboardingOwner(accountOnboardingOwner(1))
+
+    await whereToOfferOnboarding()
+    expect(localSetupPending()).toBe(false)
+  })
 })
