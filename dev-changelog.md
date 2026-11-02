@@ -323,9 +323,9 @@ All notable changes to Token Circles are documented here. The format is based on
   and `chooseLocalOnly` selects the oldest before its reload (`leaveSelectionForLocalWorkspace`,
   localOnly.ts, so the wizard itself still writes neither key) instead of removing
   `currentProfileId` and `selectedProfileIds`, which let App open the lowest id, Example Low
-  Income. Over an example
-  (`overExample()`), the space step starts with no stored guidance answers, so About this space no
-  longer shows the example's region and saves `skipped` on the new space. Tests: `demoMode.test.ts`,
+  Income. Over an example (`overExample()`), the space step starts with no stored guidance
+  answers, so About this space no longer shows the example's region and saves `skipped` on the
+  new space. Tests: `demoMode.test.ts`,
   `loginScreen.tryDemo.test.tsx`, `onboardingAfterLocalOnly.test.ts` (a real `account-1` boot that
   never reads `/api/profiles` and drops the marker; a failed profiles read keeps it),
   `onboardingOverExamples.test.tsx` and `localOnly.test.ts`, and `onboarding-server.spec.ts`
