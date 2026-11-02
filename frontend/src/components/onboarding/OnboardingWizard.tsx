@@ -678,9 +678,16 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
       forgetOnboardingStatus('local')
       // Server-mode profile selection is meaningless against the local DB; stale ids would make
       // the profile picker read empty or heal onto the wrong profile (mirrors handleLogout's
-      // cleanup).
-      localStorage.removeItem('currentProfileId')
-      localStorage.removeItem('selectedProfileIds')
+      // cleanup). Over profiles of the person's own, the oldest is selected instead: the confirm
+      // says they carry on with them, and App, left to pick, would open the lowest id, an example
+      // where the examples are here too.
+      if (found.kind === 'own') {
+        localStorage.setItem('currentProfileId', String(found.ids[0]))
+        localStorage.setItem('selectedProfileIds', JSON.stringify([found.ids[0]]))
+      } else {
+        localStorage.removeItem('currentProfileId')
+        localStorage.removeItem('selectedProfileIds')
+      }
       // Setup opens on the space after the reload unless the workspace has a profile of the
       // person's own (onboardingStore.ts, whereToOfferOnboarding).
       markLocalSetupPending()

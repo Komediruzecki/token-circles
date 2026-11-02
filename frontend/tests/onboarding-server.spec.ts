@@ -658,6 +658,90 @@ test.describe('keeping the data in this browser, over the demo @smoke', () => {
       await deleteAccount(ctx, email)
     }
   })
+
+  test('beside the examples, a profile of your own is what the app opens on', async ({ page }) => {
+    test.setTimeout(180_000)
+    const ctx = page.context()
+    const { email } = await signUpAndIn(ctx)
+    try {
+      await page.goto(`${E2E_BASE}/?demo=low#dashboard`, {
+        waitUntil: 'domcontentloaded',
+        timeout: 30_000,
+      })
+      await expect(page.getByTestId('dashboard-header')).toBeVisible({ timeout: 60_000 })
+      await expect
+        .poll(async () => (await localWorkspace(page)).profiles.map((p) => p.name), {
+          timeout: 30_000,
+        })
+        .toEqual(EXAMPLES)
+
+      // A profile of the person's own beside the examples, with an account in it, made on an
+      // earlier visit: a higher id than every example.
+      const own = await page.evaluate(async () => {
+        const db = await new Promise<IDBDatabase>((resolve, reject) => {
+          const open = indexedDB.open('finance-manager')
+          open.onsuccess = () => {
+            resolve(open.result)
+          }
+          open.onerror = () => {
+            reject(open.error ?? new Error('open failed'))
+          }
+        })
+        const added = (store: string, row: Record<string, unknown>) =>
+          new Promise<number>((resolve, reject) => {
+            const put = db.transaction(store, 'readwrite').objectStore(store).add(row)
+            put.onsuccess = () => {
+              resolve(put.result as number)
+            }
+            put.onerror = () => {
+              reject(put.error ?? new Error('add failed'))
+            }
+          })
+        const id = await added('profiles', {
+          name: 'Household',
+          created_at: '2026-02-01T00:00:00.000Z',
+        })
+        await added('accounts', {
+          profile_id: id,
+          name: 'Main',
+          type: 'checking',
+          currency: 'EUR',
+          balance: 5,
+          created_at: '2026-02-01T00:00:00.000Z',
+        })
+        db.close()
+        return id
+      })
+      const examples = (await localWorkspace(page)).profiles
+        .filter((p) => EXAMPLES.includes(p.name))
+        .map((p) => p.id)
+      expect(Math.max(...examples)).toBeLessThan(own)
+
+      await page.evaluate(() => {
+        localStorage.setItem('finance_storage_mode', 'self-hosted')
+        localStorage.removeItem('currentProfileId')
+        localStorage.removeItem('selectedProfileIds')
+      })
+      await page.reload({ waitUntil: 'domcontentloaded' })
+      await expect(page.getByTestId('onboarding-step-space')).toBeVisible({ timeout: 30_000 })
+
+      await page.getByTestId('onboarding-local-only').click()
+      await expect(page.getByRole('alertdialog')).toContainText(
+        'with your profile "Household". You carry on with it'
+      )
+      await page.getByTestId('confirm-accept').click()
+
+      // The reload lands on Household, as the confirm said, and setup stays closed.
+      await expect(page.getByTestId('dashboard-header')).toBeVisible({ timeout: 60_000 })
+      // The initial's badge, then the name.
+      await expect(page.getByTestId('profile-dropdown-btn')).toHaveText('HHousehold')
+      expect(await page.evaluate(() => localStorage.getItem('currentProfileId'))).toBe(String(own))
+      await page.waitForTimeout(1200)
+      await expect(page.getByTestId('onboarding-wizard')).toHaveCount(0)
+    } finally {
+      await deleteAccount(ctx, email)
+    }
+  })
 })
 
 // The space step signed in has one line local-first never shows: the way to keep the data in this

@@ -24,8 +24,11 @@ export type LocalWorkspace =
   | { kind: 'none' }
   /** Only the demo's example profiles. */
   | { kind: 'examples' }
-  /** At least one profile of the person's own: their names, oldest first. */
-  | { kind: 'own'; names: string[] }
+  /**
+   * At least one profile of the person's own: their names and ids, oldest first. The switch opens
+   * the app on the first id, not on an example beside it.
+   */
+  | { kind: 'own'; names: string[]; ids: number[] }
 
 interface StoredProfile {
   id?: unknown
@@ -41,7 +44,7 @@ export function classifyLocalProfiles(rows: readonly StoredProfile[]): LocalWork
   if (named.length === 0) return { kind: 'none' }
   const own = named.filter((p) => !isExampleProfileName(p.name))
   if (own.length === 0) return { kind: 'examples' }
-  return { kind: 'own', names: own.map((p) => p.name) }
+  return { kind: 'own', names: own.map((p) => p.name), ids: own.map((p) => p.id) }
 }
 
 /** Read the profiles of this browser's local workspace without changing anything in it. */

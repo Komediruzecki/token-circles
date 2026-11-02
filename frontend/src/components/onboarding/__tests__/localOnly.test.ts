@@ -83,6 +83,8 @@ describe('reading the local workspace before the switch', () => {
     expect(await readLocalWorkspace(factory)).toEqual({
       kind: 'own',
       names: ['Our flat', 'Side business'],
+      // The examples are ids 1 to 3; the switch opens the app on the oldest of these.
+      ids: [4, 5],
     })
   })
 
@@ -129,15 +131,15 @@ describe('what the switch asks', () => {
   })
 
   it("over a workspace of the person's own, names what is carried on with", () => {
-    expect(localOnlyQuestion({ kind: 'own', names: ['Our flat'] })).toBe(
+    expect(localOnlyQuestion({ kind: 'own', names: ['Our flat'], ids: [4] })).toBe(
       'Keep your data in this browser only? This browser already has a local workspace with your profile "Our flat". You carry on with it, and nothing syncs to the cloud. Settings can switch back.'
     )
-    expect(localOnlyQuestion({ kind: 'own', names: ['A', 'B'] })).toContain(
+    expect(localOnlyQuestion({ kind: 'own', names: ['A', 'B'], ids: [4, 5] })).toContain(
       'with your profiles "A" and "B".'
     )
-    expect(localOnlyQuestion({ kind: 'own', names: ['A', 'B', 'C', 'D', 'E'] })).toContain(
-      'with your profiles "A", "B", "C" and 2 more.'
-    )
+    expect(
+      localOnlyQuestion({ kind: 'own', names: ['A', 'B', 'C', 'D', 'E'], ids: [4, 5, 6, 7, 8] })
+    ).toContain('with your profiles "A", "B", "C" and 2 more.')
   })
 
   it('where it could not tell, says only what is true either way', () => {
@@ -152,7 +154,7 @@ describe('what the switch asks', () => {
     const cases: LocalWorkspace[] = [
       { kind: 'none' },
       { kind: 'examples' },
-      { kind: 'own', names: ['A'] },
+      { kind: 'own', names: ['A'], ids: [4] },
       { kind: 'unknown' },
     ]
     for (const found of cases) {
