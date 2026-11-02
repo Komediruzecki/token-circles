@@ -9,8 +9,10 @@
  *
  * Against the real local router on fake-indexeddb.
  */
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { __resetAccountStateForTest } from '../accountState'
 import { EXAMPLE_PROFILE_NAMES } from '../demoMode'
+import { accountOnboardingOwner } from '../onboardingFlag'
 import {
   completeOnboarding,
   forgetOnboardingStatus,
@@ -25,6 +27,22 @@ import {
   whereToOfferOnboarding,
 } from '../onboardingStore'
 import { getDB } from '../storage/idb.js'
+import { setStorageMode } from '../storage/storageFactory'
+import type * as ApiModule from '../api'
+
+/** Whether the profiles read fails, as a broken local database's does. */
+const profilesRead = vi.hoisted(() => ({ fails: false }))
+
+vi.mock('../api', async (importOriginal) => {
+  const real = await importOriginal<typeof ApiModule>()
+  return {
+    ...real,
+    apiGet: (url: string, ...rest: unknown[]) =>
+      profilesRead.fails && url === '/api/profiles'
+        ? Promise.reject(new Error('The profiles could not be read.'))
+        : (real.apiGet as (u: string, ...r: unknown[]) => Promise<unknown>)(url, ...rest),
+  }
+})
 
 /** A workspace like the demo's: the three examples, the first holding an account and a payment. */
 async function examplesWorkspace(): Promise<void> {
@@ -57,6 +75,7 @@ beforeEach(async () => {
   for (const store of Array.from(db.objectStoreNames)) await db.clear(store)
   forgetOnboardingStatus('local')
   localStorage.removeItem(LOCAL_SETUP_PENDING_KEY)
+  profilesRead.fails = false
 })
 
 describe('after "Keep my data in this browser only"', () => {
@@ -120,11 +139,67 @@ describe('after "Keep my data in this browser only"', () => {
     await onboardingMirrorSettled()
   })
 
-  it('opens nothing on a signed-in account, where the marker means nothing', async () => {
+  it('keeps the marker and opens nothing when the profiles cannot be read', async () => {
     await examplesWorkspace()
     markLocalSetupPending()
-    setOnboardingOwner(null)
+    profilesRead.fails = true
     expect(await whereToOfferOnboarding()).toBeNull()
-    setOnboardingOwner('local')
+    expect(localSetupPending()).toBe(true)
+    // Read on the next load: setup opens then.
+    profilesRead.fails = false
+    expect(await whereToOfferOnboarding()).toBe('space')
+  })
+})
+
+describe('a boot on a signed-in account', () => {
+  /** Every request the stand-in Worker was sent, as `METHOD path`. */
+  const sent: string[] = []
+
+  beforeEach(() => {
+    sent.length = 0
+    setStorageMode('self-hosted')
+    __resetAccountStateForTest()
+    vi.stubGlobal('fetch', (url: string, init: RequestInit = {}) => {
+      const path = new URL(url, 'http://localhost').pathname
+      sent.push(`${(init.method ?? 'GET').toUpperCase()} ${path}`)
+      const body =
+        path === '/api/account/state'
+          ? {
+              onboarding: {
+                step: 'done',
+                started_at: '2026-10-01 09:00:00',
+                finished_at: '2026-10-01 09:05:00',
+                outcome: 'completed',
+              },
+              tours: null,
+              getting_started: null,
+            }
+          : // Read as if it were the local workspace: only the examples.
+            path === '/api/profiles'
+            ? EXAMPLE_PROFILE_NAMES.map((name, i) => ({ id: i + 1, name }))
+            : {}
+      return Promise.resolve(
+        new Response(JSON.stringify(body), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      )
+    })
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    setOnboardingOwner(null)
+    __resetAccountStateForTest()
+    setStorageMode('serverless')
+  })
+
+  it('opens nothing for the marker, which it never reads the profiles for', async () => {
+    markLocalSetupPending()
+    setOnboardingOwner(accountOnboardingOwner(1))
+
+    expect(await whereToOfferOnboarding()).toBeNull()
+    expect(sent).toContain('GET /api/account/state')
+    expect(sent).not.toContain('GET /api/profiles')
   })
 })
