@@ -496,8 +496,9 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
         })
         setChosenAnswers({})
         // Asked again when the step opens again: what the record holds now. A workspace with no
-        // profile yet holds none.
-        if (state.currentProfile && benchmarksShown()) {
+        // profile yet holds none, and nor does a space made over an example: the answers shown
+        // are the example's, while the save goes to the new profile, which has none.
+        if (state.currentProfile && benchmarksShown() && !overExample()) {
           loadAnswers()
             .then(setStoredAnswers)
             .catch(() => setStoredAnswers({}))

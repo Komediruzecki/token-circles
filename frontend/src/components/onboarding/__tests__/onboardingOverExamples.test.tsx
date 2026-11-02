@@ -328,3 +328,48 @@ it('leaves the selection for the app to pick over the examples alone, as before'
   expect(localStorage.getItem('selectedProfileIds')).toBeNull()
   expect(localStorage.getItem(LOCAL_SETUP_PENDING_KEY)).toBe('1')
 })
+
+/** The region chip checked on About this space, or null for none. */
+const checkedRegion = () =>
+  host
+    .querySelector<HTMLInputElement>('[data-test-id="onboarding-space-region"] input:checked')
+    ?.closest('[data-test-id]')
+    ?.getAttribute('data-test-id') ?? null
+
+/** A profile's stored guidance answers, as local-first files them (guidanceAnswers.ts). */
+async function answersOf(profileId: number): Promise<Record<string, unknown> | null> {
+  const row = (await (await getDB()).get('settings', `guidance:${String(profileId)}`)) as
+    { value: string } | undefined
+  return row ? (JSON.parse(row.value) as Record<string, unknown>) : null
+}
+
+it('asks About this space afresh over an example, and saves the answer on the new space', async () => {
+  // About this space shows where the benchmarks do.
+  vi.stubEnv('MODE', 'development')
+  // The example the demo left on, with an answer of its own.
+  await (
+    await getDB()
+  ).put('settings', { key: 'guidance:1', value: JSON.stringify({ region: 'DE' }) })
+  const name = await openSpaceStep()
+  radio('keep')!.click()
+  nameAndContinue(name, 'Our flat')
+  await vi.waitFor(() => {
+    expect(host.querySelector('[data-test-id="onboarding-step-about"]')).not.toBeNull()
+  })
+  const ours = useAppState().currentProfile!.id
+  expect(ours).toBeGreaterThan(3)
+
+  // Nothing of the example's: the space is new.
+  expect(checkedRegion()).toBeNull()
+
+  host.querySelector<HTMLInputElement>('[data-test-id="onboarding-space-region-HR"] input')!.click()
+  expect(checkedRegion()).toBe('onboarding-space-region-HR')
+  host.querySelector<HTMLButtonElement>('[data-test-id="onboarding-next"]')!.click()
+  await vi.waitFor(() => {
+    expect(onboardingStep()).toBe('account')
+  })
+
+  expect(await answersOf(ours)).toMatchObject({ region: 'HR' })
+  // The example kept, with its own answer untouched.
+  expect(await answersOf(1)).toEqual({ region: 'DE' })
+})
