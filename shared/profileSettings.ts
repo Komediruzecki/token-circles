@@ -1,12 +1,14 @@
 /**
- * The settings that belong to one profile: its retirement plan and its badge record.
+ * The settings that belong to one profile: its retirement plan, its badge record, and the answers
+ * it gave the guidance (shared/guidance/answers.ts).
  *
  * The Worker's settings table is keyed by (key, profile_id), so there each is a row of its
  * profile under the plain key. Local-first keeps one settings row per key for the whole browser,
  * so it names the profile in the key: `retirement_settings:<profile id>`. A backup moved from one
- * runtime to the other is read through these, so that each setting stays with its profile.
+ * runtime to the other is read through these, so that each setting stays with its profile, and
+ * each goes with a deleted profile in both.
  */
-export const PROFILE_SETTING_KEYS = ['retirement_settings', 'achievements'] as const;
+export const PROFILE_SETTING_KEYS = ['retirement_settings', 'achievements', 'guidance'] as const;
 
 export type ProfileSettingKey = (typeof PROFILE_SETTING_KEYS)[number];
 
@@ -14,6 +16,9 @@ export type ProfileSettingKey = (typeof PROFILE_SETTING_KEYS)[number];
 export function isProfileSettingKey(key: string): key is ProfileSettingKey {
   return (PROFILE_SETTING_KEYS as readonly string[]).includes(key);
 }
+
+/** A key in local-first's form, `<key>:<profile id>`, for any of the keys above. */
+const LOCAL_FORM = new RegExp(`^(${PROFILE_SETTING_KEYS.join('|')}):(\\d+)$`);
 
 /** Local-first's key for `key` of profile `profileId`. */
 export function localProfileSettingKey(key: ProfileSettingKey, profileId: number): string {
@@ -24,7 +29,7 @@ export function localProfileSettingKey(key: ProfileSettingKey, profileId: number
 export function splitLocalProfileSettingKey(
   key: string
 ): { key: ProfileSettingKey; profileId: number } | null {
-  const match = /^(retirement_settings|achievements):(\d+)$/.exec(key);
+  const match = LOCAL_FORM.exec(key);
   return match ? { key: match[1] as ProfileSettingKey, profileId: Number(match[2]) } : null;
 }
 

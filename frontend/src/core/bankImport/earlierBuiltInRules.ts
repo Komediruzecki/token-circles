@@ -5,8 +5,9 @@
  * so did a save with nothing changed (rulesStore.ts). The copy was never edited, but it read as an
  * edit: it kept giving the names of the version that stored it after the built-in rules moved on,
  * and switching the mapping warned that edits would be lost. A stored set equal to one of these
- * loads as its group's rules now. Saving the built-in rules as they are stores nothing any more, so
- * this list holds only what earlier versions stored.
+ * loads as its group's rules now. Saving the built-in rules as they are stores nothing since 5.17.4.
+ * The sets 5.17.4 and 5.17.5 shipped are here all the same, so a stored copy of them, whatever
+ * stored it, loads as the rules now and not as an edit that keeps Restaurant and Dining.
  *
  * Frozen: each is a group's built-in rules exactly as git has them at that version. The tests keep
  * their own copies (__tests__/fixtures), so a change here fails them.
@@ -377,10 +378,288 @@ const WORLDWIDE_5_17_3: CategoryRuleSet = [
   },
 ]
 
+/**
+ * DEFAULT_CATEGORY_RULES in 5.17.4 and 5.17.5: the defaults and former names of #673, with the
+ * restaurant rule still giving Restaurant.
+ */
+const CROATIAN_5_17_5: CategoryRuleSet = [
+  {
+    category: 'Groceries',
+    keywords: [
+      'kaufland',
+      'konzum',
+      'spar',
+      'lidl',
+      'plodine',
+      'dm drogerie',
+      'müller',
+      'muller',
+      'vrutak',
+      'bio&bio',
+      'tommy',
+      'studenac',
+    ],
+  },
+  {
+    category: 'Subscriptions',
+    keywords: [
+      'netflix',
+      'spotify',
+      'google one',
+      'youtube',
+      'audible',
+      'apple',
+      'openai',
+      'anthropic',
+      'github',
+      'cloudflare',
+      'patreon',
+    ],
+  },
+  {
+    category: 'Transportation',
+    formerly: ['Car (Gas)'],
+    keywords: ['ina bp', 'lukoil', 'petrol', 'crodux', 'tifon', 'shell', 'benzinska'],
+  },
+  {
+    category: 'Bank Fees',
+    keywords: [
+      'naknad',
+      'uplata naknade',
+      'pripis kamate',
+      'pasivne kamate',
+      'bank fee',
+      'vođenje računa',
+      'vodenje racuna',
+    ],
+  },
+  {
+    category: 'Utilities',
+    formerly: ['Apartment (Bills)'],
+    keywords: [
+      'pričuva',
+      'pricuva',
+      'vodne usluge',
+      'zbrinjavanje otpada',
+      'obračun plina',
+      'obracun plina',
+      'hep',
+      'a1 usluge',
+      'a1 hrvatska',
+      'plina za',
+      'osiguranj',
+    ],
+  },
+  {
+    category: 'Salary',
+    formerly: ['Salary Eur'],
+    keywords: [
+      'isplata plaće',
+      'isplata place',
+      'isplata potpore',
+      'naknada za prijevoz',
+      'plaća',
+      'salary',
+      'payroll',
+    ],
+  },
+  {
+    category: 'Healthcare',
+    formerly: ['Health'],
+    keywords: ['ljekarn', 'ljekarne', 'pharmacy', 'poliklinik', 'dom zdravlja'],
+  },
+  {
+    category: 'Restaurant',
+    keywords: ['restaurant', 'restoran', 'rougemarin', 'pizzeria', 'caffe', 'bistro'],
+  },
+  {
+    category: 'Shopping',
+    keywords: ['about you', 'reserved', 'zara', 'h&m', 'steam', 'amazon'],
+  },
+  {
+    category: 'Transportation',
+    formerly: ['Transport'],
+    keywords: ['zet', 'garaža', 'garaza', 'parking', 'hak', 'enc', 'autoceste'],
+  },
+]
+
+/**
+ * DEFAULT_CATEGORY_RULES_WORLDWIDE in 5.17.4 and 5.17.5: the defaults and former names of #673,
+ * with the dining rule still giving Dining.
+ */
+const WORLDWIDE_5_17_5: CategoryRuleSet = [
+  {
+    category: 'Groceries',
+    keywords: [
+      'walmart',
+      'costco',
+      'aldi',
+      'lidl',
+      'tesco',
+      'sainsbury',
+      'kroger',
+      'carrefour',
+      'whole foods',
+      'trader joe',
+      'supermarket',
+      'grocery',
+      'safeway',
+    ],
+  },
+  {
+    category: 'Dining',
+    keywords: [
+      'mcdonald',
+      'burger king',
+      'kfc',
+      'starbucks',
+      'subway',
+      'domino',
+      'pizza',
+      'restaurant',
+      'cafe',
+      'coffee',
+      'uber eats',
+      'doordash',
+      'deliveroo',
+      'grubhub',
+      'chipotle',
+    ],
+  },
+  {
+    category: 'Transportation',
+    formerly: ['Transport'],
+    keywords: ['uber', 'lyft', 'bolt', 'taxi', 'transit', 'metro', 'parking', 'toll', 'railway'],
+  },
+  {
+    category: 'Transportation',
+    formerly: ['Fuel'],
+    keywords: ['shell', 'esso', 'exxon', 'chevron', 'texaco', 'gas station', 'petrol', 'fuel'],
+  },
+  {
+    category: 'Subscriptions',
+    keywords: [
+      'netflix',
+      'spotify',
+      'youtube premium',
+      'amazon prime',
+      'disney',
+      'hbo',
+      'hulu',
+      'audible',
+      'patreon',
+      'openai',
+      'anthropic',
+      'github',
+      'google one',
+      'icloud',
+      'dropbox',
+      'adobe',
+      'microsoft 365',
+    ],
+  },
+  {
+    category: 'Shopping',
+    keywords: [
+      'amazon',
+      'ebay',
+      'aliexpress',
+      'etsy',
+      'ikea',
+      'zara',
+      'h&m',
+      'nike',
+      'adidas',
+      'best buy',
+      'shein',
+    ],
+  },
+  {
+    category: 'Utilities',
+    keywords: [
+      'electric',
+      'electricity',
+      'water bill',
+      'gas bill',
+      'internet',
+      'broadband',
+      'vodafone',
+      'verizon',
+      't-mobile',
+      'comcast',
+      'utility',
+    ],
+  },
+  {
+    category: 'Healthcare',
+    formerly: ['Health'],
+    keywords: ['pharmacy', 'cvs', 'walgreens', 'boots', 'clinic', 'hospital', 'dental', 'doctor'],
+  },
+  {
+    category: 'Entertainment',
+    keywords: [
+      'cinema',
+      'movie',
+      'theatre',
+      'steam',
+      'playstation',
+      'xbox',
+      'nintendo',
+      'ticketmaster',
+    ],
+  },
+  {
+    category: 'Travel',
+    keywords: [
+      'airbnb',
+      'booking.com',
+      'expedia',
+      'hotel',
+      'airlines',
+      'ryanair',
+      'easyjet',
+      'flight',
+      'hertz',
+    ],
+  },
+  {
+    category: 'Bank Fees',
+    keywords: [
+      'bank fee',
+      'service charge',
+      'atm fee',
+      'overdraft',
+      'interest charge',
+      'monthly fee',
+    ],
+  },
+  {
+    category: 'Income',
+    keywords: ['salary', 'payroll', 'wages', 'direct deposit', 'refund', 'reimbursement'],
+  },
+  {
+    category: 'Transfers',
+    keywords: [
+      'transfer',
+      'zelle',
+      'venmo',
+      'paypal',
+      'wise',
+      'revolut',
+      'cash app',
+      'wire transfer',
+    ],
+  },
+  {
+    category: 'Housing',
+    keywords: ['rent payment', 'monthly rent', 'mortgage', 'landlord', 'property management'],
+  },
+]
+
 /** Each group's earlier built-in rules, by group id (RULE_GROUPS), oldest first. */
 export const EARLIER_BUILT_IN_RULES: Readonly<Record<string, readonly CategoryRuleSet[]>> = {
-  croatian: [CROATIAN_5_17_3, CROATIAN_671],
-  worldwide: [WORLDWIDE_5_17_3],
+  croatian: [CROATIAN_5_17_3, CROATIAN_671, CROATIAN_5_17_5],
+  worldwide: [WORLDWIDE_5_17_3, WORLDWIDE_5_17_5],
 }
 
 /** Whether two JSON values are equal: arrays item by item, objects key by key in any order. */

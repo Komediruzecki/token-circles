@@ -6,8 +6,12 @@ import { expect, ProfileApi } from './release-fixtures'
 import type { Page } from '@playwright/test'
 import type { Mode } from './release-fixtures'
 
-/** What a badge announcement says (core/achievementsStore.ts `announce`). */
-export const BADGE_TOAST = /Badge unlocked: |badges earned from your history so far\./
+/**
+ * What a badge announcement says (core/achievementsStore.ts `announce`). A first run that holds
+ * twelve tracked months in a row counts its prints too: "N badges and 26 prints from ...".
+ */
+export const BADGE_TOAST =
+  /Badge unlocked: |badges (?:earned|and your first print|and \d+ prints) from your history so far\./
 
 export interface ToastSeen {
   text: string

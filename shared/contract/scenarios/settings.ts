@@ -1,3 +1,4 @@
+import { ANSWERS_MAX_BYTES, ANSWERS_MESSAGES } from '../../guidance/answers';
 import { SETTINGS_MESSAGES } from '../../settingsSchema';
 import { expectOk, scenario } from '../types';
 import type { ContractApi, Expect, Json } from '../types';
@@ -7,6 +8,34 @@ async function settingsOf(api: ContractApi, expect: Expect): Promise<Json> {
   expectOk(expect, reply, 'GET /api/settings');
   return reply.body;
 }
+
+/**
+ * Where a profile's guidance answers are kept (shared/guidance/answers.ts): the Worker's settings
+ * are per profile, so under the plain key; local-first's serve the whole browser, so the key names
+ * the profile, as the app's `answersKey` does.
+ */
+export function answersKeyOf(api: ContractApi): string {
+  return api.runtime === 'worker' ? 'guidance' : `guidance:${api.profile}`;
+}
+
+/**
+ * A record as a newer build writes it: setup's answers, the circles' (but the support categories,
+ * which name ids), and a question this build never asks.
+ */
+export const ANSWERS = JSON.stringify({
+  region: 'HR',
+  adults: 2,
+  children: 0,
+  carriesCardBalance: false,
+  freeMoney: { region: 'HR', answer: 'not-sure' },
+  setsAsideYearly: true,
+  savedElsewhere: { amount: 2000, currency: 'EUR' },
+  enoughPerYear: { amount: 40000, currency: 'EUR' },
+  tenure: 'outright',
+  kindsAsked: true,
+  savingsGoal: 15,
+  allAccounts: true,
+});
 
 /** The record the achievements store saves (core/achievements/records.ts, serializeRecords). */
 const ACHIEVEMENTS = JSON.stringify({
@@ -68,6 +97,62 @@ export const settings = [
       expect(theirs).toMatchObject({ currency: 'USD', onboarding: 'completed' });
     }
   }),
+
+  scenario(
+    'the guidance answers are stored as sent, fields this build does not read and all',
+    async (api, expect) => {
+      const mine = answersKeyOf(api);
+      const theirs = answersKeyOf(api.other);
+      expectOk(expect, await api.put('/api/settings', { [mine]: ANSWERS }), 'PUT the answers');
+      expectOk(
+        expect,
+        await api.other.put('/api/settings', { [theirs]: '{"region":"UK"}' }),
+        "PUT the other profile's answers"
+      );
+      // Each profile reads its own record back, as it was sent.
+      expect((await settingsOf(api, expect))[mine]).toBe(ANSWERS);
+      expect((await settingsOf(api.other, expect))[theirs]).toBe('{"region":"UK"}');
+
+      // The most a record holds is 4 KB.
+      const shell = JSON.stringify({ region: 'DE', note: '' }).length;
+      const full = JSON.stringify({ region: 'DE', note: 'a'.repeat(ANSWERS_MAX_BYTES - shell) });
+      expect(new TextEncoder().encode(full).length).toBe(ANSWERS_MAX_BYTES);
+      expectOk(expect, await api.put('/api/settings', { [mine]: full }), 'PUT 4 KB of answers');
+      expect((await settingsOf(api, expect))[mine]).toBe(full);
+    }
+  ),
+
+  scenario(
+    'a guidance record that is not well formed is refused, and the one stored kept',
+    async (api, expect) => {
+      const key = answersKeyOf(api);
+      expectOk(expect, await api.put('/api/settings', { [key]: ANSWERS }), 'PUT the answers');
+      const refusals: [unknown, string][] = [
+        ['{"region":"DE"', ANSWERS_MESSAGES.record],
+        ['["DE"]', ANSWERS_MESSAGES.record],
+        [{ region: 'DE' }, ANSWERS_MESSAGES.record],
+        ['{"region":49}', ANSWERS_MESSAGES.region],
+        ['{"adults":0}', ANSWERS_MESSAGES.adults],
+        ['{"children":-1}', ANSWERS_MESSAGES.children],
+        ['{"supportCategoryIds":[0]}', ANSWERS_MESSAGES.supportCategoryIds],
+        ['{"carriesCardBalance":"no"}', ANSWERS_MESSAGES.carriesCardBalance],
+        ['{"freeMoney":"taken"}', ANSWERS_MESSAGES.freeMoney],
+        ['{"setsAsideYearly":1}', ANSWERS_MESSAGES.setsAsideYearly],
+        ['{"savedElsewhere":{"amount":-5,"currency":"EUR"}}', ANSWERS_MESSAGES.savedElsewhere],
+        ['{"enoughPerYear":{"amount":0,"currency":"EUR"}}', ANSWERS_MESSAGES.enoughPerYear],
+        ['{"tenure":"own outright"}', ANSWERS_MESSAGES.tenure],
+        ['{"kindsAsked":"yes"}', ANSWERS_MESSAGES.kindsAsked],
+        ['{"savingsGoal":150}', ANSWERS_MESSAGES.savingsGoal],
+        [JSON.stringify({ note: 'a'.repeat(ANSWERS_MAX_BYTES) }), ANSWERS_MESSAGES.size],
+      ];
+      for (const [raw, message] of refusals) {
+        const reply = await api.put('/api/settings', { [key]: raw });
+        expect(reply.status).toBe(400);
+        expect(reply.body).toEqual({ error: message, fields: { [key]: message } });
+      }
+      expect((await settingsOf(api, expect))[key]).toBe(ANSWERS);
+    }
+  ),
 
   scenario('the storage mode is read, and a switch acknowledged', async (api, expect) => {
     const read = await api.get('/api/storage-mode');

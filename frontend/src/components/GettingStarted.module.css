@@ -1,0 +1,131 @@
+/* Getting started: the card on Dashboard, and the list it shares with the wizard's last step. */
+.card {
+  margin: 12px 0 4px;
+  padding: 16px 18px;
+  border: 1px solid color-mix(in oklab, var(--primary) 22%, var(--border));
+  border-radius: var(--radius, 12px);
+  background: var(--card-bg);
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.heading {
+  margin: 0;
+  font-family: var(--font-display, inherit);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.lead {
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+
+/* Styled as the app's secondary card actions (Progress's advice links), and at least 44 px tall:
+   Hide is for good, so it is a full touch target rather than a small chip beside the heading. */
+.hide {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.hide:hover {
+  border-color: var(--primary);
+  color: var(--text);
+}
+
+.steps {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+}
+
+.step {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.link {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.link:hover .title,
+.link:focus-visible .title {
+  text-decoration: underline;
+}
+
+.title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.page {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--primary);
+}
+
+.reason {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+/* A finger's 44 px, wherever a finger taps it: on a phone, where the title and its page stack and
+   their text alone was 41 px tall, and on any touch screen. A mouse keeps the line's own height. */
+@media (pointer: coarse) {
+  .link {
+    min-height: 44px;
+    align-items: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .card {
+    padding: 14px;
+  }
+
+  .link {
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 2px;
+    min-height: 44px;
+  }
+}
+
+/* The article that answers a step's why (ArticleLink), under its reason. */
+.step .article {
+  margin: -6px 0 -10px;
+}

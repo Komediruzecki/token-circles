@@ -71,6 +71,10 @@ vi.mock('../../core/api', async (importOriginal) => {
   }
 })
 
+// The circles' store (Your next step and the savings gauge) reads settings and holdings of its own,
+// and follows its writes in guidanceStore.test.ts. Left out here, so the counts are the cards'.
+vi.mock('../../core/guidance', () => ({ useGuidance: () => () => null, takeAnswers: vi.fn() }))
+
 let host: HTMLDivElement
 let dispose: (() => void) | undefined
 
@@ -210,5 +214,16 @@ describe('a transaction saved on another page', () => {
     expect(readsOf('/api/budgets/alerts?threshold=80')).toHaveLength(2)
     expect(readsOf('/api/portfolio/holdings')).toHaveLength(1)
     expect(readsOf('api.getRecurring')).toHaveLength(1)
+  })
+})
+
+describe('the savings gauge', () => {
+  it('is drawn once, at its own spot under the metrics, with Show more open', async () => {
+    await mountDashboard()
+    const gauges = host.querySelectorAll('[data-test-id="savings-gauge"]')
+    expect(gauges).toHaveLength(1)
+    expect(host.querySelector('[data-test-id="dashboard-metrics"]')!.nextElementSibling).toBe(
+      gauges[0]
+    )
   })
 })

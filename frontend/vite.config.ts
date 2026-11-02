@@ -1,6 +1,6 @@
 import { execSync } from 'child_process'
 import { resolve } from 'path'
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import bundleAnalyzer from 'vite-bundle-analyzer'
 import { VitePWA } from 'vite-plugin-pwa'
 import { pwaManifest } from './src/pwaManifest'
@@ -60,11 +60,18 @@ export default defineConfig(({ command, mode }) => {
   // register, and a stale one is actively removed below.
   const shipsServiceWorker = command === 'build'
   const isProd = mode === 'production'
+  // The benchmarks gate (src/core/guidanceGate.ts) as a build-time constant, by the gate's own
+  // test: where it is closed, the copy it holds back is compiled out of the build
+  // (shared/guidance/questions.ts, src/components/guidance/regionWords.ts), not only left unshown.
+  // loadEnv reads what import.meta.env does: the mode's .env files and VITE_ variables.
+  const benchmarksShown =
+    mode !== 'production' || loadEnv(mode, process.cwd(), 'VITE_').VITE_ENABLE_BENCHMARKS === 'true'
   return {
     define: {
       __APP_VERSION__: JSON.stringify(APP_VERSION),
       __GIT_SHA__: JSON.stringify(GIT_SHA),
       __SW_ENABLED__: JSON.stringify(shipsServiceWorker),
+      __BENCHMARKS_SHOWN__: JSON.stringify(benchmarksShown),
     },
     base: './',
     build: {

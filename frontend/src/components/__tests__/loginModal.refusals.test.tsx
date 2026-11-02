@@ -66,9 +66,12 @@ const settle = async () => {
   await new Promise((resolve) => setTimeout(resolve, 0))
 }
 
-/** What a refused password sign-in says, for a wrong password and an address not confirmed yet. */
+/**
+ * What a refused password sign-in says, for a wrong password and an address not confirmed yet,
+ * with where the confirm link signs in by itself (shared/confirmLinkSignIn.ts).
+ */
 const REFUSED =
-  "That email and password don't match, or the email isn't confirmed yet. Just signed up? Open the link we emailed you in this browser, then sign in. Opened it in another browser or on another device? Sign in there first."
+  "That email and password don't match, or the email isn't confirmed yet. Just signed up? Open the link we emailed you within an hour in the browser you signed up in and you're signed in. Later, or anywhere else, it asks you to sign in first."
 
 const inboxAddress = () =>
   host.querySelector('[data-test-id="check-inbox-address"]')?.textContent ?? null

@@ -56,7 +56,7 @@
  * THEN: The bill is removed from all lists with confirmation
  */
 
-import { createMemo, createResource, createSignal, For, Show } from 'solid-js'
+import { createMemo, createResource, createSignal, For, onCleanup, onMount, Show } from 'solid-js'
 import ConfirmButton from '../components/ConfirmButton'
 import { Field, FormNotice, SubmitButton } from '../components/form'
 import OrbitalAccent from '../components/OrbitalAccent'
@@ -70,6 +70,7 @@ import { apiDelete, apiHouseholdGet, apiPost, apiPut, errorStatus, showToast } f
 import { plainMessage } from '../core/apiError'
 import { useAppState } from '../core/appStore'
 import { entityVersion } from '../core/dataVersions'
+import { takeHashFlag } from '../core/hashRoute'
 import { gatedSource } from '../core/pageVisibility'
 import { monthlyEquivalent } from '../core/subscriptionMath'
 import BillCalendar from './BillCalendar'
@@ -186,6 +187,20 @@ export default function Bills() {
 
   // Tab state: 'all' | 'subscriptions' | 'calendar'
   const [billTab, setBillTab] = createSignal<'all' | 'subscriptions' | 'calendar'>('all')
+
+  // Getting started's subscription step links here as `#bills?scan=1`: the scan opens, on the
+  // Subscriptions tab it belongs to. Pages stay mounted once visited, so a later link arrives as a
+  // hashchange.
+  const openScanFromLink = () => {
+    if (!takeHashFlag('bills', 'scan')) return
+    setBillTab('subscriptions')
+    setShowScan(true)
+  }
+  onMount(openScanFromLink)
+  window.addEventListener('hashchange', openScanFromLink)
+  onCleanup(() => {
+    window.removeEventListener('hashchange', openScanFromLink)
+  })
 
   // Memoized filtered lists
   const subscriptions = createMemo(() =>

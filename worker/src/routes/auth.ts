@@ -29,6 +29,7 @@ import {
   boundTo,
   TOKEN_TTL_SECONDS,
   TRY_AGAIN,
+  type AuthUser,
 } from '../auth';
 import { sendMail } from '../email';
 import { cancelEmailChange, pendingEmailChange, sendEmailChangeLink } from '../email-change';
@@ -42,6 +43,7 @@ import {
   markerFor,
   spendLink,
   type EmailLink,
+  type SpentLink,
 } from '../email-link';
 import {
   CONFIRM_LINKS_PER_HOUR,
@@ -55,16 +57,23 @@ import {
 } from '../email-verification';
 import {
   renderAccountExists,
+  renderConfirmEmail,
   renderEmailVerification,
   renderPasswordReset,
-  renderWelcome,
 } from '../emailTemplates';
+import { claimWelcomeOnConfirm, welcomeAfterAnswer, welcomeClaimed } from '../welcome';
 import { clearRateLimit, enforce, clientIp, rateLimit } from '../ratelimit';
 import { getTotpForLogin, issueTwofaChallengeCookie } from '../twofa';
 import { logAuthEvent } from '../authlog';
 import { captchaRejection, verifyTurnstileDetailed } from '../turnstile';
 import { CAPTCHA_ACTIONS } from '../../../shared/captchaActions';
 import { checkSignInTry, coverNextTry, endLoginCheck, useUpLoginChecks } from '../login-check';
+import {
+  carriesSignupMarker,
+  clearedSignupMarker,
+  signupMarker,
+  signupMarkerFor,
+} from '../signup-marker';
 import { refusalOf } from '../../../shared/refusal';
 import {
   addressProblems,
@@ -174,25 +183,11 @@ authRoutes.get(GOOGLE_CALLBACK_PATH, async (c) => {
   const claims = await verifyGoogleIdToken(tok.id_token, GOOGLE_CLIENT_ID);
   if (!claims) return c.json({ error: 'Invalid id_token' }, 401);
 
-  const {
-    userId,
-    created,
-    email: newEmail,
-    cleared,
-    tokenVersion,
-  } = await resolveGoogleUser(c.env.DB, claims);
+  const { userId, cleared, tokenVersion, welcome } = await resolveGoogleUser(c.env.DB, claims);
   const signIn = { userId, provider: 'google', tokenVersion };
-  // Brand-new Google signups get the same welcome as email/password registrations
-  // (best-effort — a mail failure must never break the OAuth redirect).
-  if (created && newEmail) {
-    const base = c.env.CORS_ORIGIN || c.env.APP_ORIGINS?.split(',')[0] || new URL(c.req.url).origin;
-    const welcome = renderWelcome({ appUrl: base });
-    await sendMail(c.env, newEmail, welcome.subject, welcome.html, { text: welcome.text }).catch(
-      (e: unknown) => {
-        console.error('Google welcome email failed:', e);
-      }
-    );
-  }
+  // A Google sign-up, or a first sign-in that confirms an address, gets the Welcome once, after
+  // the redirect: a mail that fails never holds up the sign-in (welcome.ts).
+  if (welcome) welcomeAfterAnswer(c)(userId);
   // Second factor: same rule as password login. The redirect carries ?twofa=1 so the SPA knows
   // to show the code screen instead of treating the return as signed-in.
   if (await getTotpForLogin(c.env, userId)) {
@@ -230,13 +225,45 @@ interface AccountAtAddress {
   id: number;
   email_verified: number;
   auth_provider: string;
+  password_hash: string | null;
 }
 
 /** The account at `email`, or null. */
 function lookUpAddress(env: Env, email: string): Promise<AccountAtAddress | null> {
-  return env.DB.prepare('SELECT id, email_verified, auth_provider FROM users WHERE email = ?')
+  return env.DB.prepare(
+    'SELECT id, email_verified, auth_provider, password_hash FROM users WHERE email = ?'
+  )
     .bind(email)
     .first<AccountAtAddress>();
+}
+
+/**
+ * The password a sign-up sent, checked once after its answer whatever the address: against the
+ * hash of the account there when that account waits for its confirm link (`waiting`), and against
+ * DUMMY_PASSWORD_HASH for every other address (none, a new account, a confirmed one, a Google
+ * one), as a sign-in checks an address with no account. Every sign-up does the same work after
+ * its answer.
+ *
+ * A sign-up again with the same password, at an address that still waits for its confirm link,
+ * gives the account the hash this sign-up computed. Same password, new salt, so the sign-up's
+ * marker (signup-marker.ts) matches the account and the fresh link signs this browser in. The
+ * write is bound to the hash it checked and to the address still waiting, so a password set or an
+ * address confirmed meanwhile is left as it is. Another password changes nothing.
+ */
+async function checkSignUpPassword(
+  env: Env,
+  waiting: AccountAtAddress | null,
+  password: string,
+  passwordHash: string
+): Promise<void> {
+  const stored = waiting?.password_hash ?? null;
+  const same = await verifyPassword(password, stored ?? DUMMY_PASSWORD_HASH);
+  if (!waiting || !stored || !same) return;
+  await env.DB.prepare(
+    'UPDATE users SET password_hash = ? WHERE id = ? AND password_hash = ? AND email_verified = 0'
+  )
+    .bind(passwordHash, waiting.id, stored)
+    .run();
 }
 
 /**
@@ -266,9 +293,13 @@ async function accountAt(
 
 /**
  * The work a sign-up does after its answer. A new address gets an account, with a profile, and
- * its welcome mail with the confirm link. A password account waiting for its confirm link gets a
- * fresh one, as Send the link again would mail it, and keeps its password. Any other address with
- * an account gets a notice that someone tried, and nothing else changes.
+ * Confirm, the mail with the link that opens it; the Welcome comes once the address is confirmed
+ * (welcome.ts). A password account waiting for its confirm link gets a fresh one, as Send the link
+ * again would mail it, and keeps its password: typed again, the same password is stored with this
+ * sign-up's hash. Any other address with an account gets a notice that someone tried, and nothing
+ * else changes. Every address has its password checked once, the same way (checkSignUpPassword).
+ *
+ * `passwordHash` is the hash the route computed before its answer, for the sign-up marker.
  *
  * Finding or making the account runs a second time when the first try fails. A second failure
  * reaches the caller, which logs it: the answer has gone.
@@ -277,19 +308,21 @@ async function signUpAfterAnswer(
   env: Env,
   email: string,
   password: string,
+  passwordHash: string,
   base: string,
   apiOrigin: string
 ): Promise<void> {
-  const passwordHash = await hashPassword(password);
   const account = await accountAt(env, email, passwordHash).catch(() =>
     accountAt(env, email, passwordHash)
   );
-  if ('found' in account && emailUnconfirmed(account.found)) {
-    await mailFreshConfirmLink(env, account.found.id, email, base, apiOrigin).catch(
-      (e: unknown) => {
-        console.error('Confirm link could not be sent again:', e);
-      }
-    );
+  const waiting = 'found' in account && emailUnconfirmed(account.found) ? account.found : null;
+  await checkSignUpPassword(env, waiting, password, passwordHash).catch((e: unknown) => {
+    console.error('Sign-up could not check the password:', e);
+  });
+  if (waiting) {
+    await mailFreshConfirmLink(env, waiting.id, email, base, apiOrigin).catch((e: unknown) => {
+      console.error('Confirm link could not be sent again:', e);
+    });
     return;
   }
   if ('found' in account) {
@@ -301,14 +334,14 @@ async function signUpAfterAnswer(
     );
     return;
   }
-  // A password account's welcome always carries its confirm link: the account opens with it.
-  const welcome = renderWelcome({
-    appUrl: base,
-    verifyUrl: verifyLink(apiOrigin, account.made.token, base),
+  const confirm = renderConfirmEmail({
+    link: verifyLink(apiOrigin, account.made.token, base),
+    ttlHours: VERIFY_TOKEN_TTL_HOURS,
+    assetOrigin: base,
   });
-  await sendMail(env, email, welcome.subject, welcome.html, { text: welcome.text }).catch(
+  await sendMail(env, email, confirm.subject, confirm.html, { text: confirm.text }).catch(
     (e: unknown) => {
-      console.error('Welcome email failed:', e);
+      console.error('Confirm email failed:', e);
     }
   );
 }
@@ -318,7 +351,8 @@ async function signUpAfterAnswer(
 // or telling the address's owner that someone tried, happens after the answer
 // (signUpAfterAnswer), which tries the account work twice; a failure it cannot get past is
 // logged, not answered. No session is set: a password account signs in once its address is
-// confirmed.
+// confirmed. The answer carries the sign-up marker (signup-marker.ts), set the same way for every
+// address, so the confirm link opened in this browser signs it in.
 authRoutes.post('/api/auth/register', async (c) => {
   const rl = await enforce(c, `register:${clientIp(c)}`, 5, 3600);
   if (rl) return rl;
@@ -340,8 +374,13 @@ authRoutes.post('/api/auth/register', async (c) => {
   const emailRl = await enforce(c, `register-email:${email}`, 3, 3600);
   if (emailRl) return emailRl;
   const base = c.env.CORS_ORIGIN || c.env.APP_ORIGINS?.split(',')[0] || new URL(c.req.url).origin;
+  // Hashed before the answer, for every address alike: the marker signs the hash, and nothing is
+  // read before the answer, so it takes the same time whether or not the address has an account.
+  const passwordHash = await hashPassword(password);
+  const marker = await signupMarker(c.env, email, passwordHash);
+  if (marker) c.header('Set-Cookie', marker, { append: true });
   c.executionCtx.waitUntil(
-    signUpAfterAnswer(c.env, email, password, base, new URL(c.req.url).origin).catch(
+    signUpAfterAnswer(c.env, email, password, passwordHash, base, new URL(c.req.url).origin).catch(
       (e: unknown) => {
         console.error('Sign-up could not make the account:', e);
       }
@@ -451,7 +490,7 @@ authRoutes.post('/api/auth/login', async (c) => {
   // and the mailbox are both proved, and the link confirms the address before the sign-in goes on.
   let confirmedNow = false;
   if (emailUnconfirmed(user)) {
-    confirmedNow = await confirmWithOwnLink(c.env.DB, user.id, opened);
+    confirmedNow = await confirmWithOwnLink(c.env.DB, user.id, opened, welcomeAfterAnswer(c));
     if (!confirmedNow) {
       logAuthEvent(c, { event: 'login', outcome: 'denied', reason: 'email_unconfirmed', email });
       return refuse();
@@ -602,12 +641,15 @@ authRoutes.post('/api/auth/reset-password', async (c) => {
   // One batch, so the password change and the retiring of the account's other pending links
   // either both happen or neither does. They used to be separate awaited writes: a failure
   // between them left live reset links pointing at an account whose password had just changed.
+  const clearing = clearUnconfirmedAccess(c.env.DB, row.user_id);
   const results = await c.env.DB.batch([
     // On an account whose address was not confirmed yet, every way in that was set up before goes
     // first (clearUnconfirmedAccess), the old password with it. It has to come before the write
     // below: that write confirms the address, after which these do nothing, and it sets the new
     // password, which has to be the one that stays. A confirmed account keeps everything it has.
-    ...clearUnconfirmedAccess(c.env.DB, row.user_id),
+    ...clearing,
+    // The account's welcome, claimed while its address is unconfirmed (welcome.ts).
+    claimWelcomeOnConfirm(c.env.DB, row.user_id),
     // Set the password, mark the email verified (they proved control), and bump token_version
     // to revoke every previously issued session.
     c.env.DB.prepare(
@@ -622,10 +664,74 @@ authRoutes.post('/api/auth/reset-password', async (c) => {
   // revoked any existing sessions. `cleared` names what else went, if anything, so the app can
   // say what.
   const cleared = clearedWorthSaying(clearedAccess(results), 'reset');
+  if (welcomeClaimed(results[clearing.length])) welcomeAfterAnswer(c)(row.user_id);
   return c.json(cleared.length > 0 ? { ok: true, cleared } : { ok: true });
 });
 
 // ── Email verification ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * The confirm link, opened without its account's session in the browser that signed up, while
+ * that sign-up's marker lasts (signup-marker.ts): it confirms the address and signs in, with no
+ * password asked. Null when the link asks for the password instead, as it does anywhere else.
+ *
+ * It signs in only when every one of these holds: it is a confirm link; its account is a password
+ * account that still waits for it; the account's address is the one the link was mailed to; the
+ * account asks for no second factor, which a password sign-in would ask for; and the browser
+ * carries a marker for that address and the account's current password hash.
+ *
+ * Spending the link is the claim, as on every other path (spendLink). The session is bound to
+ * the token_version read before it (issueSessionCookie), so one that moved on in between gets the
+ * confirmed address and no session: the person signs in as usual.
+ *
+ * `replacing` is this browser's session of another account, if the request carried one. The new
+ * session cookie takes its place, so that session ends first, by its row, as signing out ends it
+ * (POST /api/auth/logout). That account's sessions elsewhere stay as they are.
+ */
+async function signInFromSignUp(
+  c: Context<AppEnv>,
+  link: EmailLink,
+  replacing: AuthUser | null
+): Promise<{ spent: SpentLink; session: string | null } | null> {
+  if (link.purpose !== 'confirm' || !carriesSignupMarker(c.req.raw)) return null;
+  const account = await c.env.DB.prepare(
+    'SELECT email, password_hash, token_version, email_verified, auth_provider FROM users WHERE id = ?'
+  )
+    .bind(link.user_id)
+    .first<{
+      email: string | null;
+      password_hash: string | null;
+      token_version: number;
+      email_verified: number;
+      auth_provider: string;
+    }>();
+  if (!account || !emailUnconfirmed(account) || !account.password_hash) return null;
+  if ((account.email ?? '').toLowerCase() !== link.email.toLowerCase()) return null;
+  if (await getTotpForLogin(c.env, link.user_id)) return null;
+  if (!(await signupMarkerFor(c.req.raw, c.env, link.email, account.password_hash))) return null;
+  const spent = await spendLink(c.env.DB, link, welcomeAfterAnswer(c));
+  if (spent !== 'confirmed') return { spent, session: null };
+  if (replacing?.sessionId !== undefined) {
+    await c.env.DB.prepare('DELETE FROM auth_sessions WHERE id = ? AND user_id = ?')
+      .bind(replacing.sessionId, replacing.userId)
+      .run();
+  }
+  const session = await issueSessionCookie(
+    c.env,
+    { userId: link.user_id, provider: 'password', tokenVersion: account.token_version },
+    sessionOrigin(c)
+  );
+  if (session) {
+    logAuthEvent(c, {
+      event: 'login',
+      outcome: 'ok',
+      reason: 'confirm_link',
+      userId: link.user_id,
+      email: link.email,
+    });
+  }
+  return { spent, session };
+}
 
 // The emailed confirm link. A top-level navigation, so the outcome comes back to the app as a
 // fragment (#everified=1 / #everified_error=…) the way the Google callback does — there is no
@@ -635,12 +741,14 @@ authRoutes.post('/api/auth/reset-password', async (c) => {
 // other moves the account to the address it was mailed to. The second adds `change=1` to every
 // answer that names its outcome, so the app can say which happened.
 //
-// Either kind is spent only with its own account's session. The session cookie is SameSite=Lax
-// on the parent domain (COOKIE_DOMAIN), so it reaches this API origin on a top-level navigation
-// from a mail client. Opened without that session, the link stays unspent, the answer is
-// `signin_required`, and the browser keeps a marker that finishes the link once its account
-// signs in there: a password sign-in spends a confirm link itself (POST /api/auth/login), and
-// the app finishes any other link after a sign-in (email-link.ts, POST /api/auth/email-link/finish).
+// Either kind is spent with its own account's session. The session cookie is SameSite=Lax on the
+// parent domain (COOKIE_DOMAIN), so it reaches this API origin on a top-level navigation from a
+// mail client. A confirm link is also spent, and signs in, in the browser that signed up, while
+// its sign-up marker lasts (signInFromSignUp): the answer adds `signed_in=1`. Opened anywhere
+// else, the link stays unspent, the answer is `signin_required`, and the browser keeps a marker
+// that finishes the link once its account signs in there: a password sign-in spends a confirm
+// link itself (POST /api/auth/login), and the app finishes any other link after a sign-in
+// (email-link.ts, POST /api/auth/email-link/finish).
 authRoutes.get('/api/auth/verify-email', async (c) => {
   const rl = await enforce(c, `verify-email:${clientIp(c)}`, 30, 60);
   if (rl) return rl;
@@ -674,11 +782,20 @@ authRoutes.get('/api/auth/verify-email', async (c) => {
       .first();
     if (!owner || link.used_at !== null) return fail('invalid_or_used');
     if (linkExpired(link)) return fail('expired', change);
+    const fromSignUp = await signInFromSignUp(c, link, auth.user);
+    if (fromSignUp?.spent === 'confirmed') {
+      const signedIn = back(fromSignUp.session ? 'everified=1&signed_in=1' : 'everified=1');
+      if (fromSignUp.session) signedIn.headers.append('Set-Cookie', fromSignUp.session);
+      signedIn.headers.append('Set-Cookie', clearedSignupMarker(c.env));
+      return signedIn;
+    }
+    if (fromSignUp?.spent === 'invalid') return fail('invalid_or_used');
+    if (fromSignUp) return fail(fromSignUp.spent);
     const asked = fail('signin_required', change);
     asked.headers.append('Set-Cookie', await markerFor(c.env, link));
     return asked;
   }
-  const spent = await spendLink(c.env.DB, link);
+  const spent = await spendLink(c.env.DB, link, welcomeAfterAnswer(c));
   if (spent === 'confirmed') return back('everified=1');
   if (spent === 'changed') return back('everified=1&change=1');
   if (spent === 'email_taken') return fail('email_taken', true);
@@ -711,9 +828,45 @@ authRoutes.post(EMAIL_LINK_FINISH_PATH, requireAuthEvenUnconfirmed, async (c) =>
   if (link.user_id !== c.get('userId')) return c.json({ outcome: 'other_account', change });
   // A spent or expired link is left exactly as it is.
   if (link.used_at !== null || linkExpired(link)) return done('none');
-  const spent = await spendLink(c.env.DB, link);
+  const spent = await spendLink(c.env.DB, link, welcomeAfterAnswer(c));
   if (spent === 'expired' || spent === 'invalid') return done('none');
   return done(spent, change);
+});
+
+/**
+ * An address as GET /api/auth/email-link names it: the first character of the part before the
+ * last `@`, three dots whatever that part's length, then `@` and the whole domain, as in
+ * `k•••@example.com`.
+ */
+export function maskedAddress(email: string): string {
+  const at = email.lastIndexOf('@');
+  const local = at === -1 ? email : email.slice(0, at);
+  const domain = at === -1 ? '' : email.slice(at + 1);
+  return `${Array.from(local)[0] ?? ''}•••@${domain}`;
+}
+
+// What the link this browser opened waits for, for the page that finishes a sign-up there: the
+// address of a confirm link, unspent and unexpired, whose account still waits for it, read from
+// the browser's marker (email-link.ts). `{ waiting: null }` for anything else. The address goes
+// out as maskedAddress writes it, enough for the person to tell which of their addresses it is;
+// the page asks for the address and its password. It checks no password and spends nothing: the
+// sign-in the page sends (POST /api/auth/login) confirms the address as it always has.
+authRoutes.get('/api/auth/email-link', async (c) => {
+  const rl = await enforce(c, `email-link-read:${clientIp(c)}`, 30, 60);
+  if (rl) return rl;
+  const nothing = () => c.json({ waiting: null });
+  const { link } = await markedLink(c.req.raw, c.env, c.env.DB);
+  if (!link || link.purpose !== 'confirm' || link.used_at !== null || linkExpired(link)) {
+    return nothing();
+  }
+  const account = await c.env.DB.prepare(
+    'SELECT email, email_verified, auth_provider FROM users WHERE id = ?'
+  )
+    .bind(link.user_id)
+    .first<{ email: string | null; email_verified: number; auth_provider: string }>();
+  if (!account || !emailUnconfirmed(account)) return nothing();
+  if ((account.email ?? '').toLowerCase() !== link.email.toLowerCase()) return nothing();
+  return c.json({ waiting: 'confirm', email: maskedAddress(link.email) });
 });
 
 /**

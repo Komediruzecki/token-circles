@@ -118,6 +118,8 @@ export interface ImportLogEntry {
   accounts_created: number
   categories_created: number
   details: string | null
+  /** The bank formats the session read, joined by commas (shared/bankFormats.ts), or null. */
+  bank_formats?: string | null
   created_at: string
 }
 
@@ -187,6 +189,19 @@ export function namesItsAccounts(row: { meta?: Pick<StatementMeta, 'accounts'> }
 
 export function sourceRowNumber(index: number): number {
   return index + 2
+}
+
+/**
+ * The bank formats an import session read, for its log: the formats of the statements the Bank
+ * Imports tab recognised, each once. None for every other tab, which reads a plain table. The
+ * runtimes keep the ones they read (shared/bankFormats.ts).
+ */
+export function importedBankFormats(
+  tab: string,
+  rows: readonly Pick<BankFileRow, 'bankId'>[]
+): BankId[] {
+  if (tab !== 'bank-imports') return []
+  return [...new Set(rows.flatMap((row) => (row.bankId ? [row.bankId] : [])))]
 }
 
 export interface ImportValidationIssue {
@@ -312,7 +327,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
   const bankFilesMissingAccount = (): number[] =>
     showBankFieldErrors() ? rowsMissingAccount(bankFiles()) : []
   const [bankAccounts, setBankAccounts] = createSignal<
-    { id: number; name: string; bank_name?: string | null }[]
+    { id: number; name: string; bank_name?: string | null; currency?: string | null }[]
   >([])
   const [bankWarnings, setBankWarnings] = createSignal<string[]>([])
 
@@ -373,6 +388,9 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
   // already exist (stored earlier, or repeated within this import). null = the
   // dry-run didn't run / failed, so the preview makes no claim.
   const [existingDuplicates, setExistingDuplicates] = createSignal<number | null>(null)
+  // Which rows those are, so a count of what an import adds can leave them out once: a bank
+  // statement's repeats of its own rows are already unticked, and also in this list.
+  const [existingDuplicateIndices, setExistingDuplicateIndices] = createSignal<number[]>([])
   const [previewValidationIssues, setPreviewValidationIssues] = createSignal<
     ImportValidationIssue[]
   >([])
@@ -658,6 +676,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
   // same statement reads "nothing new here", not a silent 0.
   const fetchDryRunPreview = async () => {
     setExistingDuplicates(null)
+    setExistingDuplicateIndices([])
     try {
       // `dry_run` in the body is what the server reads. The same flag in the URL is for the
       // client: apiFetch never sees a body, and without it every preview counted as an import and
@@ -714,6 +733,13 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
       setApprovedCategories(new Set(list))
       setNewAccounts(Array.isArray(data?.new_accounts) ? data.new_accounts : [])
       setExistingDuplicates(typeof data?.duplicates === 'number' ? data.duplicates : null)
+      setExistingDuplicateIndices(
+        Array.isArray(data?.duplicate_indices)
+          ? data.duplicate_indices.filter(
+              (index: unknown): index is number => typeof index === 'number'
+            )
+          : []
+      )
     } catch {
       // Non-fatal: fall back to auto-create-all (no approvedCategories sent on
       // import) and no duplicate claim.
@@ -745,6 +771,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     setNewAccounts([])
     setApprovedCategories(new Set<string>())
     setExistingDuplicates(null)
+    setExistingDuplicateIndices([])
     setPreviewValidationIssues([])
     setRows([])
     setHeaders([])
@@ -839,6 +866,16 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
    */
   const uploadFile = (file: File) => handleFileUpload(file, undefined, { rethrow: true })
 
+  /**
+   * Reads `file` as File Upload reads a chosen one, for a file that comes from elsewhere (the setup
+   * wizard hands over one it could not import): on to the mapping step when it reads, and in the
+   * page's error banner when it does not.
+   */
+  const readFile = (file: File) => {
+    clearUpload()
+    return handleFileUpload(file)
+  }
+
   /** Read another sheet of the uploaded workbook: the file goes up again, with the sheet named. */
   const chooseUploadedSheet = (sheetName: string) => {
     const file = uploadedFile()
@@ -888,6 +925,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
             id: a.id as number,
             name: a.name as string,
             bank_name: (a.bank_name as string) ?? null,
+            currency: typeof a.currency === 'string' ? a.currency : null,
           }))
         )
       }
@@ -1612,6 +1650,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
                   .length
               : 0,
           }),
+          bank_formats: importedBankFormats(activeImportTab(), bankFiles()),
         }),
       }).catch((e: unknown) => {
         console.error('Failed to record import log:', e)
@@ -1729,6 +1768,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     newAccounts,
     approvedCategories,
     existingDuplicates,
+    existingDuplicateIndices,
     previewValidationIssues,
     previewWarnings,
     invalidRowSet,
@@ -1771,6 +1811,8 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     addBankAccount,
     loadBankAccounts,
     loadBankCategories,
+    addBankFiles,
+    readFile,
     handleBankFileSelect,
     handleBankDrop,
     updateBankFile,

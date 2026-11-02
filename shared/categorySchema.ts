@@ -15,7 +15,12 @@
  *   frontend/src/schemas/models.ts): four types, not the two the forms offer.
  * - Checks that need the database (a name already in use, a parent in another profile) stay in
  *   the local handler and the Worker route, with their wording from here.
+ * - Only an expense category takes a kind and a choice of whether it is needed every month
+ *   (shared/guidance/kinds.ts). A body that gives either one to another type is refused; an edit
+ *   that makes a category another type clears both.
  */
+import { readKind } from './guidance/kinds';
+import type { Kind } from './guidance/kinds';
 import type { Checked, FieldErrors } from './refusal';
 
 export const CATEGORY_TYPES = ['expense', 'income', 'transfer', 'account'] as const;
@@ -35,6 +40,10 @@ export const CATEGORY_MESSAGES = {
   icon: 'Type an icon name, like utensils, or leave it blank.',
   parent: 'Choose a parent category from the list, or leave it empty.',
   taxDeductible: 'Set tax deductible to true or false.',
+  kind: 'Choose a kind from the list, or leave it empty.',
+  essential: 'Set needed every month to true or false, or leave it empty for the kind to decide.',
+  kindOnExpense: 'Only an expense category takes a kind.',
+  essentialOnExpense: 'Only an expense category can be needed every month.',
 } as const;
 
 /**
@@ -55,6 +64,10 @@ export interface CategoryInput {
   color: string;
   parent_id: number | null;
   tax_deductible: boolean;
+  /** What the category holds, or null: the app then goes by the name (`effectiveKind`). */
+  kind: Kind | null;
+  /** 1 or 0 once the person says whether it is needed every month; null while the kind decides. */
+  essential: 0 | 1 | null;
 }
 
 type Read<T> = { value: T } | { error: string };
@@ -98,6 +111,17 @@ const READERS: { [K in keyof CategoryInput]: (raw: unknown) => Read<CategoryInpu
     if (raw === false || raw === 0 || raw === 'false' || raw === '0') return { value: false };
     return { error: CATEGORY_MESSAGES.taxDeductible };
   },
+  kind: (raw) => {
+    if (isBlank(raw)) return { value: null };
+    const kind = readKind(raw);
+    return kind ? { value: kind } : { error: CATEGORY_MESSAGES.kind };
+  },
+  essential: (raw) => {
+    if (isBlank(raw)) return { value: null };
+    if (raw === true || raw === 1 || raw === 'true' || raw === '1') return { value: 1 };
+    if (raw === false || raw === 0 || raw === 'false' || raw === '0') return { value: 0 };
+    return { error: CATEGORY_MESSAGES.essential };
+  },
 };
 
 const FIELDS = Object.keys(READERS) as (keyof CategoryInput)[];
@@ -114,7 +138,15 @@ function rawField(body: Record<string, unknown>, field: keyof CategoryInput): un
   return body[field];
 }
 
-function check(body: unknown, partial: boolean): Checked<Partial<CategoryInput>> {
+/**
+ * `type` is the type the category has once the body is stored: the body's, or on an edit that
+ * leaves it out, the row's.
+ */
+function check(
+  body: unknown,
+  partial: boolean,
+  storedType?: unknown
+): Checked<Partial<CategoryInput>> {
   const record = asRecord(body);
   const value: Partial<Record<keyof CategoryInput, unknown>> = {};
   const fields: FieldErrors = {};
@@ -125,6 +157,23 @@ function check(body: unknown, partial: boolean): Checked<Partial<CategoryInput>>
     const read = READERS[field](raw);
     if ('error' in read) fields[field] = read.error;
     else value[field] = read.value;
+  }
+  // A kind, and whether it is needed every month, belong to an expense category only.
+  const type =
+    value.type ??
+    (typeof storedType === 'string' ? storedType.trim().toLowerCase() : DEFAULT_CATEGORY_TYPE);
+  if (type !== 'expense' && fields.type === undefined) {
+    if (value.kind !== undefined && value.kind !== null) {
+      fields.kind = CATEGORY_MESSAGES.kindOnExpense;
+    }
+    if (value.essential !== undefined && value.essential !== null) {
+      fields.essential = CATEGORY_MESSAGES.essentialOnExpense;
+    }
+    // An edit that makes the category another type clears both: they would mean nothing there.
+    if (partial && value.type !== undefined) {
+      value.kind = null;
+      value.essential = null;
+    }
   }
   return Object.keys(fields).length > 0
     ? { ok: false, fields }
@@ -156,7 +205,7 @@ export function checkCategoryEdit(body: unknown, stored: object): Checked<Partia
     const raw = rawField(record, field);
     if (raw !== undefined && !holds(field, raw, row[field])) changed[field] = raw;
   }
-  return check(changed, true);
+  return check(changed, true, row.type);
 }
 
 /**

@@ -3,6 +3,7 @@
  * Implements StorageAdapter for serverless/client-only operation using IndexedDB
  */
 import { openDB } from 'idb'
+import { resetKeepsIcon, resetName } from '../../../../shared/defaultCategories'
 import {
   isImportSourceKind,
   isImportSourceSchedule,
@@ -37,6 +38,7 @@ import {
 import { addKeepingIds, asRetirementGoalRow, isLegacyRetirementGoal } from './retirementGoalRows'
 import { DEFAULT_PROFILE_NAME, fileUnfiledRows } from './unfiledProfileRows'
 import type { IDBPDatabase } from 'idb'
+import type { Kind } from '../../../../shared/guidance/kinds'
 import type {
   Account,
   BalanceEntry,
@@ -409,21 +411,81 @@ async function ensureAProfile(): Promise<number> {
 
 // ---- Seed Data ----
 
-export const DEFAULT_CATEGORIES = [
-  { type: 'income', name: 'Salary', color: '#22C55E', tax_deductible: false },
-  { type: 'income', name: 'Freelance', color: '#16A34A', tax_deductible: false },
-  { type: 'income', name: 'Investments', color: '#15803D', tax_deductible: false },
-  { type: 'income', name: 'Gifts', color: '#86EFAC', tax_deductible: false },
-  { type: 'expense', name: 'Housing', color: '#EF4444', tax_deductible: false },
-  { type: 'expense', name: 'Food', color: '#F97316', tax_deductible: false },
-  { type: 'expense', name: 'Transportation', color: '#EAB308', tax_deductible: false },
-  { type: 'expense', name: 'Utilities', color: '#8B5CF6', tax_deductible: false },
-  { type: 'expense', name: 'Healthcare', color: '#EC4899', tax_deductible: true },
-  { type: 'expense', name: 'Entertainment', color: '#06B6D4', tax_deductible: false },
-  { type: 'expense', name: 'Insurance', color: '#3B82F6', tax_deductible: false },
-  { type: 'expense', name: 'Shopping', color: '#D946EF', tax_deductible: false },
-  { type: 'expense', name: 'Education', color: '#14B8A6', tax_deductible: true },
-  { type: 'expense', name: 'Subscriptions', color: '#F43F5E', tax_deductible: false },
+/**
+ * The categories a local-first profile starts from, and what "Reset to defaults" sets it back to:
+ * the Worker's list (worker/src/profileData.ts). Of its icons, only Groceries' and Eating out's,
+ * which the name alone would draw otherwise; the rest come from the name. Each expense category carries
+ * its kind (shared/guidance/kinds.ts); income categories take none. Groceries and Eating out
+ * replaced Food, which a reset renames to Groceries (shared/defaultCategories.ts).
+ */
+export const DEFAULT_CATEGORIES: ReadonlyArray<{
+  type: 'income' | 'expense'
+  name: string
+  color: string
+  tax_deductible: boolean
+  kind: Kind | null
+  /** Only where the name alone draws another icon: Groceries a mug, Eating out none. */
+  icon?: string
+}> = [
+  { type: 'income', name: 'Salary', color: '#22C55E', tax_deductible: false, kind: null },
+  { type: 'income', name: 'Freelance', color: '#16A34A', tax_deductible: false, kind: null },
+  { type: 'income', name: 'Investments', color: '#15803D', tax_deductible: false, kind: null },
+  { type: 'income', name: 'Gifts', color: '#86EFAC', tax_deductible: false, kind: null },
+  { type: 'expense', name: 'Housing', color: '#EF4444', tax_deductible: false, kind: 'housing' },
+  {
+    type: 'expense',
+    name: 'Groceries',
+    color: '#F97316',
+    tax_deductible: false,
+    kind: 'groceries',
+    icon: 'shopping-cart',
+  },
+  {
+    type: 'expense',
+    name: 'Eating out',
+    color: '#84CC16',
+    tax_deductible: false,
+    kind: 'eating_out',
+    icon: 'utensils',
+  },
+  {
+    type: 'expense',
+    name: 'Transportation',
+    color: '#EAB308',
+    tax_deductible: false,
+    kind: 'transport',
+  },
+  {
+    type: 'expense',
+    name: 'Utilities',
+    color: '#8B5CF6',
+    tax_deductible: false,
+    kind: 'utilities',
+  },
+  { type: 'expense', name: 'Healthcare', color: '#EC4899', tax_deductible: true, kind: 'health' },
+  {
+    type: 'expense',
+    name: 'Entertainment',
+    color: '#06B6D4',
+    tax_deductible: false,
+    kind: 'leisure',
+  },
+  {
+    type: 'expense',
+    name: 'Insurance',
+    color: '#3B82F6',
+    tax_deductible: false,
+    kind: 'insurance',
+  },
+  { type: 'expense', name: 'Shopping', color: '#D946EF', tax_deductible: false, kind: 'shopping' },
+  { type: 'expense', name: 'Education', color: '#14B8A6', tax_deductible: true, kind: 'childcare' },
+  {
+    type: 'expense',
+    name: 'Subscriptions',
+    color: '#F43F5E',
+    tax_deductible: false,
+    kind: 'subscriptions',
+  },
 ]
 
 interface BalanceAdjustment {
@@ -624,15 +686,17 @@ export class IndexedDBAdapter implements StorageAdapter {
       for (const profileId of pidSet) await profileStore.delete(profileId)
     }
 
-    // A deleted profile's settings go with it, as they do on the Worker: its retirement plan and
-    // its badges, the ones kept per profile (shared/profileSettings.ts). Left behind, they stayed
-    // in every backup.
+    // A deleted profile's settings go with it, as they do on the Worker: its retirement plan, its
+    // badges and its guidance answers, the ones kept per profile (shared/profileSettings.ts), and
+    // the emergency fund plan the example seed keeps under a key of its own. Left behind, they
+    // stayed in every settings read and every backup.
     if (options.deleteProfiles && transactionStores.includes('settings')) {
       const settingsStore = tx.objectStore('settings')
       for (const profileId of pidSet) {
         for (const key of PROFILE_SETTING_KEYS) {
           await settingsStore.delete(localProfileSettingKey(key, profileId))
         }
+        await settingsStore.delete(emergencyFundConfigKey(profileId))
       }
     }
 
@@ -690,6 +754,23 @@ export class IndexedDBAdapter implements StorageAdapter {
           if (row.profile_id !== profileId || row.category_id !== categoryId) continue
           if (replacementId === null) {
             await store.delete(row.id as number)
+            continue
+          }
+          // A budget for the same period and start as one the kept category has is added to that
+          // one (the first, of two), so the kept category has one budget for it, as on the Worker.
+          const kept = rows
+            .filter(
+              (other) =>
+                other.profile_id === profileId &&
+                other.category_id === replacementId &&
+                other.period === row.period &&
+                other.start_date === row.start_date
+            )
+            .sort((a, b) => Number(a.id) - Number(b.id))[0]
+          if (kept) {
+            kept.amount = Number(kept.amount) + Number(row.amount)
+            await store.put(kept)
+            await store.delete(row.id as number)
           } else {
             row.category_id = replacementId
             await store.put(row)
@@ -713,7 +794,9 @@ export class IndexedDBAdapter implements StorageAdapter {
     }
 
     for (const category of profileCategories) {
-      const name = typeof category.name === 'string' ? category.name.trim().toLocaleLowerCase() : ''
+      // A replaced default (Food) is matched to the default that replaced it (Groceries), and so
+      // is renamed to it with its entries instead of being deleted (shared/defaultCategories.ts).
+      const name = typeof category.name === 'string' ? resetName(category.name) : ''
       const defaultCategory = defaultsByName.get(name)
       const canonicalId = canonicalIds.get(name)
 
@@ -722,6 +805,11 @@ export class IndexedDBAdapter implements StorageAdapter {
         await categoryStore.put({
           ...category,
           ...defaultCategory,
+          // An icon the person chose for Food stays as it becomes Groceries.
+          ...(resetKeepsIcon(String(category.name), category.icon as string | null)
+            ? { icon: category.icon }
+            : {}),
+          essential: null,
           parent_id: null,
           profile_id: profileId,
         })
@@ -1730,12 +1818,13 @@ export class IndexedDBAdapter implements StorageAdapter {
           })
         }
       }
-      // A retirement plan and a badge record belong to one profile (shared/profileSettings.ts),
-      // kept here under a key that names it, and the restore gave every profile a new id: each
-      // follows its profile, and one of a profile the file does not carry is left out. A cloud
-      // backup keeps them as rows of their profiles, under the plain key; those are filed the
-      // same way, and the plain keys among the first profile's settings are left out, since a
-      // badge record under the plain key is taken over by the first profile to open.
+      // A retirement plan, a badge record and the guidance answers belong to one profile
+      // (shared/profileSettings.ts), kept here under a key that names it, and the restore gave
+      // every profile a new id: each follows its profile, and one of a profile the file does not
+      // carry is left out. A cloud backup keeps them as rows of their profiles, under the plain
+      // key; those are filed the same way, and the plain keys among the first profile's settings
+      // are left out, since a badge record under the plain key is taken over by the first profile
+      // to open.
       const putProfileSetting = async (key: string, fileProfileId: number, value: unknown) => {
         if (!isProfileSettingKey(key)) return
         const restoredId = profileIdMap.get(fileProfileId)
@@ -1889,6 +1978,11 @@ export async function seedDefaultCategories(profileId: number): Promise<void> {
 
 // ── Demo Profile Seeding ──────────────────────────────────────────────────────
 
+/** Where the example seed keeps a profile's emergency fund plan; deleting the profile removes it. */
+export function emergencyFundConfigKey(profileId: number): string {
+  return `emergency_fund_config_${String(profileId)}`
+}
+
 const DEMO_PROFILES = [
   { name: 'Example Low Income', income: 2500, spendFraction: 0.95 },
   { name: 'Example Mid Income', income: 5500, spendFraction: 0.82 },
@@ -1938,10 +2032,10 @@ export const DEMO_SUBSCRIPTIONS: Record<
 // Monthly expense templates — fractions of total monthly spending
 const MONTHLY_EXPENSES = [
   { name: 'Housing', description: 'Monthly rent', pct: 0.37 },
-  { name: 'Food', description: 'Grocery shopping', pct: 0.21 },
+  { name: 'Groceries', description: 'Grocery shopping', pct: 0.21 },
   { name: 'Transportation', description: 'Transport pass', pct: 0.11 },
   { name: 'Utilities', description: 'Electric and water bill', pct: 0.08 },
-  { name: 'Entertainment', description: 'Dining out', pct: 0.07 },
+  { name: 'Eating out', description: 'Dining out', pct: 0.07 },
   { name: 'Shopping', description: 'Clothes and supplies', pct: 0.06 },
   { name: 'Insurance', description: 'Auto insurance', pct: 0.05 },
   { name: 'Subscriptions', description: 'Streaming services', pct: 0.05 },
@@ -2489,9 +2583,9 @@ export async function seedDemoProfiles(): Promise<void> {
     // ── Budgets ──
     const budgetCategories = [
       { name: 'Housing', pct: 0.37 },
-      { name: 'Food', pct: 0.21 },
+      { name: 'Groceries', pct: 0.21 },
       { name: 'Transportation', pct: 0.11 },
-      { name: 'Entertainment', pct: 0.07 },
+      { name: 'Eating out', pct: 0.07 },
       { name: 'Shopping', pct: 0.06 },
       { name: 'Subscriptions', pct: 0.05 },
     ]
@@ -2515,7 +2609,7 @@ export async function seedDemoProfiles(): Promise<void> {
     // ── Emergency fund config ──
     const monthlyExpenses = Math.round(profile.income * profile.spendFraction)
     await db.put('settings', {
-      key: `emergency_fund_config_${profileId}`,
+      key: emergencyFundConfigKey(profileId),
       value: JSON.stringify({ monthly_expenses: monthlyExpenses, profile_id: profileId }),
     })
   }

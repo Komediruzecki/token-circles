@@ -44,6 +44,21 @@ blocked and every other request aborted. Per tab, not per context: an old tab th
 new build went live would otherwise get the new `index.html`, reload onto the new build, and close the
 connection whose blocking the case is about.
 
+## The benchmarks gate in production (circles part 2)
+
+`s17-benchmarks-gate.spec.ts` reads the candidate's production build, `<builds>/rc` as above, and is skipped
+without it:
+
+```bash
+RELEASE_BUILDS_DIR=<builds> pnpm run test:e2e:release tests/release/s17-benchmarks-gate.spec.ts
+```
+
+Dev and every local build open the gate, so only a production build shows it closed: the circles and their
+questions show, How you compare and the free-money check do not, and the cards' chunk is never fetched. The
+copy the gate holds back is compiled out of such a build (`__BENCHMARKS_SHOWN__` in `vite.config.ts`), so the
+spec also greps the build's scripts for some of it and expects none. A build made with
+`VITE_ENABLE_BENCHMARKS=true` fails both checks.
+
 ## Known bugs, pinned
 
 A confirmed bug that the release does not fix is recorded with `test.fail(condition, reason)`, so the suite

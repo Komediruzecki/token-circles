@@ -14,6 +14,7 @@ import { expect, request, test as setup } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
+import { USER_STATE_PATH } from '../../shared/accountStateKeys'
 import { accountMade } from './db'
 import { E2E_BASE, E2E_EMAIL, E2E_PASSWORD, E2E_PROFILE, STORAGE_STATE } from './e2e-constants'
 import { seedProfile } from './e2e-seed'
@@ -58,6 +59,14 @@ setup('sign in and save the session', async () => {
 
   const profileId = await e2eProfile(api)
   await seedProfile(api, profileId)
+
+  // An account in use has finished the setup wizard: migration 0035 marks every one there was,
+  // and the app opens the wizard for an account whose record is not finished. So the fixture's is
+  // finished here, and the wizard opens over no spec's page.
+  const decided = await api.put(`${USER_STATE_PATH}/onboarding`, {
+    data: { outcome: 'completed' },
+  })
+  expect(decided.ok(), `could not record the setup wizard: ${decided.status()}`).toBeTruthy()
 
   // eslint-disable-next-line security/detect-non-literal-fs-filename -- a constant path
   mkdirSync(dirname(STORAGE_STATE), { recursive: true })

@@ -118,6 +118,8 @@ export async function handleIngestEmail(message: ForwardableEmailMessage, env: E
           accounts_created: Number(body.accounts_created ?? 0),
           categories_created: Number(body.categories_created ?? 0),
           details: JSON.stringify({ mode: 'email-in', from: message.from }),
+          // An attachment is read as a plain table by its headers, not by a bank's format.
+          bank_formats: null,
         });
       }
     }

@@ -8,6 +8,42 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Getting started: three next steps from your own data.** When you finish or skip the setup wizard, its last step and a Getting started card on Dashboard list up to three next steps, each with its reason in your own counts and months and a link to the page where it's done: import the rest of your year, review the subscriptions the scan spotted, sort the entries without a category, set a budget for your biggest category without one, see what put last month in the red, or compare paying a loan off faster. A step goes once it's done. Hide the card and it stays hidden, signed in on every device.
+- **Getting started can suggest a one-month cushion** when the money you can reach covers less than a month of what you need.
+- **Categories say what they hold.** Each expense category has a kind, like groceries or eating out, and a "Needed every month" tick, both guessed from its name until you pick. The default categories have Groceries and Eating out instead of Food, and resetting your categories turns Food into Groceries, entries and all.
+- **Credit cards are an account type.** A card, and a Giro account's overdraft, can carry a limit and an interest rate.
+- **Two mails for your first week.** On day 2, if nothing is imported yet, how to get a year of statements out of your bank; on day 7, after an import, what your first week found, in counts and never amounts. Both carry a stop link that stops these two mails, and Settings has a switch for them while they can still come.
+- **The subscription scan finds regular payments it has no name for**, like the rent or a local gym, and adds each as a bill or a subscription. It leaves cash withdrawals out, and lists what you pay every week or two unticked.
+- **Seven circles on Progress.** Each circle, from Clear picture to More than enough, gets a row with your own figure, like months on file or the months of essentials your money covers. The row you're in is lit, with Your next step above it.
+- **Open a circle to see what it checks**: met, not yet or not known yet, with the numbers behind each. Where a check needs your answer, like whether you carry a balance on a card or set money aside for yearly bills, the circle asks once and Settings keeps it.
+- **Your next step on Dashboard.** Once Getting started is hidden or a full year is on file, Dashboard shows the one step your circles point to, with a link to all seven.
+- **Progress has a tour**: what the page holds, Your next step and the seven circles, one stop each.
+- **Prints on Progress.** Every twelve tracked months in a row make a print: your year drawn as a seal, one petal a month, with no amounts on it. Tap a petal to see its month, or share a print as an image.
+- **Three short articles answer the why behind a step.** Getting started, Your next step, the circles and Worth a look on Progress link to them on about.tokencircles.com, in a new tab: Getting a year out of your bank under the import step (the day-2 mail links it too), Why one month lies under a month in the red and the months on file, and Your first cushion under the cushion step and its check.
+
+### Changed
+
+- **The setup wizard follows your account.** Signed in, a new account meets the setup wizard once, on whichever device it signs in first, and a wizard left part way reopens at the step you reached. Finish or skip it on one device and no other device shows it. An account that already has data, or that finished or skipped the wizard before, does not see it again.
+- **A shorter setup wizard that fits a phone.** It opens on your space's name, then asks for your main account and one bank statement. Choose the statement and setup reads it straight away: it names the bank and the account it goes into (one you already have, if you have one), says how many entries are new, and imports them in one tap. A Register file from YNAB's Export Plan download goes in the same way, each row into the account it names. A file it can't read opens on the Import page with setup finished, or you can go on without it. Back, the step count and Close sit at the top, the buttons stay in one row at the bottom, and badges you earn while setting up wait until you're done.
+- **Tours you finish follow your account.** Signed in, the tour menu marks the tours you finished as Done on every device, and Reset All Tours starts them over everywhere.
+- **The streak says months in a row.** The badge rail on Dashboard and the record on Progress read "4 months in a row" where they said "4 months tracked": the number counts tracked months without a gap, up to this month or last. With no streak running, both say "Start a streak".
+- **Sign-up mails do one job each.** Signing up with a password sends Confirm, which holds the link that opens your account and nothing else. The welcome comes once your address is confirmed, or straight away for a Google sign-up, and says where to start: a year of statements from your bank.
+- **The confirm link signs you in.** Opened within an hour in the browser you signed up in, it confirms your address and opens your account with no password asked. Anywhere else, or later, it asks for your address and password, and shows enough of the address to tell which one it's for, like k•••@example.com.
+- **The mail that says your address already has an account now has Reset password**, which opens the form that sends a reset link.
+- **A deduction lowers income** instead of counting as spending, in the rainy-day badge, the year in review and the advice about a month in the red.
+- **The savings rate covers your last 12 months** and sits under the totals. A goal you set stays with the profile instead of the browser.
+- **Each advice card on Progress says which circle it counts toward**, and that line opens the circle.
+
+### Fixed
+
+- **A category called Groceries shows a shopping cart, and one named for a meal shows a knife and fork** (Eating out, Restaurant, Dining, Breakfast, Lunch, Dinner, Meals), and an import that creates one gives it the same icon. Before, they showed a coffee mug, and Eating out a plain tick. An icon you picked stays, and so does the mug an earlier import gave a category while you were signed in. Coffee and Cafe keep the mug.
+- **The subscription scan keeps up with a long history.** With a few thousand entries, Scan transactions on Bills and the setup wizard's subscriptions step held the page for over a second. They now find the same subscriptions in a small part of that time.
+- **The plan name on a subscription the scan finds is easier to read.** In the light theme, "Standard" beside Netflix was blue on a pale blue tint at 4.0:1. It's a darker blue now, on Bills and in setup.
+- **A first bank import files restaurants, cafes and takeaways under Eating out**, instead of a new Restaurant or Dining category. If you already have one of those, its rows keep going there.
+- **Setup after the demo makes a space of your own.** Keeping your data in this browser after running the demo opened Example Low Income's dashboard, and running setup again in the demo renamed that example. Setup now makes your space a new profile and lets you remove the three example profiles or keep them.
+
 ## [5.17.6] — 2026-11-01
 
 ### Fixed

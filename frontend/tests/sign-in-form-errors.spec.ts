@@ -19,9 +19,8 @@
 import { type APIRequestContext, expect, type Locator, type Page, test } from '@playwright/test'
 import { createHash, randomBytes } from 'node:crypto'
 import { BOOTS, bootApp, openSignIn, signInWithPassword } from './boot'
-import { accountMade, confirmAccount, sql, sqlRows } from './db'
+import { accountMade, confirmAccount, sql } from './db'
 import { E2E_BASE } from './e2e-constants'
-import { onboardingDecided } from './onboarding-decided'
 import { isNetworkNoise } from './test-helpers'
 import { SIGN_IN_MESSAGES as SAY } from '../../shared/signInSchema'
 
@@ -307,15 +306,9 @@ for (const boot of BOOTS) {
       // ── The sign-in dialog, empty, from Manage Account once signed in ─────────────────────────
       const account = await signUp(request)
       try {
-        // A new account is offered the setup wizard, which would sit over Manage Account: this
-        // one has decided its setup.
-        const [made] = sqlRows<{ id: number }>(`SELECT id FROM users WHERE email = '${account}'`)
-        await page.addInitScript(
-          (decided) => {
-            for (const [key, value] of decided) localStorage.setItem(key, value)
-          },
-          onboardingDecided([made.id])
-        )
+        // A new account meets the setup wizard on its first sign-in, whatever its profile holds.
+        // This one is marked as having decided it (boot.ts), so the wizard opens over nothing here.
+        await bootApp(context, boot, account)
         await page.goto(`${E2E_BASE}/`)
         await signInWithPassword(page, account, PASSWORD)
         const sent = signIns.length

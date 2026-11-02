@@ -82,15 +82,39 @@ async function wizardImportStep(page: Page): Promise<Locator> {
   await page.getByTestId('settings-run-onboarding').click()
   const wizard = page.getByTestId('onboarding-wizard')
   await expect(wizard).toBeVisible()
-  // welcome > space > account > import, each forward with the footer's primary button.
-  for (const step of ['welcome', 'space', 'account']) {
-    await expect(wizard.getByTestId(`onboarding-step-${step}`)).toBeVisible({ timeout: 15_000 })
+  // The space's two screens, each forward with the footer's Continue, then past the account with
+  // nothing typed, which asks nothing.
+  for (const screen of ['space', 'about']) {
+    await expect(wizard.getByTestId(`onboarding-step-${screen}`)).toBeVisible({ timeout: 15_000 })
     const next = wizard.getByTestId('onboarding-next')
     await expect(next).toBeEnabled({ timeout: 15_000 })
     await next.click()
   }
+  await expect(wizard.getByTestId('onboarding-step-account')).toBeVisible({ timeout: 15_000 })
+  await wizard.getByTestId('onboarding-account-skip').click()
   await expect(wizard.getByTestId('onboarding-step-import')).toBeVisible({ timeout: 15_000 })
   return wizard
+}
+
+/** Choose `csv` on the wizard's statement step: the categories it would create, once read. */
+async function wizardNewCategories(
+  wizard: Locator,
+  filename: string,
+  csv: string
+): Promise<string> {
+  await wizard.getByTestId('onboarding-import-input').setInputFiles({
+    name: filename,
+    mimeType: 'text/csv',
+    buffer: Buffer.from(csv, 'utf-8'),
+  })
+  await expect(wizard.getByTestId('onboarding-import-file')).toHaveAttribute(
+    'data-state',
+    'ready',
+    {
+      timeout: 20_000,
+    }
+  )
+  return (await wizard.getByTestId('onboarding-import-categories').textContent()) ?? ''
 }
 
 async function leaveWizard(page: Page): Promise<void> {
@@ -292,26 +316,43 @@ for (const [pass, test] of both) {
       await expect.poll(() => rulesShown(editor)).toEqual(SHOWN_A)
     })
 
-    test('4.7 the wizard relaunched on another profile shows that profile’s rules @release', async ({
+    test('4.7 the wizard relaunched on another profile reads a statement with that profile’s rules @release', async ({
       m,
     }) => {
+      // The wizard has no rules editor since its statement step stopped embedding the Import
+      // page: a statement it reads goes through the active profile's stored rules, which name its
+      // categories.
       const { page } = m
       await arrangeImportRules(page, m.a.id, RULES_A)
       await arrangeImportRules(page, m.b.id, RULES_B)
       await reloadOn(page, 'settings', 'settings-header')
+      const statement = revolutStatement([
+        { date: localIso(-2), description: `zz-bread corner${m.suffix}`, amount: -12 },
+        { date: localIso(-1), description: `zz-petrol stop${m.suffix}`, amount: -40 },
+      ])
 
       // The first visit, on the first profile.
       const wizard = await wizardImportStep(page)
-      await openRulesEditor(wizard)
-      expect(await rulesShown(wizard)).toEqual(SHOWN_A)
+      const first = await wizardNewCategories(wizard, fileFor(m, 'wizard-a'), statement)
+      expect(first).toContain('zz-Bakery')
+      expect(first).not.toContain('zz-Fuel')
       await leaveWizard(page)
 
       // Relaunched on the other.
       await switchProfile(page, m.b.id)
       await wizardImportStep(page)
-      await openRulesEditor(wizard)
-      await expect.poll(() => rulesShown(wizard)).toEqual(SHOWN_B)
+      const second = await wizardNewCategories(wizard, fileFor(m, 'wizard-b'), statement)
+      expect(second).toContain('zz-Fuel')
+      expect(second).not.toContain('zz-Bakery')
       await leaveWizard(page)
+      // Read, not imported: nothing from the statement was written on either profile. By its own
+      // descriptions: local-first's suffix is empty.
+      for (const profile of [m.a.id, m.b.id]) {
+        const rows = await m.rows<{ description?: string }>('transactions', profile)
+        expect(
+          rows.filter((r) => /zz-(bread corner|petrol stop)/.test(r.description ?? ''))
+        ).toEqual([])
+      }
     })
   })
 }

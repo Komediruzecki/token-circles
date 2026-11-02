@@ -151,7 +151,7 @@ describe('send-sample-mails, the headers', () => {
   }
 
   it('sends the List-Unsubscribe pair with a mail that has an unsubscribe link, as the Worker does', async () => {
-    const [budget] = await bodies('budget-alert');
+    const [budget, dayTwo] = await bodies('budget-alert,week-one-day-2');
 
     expect(budget.headers).toEqual({
       'List-Unsubscribe': expect.stringMatching(
@@ -159,6 +159,9 @@ describe('send-sample-mails, the headers', () => {
       ),
       'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
     });
+    expect((dayTwo.headers as Record<string, string>)['List-Unsubscribe']).toContain(
+      'list=week-one'
+    );
   });
 
   it('sends no headers with a mail that has none', async () => {

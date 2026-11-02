@@ -7,6 +7,7 @@ export interface ToggleFieldProps {
   description: string
   checked: (() => boolean) | boolean
   onChange: (value: boolean) => void
+  disabled?: boolean
   'data-test-id'?: string
 }
 
@@ -32,6 +33,7 @@ export default function ToggleField(props: ToggleFieldProps) {
       <Toggle
         checked={props.checked}
         onChange={props.onChange}
+        disabled={props.disabled}
         aria-labelledby={titleId}
         aria-describedby={descriptionId}
         data-test-id={props['data-test-id']}

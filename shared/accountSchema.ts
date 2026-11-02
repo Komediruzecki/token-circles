@@ -28,6 +28,9 @@
  *   the runtime: both keep one base currency per profile and answer another with a 409 of their
  *   own (worker/src/base-currency.ts, frontend/src/core/storage/baseCurrency.ts). No currency is
  *   the base currency.
+ * - A credit card, and a Giro account's overdraft, can carry a limit and a yearly interest rate
+ *   (migration 0037). No other type takes either, and an edit that makes the account another type
+ *   clears both. The balance stays signed: money owed on a card is a balance below zero.
  */
 import { isCalendarDate } from './transactionSchema';
 import type { Checked, FieldErrors } from './refusal';
@@ -38,8 +41,19 @@ import type { Checked, FieldErrors } from './refusal';
  * type that is not on it and show it as a plain account (frontend/src/core/accountTypes.ts), so a
  * type a later build adds does not empty this build's account list.
  */
-export const ACCOUNT_TYPES = ['giro', 'savings', 'ib', 'cash'] as const;
+export const ACCOUNT_TYPES = ['giro', 'savings', 'ib', 'cash', 'credit'] as const;
 export type AccountType = (typeof ACCOUNT_TYPES)[number];
+
+/**
+ * The types that can owe money up to a limit, at a rate: a credit card, and a Giro account with
+ * an overdraft. Only these take `credit_limit` and `credit_rate`.
+ */
+export const CREDIT_LINE_TYPES: readonly AccountType[] = ['credit', 'giro'];
+
+/** Whether an account of this stored type can carry a limit and an interest rate. */
+export function takesCreditLine(type: unknown): boolean {
+  return (CREDIT_LINE_TYPES as readonly string[]).includes(storedAccountType(type));
+}
 
 export const ACCOUNT_NAME_MAX = 100;
 export const DEFAULT_ACCOUNT_TYPE: AccountType = 'giro';
@@ -71,6 +85,7 @@ export const ACCOUNT_TYPE_WORDS: Readonly<Record<AccountType, string>> = {
   savings: 'a savings account',
   ib: 'an investment account',
   cash: 'cash',
+  credit: 'a credit card',
 };
 
 /** Whether `value` is one of the types the app has, exactly as it stores them. */
@@ -96,13 +111,17 @@ export function readAccountType(raw: unknown): AccountType | null {
 export const ACCOUNT_MESSAGES = {
   name: 'Give the account a name.',
   nameLength: `Keep the name to ${ACCOUNT_NAME_MAX} characters or fewer.`,
-  type: 'Choose Giro, Savings, Investment or Cash.',
+  type: 'Choose Giro, Savings, Investment, Cash or Credit Card.',
   balance: 'Enter the balance as a number, like 1250.50.',
   startingBalance: 'Enter the starting balance as a number, like 1250.50.',
   startingDate: 'Enter a real date, written like 2026-03-31, or leave it blank.',
   currency: 'Use a three-letter currency code, like EUR.',
   bankName: 'Write the bank name as text.',
   notes: 'Write the notes as text.',
+  creditLimit: 'Enter the limit as an amount of 0 or more, like 2000, or leave it blank.',
+  creditRate: 'Enter the rate as a percentage from 0 to 100, like 15.9, or leave it blank.',
+  creditLimitType: 'Only a credit card or a Giro account has a limit.',
+  creditRateType: 'Only a credit card or a Giro account has an interest rate.',
 } as const;
 
 /** An import's refusal of an account to create whose type the app does not have, in both runtimes. */
@@ -121,6 +140,16 @@ export interface AccountInput {
   /** The code the body asks for, upper-cased. Null for none: the base currency. */
   currency: string | null;
   notes: string;
+  /**
+   * How much a credit card lets you owe, or how far below zero a Giro account's overdraft goes,
+   * as an amount of 0 or more. Null for none given.
+   */
+  credit_limit: number | null;
+  /**
+   * The yearly percentage charged on money owed on the account, like a loan's `interest_rate`.
+   * Null for none given.
+   */
+  credit_rate: number | null;
 }
 
 type Read<T> = { value: T } | { error: string };
@@ -146,6 +175,17 @@ const balanceReader =
     if (isBlank(raw)) return { value: null };
     const number = asNumber(raw);
     return number !== null ? { value: number } : { error: message };
+  };
+
+/** An amount or a percentage from `min` to `max`, or null for a blank one. */
+const rangeReader =
+  (message: string, min: number, max: number) =>
+  (raw: unknown): Read<number | null> => {
+    if (isBlank(raw)) return { value: null };
+    const number = asNumber(raw);
+    return number !== null && number >= min && number <= max
+      ? { value: number }
+      : { error: message };
   };
 
 const textReader =
@@ -179,7 +219,14 @@ const READERS: { [K in Field]: (raw: unknown) => Read<AccountInput[K] | null> } 
     return /^[A-Z]{3}$/.test(code) ? { value: code } : { error: M.currency };
   },
   notes: textReader(M.notes),
+  credit_limit: rangeReader(M.creditLimit, 0, Number.MAX_SAFE_INTEGER),
+  credit_rate: rangeReader(M.creditRate, 0, 100),
 };
+
+const CREDIT_LINE_FIELDS = [
+  ['credit_limit', M.creditLimitType],
+  ['credit_rate', M.creditRateType],
+] as const;
 
 const FIELDS = Object.keys(READERS) as Field[];
 
@@ -211,6 +258,11 @@ function readFields(
  */
 export function checkAccountCreate(body: unknown): Checked<AccountInput> {
   const { value, fields } = readFields(asRecord(body));
+  if (!fields.type && !takesCreditLine(value.type)) {
+    for (const [field, message] of CREDIT_LINE_FIELDS) {
+      if (value[field] !== null && value[field] !== undefined) fields[field] = message;
+    }
+  }
   if (Object.keys(fields).length > 0) return { ok: false, fields };
   const start = (value.starting_balance as number | null) ?? (value.balance as number | null) ?? 0;
   return {
@@ -241,6 +293,14 @@ export function checkAccountEdit(body: unknown, stored: object): Checked<Partial
   // A blank balance means "work it out" on a create. On an edit there is nothing to work it from.
   if (value.balance === null) fields.balance = M.balance;
   if (value.starting_balance === null) fields.starting_balance = M.startingBalance;
+  // A limit and a rate belong to a credit card or a Giro account. An edit that gives the account
+  // another type takes away the ones it holds; one that sets either on another type is refused.
+  if (!fields.type && !takesCreditLine(value.type ?? row.type)) {
+    for (const [field, message] of CREDIT_LINE_FIELDS) {
+      if (value[field] !== null && value[field] !== undefined) fields[field] = message;
+      else if (value.type !== undefined && !isBlank(row[field])) value[field] = null;
+    }
+  }
   // A blank currency asks for nothing, so the row keeps the one it has.
   if (value.currency === null) delete value.currency;
   return Object.keys(fields).length > 0

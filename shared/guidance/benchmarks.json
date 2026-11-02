@@ -1,0 +1,3758 @@
+{
+  "schemaVersion": 1,
+  "generatedOn": "2026-10-11",
+  "about": "Benchmarks for Token Circles guidance. Each entry is one metric, region and band. Bands cover min <= value < max; null means unbounded; maxInclusive marks a closed upper edge and minExclusive an open lower edge. A band with a \"when\" applies only when the profile matches it. \"borrowedFrom\" marks a region using another region's evidence. How each metric and region got its edges: derivations. Full method: guidance.md section 4.",
+  "bandRule": {
+    "widenLow": 0.75,
+    "widenHigh": 1.25,
+    "text": "Where sources publish group averages, typical runs from 0.75 x the lowest to 1.25 x the highest group average."
+  },
+  "regions": [
+    {
+      "id": "EU27",
+      "name": "European Union (27 countries)",
+      "currency": "EUR",
+      "inCopy": "the EU"
+    },
+    {
+      "id": "DE",
+      "name": "Germany",
+      "currency": "EUR",
+      "inCopy": "Germany"
+    },
+    {
+      "id": "HR",
+      "name": "Croatia",
+      "currency": "EUR",
+      "inCopy": "Croatia"
+    },
+    {
+      "id": "UK",
+      "name": "United Kingdom",
+      "currency": "GBP",
+      "inCopy": "the UK"
+    },
+    {
+      "id": "US",
+      "name": "United States",
+      "currency": "USD",
+      "inCopy": "the US"
+    }
+  ],
+  "regionChoice": {
+    "order": ["profileSetting", "importHint", "baseCurrency", "fallback"],
+    "importHint": {
+      "adapters": {
+        "dkb": "DE",
+        "n26": "DE",
+        "sparkasse": "DE",
+        "erste": "HR",
+        "pbz": "HR"
+      },
+      "ibanCountry": {
+        "DE": "DE",
+        "HR": "HR",
+        "GB": "UK"
+      }
+    },
+    "baseCurrency": {
+      "EUR": "EU27",
+      "GBP": "UK",
+      "USD": "US"
+    },
+    "fallback": "EU27"
+  },
+  "metrics": [
+    {
+      "id": "subscriptions.count",
+      "label": "Subscriptions",
+      "unit": "subscriptions per adult",
+      "goodDirection": "neither",
+      "formula": "Active subscriptions (bills of type subscription, plus scan finds the person kept) divided by adults in the household",
+      "minData": "One import that covers at least 3 months; yearly subscriptions need 12 months to show"
+    },
+    {
+      "id": "subscriptions.monthlySpend",
+      "label": "Subscription spend",
+      "unit": "per adult per month",
+      "goodDirection": "neither",
+      "formula": "Sum of monthlyEquivalent(amount, frequency) over active subscriptions, in the region currency, divided by adults",
+      "minData": "As subscriptions.count"
+    },
+    {
+      "id": "savings.rate",
+      "label": "Savings rate",
+      "unit": "percent of income",
+      "goodDirection": "higher",
+      "formula": "(income - spending) / income over the last 12 tracked months; income = income less deductions, spending = expense entries only, transfers excluded; loan principal added back when the loan is on file",
+      "minData": "3 tracked months for a provisional reading, 12 for a firm one"
+    },
+    {
+      "id": "cushion.months",
+      "label": "Cash cushion",
+      "unit": "months of essential spending",
+      "goodDirection": "higher",
+      "formula": "(savings and cash balances + lowest current-account balance in the last 30 days) / average monthly essential spending",
+      "minData": "Current balances on every account; 3 tracked months of spending"
+    },
+    {
+      "id": "shock.cover",
+      "label": "Unexpected bill test",
+      "unit": "multiple of the regional amount",
+      "goodDirection": "higher",
+      "formula": "Same liquid money as cushion.months divided by the regional test amount, converted to the base currency",
+      "minData": "Current balances; a region with a test amount"
+    },
+    {
+      "id": "housing.share",
+      "label": "Housing costs",
+      "unit": "percent of net income",
+      "goodDirection": "lower",
+      "formula": "Monthly rent or mortgage payment + utilities + building charges, divided by average monthly income",
+      "minData": "3 tracked months with income and housing payments"
+    },
+    {
+      "id": "spending.foodAtHome",
+      "label": "Groceries",
+      "unit": "percent of spending",
+      "goodDirection": "neither",
+      "formula": "Groceries / total spending over the window",
+      "minData": "3 tracked months, 90% of spending categorised by amount"
+    },
+    {
+      "id": "spending.eatingOut",
+      "label": "Eating out",
+      "unit": "percent of spending",
+      "goodDirection": "neither",
+      "formula": "Restaurants, cafes, takeaway and delivery / total spending",
+      "minData": "As spending.foodAtHome"
+    },
+    {
+      "id": "spending.transport",
+      "label": "Transport",
+      "unit": "percent of spending",
+      "goodDirection": "neither",
+      "formula": "Fuel, public transport, car running costs and car payments / total spending",
+      "minData": "As spending.foodAtHome; 12 months to catch yearly car costs"
+    },
+    {
+      "id": "debt.rate",
+      "label": "Interest rate on a debt",
+      "unit": "percent a year",
+      "goodDirection": "lower",
+      "formula": "Current rate of each loan on file (rate_periods applied); a carried card or overdraft balance counts at its rate",
+      "minData": "The debt is on file with its rate"
+    },
+    {
+      "id": "debt.serviceShare",
+      "label": "Debt payments",
+      "unit": "percent of net income",
+      "goodDirection": "lower",
+      "formula": "Monthly payments on all loans on file (mortgage included) / average monthly income",
+      "minData": "Loans on file; 3 tracked months of income"
+    }
+  ],
+  "entries": [
+    {
+      "metric": "subscriptions.count",
+      "region": "UK",
+      "band": "low",
+      "min": 0,
+      "max": 2,
+      "unit": "subscriptions per adult",
+      "sourceUrl": "https://assets.publishing.service.gov.uk/media/64464e6f529eda00123b02c4/annex_2-subscription_traps_impact_assessment.pdf",
+      "year": 2022,
+      "sourceIds": ["dbt-subscription-traps-2023"],
+      "strength": "moderate"
+    },
+    {
+      "metric": "subscriptions.count",
+      "region": "UK",
+      "band": "typical",
+      "min": 2,
+      "max": 6,
+      "unit": "subscriptions per adult",
+      "sourceUrl": "https://assets.publishing.service.gov.uk/media/64464e6f529eda00123b02c4/annex_2-subscription_traps_impact_assessment.pdf",
+      "year": 2022,
+      "sourceIds": ["dbt-subscription-traps-2023"],
+      "strength": "moderate"
+    },
+    {
+      "metric": "subscriptions.count",
+      "region": "UK",
+      "band": "high",
+      "min": 6,
+      "max": null,
+      "unit": "subscriptions per adult",
+      "sourceUrl": "https://assets.publishing.service.gov.uk/media/64464e6f529eda00123b02c4/annex_2-subscription_traps_impact_assessment.pdf",
+      "year": 2022,
+      "sourceIds": ["dbt-subscription-traps-2023"],
+      "strength": "moderate"
+    },
+    {
+      "metric": "subscriptions.count",
+      "region": "US",
+      "band": "low",
+      "min": 0,
+      "max": 2,
+      "unit": "subscriptions per adult",
+      "sourceUrl": "https://self.inc/info/cost-of-unused-paid-subscriptions",
+      "year": 2026,
+      "sourceIds": ["self-subscriptions-2026"],
+      "strength": "weak"
+    },
+    {
+      "metric": "subscriptions.count",
+      "region": "US",
+      "band": "typical",
+      "min": 2,
+      "max": 7,
+      "unit": "subscriptions per adult",
+      "sourceUrl": "https://self.inc/info/cost-of-unused-paid-subscriptions",
+      "year": 2026,
+      "sourceIds": ["self-subscriptions-2026"],
+      "strength": "weak"
+    },
+    {
+      "metric": "subscriptions.count",
+      "region": "US",
+      "band": "high",
+      "min": 7,
+      "max": null,
+      "unit": "subscriptions per adult",
+      "sourceUrl": "https://self.inc/info/cost-of-unused-paid-subscriptions",
+      "year": 2026,
+      "sourceIds": ["self-subscriptions-2026"],
+      "strength": "weak"
+    },
+    {
+      "metric": "subscriptions.count",
+      "region": "EU27",
+      "band": "low",
+      "min": 0,
+      "max": 2,
+      "unit": "subscriptions per adult",
+      "sourceUrl": "https://assets.publishing.service.gov.uk/media/64464e6f529eda00123b02c4/annex_2-subscription_traps_impact_assessment.pdf",
+      "year": 2022,
+      "sourceIds": ["dbt-subscription-traps-2023"],
+      "strength": "weak",
+      "borrowedFrom": "UK"
+    },
+    {
+      "metric": "subscriptions.count",
+      "region": "EU27",
+      "band": "typical",
+      "min": 2,
+      "max": 6,
+      "unit": "subscriptions per adult",
+      "sourceUrl": "https://assets.publishing.service.gov.uk/media/64464e6f529eda00123b02c4/annex_2-subscription_traps_impact_assessment.pdf",
+      "year": 2022,
+      "sourceIds": ["dbt-subscription-traps-2023"],
+      "strength": "weak",
+      "borrowedFrom": "UK"
+    },
+    {
+      "metric": "subscriptions.count",
+      "region": "EU27",
+      "band": "high",
+      "min": 6,
+      "max": null,
+      "unit": "subscriptions per adult",
+      "sourceUrl": "https://assets.publishing.service.gov.uk/media/64464e6f529eda00123b02c4/annex_2-subscription_traps_impact_assessment.pdf",
+      "year": 2022,
+      "sourceIds": ["dbt-subscription-traps-2023"],
+      "strength": "weak",
+      "borrowedFrom": "UK"
+    },
+    {
+      "metric": "subscriptions.count",
+      "region": "DE",
+      "band": "low",
+      "min": 0,
+      "max": 2,
+      "unit": "subscriptions per adult",
+      "sourceUrl": "https://assets.publishing.service.gov.uk/media/64464e6f529eda00123b02c4/annex_2-subscription_traps_impact_assessment.pdf",
+      "year": 2022,
+      "sourceIds": ["dbt-subscription-traps-2023"],
+      "strength": "weak",
+      "borrowedFrom": "UK"
+    },
+    {
+      "metric": "subscriptions.count",
+      "region": "DE",
+      "band": "typical",
+      "min": 2,
+      "max": 6,
+      "unit": "subscriptions per adult",
+      "sourceUrl": "https://assets.publishing.service.gov.uk/media/64464e6f529eda00123b02c4/annex_2-subscription_traps_impact_assessment.pdf",
+      "year": 2022,
+      "sourceIds": ["dbt-subscription-traps-2023"],
+      "strength": "weak",
+      "borrowedFrom": "UK"
+    },
+    {
+      "metric": "subscriptions.count",
+      "region": "DE",
+      "band": "high",
+      "min": 6,
+      "max": null,
+      "unit": "subscriptions per adult",
+      "sourceUrl": "https://assets.publishing.service.gov.uk/media/64464e6f529eda00123b02c4/annex_2-subscription_traps_impact_assessment.pdf",
+      "year": 2022,
+      "sourceIds": ["dbt-subscription-traps-2023"],
+      "strength": "weak",
+      "borrowedFrom": "UK"
+    },
+    {
+      "metric": "subscriptions.count",
+      "region": "HR",
+      "band": "low",
+      "min": 0,
+      "max": 2,
+      "unit": "subscriptions per adult",
+      "sourceUrl": "https://assets.publishing.service.gov.uk/media/64464e6f529eda00123b02c4/annex_2-subscription_traps_impact_assessment.pdf",
+      "year": 2022,
+      "sourceIds": ["dbt-subscription-traps-2023"],
+      "strength": "weak",
+      "borrowedFrom": "UK"
+    },
+    {
+      "metric": "subscriptions.count",
+      "region": "HR",
+      "band": "typical",
+      "min": 2,
+      "max": 6,
+      "unit": "subscriptions per adult",
+      "sourceUrl": "https://assets.publishing.service.gov.uk/media/64464e6f529eda00123b02c4/annex_2-subscription_traps_impact_assessment.pdf",
+      "year": 2022,
+      "sourceIds": ["dbt-subscription-traps-2023"],
+      "strength": "weak",
+      "borrowedFrom": "UK"
+    },
+    {
+      "metric": "subscriptions.count",
+      "region": "HR",
+      "band": "high",
+      "min": 6,
+      "max": null,
+      "unit": "subscriptions per adult",
+      "sourceUrl": "https://assets.publishing.service.gov.uk/media/64464e6f529eda00123b02c4/annex_2-subscription_traps_impact_assessment.pdf",
+      "year": 2022,
+      "sourceIds": ["dbt-subscription-traps-2023"],
+      "strength": "weak",
+      "borrowedFrom": "UK"
+    },
+    {
+      "metric": "subscriptions.monthlySpend",
+      "region": "US",
+      "band": "low",
+      "min": 0,
+      "max": 26,
+      "unit": "USD per adult per month",
+      "sourceUrl": "https://self.inc/info/cost-of-unused-paid-subscriptions",
+      "year": 2026,
+      "sourceIds": ["self-subscriptions-2026", "cnet-subscriptions-2026"],
+      "strength": "weak"
+    },
+    {
+      "metric": "subscriptions.monthlySpend",
+      "region": "US",
+      "band": "typical",
+      "min": 26,
+      "max": 139,
+      "unit": "USD per adult per month",
+      "sourceUrl": "https://self.inc/info/cost-of-unused-paid-subscriptions",
+      "year": 2026,
+      "sourceIds": ["self-subscriptions-2026", "cnet-subscriptions-2026"],
+      "strength": "weak"
+    },
+    {
+      "metric": "subscriptions.monthlySpend",
+      "region": "US",
+      "band": "high",
+      "min": 139,
+      "max": null,
+      "unit": "USD per adult per month",
+      "sourceUrl": "https://self.inc/info/cost-of-unused-paid-subscriptions",
+      "year": 2026,
+      "sourceIds": ["self-subscriptions-2026", "cnet-subscriptions-2026"],
+      "strength": "weak"
+    },
+    {
+      "metric": "subscriptions.monthlySpend",
+      "region": "UK",
+      "band": "low",
+      "min": 0,
+      "max": 26,
+      "unit": "GBP per adult per month",
+      "sourceUrl": "https://assets.publishing.service.gov.uk/media/64464e6f529eda00123b02c4/annex_2-subscription_traps_impact_assessment.pdf",
+      "year": 2020,
+      "sourceIds": ["dbt-subscription-traps-2023"],
+      "strength": "moderate"
+    },
+    {
+      "metric": "subscriptions.monthlySpend",
+      "region": "UK",
+      "band": "typical",
+      "min": 26,
+      "max": 71,
+      "unit": "GBP per adult per month",
+      "sourceUrl": "https://assets.publishing.service.gov.uk/media/64464e6f529eda00123b02c4/annex_2-subscription_traps_impact_assessment.pdf",
+      "year": 2020,
+      "sourceIds": ["dbt-subscription-traps-2023"],
+      "strength": "moderate"
+    },
+    {
+      "metric": "subscriptions.monthlySpend",
+      "region": "UK",
+      "band": "high",
+      "min": 71,
+      "max": null,
+      "unit": "GBP per adult per month",
+      "sourceUrl": "https://assets.publishing.service.gov.uk/media/64464e6f529eda00123b02c4/annex_2-subscription_traps_impact_assessment.pdf",
+      "year": 2020,
+      "sourceIds": ["dbt-subscription-traps-2023"],
+      "strength": "moderate"
+    },
+    {
+      "metric": "savings.rate",
+      "region": "EU27",
+      "band": "low",
+      "min": null,
+      "max": 9.3,
+      "unit": "percent of income",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/tec00131/default/table",
+      "year": 2025,
+      "sourceIds": ["eurostat-tec00131"],
+      "strength": "moderate"
+    },
+    {
+      "metric": "savings.rate",
+      "region": "EU27",
+      "band": "typical",
+      "min": 9.3,
+      "max": 19.3,
+      "unit": "percent of income",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/tec00131/default/table",
+      "year": 2025,
+      "sourceIds": ["eurostat-tec00131"],
+      "strength": "moderate"
+    },
+    {
+      "metric": "savings.rate",
+      "region": "EU27",
+      "band": "high",
+      "min": 19.3,
+      "max": null,
+      "unit": "percent of income",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/tec00131/default/table",
+      "year": 2025,
+      "sourceIds": ["eurostat-tec00131"],
+      "strength": "moderate"
+    },
+    {
+      "metric": "savings.rate",
+      "region": "DE",
+      "band": "low",
+      "min": null,
+      "max": 13.9,
+      "unit": "percent of income",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/tec00131/default/table",
+      "year": 2025,
+      "sourceIds": ["eurostat-tec00131"],
+      "strength": "moderate"
+    },
+    {
+      "metric": "savings.rate",
+      "region": "DE",
+      "band": "typical",
+      "min": 13.9,
+      "max": 23.9,
+      "unit": "percent of income",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/tec00131/default/table",
+      "year": 2025,
+      "sourceIds": ["eurostat-tec00131"],
+      "strength": "moderate"
+    },
+    {
+      "metric": "savings.rate",
+      "region": "DE",
+      "band": "high",
+      "min": 23.9,
+      "max": null,
+      "unit": "percent of income",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/tec00131/default/table",
+      "year": 2025,
+      "sourceIds": ["eurostat-tec00131"],
+      "strength": "moderate"
+    },
+    {
+      "metric": "savings.rate",
+      "region": "HR",
+      "band": "low",
+      "min": null,
+      "max": 4.0,
+      "unit": "percent of income",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/tec00131/default/table",
+      "year": 2024,
+      "sourceIds": ["eurostat-tec00131"],
+      "strength": "moderate"
+    },
+    {
+      "metric": "savings.rate",
+      "region": "HR",
+      "band": "typical",
+      "min": 4.0,
+      "max": 14.0,
+      "unit": "percent of income",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/tec00131/default/table",
+      "year": 2024,
+      "sourceIds": ["eurostat-tec00131"],
+      "strength": "moderate"
+    },
+    {
+      "metric": "savings.rate",
+      "region": "HR",
+      "band": "high",
+      "min": 14.0,
+      "max": null,
+      "unit": "percent of income",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/tec00131/default/table",
+      "year": 2024,
+      "sourceIds": ["eurostat-tec00131"],
+      "strength": "moderate"
+    },
+    {
+      "metric": "savings.rate",
+      "region": "UK",
+      "band": "low",
+      "min": null,
+      "max": 4.7,
+      "unit": "percent of income",
+      "sourceUrl": "https://www.ons.gov.uk/economy/grossdomesticproductgdp/timeseries/nrjs/ukea",
+      "year": 2025,
+      "sourceIds": ["ons-nrjs"],
+      "strength": "moderate"
+    },
+    {
+      "metric": "savings.rate",
+      "region": "UK",
+      "band": "typical",
+      "min": 4.7,
+      "max": 14.7,
+      "unit": "percent of income",
+      "sourceUrl": "https://www.ons.gov.uk/economy/grossdomesticproductgdp/timeseries/nrjs/ukea",
+      "year": 2025,
+      "sourceIds": ["ons-nrjs"],
+      "strength": "moderate"
+    },
+    {
+      "metric": "savings.rate",
+      "region": "UK",
+      "band": "high",
+      "min": 14.7,
+      "max": null,
+      "unit": "percent of income",
+      "sourceUrl": "https://www.ons.gov.uk/economy/grossdomesticproductgdp/timeseries/nrjs/ukea",
+      "year": 2025,
+      "sourceIds": ["ons-nrjs"],
+      "strength": "moderate"
+    },
+    {
+      "metric": "savings.rate",
+      "region": "US",
+      "band": "low",
+      "min": null,
+      "max": 0.4,
+      "unit": "percent of income",
+      "sourceUrl": "https://fred.stlouisfed.org/series/PSAVERT",
+      "year": 2025,
+      "sourceIds": ["bea-psavert"],
+      "strength": "moderate"
+    },
+    {
+      "metric": "savings.rate",
+      "region": "US",
+      "band": "typical",
+      "min": 0.4,
+      "max": 10.4,
+      "unit": "percent of income",
+      "sourceUrl": "https://fred.stlouisfed.org/series/PSAVERT",
+      "year": 2025,
+      "sourceIds": ["bea-psavert"],
+      "strength": "moderate"
+    },
+    {
+      "metric": "savings.rate",
+      "region": "US",
+      "band": "high",
+      "min": 10.4,
+      "max": null,
+      "unit": "percent of income",
+      "sourceUrl": "https://fred.stlouisfed.org/series/PSAVERT",
+      "year": 2025,
+      "sourceIds": ["bea-psavert"],
+      "strength": "moderate"
+    },
+    {
+      "metric": "cushion.months",
+      "region": "EU27",
+      "band": "low",
+      "min": 0,
+      "max": 1,
+      "unit": "months of essential spending",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/ilc_odbt15/default/table",
+      "year": 2020,
+      "sourceIds": ["eurostat-ilc_odbt15", "rpf-wiki-2026"],
+      "strength": "moderate"
+    },
+    {
+      "metric": "cushion.months",
+      "region": "EU27",
+      "band": "typical",
+      "min": 1,
+      "max": 6,
+      "unit": "months of essential spending",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/ilc_odbt15/default/table",
+      "year": 2020,
+      "sourceIds": ["eurostat-ilc_odbt15", "rpf-wiki-2026"],
+      "strength": "moderate"
+    },
+    {
+      "metric": "cushion.months",
+      "region": "EU27",
+      "band": "high",
+      "min": 6,
+      "max": null,
+      "unit": "months of essential spending",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/ilc_odbt15/default/table",
+      "year": 2020,
+      "sourceIds": ["eurostat-ilc_odbt15", "rpf-wiki-2026"],
+      "strength": "moderate"
+    },
+    {
+      "metric": "cushion.months",
+      "region": "HR",
+      "band": "low",
+      "min": 0,
+      "max": 1,
+      "unit": "months of essential spending",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/ilc_odbt15/default/table",
+      "year": 2020,
+      "sourceIds": ["eurostat-ilc_odbt15", "rpf-wiki-2026"],
+      "strength": "moderate"
+    },
+    {
+      "metric": "cushion.months",
+      "region": "HR",
+      "band": "typical",
+      "min": 1,
+      "max": 6,
+      "unit": "months of essential spending",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/ilc_odbt15/default/table",
+      "year": 2020,
+      "sourceIds": ["eurostat-ilc_odbt15", "rpf-wiki-2026"],
+      "strength": "moderate"
+    },
+    {
+      "metric": "cushion.months",
+      "region": "HR",
+      "band": "high",
+      "min": 6,
+      "max": null,
+      "unit": "months of essential spending",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/ilc_odbt15/default/table",
+      "year": 2020,
+      "sourceIds": ["eurostat-ilc_odbt15", "rpf-wiki-2026"],
+      "strength": "moderate"
+    },
+    {
+      "metric": "cushion.months",
+      "region": "DE",
+      "band": "low",
+      "min": 0,
+      "max": 1,
+      "unit": "months of essential spending",
+      "sourceUrl": "https://www.destatis.de/Europa/DE/Thema/Bevoelkerung-Arbeit-Soziales/Soziales-Lebensbedingungen/Kein_Geld.html",
+      "year": 2025,
+      "sourceIds": ["destatis-unexpected-2025", "rpf-wiki-2026"],
+      "strength": "moderate"
+    },
+    {
+      "metric": "cushion.months",
+      "region": "DE",
+      "band": "typical",
+      "min": 1,
+      "max": 6,
+      "unit": "months of essential spending",
+      "sourceUrl": "https://www.destatis.de/Europa/DE/Thema/Bevoelkerung-Arbeit-Soziales/Soziales-Lebensbedingungen/Kein_Geld.html",
+      "year": 2025,
+      "sourceIds": ["destatis-unexpected-2025", "rpf-wiki-2026"],
+      "strength": "moderate"
+    },
+    {
+      "metric": "cushion.months",
+      "region": "DE",
+      "band": "high",
+      "min": 6,
+      "max": null,
+      "unit": "months of essential spending",
+      "sourceUrl": "https://www.destatis.de/Europa/DE/Thema/Bevoelkerung-Arbeit-Soziales/Soziales-Lebensbedingungen/Kein_Geld.html",
+      "year": 2025,
+      "sourceIds": ["destatis-unexpected-2025", "rpf-wiki-2026"],
+      "strength": "moderate"
+    },
+    {
+      "metric": "cushion.months",
+      "region": "UK",
+      "band": "low",
+      "min": 0,
+      "max": 1,
+      "unit": "months of essential spending",
+      "sourceUrl": "https://www.ons.gov.uk/peoplepopulationandcommunity/wellbeing/bulletins/publicopinionsandsocialtrendsgreatbritain/june2025",
+      "year": 2025,
+      "sourceIds": ["ons-opn-2025-06", "rpf-wiki-2026"],
+      "strength": "moderate"
+    },
+    {
+      "metric": "cushion.months",
+      "region": "UK",
+      "band": "typical",
+      "min": 1,
+      "max": 6,
+      "unit": "months of essential spending",
+      "sourceUrl": "https://www.ons.gov.uk/peoplepopulationandcommunity/wellbeing/bulletins/publicopinionsandsocialtrendsgreatbritain/june2025",
+      "year": 2025,
+      "sourceIds": ["ons-opn-2025-06", "rpf-wiki-2026"],
+      "strength": "moderate"
+    },
+    {
+      "metric": "cushion.months",
+      "region": "UK",
+      "band": "high",
+      "min": 6,
+      "max": null,
+      "unit": "months of essential spending",
+      "sourceUrl": "https://www.ons.gov.uk/peoplepopulationandcommunity/wellbeing/bulletins/publicopinionsandsocialtrendsgreatbritain/june2025",
+      "year": 2025,
+      "sourceIds": ["ons-opn-2025-06", "rpf-wiki-2026"],
+      "strength": "moderate"
+    },
+    {
+      "metric": "cushion.months",
+      "region": "US",
+      "band": "low",
+      "min": 0,
+      "max": 1,
+      "unit": "months of essential spending",
+      "sourceUrl": "https://www.federalreserve.gov/publications/files/2025-report-economic-well-being-us-households-202605.pdf",
+      "year": 2025,
+      "sourceIds": ["fed-shed-2025", "rpf-wiki-2026"],
+      "strength": "moderate"
+    },
+    {
+      "metric": "cushion.months",
+      "region": "US",
+      "band": "typical",
+      "min": 1,
+      "max": 6,
+      "unit": "months of essential spending",
+      "sourceUrl": "https://www.federalreserve.gov/publications/files/2025-report-economic-well-being-us-households-202605.pdf",
+      "year": 2025,
+      "sourceIds": ["fed-shed-2025", "rpf-wiki-2026"],
+      "strength": "moderate"
+    },
+    {
+      "metric": "cushion.months",
+      "region": "US",
+      "band": "high",
+      "min": 6,
+      "max": null,
+      "unit": "months of essential spending",
+      "sourceUrl": "https://www.federalreserve.gov/publications/files/2025-report-economic-well-being-us-households-202605.pdf",
+      "year": 2025,
+      "sourceIds": ["fed-shed-2025", "rpf-wiki-2026"],
+      "strength": "moderate"
+    },
+    {
+      "metric": "shock.cover",
+      "region": "DE",
+      "band": "low",
+      "min": 0,
+      "max": 1,
+      "unit": "multiple of the regional amount",
+      "sourceUrl": "https://www.destatis.de/Europa/DE/Thema/Bevoelkerung-Arbeit-Soziales/Soziales-Lebensbedingungen/Kein_Geld.html",
+      "year": 2025,
+      "sourceIds": ["destatis-unexpected-2025"],
+      "strength": "strong"
+    },
+    {
+      "metric": "shock.cover",
+      "region": "DE",
+      "band": "typical",
+      "min": 1,
+      "max": null,
+      "unit": "multiple of the regional amount",
+      "sourceUrl": "https://www.destatis.de/Europa/DE/Thema/Bevoelkerung-Arbeit-Soziales/Soziales-Lebensbedingungen/Kein_Geld.html",
+      "year": 2025,
+      "sourceIds": ["destatis-unexpected-2025"],
+      "strength": "strong"
+    },
+    {
+      "metric": "shock.cover",
+      "region": "HR",
+      "band": "low",
+      "min": 0,
+      "max": 1,
+      "unit": "multiple of the regional amount",
+      "sourceUrl": "https://podaci.dzs.hr/media/tsgdvqvh/zudp-2026-1-1-pokazatelji-siroma%C5%A1tva-i-socijalne-isklju%C4%8Denosti-u-2025.pdf",
+      "year": 2025,
+      "sourceIds": ["dzs-poverty-2025"],
+      "strength": "strong"
+    },
+    {
+      "metric": "shock.cover",
+      "region": "HR",
+      "band": "typical",
+      "min": 1,
+      "max": null,
+      "unit": "multiple of the regional amount",
+      "sourceUrl": "https://podaci.dzs.hr/media/tsgdvqvh/zudp-2026-1-1-pokazatelji-siroma%C5%A1tva-i-socijalne-isklju%C4%8Denosti-u-2025.pdf",
+      "year": 2025,
+      "sourceIds": ["dzs-poverty-2025"],
+      "strength": "strong"
+    },
+    {
+      "metric": "shock.cover",
+      "region": "UK",
+      "band": "low",
+      "min": 0,
+      "max": 1,
+      "unit": "multiple of the regional amount",
+      "sourceUrl": "https://www.ons.gov.uk/peoplepopulationandcommunity/wellbeing/bulletins/publicopinionsandsocialtrendsgreatbritain/june2025",
+      "year": 2025,
+      "sourceIds": ["ons-opn-2025-06"],
+      "strength": "strong"
+    },
+    {
+      "metric": "shock.cover",
+      "region": "UK",
+      "band": "typical",
+      "min": 1,
+      "max": null,
+      "unit": "multiple of the regional amount",
+      "sourceUrl": "https://www.ons.gov.uk/peoplepopulationandcommunity/wellbeing/bulletins/publicopinionsandsocialtrendsgreatbritain/june2025",
+      "year": 2025,
+      "sourceIds": ["ons-opn-2025-06"],
+      "strength": "strong"
+    },
+    {
+      "metric": "shock.cover",
+      "region": "US",
+      "band": "low",
+      "min": 0,
+      "max": 1,
+      "unit": "multiple of the regional amount",
+      "sourceUrl": "https://www.federalreserve.gov/publications/files/2025-report-economic-well-being-us-households-202605.pdf",
+      "year": 2025,
+      "sourceIds": ["fed-shed-2025"],
+      "strength": "strong"
+    },
+    {
+      "metric": "shock.cover",
+      "region": "US",
+      "band": "typical",
+      "min": 1,
+      "max": null,
+      "unit": "multiple of the regional amount",
+      "sourceUrl": "https://www.federalreserve.gov/publications/files/2025-report-economic-well-being-us-households-202605.pdf",
+      "year": 2025,
+      "sourceIds": ["fed-shed-2025"],
+      "strength": "strong"
+    },
+    {
+      "metric": "housing.share",
+      "region": "EU27",
+      "band": "low",
+      "min": 0,
+      "max": 18.9,
+      "unit": "percent of net income",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/ilc_mded01/default/table",
+      "year": 2025,
+      "sourceIds": ["eurostat-ilc_mded01", "eurostat-ilc_lvho07a"],
+      "strength": "strong"
+    },
+    {
+      "metric": "housing.share",
+      "region": "EU27",
+      "band": "typical",
+      "min": 18.9,
+      "max": 40.0,
+      "unit": "percent of net income",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/ilc_mded01/default/table",
+      "year": 2025,
+      "sourceIds": ["eurostat-ilc_mded01", "eurostat-ilc_lvho07a"],
+      "strength": "strong"
+    },
+    {
+      "metric": "housing.share",
+      "region": "EU27",
+      "band": "high",
+      "min": 40.0,
+      "max": null,
+      "unit": "percent of net income",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/ilc_mded01/default/table",
+      "year": 2025,
+      "sourceIds": ["eurostat-ilc_mded01", "eurostat-ilc_lvho07a"],
+      "strength": "strong"
+    },
+    {
+      "metric": "housing.share",
+      "region": "DE",
+      "band": "low",
+      "min": 0,
+      "max": 24.1,
+      "unit": "percent of net income",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/ilc_mded01/default/table",
+      "year": 2025,
+      "sourceIds": ["eurostat-ilc_mded01", "eurostat-ilc_lvho07a"],
+      "strength": "strong"
+    },
+    {
+      "metric": "housing.share",
+      "region": "DE",
+      "band": "typical",
+      "min": 24.1,
+      "max": 40.0,
+      "unit": "percent of net income",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/ilc_mded01/default/table",
+      "year": 2025,
+      "sourceIds": ["eurostat-ilc_mded01", "eurostat-ilc_lvho07a"],
+      "strength": "strong"
+    },
+    {
+      "metric": "housing.share",
+      "region": "DE",
+      "band": "high",
+      "min": 40.0,
+      "max": null,
+      "unit": "percent of net income",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/ilc_mded01/default/table",
+      "year": 2025,
+      "sourceIds": ["eurostat-ilc_mded01", "eurostat-ilc_lvho07a"],
+      "strength": "strong"
+    },
+    {
+      "metric": "housing.share",
+      "region": "HR",
+      "band": "low",
+      "min": 0,
+      "max": 11.5,
+      "unit": "percent of net income",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/ilc_mded01/default/table",
+      "year": 2025,
+      "sourceIds": ["eurostat-ilc_mded01", "eurostat-ilc_lvho07a"],
+      "strength": "strong"
+    },
+    {
+      "metric": "housing.share",
+      "region": "HR",
+      "band": "typical",
+      "min": 11.5,
+      "max": 40.0,
+      "unit": "percent of net income",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/ilc_mded01/default/table",
+      "year": 2025,
+      "sourceIds": ["eurostat-ilc_mded01", "eurostat-ilc_lvho07a"],
+      "strength": "strong"
+    },
+    {
+      "metric": "housing.share",
+      "region": "HR",
+      "band": "high",
+      "min": 40.0,
+      "max": null,
+      "unit": "percent of net income",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/ilc_mded01/default/table",
+      "year": 2025,
+      "sourceIds": ["eurostat-ilc_mded01", "eurostat-ilc_lvho07a"],
+      "strength": "strong"
+    },
+    {
+      "metric": "housing.share",
+      "region": "UK",
+      "band": "low",
+      "min": 0,
+      "max": 34,
+      "unit": "percent of net income",
+      "sourceUrl": "https://www.gov.uk/government/statistics/chapters-for-english-housing-survey-2024-to-2025-headline-findings-on-demographics-and-household-resilience/chapter-2-housing-costs-and-affordability",
+      "year": 2025,
+      "sourceIds": ["ehs-2024-25", "eurostat-ilc_lvho07a"],
+      "strength": "moderate",
+      "when": {
+        "tenure": "rentPrivate"
+      }
+    },
+    {
+      "metric": "housing.share",
+      "region": "UK",
+      "band": "typical",
+      "min": 34,
+      "max": 40.0,
+      "unit": "percent of net income",
+      "sourceUrl": "https://www.gov.uk/government/statistics/chapters-for-english-housing-survey-2024-to-2025-headline-findings-on-demographics-and-household-resilience/chapter-2-housing-costs-and-affordability",
+      "year": 2025,
+      "sourceIds": ["ehs-2024-25", "eurostat-ilc_lvho07a"],
+      "strength": "moderate",
+      "when": {
+        "tenure": "rentPrivate"
+      }
+    },
+    {
+      "metric": "housing.share",
+      "region": "UK",
+      "band": "high",
+      "min": 40.0,
+      "max": null,
+      "unit": "percent of net income",
+      "sourceUrl": "https://www.gov.uk/government/statistics/chapters-for-english-housing-survey-2024-to-2025-headline-findings-on-demographics-and-household-resilience/chapter-2-housing-costs-and-affordability",
+      "year": 2025,
+      "sourceIds": ["ehs-2024-25", "eurostat-ilc_lvho07a"],
+      "strength": "moderate",
+      "when": {
+        "tenure": "rentPrivate"
+      }
+    },
+    {
+      "metric": "housing.share",
+      "region": "UK",
+      "band": "low",
+      "min": 0,
+      "max": 28,
+      "unit": "percent of net income",
+      "sourceUrl": "https://www.gov.uk/government/statistics/chapters-for-english-housing-survey-2024-to-2025-headline-findings-on-demographics-and-household-resilience/chapter-2-housing-costs-and-affordability",
+      "year": 2025,
+      "sourceIds": ["ehs-2024-25", "eurostat-ilc_lvho07a"],
+      "strength": "moderate",
+      "when": {
+        "tenure": "rentSocial"
+      }
+    },
+    {
+      "metric": "housing.share",
+      "region": "UK",
+      "band": "typical",
+      "min": 28,
+      "max": 40.0,
+      "unit": "percent of net income",
+      "sourceUrl": "https://www.gov.uk/government/statistics/chapters-for-english-housing-survey-2024-to-2025-headline-findings-on-demographics-and-household-resilience/chapter-2-housing-costs-and-affordability",
+      "year": 2025,
+      "sourceIds": ["ehs-2024-25", "eurostat-ilc_lvho07a"],
+      "strength": "moderate",
+      "when": {
+        "tenure": "rentSocial"
+      }
+    },
+    {
+      "metric": "housing.share",
+      "region": "UK",
+      "band": "high",
+      "min": 40.0,
+      "max": null,
+      "unit": "percent of net income",
+      "sourceUrl": "https://www.gov.uk/government/statistics/chapters-for-english-housing-survey-2024-to-2025-headline-findings-on-demographics-and-household-resilience/chapter-2-housing-costs-and-affordability",
+      "year": 2025,
+      "sourceIds": ["ehs-2024-25", "eurostat-ilc_lvho07a"],
+      "strength": "moderate",
+      "when": {
+        "tenure": "rentSocial"
+      }
+    },
+    {
+      "metric": "housing.share",
+      "region": "UK",
+      "band": "low",
+      "min": 0,
+      "max": 19,
+      "unit": "percent of net income",
+      "sourceUrl": "https://www.gov.uk/government/statistics/chapters-for-english-housing-survey-2024-to-2025-headline-findings-on-demographics-and-household-resilience/chapter-2-housing-costs-and-affordability",
+      "year": 2025,
+      "sourceIds": ["ehs-2024-25", "eurostat-ilc_lvho07a"],
+      "strength": "moderate",
+      "when": {
+        "tenure": "mortgage"
+      }
+    },
+    {
+      "metric": "housing.share",
+      "region": "UK",
+      "band": "typical",
+      "min": 19,
+      "max": 40.0,
+      "unit": "percent of net income",
+      "sourceUrl": "https://www.gov.uk/government/statistics/chapters-for-english-housing-survey-2024-to-2025-headline-findings-on-demographics-and-household-resilience/chapter-2-housing-costs-and-affordability",
+      "year": 2025,
+      "sourceIds": ["ehs-2024-25", "eurostat-ilc_lvho07a"],
+      "strength": "moderate",
+      "when": {
+        "tenure": "mortgage"
+      }
+    },
+    {
+      "metric": "housing.share",
+      "region": "UK",
+      "band": "high",
+      "min": 40.0,
+      "max": null,
+      "unit": "percent of net income",
+      "sourceUrl": "https://www.gov.uk/government/statistics/chapters-for-english-housing-survey-2024-to-2025-headline-findings-on-demographics-and-household-resilience/chapter-2-housing-costs-and-affordability",
+      "year": 2025,
+      "sourceIds": ["ehs-2024-25", "eurostat-ilc_lvho07a"],
+      "strength": "moderate",
+      "when": {
+        "tenure": "mortgage"
+      }
+    },
+    {
+      "metric": "housing.share",
+      "region": "UK",
+      "band": "low",
+      "min": 0,
+      "max": 19,
+      "unit": "percent of net income",
+      "sourceUrl": "https://www.gov.uk/government/statistics/chapters-for-english-housing-survey-2024-to-2025-headline-findings-on-demographics-and-household-resilience/chapter-2-housing-costs-and-affordability",
+      "year": 2025,
+      "sourceIds": ["ehs-2024-25", "eurostat-ilc_lvho07a"],
+      "strength": "moderate",
+      "when": {
+        "tenure": "unknown"
+      }
+    },
+    {
+      "metric": "housing.share",
+      "region": "UK",
+      "band": "typical",
+      "min": 19,
+      "max": 40.0,
+      "unit": "percent of net income",
+      "sourceUrl": "https://www.gov.uk/government/statistics/chapters-for-english-housing-survey-2024-to-2025-headline-findings-on-demographics-and-household-resilience/chapter-2-housing-costs-and-affordability",
+      "year": 2025,
+      "sourceIds": ["ehs-2024-25", "eurostat-ilc_lvho07a"],
+      "strength": "moderate",
+      "when": {
+        "tenure": "unknown"
+      }
+    },
+    {
+      "metric": "housing.share",
+      "region": "UK",
+      "band": "high",
+      "min": 40.0,
+      "max": null,
+      "unit": "percent of net income",
+      "sourceUrl": "https://www.gov.uk/government/statistics/chapters-for-english-housing-survey-2024-to-2025-headline-findings-on-demographics-and-household-resilience/chapter-2-housing-costs-and-affordability",
+      "year": 2025,
+      "sourceIds": ["ehs-2024-25", "eurostat-ilc_lvho07a"],
+      "strength": "moderate",
+      "when": {
+        "tenure": "unknown"
+      }
+    },
+    {
+      "metric": "housing.share",
+      "region": "US",
+      "band": "low",
+      "min": 0,
+      "max": 30.0,
+      "unit": "percent of net income",
+      "sourceUrl": "https://www.huduser.gov/portal/datasets/cp/CHAS/bg_chas.html",
+      "year": 2025,
+      "sourceIds": ["hud-chas", "jchs-son-2026"],
+      "strength": "strong"
+    },
+    {
+      "metric": "housing.share",
+      "region": "US",
+      "band": "typical",
+      "min": 30.0,
+      "max": 50.0,
+      "unit": "percent of net income",
+      "sourceUrl": "https://www.huduser.gov/portal/datasets/cp/CHAS/bg_chas.html",
+      "year": 2025,
+      "sourceIds": ["hud-chas", "jchs-son-2026"],
+      "strength": "strong"
+    },
+    {
+      "metric": "housing.share",
+      "region": "US",
+      "band": "high",
+      "min": 50.0,
+      "max": null,
+      "unit": "percent of net income",
+      "sourceUrl": "https://www.huduser.gov/portal/datasets/cp/CHAS/bg_chas.html",
+      "year": 2025,
+      "sourceIds": ["hud-chas", "jchs-son-2026"],
+      "strength": "strong"
+    },
+    {
+      "metric": "spending.foodAtHome",
+      "region": "EU27",
+      "band": "low",
+      "min": 0,
+      "max": 12.2,
+      "unit": "percent of spending",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/hbs_str_t223/default/table",
+      "year": 2020,
+      "sourceIds": ["eurostat-hbs_str_t223", "eurostat-nama_10_cp18"],
+      "strength": "moderate"
+    },
+    {
+      "metric": "spending.foodAtHome",
+      "region": "EU27",
+      "band": "typical",
+      "min": 12.2,
+      "max": 25.8,
+      "unit": "percent of spending",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/hbs_str_t223/default/table",
+      "year": 2020,
+      "sourceIds": ["eurostat-hbs_str_t223", "eurostat-nama_10_cp18"],
+      "strength": "moderate"
+    },
+    {
+      "metric": "spending.foodAtHome",
+      "region": "EU27",
+      "band": "high",
+      "min": 25.8,
+      "max": null,
+      "unit": "percent of spending",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/hbs_str_t223/default/table",
+      "year": 2020,
+      "sourceIds": ["eurostat-hbs_str_t223", "eurostat-nama_10_cp18"],
+      "strength": "moderate"
+    },
+    {
+      "metric": "spending.foodAtHome",
+      "region": "DE",
+      "band": "low",
+      "min": 0,
+      "max": 8.8,
+      "unit": "percent of spending",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/hbs_str_t223/default/table",
+      "year": 2020,
+      "sourceIds": ["eurostat-hbs_str_t223"],
+      "strength": "moderate"
+    },
+    {
+      "metric": "spending.foodAtHome",
+      "region": "DE",
+      "band": "typical",
+      "min": 8.8,
+      "max": 18.4,
+      "unit": "percent of spending",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/hbs_str_t223/default/table",
+      "year": 2020,
+      "sourceIds": ["eurostat-hbs_str_t223"],
+      "strength": "moderate"
+    },
+    {
+      "metric": "spending.foodAtHome",
+      "region": "DE",
+      "band": "high",
+      "min": 18.4,
+      "max": null,
+      "unit": "percent of spending",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/hbs_str_t223/default/table",
+      "year": 2020,
+      "sourceIds": ["eurostat-hbs_str_t223"],
+      "strength": "moderate"
+    },
+    {
+      "metric": "spending.foodAtHome",
+      "region": "HR",
+      "band": "low",
+      "min": 0,
+      "max": 16.7,
+      "unit": "percent of spending",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/hbs_str_t223/default/table",
+      "year": 2020,
+      "sourceIds": ["eurostat-hbs_str_t223", "dzs-hbs-2022"],
+      "strength": "moderate"
+    },
+    {
+      "metric": "spending.foodAtHome",
+      "region": "HR",
+      "band": "typical",
+      "min": 16.7,
+      "max": 47.6,
+      "unit": "percent of spending",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/hbs_str_t223/default/table",
+      "year": 2020,
+      "sourceIds": ["eurostat-hbs_str_t223", "dzs-hbs-2022"],
+      "strength": "moderate"
+    },
+    {
+      "metric": "spending.foodAtHome",
+      "region": "HR",
+      "band": "high",
+      "min": 47.6,
+      "max": null,
+      "unit": "percent of spending",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/hbs_str_t223/default/table",
+      "year": 2020,
+      "sourceIds": ["eurostat-hbs_str_t223", "dzs-hbs-2022"],
+      "strength": "moderate"
+    },
+    {
+      "metric": "spending.foodAtHome",
+      "region": "UK",
+      "band": "low",
+      "min": 0,
+      "max": 6.8,
+      "unit": "percent of spending",
+      "sourceUrl": "https://www.ons.gov.uk/peoplepopulationandcommunity/personalandhouseholdfinances/expenditure/bulletins/familyspendingintheuk/april2024tomarch2025",
+      "year": 2025,
+      "sourceIds": ["ons-family-spending-fye2025"],
+      "strength": "strong"
+    },
+    {
+      "metric": "spending.foodAtHome",
+      "region": "UK",
+      "band": "typical",
+      "min": 6.8,
+      "max": 17.5,
+      "unit": "percent of spending",
+      "sourceUrl": "https://www.ons.gov.uk/peoplepopulationandcommunity/personalandhouseholdfinances/expenditure/bulletins/familyspendingintheuk/april2024tomarch2025",
+      "year": 2025,
+      "sourceIds": ["ons-family-spending-fye2025"],
+      "strength": "strong"
+    },
+    {
+      "metric": "spending.foodAtHome",
+      "region": "UK",
+      "band": "high",
+      "min": 17.5,
+      "max": null,
+      "unit": "percent of spending",
+      "sourceUrl": "https://www.ons.gov.uk/peoplepopulationandcommunity/personalandhouseholdfinances/expenditure/bulletins/familyspendingintheuk/april2024tomarch2025",
+      "year": 2025,
+      "sourceIds": ["ons-family-spending-fye2025"],
+      "strength": "strong"
+    },
+    {
+      "metric": "spending.foodAtHome",
+      "region": "US",
+      "band": "low",
+      "min": 0,
+      "max": 5.7,
+      "unit": "percent of spending",
+      "sourceUrl": "https://www.bls.gov/cex/tables/calendar-year/mean-item-share-average-standard-error/cu-income-quintiles-before-taxes-2024.xlsx",
+      "year": 2024,
+      "sourceIds": ["bls-ce-2024"],
+      "strength": "strong"
+    },
+    {
+      "metric": "spending.foodAtHome",
+      "region": "US",
+      "band": "typical",
+      "min": 5.7,
+      "max": 14.0,
+      "unit": "percent of spending",
+      "sourceUrl": "https://www.bls.gov/cex/tables/calendar-year/mean-item-share-average-standard-error/cu-income-quintiles-before-taxes-2024.xlsx",
+      "year": 2024,
+      "sourceIds": ["bls-ce-2024"],
+      "strength": "strong"
+    },
+    {
+      "metric": "spending.foodAtHome",
+      "region": "US",
+      "band": "high",
+      "min": 14.0,
+      "max": null,
+      "unit": "percent of spending",
+      "sourceUrl": "https://www.bls.gov/cex/tables/calendar-year/mean-item-share-average-standard-error/cu-income-quintiles-before-taxes-2024.xlsx",
+      "year": 2024,
+      "sourceIds": ["bls-ce-2024"],
+      "strength": "strong"
+    },
+    {
+      "metric": "spending.eatingOut",
+      "region": "EU27",
+      "band": "low",
+      "min": 0,
+      "max": 2.4,
+      "unit": "percent of spending",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/hbs_str_t223/default/table",
+      "year": 2020,
+      "sourceIds": ["eurostat-hbs_str_t223", "eurostat-nama_10_cp18"],
+      "strength": "weak"
+    },
+    {
+      "metric": "spending.eatingOut",
+      "region": "EU27",
+      "band": "typical",
+      "min": 2.4,
+      "max": 7.0,
+      "unit": "percent of spending",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/hbs_str_t223/default/table",
+      "year": 2020,
+      "sourceIds": ["eurostat-hbs_str_t223", "eurostat-nama_10_cp18"],
+      "strength": "weak"
+    },
+    {
+      "metric": "spending.eatingOut",
+      "region": "EU27",
+      "band": "high",
+      "min": 7.0,
+      "max": null,
+      "unit": "percent of spending",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/hbs_str_t223/default/table",
+      "year": 2020,
+      "sourceIds": ["eurostat-hbs_str_t223", "eurostat-nama_10_cp18"],
+      "strength": "weak"
+    },
+    {
+      "metric": "spending.eatingOut",
+      "region": "DE",
+      "band": "low",
+      "min": 0,
+      "max": 2.7,
+      "unit": "percent of spending",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/hbs_str_t223/default/table",
+      "year": 2020,
+      "sourceIds": ["eurostat-hbs_str_t223"],
+      "strength": "moderate"
+    },
+    {
+      "metric": "spending.eatingOut",
+      "region": "DE",
+      "band": "typical",
+      "min": 2.7,
+      "max": 7.1,
+      "unit": "percent of spending",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/hbs_str_t223/default/table",
+      "year": 2020,
+      "sourceIds": ["eurostat-hbs_str_t223"],
+      "strength": "moderate"
+    },
+    {
+      "metric": "spending.eatingOut",
+      "region": "DE",
+      "band": "high",
+      "min": 7.1,
+      "max": null,
+      "unit": "percent of spending",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/hbs_str_t223/default/table",
+      "year": 2020,
+      "sourceIds": ["eurostat-hbs_str_t223"],
+      "strength": "moderate"
+    },
+    {
+      "metric": "spending.eatingOut",
+      "region": "HR",
+      "band": "low",
+      "min": 0,
+      "max": 0.8,
+      "unit": "percent of spending",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/hbs_str_t223/default/table",
+      "year": 2020,
+      "sourceIds": ["eurostat-hbs_str_t223"],
+      "strength": "weak"
+    },
+    {
+      "metric": "spending.eatingOut",
+      "region": "HR",
+      "band": "typical",
+      "min": 0.8,
+      "max": 4.3,
+      "unit": "percent of spending",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/hbs_str_t223/default/table",
+      "year": 2020,
+      "sourceIds": ["eurostat-hbs_str_t223"],
+      "strength": "weak"
+    },
+    {
+      "metric": "spending.eatingOut",
+      "region": "HR",
+      "band": "high",
+      "min": 4.3,
+      "max": null,
+      "unit": "percent of spending",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/hbs_str_t223/default/table",
+      "year": 2020,
+      "sourceIds": ["eurostat-hbs_str_t223"],
+      "strength": "weak"
+    },
+    {
+      "metric": "spending.eatingOut",
+      "region": "UK",
+      "band": "low",
+      "min": 0,
+      "max": 2.6,
+      "unit": "percent of spending",
+      "sourceUrl": "https://www.ons.gov.uk/peoplepopulationandcommunity/personalandhouseholdfinances/expenditure/bulletins/familyspendingintheuk/april2024tomarch2025",
+      "year": 2025,
+      "sourceIds": ["ons-family-spending-fye2025"],
+      "strength": "moderate"
+    },
+    {
+      "metric": "spending.eatingOut",
+      "region": "UK",
+      "band": "typical",
+      "min": 2.6,
+      "max": 7.5,
+      "unit": "percent of spending",
+      "sourceUrl": "https://www.ons.gov.uk/peoplepopulationandcommunity/personalandhouseholdfinances/expenditure/bulletins/familyspendingintheuk/april2024tomarch2025",
+      "year": 2025,
+      "sourceIds": ["ons-family-spending-fye2025"],
+      "strength": "moderate"
+    },
+    {
+      "metric": "spending.eatingOut",
+      "region": "UK",
+      "band": "high",
+      "min": 7.5,
+      "max": null,
+      "unit": "percent of spending",
+      "sourceUrl": "https://www.ons.gov.uk/peoplepopulationandcommunity/personalandhouseholdfinances/expenditure/bulletins/familyspendingintheuk/april2024tomarch2025",
+      "year": 2025,
+      "sourceIds": ["ons-family-spending-fye2025"],
+      "strength": "moderate"
+    },
+    {
+      "metric": "spending.eatingOut",
+      "region": "US",
+      "band": "low",
+      "min": 0,
+      "max": 3.6,
+      "unit": "percent of spending",
+      "sourceUrl": "https://www.bls.gov/cex/tables/calendar-year/mean-item-share-average-standard-error/cu-income-quintiles-before-taxes-2024.xlsx",
+      "year": 2024,
+      "sourceIds": ["bls-ce-2024"],
+      "strength": "strong"
+    },
+    {
+      "metric": "spending.eatingOut",
+      "region": "US",
+      "band": "typical",
+      "min": 3.6,
+      "max": 7.8,
+      "unit": "percent of spending",
+      "sourceUrl": "https://www.bls.gov/cex/tables/calendar-year/mean-item-share-average-standard-error/cu-income-quintiles-before-taxes-2024.xlsx",
+      "year": 2024,
+      "sourceIds": ["bls-ce-2024"],
+      "strength": "strong"
+    },
+    {
+      "metric": "spending.eatingOut",
+      "region": "US",
+      "band": "high",
+      "min": 7.8,
+      "max": null,
+      "unit": "percent of spending",
+      "sourceUrl": "https://www.bls.gov/cex/tables/calendar-year/mean-item-share-average-standard-error/cu-income-quintiles-before-taxes-2024.xlsx",
+      "year": 2024,
+      "sourceIds": ["bls-ce-2024"],
+      "strength": "strong"
+    },
+    {
+      "metric": "spending.transport",
+      "region": "EU27",
+      "band": "low",
+      "min": 0,
+      "max": 6.0,
+      "unit": "percent of spending",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/hbs_str_t223/default/table",
+      "year": 2020,
+      "sourceIds": ["eurostat-hbs_str_t223", "eurostat-nama_10_cp18"],
+      "strength": "moderate"
+    },
+    {
+      "metric": "spending.transport",
+      "region": "EU27",
+      "band": "typical",
+      "min": 6.0,
+      "max": 18.8,
+      "unit": "percent of spending",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/hbs_str_t223/default/table",
+      "year": 2020,
+      "sourceIds": ["eurostat-hbs_str_t223", "eurostat-nama_10_cp18"],
+      "strength": "moderate"
+    },
+    {
+      "metric": "spending.transport",
+      "region": "EU27",
+      "band": "high",
+      "min": 18.8,
+      "max": null,
+      "unit": "percent of spending",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/hbs_str_t223/default/table",
+      "year": 2020,
+      "sourceIds": ["eurostat-hbs_str_t223", "eurostat-nama_10_cp18"],
+      "strength": "moderate"
+    },
+    {
+      "metric": "spending.transport",
+      "region": "DE",
+      "band": "low",
+      "min": 0,
+      "max": 6.4,
+      "unit": "percent of spending",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/hbs_str_t223/default/table",
+      "year": 2020,
+      "sourceIds": ["eurostat-hbs_str_t223"],
+      "strength": "moderate"
+    },
+    {
+      "metric": "spending.transport",
+      "region": "DE",
+      "band": "typical",
+      "min": 6.4,
+      "max": 25.6,
+      "unit": "percent of spending",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/hbs_str_t223/default/table",
+      "year": 2020,
+      "sourceIds": ["eurostat-hbs_str_t223"],
+      "strength": "moderate"
+    },
+    {
+      "metric": "spending.transport",
+      "region": "DE",
+      "band": "high",
+      "min": 25.6,
+      "max": null,
+      "unit": "percent of spending",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/hbs_str_t223/default/table",
+      "year": 2020,
+      "sourceIds": ["eurostat-hbs_str_t223"],
+      "strength": "moderate"
+    },
+    {
+      "metric": "spending.transport",
+      "region": "HR",
+      "band": "low",
+      "min": 0,
+      "max": 4.4,
+      "unit": "percent of spending",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/hbs_str_t223/default/table",
+      "year": 2020,
+      "sourceIds": ["eurostat-hbs_str_t223", "dzs-hbs-2022"],
+      "strength": "moderate"
+    },
+    {
+      "metric": "spending.transport",
+      "region": "HR",
+      "band": "typical",
+      "min": 4.4,
+      "max": 24.9,
+      "unit": "percent of spending",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/hbs_str_t223/default/table",
+      "year": 2020,
+      "sourceIds": ["eurostat-hbs_str_t223", "dzs-hbs-2022"],
+      "strength": "moderate"
+    },
+    {
+      "metric": "spending.transport",
+      "region": "HR",
+      "band": "high",
+      "min": 24.9,
+      "max": null,
+      "unit": "percent of spending",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/hbs_str_t223/default/table",
+      "year": 2020,
+      "sourceIds": ["eurostat-hbs_str_t223", "dzs-hbs-2022"],
+      "strength": "moderate"
+    },
+    {
+      "metric": "spending.transport",
+      "region": "UK",
+      "band": "low",
+      "min": 0,
+      "max": 6.8,
+      "unit": "percent of spending",
+      "sourceUrl": "https://www.ons.gov.uk/peoplepopulationandcommunity/personalandhouseholdfinances/expenditure/bulletins/familyspendingintheuk/april2024tomarch2025",
+      "year": 2025,
+      "sourceIds": ["ons-family-spending-fye2025"],
+      "strength": "strong"
+    },
+    {
+      "metric": "spending.transport",
+      "region": "UK",
+      "band": "typical",
+      "min": 6.8,
+      "max": 20.0,
+      "unit": "percent of spending",
+      "sourceUrl": "https://www.ons.gov.uk/peoplepopulationandcommunity/personalandhouseholdfinances/expenditure/bulletins/familyspendingintheuk/april2024tomarch2025",
+      "year": 2025,
+      "sourceIds": ["ons-family-spending-fye2025"],
+      "strength": "strong"
+    },
+    {
+      "metric": "spending.transport",
+      "region": "UK",
+      "band": "high",
+      "min": 20.0,
+      "max": null,
+      "unit": "percent of spending",
+      "sourceUrl": "https://www.ons.gov.uk/peoplepopulationandcommunity/personalandhouseholdfinances/expenditure/bulletins/familyspendingintheuk/april2024tomarch2025",
+      "year": 2025,
+      "sourceIds": ["ons-family-spending-fye2025"],
+      "strength": "strong"
+    },
+    {
+      "metric": "spending.transport",
+      "region": "US",
+      "band": "low",
+      "min": 0,
+      "max": 11.2,
+      "unit": "percent of spending",
+      "sourceUrl": "https://www.bls.gov/cex/tables/calendar-year/mean-item-share-average-standard-error/cu-income-quintiles-before-taxes-2024.xlsx",
+      "year": 2024,
+      "sourceIds": ["bls-ce-2024"],
+      "strength": "strong"
+    },
+    {
+      "metric": "spending.transport",
+      "region": "US",
+      "band": "typical",
+      "min": 11.2,
+      "max": 25.8,
+      "unit": "percent of spending",
+      "sourceUrl": "https://www.bls.gov/cex/tables/calendar-year/mean-item-share-average-standard-error/cu-income-quintiles-before-taxes-2024.xlsx",
+      "year": 2024,
+      "sourceIds": ["bls-ce-2024"],
+      "strength": "strong"
+    },
+    {
+      "metric": "spending.transport",
+      "region": "US",
+      "band": "high",
+      "min": 25.8,
+      "max": null,
+      "unit": "percent of spending",
+      "sourceUrl": "https://www.bls.gov/cex/tables/calendar-year/mean-item-share-average-standard-error/cu-income-quintiles-before-taxes-2024.xlsx",
+      "year": 2024,
+      "sourceIds": ["bls-ce-2024"],
+      "strength": "strong"
+    },
+    {
+      "metric": "debt.rate",
+      "region": "EU27",
+      "band": "low",
+      "min": 0,
+      "max": 4.0,
+      "unit": "percent a year (APR)",
+      "sourceUrl": "https://web.archive.org/web/20260820074738/https://www.reddit.com/r/personalfinance/wiki/commontopics/",
+      "year": 2026,
+      "sourceIds": ["rpf-wiki-2026"],
+      "strength": "weak"
+    },
+    {
+      "metric": "debt.rate",
+      "region": "EU27",
+      "band": "typical",
+      "min": 4.0,
+      "max": 10.0,
+      "unit": "percent a year (APR)",
+      "sourceUrl": "https://web.archive.org/web/20260820074738/https://www.reddit.com/r/personalfinance/wiki/commontopics/",
+      "year": 2026,
+      "sourceIds": ["rpf-wiki-2026"],
+      "strength": "weak"
+    },
+    {
+      "metric": "debt.rate",
+      "region": "EU27",
+      "band": "high",
+      "min": 10.0,
+      "max": null,
+      "unit": "percent a year (APR)",
+      "sourceUrl": "https://web.archive.org/web/20260820074738/https://www.reddit.com/r/personalfinance/wiki/commontopics/",
+      "year": 2026,
+      "sourceIds": ["rpf-wiki-2026"],
+      "strength": "weak"
+    },
+    {
+      "metric": "debt.rate",
+      "region": "DE",
+      "band": "low",
+      "min": 0,
+      "max": 4.0,
+      "unit": "percent a year (APR)",
+      "sourceUrl": "https://web.archive.org/web/20260820074738/https://www.reddit.com/r/personalfinance/wiki/commontopics/",
+      "year": 2026,
+      "sourceIds": ["rpf-wiki-2026"],
+      "strength": "weak"
+    },
+    {
+      "metric": "debt.rate",
+      "region": "DE",
+      "band": "typical",
+      "min": 4.0,
+      "max": 10.0,
+      "unit": "percent a year (APR)",
+      "sourceUrl": "https://web.archive.org/web/20260820074738/https://www.reddit.com/r/personalfinance/wiki/commontopics/",
+      "year": 2026,
+      "sourceIds": ["rpf-wiki-2026"],
+      "strength": "weak"
+    },
+    {
+      "metric": "debt.rate",
+      "region": "DE",
+      "band": "high",
+      "min": 10.0,
+      "max": null,
+      "unit": "percent a year (APR)",
+      "sourceUrl": "https://web.archive.org/web/20260820074738/https://www.reddit.com/r/personalfinance/wiki/commontopics/",
+      "year": 2026,
+      "sourceIds": ["rpf-wiki-2026"],
+      "strength": "weak"
+    },
+    {
+      "metric": "debt.rate",
+      "region": "HR",
+      "band": "low",
+      "min": 0,
+      "max": 4.0,
+      "unit": "percent a year (APR)",
+      "sourceUrl": "https://web.archive.org/web/20260820074738/https://www.reddit.com/r/personalfinance/wiki/commontopics/",
+      "year": 2026,
+      "sourceIds": ["rpf-wiki-2026"],
+      "strength": "weak"
+    },
+    {
+      "metric": "debt.rate",
+      "region": "HR",
+      "band": "typical",
+      "min": 4.0,
+      "max": 10.0,
+      "unit": "percent a year (APR)",
+      "sourceUrl": "https://web.archive.org/web/20260820074738/https://www.reddit.com/r/personalfinance/wiki/commontopics/",
+      "year": 2026,
+      "sourceIds": ["rpf-wiki-2026"],
+      "strength": "weak"
+    },
+    {
+      "metric": "debt.rate",
+      "region": "HR",
+      "band": "high",
+      "min": 10.0,
+      "max": null,
+      "unit": "percent a year (APR)",
+      "sourceUrl": "https://web.archive.org/web/20260820074738/https://www.reddit.com/r/personalfinance/wiki/commontopics/",
+      "year": 2026,
+      "sourceIds": ["rpf-wiki-2026"],
+      "strength": "weak"
+    },
+    {
+      "metric": "debt.rate",
+      "region": "UK",
+      "band": "low",
+      "min": 0,
+      "max": 4.0,
+      "unit": "percent a year (APR)",
+      "sourceUrl": "https://web.archive.org/web/20260820074738/https://www.reddit.com/r/personalfinance/wiki/commontopics/",
+      "year": 2026,
+      "sourceIds": ["rpf-wiki-2026"],
+      "strength": "weak"
+    },
+    {
+      "metric": "debt.rate",
+      "region": "UK",
+      "band": "typical",
+      "min": 4.0,
+      "max": 10.0,
+      "unit": "percent a year (APR)",
+      "sourceUrl": "https://web.archive.org/web/20260820074738/https://www.reddit.com/r/personalfinance/wiki/commontopics/",
+      "year": 2026,
+      "sourceIds": ["rpf-wiki-2026"],
+      "strength": "weak"
+    },
+    {
+      "metric": "debt.rate",
+      "region": "UK",
+      "band": "high",
+      "min": 10.0,
+      "max": null,
+      "unit": "percent a year (APR)",
+      "sourceUrl": "https://web.archive.org/web/20260820074738/https://www.reddit.com/r/personalfinance/wiki/commontopics/",
+      "year": 2026,
+      "sourceIds": ["rpf-wiki-2026"],
+      "strength": "weak"
+    },
+    {
+      "metric": "debt.rate",
+      "region": "US",
+      "band": "low",
+      "min": 0,
+      "max": 4.0,
+      "unit": "percent a year (APR)",
+      "sourceUrl": "https://web.archive.org/web/20260820074738/https://www.reddit.com/r/personalfinance/wiki/commontopics/",
+      "year": 2026,
+      "sourceIds": ["rpf-wiki-2026"],
+      "strength": "weak"
+    },
+    {
+      "metric": "debt.rate",
+      "region": "US",
+      "band": "typical",
+      "min": 4.0,
+      "max": 10.0,
+      "unit": "percent a year (APR)",
+      "sourceUrl": "https://web.archive.org/web/20260820074738/https://www.reddit.com/r/personalfinance/wiki/commontopics/",
+      "year": 2026,
+      "sourceIds": ["rpf-wiki-2026"],
+      "strength": "weak"
+    },
+    {
+      "metric": "debt.rate",
+      "region": "US",
+      "band": "high",
+      "min": 10.0,
+      "max": null,
+      "unit": "percent a year (APR)",
+      "sourceUrl": "https://web.archive.org/web/20260820074738/https://www.reddit.com/r/personalfinance/wiki/commontopics/",
+      "year": 2026,
+      "sourceIds": ["rpf-wiki-2026"],
+      "strength": "weak"
+    },
+    {
+      "metric": "debt.serviceShare",
+      "region": "HR",
+      "band": "low",
+      "min": 0,
+      "max": 0,
+      "unit": "percent of net income",
+      "sourceUrl": "https://www.hnb.hr/en/-/kriteriji-kreditiranja-potrosaca",
+      "year": 2025,
+      "sourceIds": ["hnb-dsti-2025"],
+      "strength": "moderate",
+      "maxInclusive": true,
+      "when": {
+        "hasHousingLoan": false
+      }
+    },
+    {
+      "metric": "debt.serviceShare",
+      "region": "HR",
+      "band": "typical",
+      "min": 0,
+      "max": 40.0,
+      "unit": "percent of net income",
+      "sourceUrl": "https://www.hnb.hr/en/-/kriteriji-kreditiranja-potrosaca",
+      "year": 2025,
+      "sourceIds": ["hnb-dsti-2025"],
+      "strength": "moderate",
+      "minExclusive": true,
+      "when": {
+        "hasHousingLoan": false
+      }
+    },
+    {
+      "metric": "debt.serviceShare",
+      "region": "HR",
+      "band": "high",
+      "min": 40.0,
+      "max": null,
+      "unit": "percent of net income",
+      "sourceUrl": "https://www.hnb.hr/en/-/kriteriji-kreditiranja-potrosaca",
+      "year": 2025,
+      "sourceIds": ["hnb-dsti-2025"],
+      "strength": "moderate",
+      "when": {
+        "hasHousingLoan": false
+      }
+    },
+    {
+      "metric": "debt.serviceShare",
+      "region": "HR",
+      "band": "low",
+      "min": 0,
+      "max": 0,
+      "unit": "percent of net income",
+      "sourceUrl": "https://www.hnb.hr/en/-/kriteriji-kreditiranja-potrosaca",
+      "year": 2025,
+      "sourceIds": ["hnb-dsti-2025"],
+      "strength": "moderate",
+      "maxInclusive": true,
+      "when": {
+        "hasHousingLoan": true
+      }
+    },
+    {
+      "metric": "debt.serviceShare",
+      "region": "HR",
+      "band": "typical",
+      "min": 0,
+      "max": 45.0,
+      "unit": "percent of net income",
+      "sourceUrl": "https://www.hnb.hr/en/-/kriteriji-kreditiranja-potrosaca",
+      "year": 2025,
+      "sourceIds": ["hnb-dsti-2025"],
+      "strength": "moderate",
+      "minExclusive": true,
+      "when": {
+        "hasHousingLoan": true
+      }
+    },
+    {
+      "metric": "debt.serviceShare",
+      "region": "HR",
+      "band": "high",
+      "min": 45.0,
+      "max": null,
+      "unit": "percent of net income",
+      "sourceUrl": "https://www.hnb.hr/en/-/kriteriji-kreditiranja-potrosaca",
+      "year": 2025,
+      "sourceIds": ["hnb-dsti-2025"],
+      "strength": "moderate",
+      "when": {
+        "hasHousingLoan": true
+      }
+    },
+    {
+      "metric": "debt.serviceShare",
+      "region": "DE",
+      "band": "low",
+      "min": 0,
+      "max": 0,
+      "unit": "percent of net income",
+      "sourceUrl": "https://www.hnb.hr/en/-/kriteriji-kreditiranja-potrosaca",
+      "year": 2025,
+      "sourceIds": ["hnb-dsti-2025"],
+      "strength": "moderate",
+      "maxInclusive": true,
+      "borrowedFrom": "HR",
+      "when": {
+        "hasHousingLoan": false
+      }
+    },
+    {
+      "metric": "debt.serviceShare",
+      "region": "DE",
+      "band": "typical",
+      "min": 0,
+      "max": 40.0,
+      "unit": "percent of net income",
+      "sourceUrl": "https://www.hnb.hr/en/-/kriteriji-kreditiranja-potrosaca",
+      "year": 2025,
+      "sourceIds": ["hnb-dsti-2025"],
+      "strength": "moderate",
+      "minExclusive": true,
+      "borrowedFrom": "HR",
+      "when": {
+        "hasHousingLoan": false
+      }
+    },
+    {
+      "metric": "debt.serviceShare",
+      "region": "DE",
+      "band": "high",
+      "min": 40.0,
+      "max": null,
+      "unit": "percent of net income",
+      "sourceUrl": "https://www.hnb.hr/en/-/kriteriji-kreditiranja-potrosaca",
+      "year": 2025,
+      "sourceIds": ["hnb-dsti-2025"],
+      "strength": "moderate",
+      "borrowedFrom": "HR",
+      "when": {
+        "hasHousingLoan": false
+      }
+    },
+    {
+      "metric": "debt.serviceShare",
+      "region": "DE",
+      "band": "low",
+      "min": 0,
+      "max": 0,
+      "unit": "percent of net income",
+      "sourceUrl": "https://www.hnb.hr/en/-/kriteriji-kreditiranja-potrosaca",
+      "year": 2025,
+      "sourceIds": ["hnb-dsti-2025"],
+      "strength": "moderate",
+      "maxInclusive": true,
+      "borrowedFrom": "HR",
+      "when": {
+        "hasHousingLoan": true
+      }
+    },
+    {
+      "metric": "debt.serviceShare",
+      "region": "DE",
+      "band": "typical",
+      "min": 0,
+      "max": 45.0,
+      "unit": "percent of net income",
+      "sourceUrl": "https://www.hnb.hr/en/-/kriteriji-kreditiranja-potrosaca",
+      "year": 2025,
+      "sourceIds": ["hnb-dsti-2025"],
+      "strength": "moderate",
+      "minExclusive": true,
+      "borrowedFrom": "HR",
+      "when": {
+        "hasHousingLoan": true
+      }
+    },
+    {
+      "metric": "debt.serviceShare",
+      "region": "DE",
+      "band": "high",
+      "min": 45.0,
+      "max": null,
+      "unit": "percent of net income",
+      "sourceUrl": "https://www.hnb.hr/en/-/kriteriji-kreditiranja-potrosaca",
+      "year": 2025,
+      "sourceIds": ["hnb-dsti-2025"],
+      "strength": "moderate",
+      "borrowedFrom": "HR",
+      "when": {
+        "hasHousingLoan": true
+      }
+    },
+    {
+      "metric": "debt.serviceShare",
+      "region": "EU27",
+      "band": "low",
+      "min": 0,
+      "max": 0,
+      "unit": "percent of net income",
+      "sourceUrl": "https://www.hnb.hr/en/-/kriteriji-kreditiranja-potrosaca",
+      "year": 2025,
+      "sourceIds": ["hnb-dsti-2025"],
+      "strength": "moderate",
+      "maxInclusive": true,
+      "borrowedFrom": "HR",
+      "when": {
+        "hasHousingLoan": false
+      }
+    },
+    {
+      "metric": "debt.serviceShare",
+      "region": "EU27",
+      "band": "typical",
+      "min": 0,
+      "max": 40.0,
+      "unit": "percent of net income",
+      "sourceUrl": "https://www.hnb.hr/en/-/kriteriji-kreditiranja-potrosaca",
+      "year": 2025,
+      "sourceIds": ["hnb-dsti-2025"],
+      "strength": "moderate",
+      "minExclusive": true,
+      "borrowedFrom": "HR",
+      "when": {
+        "hasHousingLoan": false
+      }
+    },
+    {
+      "metric": "debt.serviceShare",
+      "region": "EU27",
+      "band": "high",
+      "min": 40.0,
+      "max": null,
+      "unit": "percent of net income",
+      "sourceUrl": "https://www.hnb.hr/en/-/kriteriji-kreditiranja-potrosaca",
+      "year": 2025,
+      "sourceIds": ["hnb-dsti-2025"],
+      "strength": "moderate",
+      "borrowedFrom": "HR",
+      "when": {
+        "hasHousingLoan": false
+      }
+    },
+    {
+      "metric": "debt.serviceShare",
+      "region": "EU27",
+      "band": "low",
+      "min": 0,
+      "max": 0,
+      "unit": "percent of net income",
+      "sourceUrl": "https://www.hnb.hr/en/-/kriteriji-kreditiranja-potrosaca",
+      "year": 2025,
+      "sourceIds": ["hnb-dsti-2025"],
+      "strength": "moderate",
+      "maxInclusive": true,
+      "borrowedFrom": "HR",
+      "when": {
+        "hasHousingLoan": true
+      }
+    },
+    {
+      "metric": "debt.serviceShare",
+      "region": "EU27",
+      "band": "typical",
+      "min": 0,
+      "max": 45.0,
+      "unit": "percent of net income",
+      "sourceUrl": "https://www.hnb.hr/en/-/kriteriji-kreditiranja-potrosaca",
+      "year": 2025,
+      "sourceIds": ["hnb-dsti-2025"],
+      "strength": "moderate",
+      "minExclusive": true,
+      "borrowedFrom": "HR",
+      "when": {
+        "hasHousingLoan": true
+      }
+    },
+    {
+      "metric": "debt.serviceShare",
+      "region": "EU27",
+      "band": "high",
+      "min": 45.0,
+      "max": null,
+      "unit": "percent of net income",
+      "sourceUrl": "https://www.hnb.hr/en/-/kriteriji-kreditiranja-potrosaca",
+      "year": 2025,
+      "sourceIds": ["hnb-dsti-2025"],
+      "strength": "moderate",
+      "borrowedFrom": "HR",
+      "when": {
+        "hasHousingLoan": true
+      }
+    },
+    {
+      "metric": "debt.serviceShare",
+      "region": "US",
+      "band": "low",
+      "min": 0,
+      "max": 0,
+      "unit": "percent of net income",
+      "sourceUrl": "https://selling-guide.fanniemae.com/sel/b3-6-02/debt-income-ratios",
+      "year": 2025,
+      "sourceIds": ["fannie-b3-6-02"],
+      "strength": "moderate",
+      "maxInclusive": true
+    },
+    {
+      "metric": "debt.serviceShare",
+      "region": "US",
+      "band": "typical",
+      "min": 0,
+      "max": 36.0,
+      "unit": "percent of net income",
+      "sourceUrl": "https://selling-guide.fanniemae.com/sel/b3-6-02/debt-income-ratios",
+      "year": 2025,
+      "sourceIds": ["fannie-b3-6-02"],
+      "strength": "moderate",
+      "minExclusive": true
+    },
+    {
+      "metric": "debt.serviceShare",
+      "region": "US",
+      "band": "high",
+      "min": 36.0,
+      "max": null,
+      "unit": "percent of net income",
+      "sourceUrl": "https://selling-guide.fanniemae.com/sel/b3-6-02/debt-income-ratios",
+      "year": 2025,
+      "sourceIds": ["fannie-b3-6-02"],
+      "strength": "moderate"
+    }
+  ],
+  "derivations": [
+    {
+      "metric": "subscriptions.count",
+      "region": "UK",
+      "strength": "moderate",
+      "sourceIds": ["dbt-subscription-traps-2023"],
+      "text": "Typical runs from 0.75 x the lowest to 1.25 x the highest published average count, rounded to whole subscriptions (sources publish averages, not distributions).",
+      "borrowedFrom": null
+    },
+    {
+      "metric": "subscriptions.count",
+      "region": "US",
+      "strength": "weak",
+      "sourceIds": ["self-subscriptions-2026"],
+      "text": "Typical runs from 0.75 x the lowest to 1.25 x the highest published average count, rounded to whole subscriptions (sources publish averages, not distributions).",
+      "borrowedFrom": null
+    },
+    {
+      "metric": "subscriptions.count",
+      "region": "EU27",
+      "strength": "weak",
+      "sourceIds": ["dbt-subscription-traps-2023"],
+      "text": "Typical runs from 0.75 x the lowest to 1.25 x the highest published average count, rounded to whole subscriptions (sources publish averages, not distributions).",
+      "borrowedFrom": "UK"
+    },
+    {
+      "metric": "subscriptions.count",
+      "region": "DE",
+      "strength": "weak",
+      "sourceIds": ["dbt-subscription-traps-2023"],
+      "text": "Typical runs from 0.75 x the lowest to 1.25 x the highest published average count, rounded to whole subscriptions (sources publish averages, not distributions).",
+      "borrowedFrom": "UK"
+    },
+    {
+      "metric": "subscriptions.count",
+      "region": "HR",
+      "strength": "weak",
+      "sourceIds": ["dbt-subscription-traps-2023"],
+      "text": "Typical runs from 0.75 x the lowest to 1.25 x the highest published average count, rounded to whole subscriptions (sources publish averages, not distributions).",
+      "borrowedFrom": "UK"
+    },
+    {
+      "metric": "subscriptions.monthlySpend",
+      "region": "US",
+      "strength": "weak",
+      "sourceIds": ["self-subscriptions-2026", "cnet-subscriptions-2026"],
+      "text": "Typical runs from 0.75 x the lowest to 1.25 x the highest recent published average monthly spend. Scope differs between surveys, which is why the averages are far apart.",
+      "borrowedFrom": null
+    },
+    {
+      "metric": "subscriptions.monthlySpend",
+      "region": "UK",
+      "strength": "moderate",
+      "sourceIds": ["dbt-subscription-traps-2023"],
+      "text": "Typical runs from 0.75 x the lowest to 1.25 x the highest recent published average monthly spend. Scope differs between surveys, which is why the averages are far apart.",
+      "borrowedFrom": null
+    },
+    {
+      "metric": "savings.rate",
+      "region": "EU27",
+      "strength": "moderate",
+      "sourceIds": ["eurostat-tec00131"],
+      "text": "Typical is the official household saving rate plus or minus 5 points (the width is the model's choice; official sources publish one aggregate rate). Any rate below zero is low.",
+      "borrowedFrom": null
+    },
+    {
+      "metric": "savings.rate",
+      "region": "DE",
+      "strength": "moderate",
+      "sourceIds": ["eurostat-tec00131"],
+      "text": "Typical is the official household saving rate plus or minus 5 points (the width is the model's choice; official sources publish one aggregate rate). Any rate below zero is low.",
+      "borrowedFrom": null
+    },
+    {
+      "metric": "savings.rate",
+      "region": "HR",
+      "strength": "moderate",
+      "sourceIds": ["eurostat-tec00131"],
+      "text": "Typical is the official household saving rate plus or minus 5 points (the width is the model's choice; official sources publish one aggregate rate). Any rate below zero is low.",
+      "borrowedFrom": null
+    },
+    {
+      "metric": "savings.rate",
+      "region": "UK",
+      "strength": "moderate",
+      "sourceIds": ["ons-nrjs"],
+      "text": "Typical is the official household saving rate plus or minus 5 points (the width is the model's choice; official sources publish one aggregate rate). Any rate below zero is low.",
+      "borrowedFrom": null
+    },
+    {
+      "metric": "savings.rate",
+      "region": "US",
+      "strength": "moderate",
+      "sourceIds": ["bea-psavert"],
+      "text": "Typical is the official household saving rate plus or minus 5 points (the width is the model's choice; official sources publish one aggregate rate). Any rate below zero is low.",
+      "borrowedFrom": null
+    },
+    {
+      "metric": "cushion.months",
+      "region": "EU27",
+      "strength": "moderate",
+      "sourceIds": ["eurostat-ilc_odbt15", "rpf-wiki-2026"],
+      "text": "Edges come from the r/personalfinance wiki: a fund of one month is enough while paying debts above 10%, and a full fund is three to six months. So the first cushion is a month of essential spending, and six months is the top. Eurostat's figures on how long households could live on their savings give context, not the edges.",
+      "borrowedFrom": null
+    },
+    {
+      "metric": "cushion.months",
+      "region": "HR",
+      "strength": "moderate",
+      "sourceIds": ["eurostat-ilc_odbt15", "rpf-wiki-2026"],
+      "text": "Edges come from the r/personalfinance wiki: a fund of one month is enough while paying debts above 10%, and a full fund is three to six months. So the first cushion is a month of essential spending, and six months is the top. Eurostat's figures on how long households could live on their savings give context, not the edges.",
+      "borrowedFrom": null
+    },
+    {
+      "metric": "cushion.months",
+      "region": "DE",
+      "strength": "moderate",
+      "sourceIds": ["destatis-unexpected-2025", "rpf-wiki-2026"],
+      "text": "Edges come from the r/personalfinance wiki: a fund of one month is enough while paying debts above 10%, and a full fund is three to six months. So the first cushion is a month of essential spending, and six months is the top. Destatis figures on households with no money for an unexpected expense give context, not the edges.",
+      "borrowedFrom": null
+    },
+    {
+      "metric": "cushion.months",
+      "region": "UK",
+      "strength": "moderate",
+      "sourceIds": ["ons-opn-2025-06", "rpf-wiki-2026"],
+      "text": "Edges come from the r/personalfinance wiki: a fund of one month is enough while paying debts above 10%, and a full fund is three to six months. So the first cushion is a month of essential spending, and six months is the top. The ONS bulletin Public opinions and social trends (June 2025) gives context, not the edges.",
+      "borrowedFrom": null
+    },
+    {
+      "metric": "cushion.months",
+      "region": "US",
+      "strength": "moderate",
+      "sourceIds": ["fed-shed-2025", "rpf-wiki-2026"],
+      "text": "Edges come from the r/personalfinance wiki: a fund of one month is enough while paying debts above 10%, and a full fund is three to six months. So the first cushion is a month of essential spending, and six months is the top. The Federal Reserve's Economic Well-Being of U.S. Households in 2025 gives context, not the edges.",
+      "borrowedFrom": null
+    },
+    {
+      "metric": "shock.cover",
+      "region": "DE",
+      "strength": "strong",
+      "sourceIds": ["destatis-unexpected-2025"],
+      "text": "Value is liquid money divided by the regional test amount. Below 1 means the person could not cover it from cash today.",
+      "borrowedFrom": null
+    },
+    {
+      "metric": "shock.cover",
+      "region": "HR",
+      "strength": "strong",
+      "sourceIds": ["dzs-poverty-2025"],
+      "text": "Value is liquid money divided by the regional test amount. Below 1 means the person could not cover it from cash today.",
+      "borrowedFrom": null
+    },
+    {
+      "metric": "shock.cover",
+      "region": "UK",
+      "strength": "strong",
+      "sourceIds": ["ons-opn-2025-06"],
+      "text": "Value is liquid money divided by the regional test amount. Below 1 means the person could not cover it from cash today.",
+      "borrowedFrom": null
+    },
+    {
+      "metric": "shock.cover",
+      "region": "US",
+      "strength": "strong",
+      "sourceIds": ["fed-shed-2025"],
+      "text": "Value is liquid money divided by the regional test amount. Below 1 means the person could not cover it from cash today.",
+      "borrowedFrom": null
+    },
+    {
+      "metric": "housing.share",
+      "region": "EU27",
+      "strength": "strong",
+      "sourceIds": ["eurostat-ilc_mded01", "eurostat-ilc_lvho07a"],
+      "text": "Low is below the regional average share; high is above the official overburden line (Eurostat: 40% of disposable income; HUD: 50% of income, with 30% as cost burden).",
+      "borrowedFrom": null
+    },
+    {
+      "metric": "housing.share",
+      "region": "DE",
+      "strength": "strong",
+      "sourceIds": ["eurostat-ilc_mded01", "eurostat-ilc_lvho07a"],
+      "text": "Low is below the regional average share; high is above the official overburden line (Eurostat: 40% of disposable income; HUD: 50% of income, with 30% as cost burden).",
+      "borrowedFrom": null
+    },
+    {
+      "metric": "housing.share",
+      "region": "HR",
+      "strength": "strong",
+      "sourceIds": ["eurostat-ilc_mded01", "eurostat-ilc_lvho07a"],
+      "text": "Low is below the regional average share; high is above the official overburden line (Eurostat: 40% of disposable income; HUD: 50% of income, with 30% as cost burden).",
+      "borrowedFrom": null
+    },
+    {
+      "metric": "housing.share",
+      "region": "UK",
+      "strength": "moderate",
+      "sourceIds": ["ehs-2024-25", "eurostat-ilc_lvho07a"],
+      "text": "Low is below the regional average share; high is above the official overburden line (Eurostat: 40% of disposable income; HUD: 50% of income, with 30% as cost burden). UK: EHS averages are on gross income, so a share of take-home pay reads higher; the 40% line is borrowed from Eurostat.",
+      "borrowedFrom": null
+    },
+    {
+      "metric": "housing.share",
+      "region": "US",
+      "strength": "strong",
+      "sourceIds": ["hud-chas", "jchs-son-2026"],
+      "text": "Low is below the regional average share; high is above the official overburden line (Eurostat: 40% of disposable income; HUD: 50% of income, with 30% as cost burden). US lines are on income before tax, so a share of take-home pay reads higher.",
+      "borrowedFrom": null
+    },
+    {
+      "metric": "spending.foodAtHome",
+      "region": "EU27",
+      "strength": "moderate",
+      "sourceIds": ["eurostat-hbs_str_t223", "eurostat-nama_10_cp18"],
+      "text": "Typical runs from 0.75 x the lowest to 1.25 x the highest income-quintile average share of spending. EU27 quintile shares raised by 1/(1-0.115) to take out imputed rent (national accounts ratio, 2024).",
+      "borrowedFrom": null
+    },
+    {
+      "metric": "spending.foodAtHome",
+      "region": "DE",
+      "strength": "moderate",
+      "sourceIds": ["eurostat-hbs_str_t223"],
+      "text": "Typical runs from 0.75 x the lowest to 1.25 x the highest income-quintile average share of spending. Quintile shares without imputed rent.",
+      "borrowedFrom": null
+    },
+    {
+      "metric": "spending.foodAtHome",
+      "region": "HR",
+      "strength": "moderate",
+      "sourceIds": ["eurostat-hbs_str_t223", "dzs-hbs-2022"],
+      "text": "Typical runs from 0.75 x the lowest to 1.25 x the highest income-quintile average share of spending. Quintile shares without imputed rent; DZS 2022 average 27.0% sits inside.",
+      "borrowedFrom": null
+    },
+    {
+      "metric": "spending.foodAtHome",
+      "region": "UK",
+      "strength": "strong",
+      "sourceIds": ["ons-family-spending-fye2025"],
+      "text": "Typical runs from 0.75 x the lowest to 1.25 x the highest income-quintile average share of spending. Quintiles approximated as the mean of adjacent decile shares (rounded to whole percent in the source).",
+      "borrowedFrom": null
+    },
+    {
+      "metric": "spending.foodAtHome",
+      "region": "US",
+      "strength": "strong",
+      "sourceIds": ["bls-ce-2024"],
+      "text": "Typical runs from 0.75 x the lowest to 1.25 x the highest income-quintile average share of spending. Quintile shares re-based without personal insurance and pensions.",
+      "borrowedFrom": null
+    },
+    {
+      "metric": "spending.eatingOut",
+      "region": "EU27",
+      "strength": "weak",
+      "sourceIds": ["eurostat-hbs_str_t223", "eurostat-nama_10_cp18"],
+      "text": "Typical runs from 0.75 x the lowest to 1.25 x the highest income-quintile average share of spending. EU27 publishes restaurants and accommodation together; scaled by the food-service share (0.772, national accounts 2024) and for imputed rent. Pandemic wave.",
+      "borrowedFrom": null
+    },
+    {
+      "metric": "spending.eatingOut",
+      "region": "DE",
+      "strength": "moderate",
+      "sourceIds": ["eurostat-hbs_str_t223"],
+      "text": "Typical runs from 0.75 x the lowest to 1.25 x the highest income-quintile average share of spending. Food and beverage serving services by quintile, without imputed rent.",
+      "borrowedFrom": null
+    },
+    {
+      "metric": "spending.eatingOut",
+      "region": "HR",
+      "strength": "weak",
+      "sourceIds": ["eurostat-hbs_str_t223"],
+      "text": "Typical runs from 0.75 x the lowest to 1.25 x the highest income-quintile average share of spending. Food and beverage serving services by quintile, without imputed rent. Pandemic wave; DZS 2022 puts catering near 3.8% overall.",
+      "borrowedFrom": null
+    },
+    {
+      "metric": "spending.eatingOut",
+      "region": "UK",
+      "strength": "moderate",
+      "sourceIds": ["ons-family-spending-fye2025"],
+      "text": "Typical runs from 0.75 x the lowest to 1.25 x the highest income-quintile average share of spending. Restaurants and hotels by quintile scaled by the catering share (34.6/49.2, table A1).",
+      "borrowedFrom": null
+    },
+    {
+      "metric": "spending.eatingOut",
+      "region": "US",
+      "strength": "strong",
+      "sourceIds": ["bls-ce-2024"],
+      "text": "Typical runs from 0.75 x the lowest to 1.25 x the highest income-quintile average share of spending. Food away from home by quintile, re-based without personal insurance and pensions.",
+      "borrowedFrom": null
+    },
+    {
+      "metric": "spending.transport",
+      "region": "EU27",
+      "strength": "moderate",
+      "sourceIds": ["eurostat-hbs_str_t223", "eurostat-nama_10_cp18"],
+      "text": "Typical runs from 0.75 x the lowest to 1.25 x the highest income-quintile average share of spending. EU27 quintile shares raised to take out imputed rent. Pandemic wave.",
+      "borrowedFrom": null
+    },
+    {
+      "metric": "spending.transport",
+      "region": "DE",
+      "strength": "moderate",
+      "sourceIds": ["eurostat-hbs_str_t223"],
+      "text": "Typical runs from 0.75 x the lowest to 1.25 x the highest income-quintile average share of spending. Quintile shares without imputed rent, vehicle purchases included.",
+      "borrowedFrom": null
+    },
+    {
+      "metric": "spending.transport",
+      "region": "HR",
+      "strength": "moderate",
+      "sourceIds": ["eurostat-hbs_str_t223", "dzs-hbs-2022"],
+      "text": "Typical runs from 0.75 x the lowest to 1.25 x the highest income-quintile average share of spending. Quintile shares without imputed rent; DZS 2022 average 15.5%.",
+      "borrowedFrom": null
+    },
+    {
+      "metric": "spending.transport",
+      "region": "UK",
+      "strength": "strong",
+      "sourceIds": ["ons-family-spending-fye2025"],
+      "text": "Typical runs from 0.75 x the lowest to 1.25 x the highest income-quintile average share of spending. Quintiles approximated from deciles; vehicle purchases included.",
+      "borrowedFrom": null
+    },
+    {
+      "metric": "spending.transport",
+      "region": "US",
+      "strength": "strong",
+      "sourceIds": ["bls-ce-2024"],
+      "text": "Typical runs from 0.75 x the lowest to 1.25 x the highest income-quintile average share of spending. Quintile shares re-based without personal insurance and pensions; vehicle purchases included.",
+      "borrowedFrom": null
+    },
+    {
+      "metric": "debt.rate",
+      "region": "EU27",
+      "strength": "weak",
+      "sourceIds": ["rpf-wiki-2026"],
+      "text": "Edges are a community convention (4% and 10%), not an official line. Regional averages give context: every region's average new consumer loan sits between them except the US, and card rates sit far above.",
+      "borrowedFrom": null
+    },
+    {
+      "metric": "debt.rate",
+      "region": "DE",
+      "strength": "weak",
+      "sourceIds": ["rpf-wiki-2026"],
+      "text": "Edges are a community convention (4% and 10%), not an official line. Regional averages give context: every region's average new consumer loan sits between them except the US, and card rates sit far above.",
+      "borrowedFrom": null
+    },
+    {
+      "metric": "debt.rate",
+      "region": "HR",
+      "strength": "weak",
+      "sourceIds": ["rpf-wiki-2026"],
+      "text": "Edges are a community convention (4% and 10%), not an official line. Regional averages give context: every region's average new consumer loan sits between them except the US, and card rates sit far above.",
+      "borrowedFrom": null
+    },
+    {
+      "metric": "debt.rate",
+      "region": "UK",
+      "strength": "weak",
+      "sourceIds": ["rpf-wiki-2026"],
+      "text": "Edges are a community convention (4% and 10%), not an official line. Regional averages give context: every region's average new consumer loan sits between them except the US, and card rates sit far above.",
+      "borrowedFrom": null
+    },
+    {
+      "metric": "debt.rate",
+      "region": "US",
+      "strength": "weak",
+      "sourceIds": ["rpf-wiki-2026"],
+      "text": "Edges are a community convention (4% and 10%), not an official line. Regional averages give context: every region's average new consumer loan sits between them except the US, and card rates sit far above.",
+      "borrowedFrom": null
+    },
+    {
+      "metric": "debt.serviceShare",
+      "region": "HR",
+      "strength": "moderate",
+      "sourceIds": ["hnb-dsti-2025"],
+      "text": "Low means no debt payments. High is at or above a regulator's or lender's ceiling for new lending (HNB: 40% non-housing, 45% with a housing loan; Fannie Mae: 36% of gross income). A ceiling for lending, not a measure of hardship.",
+      "borrowedFrom": null
+    },
+    {
+      "metric": "debt.serviceShare",
+      "region": "DE",
+      "strength": "moderate",
+      "sourceIds": ["hnb-dsti-2025"],
+      "text": "Low means no debt payments. High is at or above a regulator's or lender's ceiling for new lending (HNB: 40% non-housing, 45% with a housing loan; Fannie Mae: 36% of gross income). A ceiling for lending, not a measure of hardship.",
+      "borrowedFrom": "HR"
+    },
+    {
+      "metric": "debt.serviceShare",
+      "region": "EU27",
+      "strength": "moderate",
+      "sourceIds": ["hnb-dsti-2025"],
+      "text": "Low means no debt payments. High is at or above a regulator's or lender's ceiling for new lending (HNB: 40% non-housing, 45% with a housing loan; Fannie Mae: 36% of gross income). A ceiling for lending, not a measure of hardship.",
+      "borrowedFrom": "HR"
+    },
+    {
+      "metric": "debt.serviceShare",
+      "region": "US",
+      "strength": "moderate",
+      "sourceIds": ["fannie-b3-6-02"],
+      "text": "Low means no debt payments. High is at or above a regulator's or lender's ceiling for new lending (HNB: 40% non-housing, 45% with a housing loan; Fannie Mae: 36% of gross income). A ceiling for lending, not a measure of hardship. US line is on gross income.",
+      "borrowedFrom": null
+    }
+  ],
+  "references": [
+    {
+      "metric": "subscriptions.count",
+      "region": "UK",
+      "value": 2.9,
+      "unit": "subscriptions per adult",
+      "label": "about 3 per adult (3.4 to 4 among people who have any)",
+      "sourceUrl": "https://assets.publishing.service.gov.uk/media/64464e6f529eda00123b02c4/annex_2-subscription_traps_impact_assessment.pdf",
+      "year": 2022,
+      "sourceId": "dbt-subscription-traps-2023"
+    },
+    {
+      "metric": "subscriptions.count",
+      "region": "US",
+      "value": 3.4,
+      "unit": "subscriptions per adult who pays",
+      "label": "about 3 (3.4 among people who pay for any)",
+      "sourceUrl": "https://self.inc/info/cost-of-unused-paid-subscriptions",
+      "year": 2026,
+      "sourceId": "self-subscriptions-2026"
+    },
+    {
+      "metric": "subscriptions.monthlySpend",
+      "region": "US",
+      "value": 111,
+      "unit": "USD per month",
+      "label": "about $111 a month (CNET, 2026); $35 in a narrower poll (Self Financial, 2026)",
+      "sourceUrl": "https://www.wfsb.com/2026/07/16/average-american-now-spending-111-month-subscriptions-study-finds/",
+      "year": 2026,
+      "sourceId": "cnet-subscriptions-2026"
+    },
+    {
+      "metric": "subscriptions.monthlySpend",
+      "region": "UK",
+      "value": 41,
+      "unit": "GBP per adult per month",
+      "label": "about GBP 41 a month per adult (2.9 subscriptions at GBP 14.19 each, DBT 2023)",
+      "sourceUrl": "https://assets.publishing.service.gov.uk/media/64464e6f529eda00123b02c4/annex_2-subscription_traps_impact_assessment.pdf",
+      "year": 2022,
+      "sourceId": "dbt-subscription-traps-2023"
+    },
+    {
+      "metric": "savings.rate",
+      "region": "EU27",
+      "value": 14.32,
+      "unit": "percent of disposable income",
+      "label": "14.3% (2025)",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/tec00131/default/table",
+      "year": 2025,
+      "sourceId": "eurostat-tec00131"
+    },
+    {
+      "metric": "savings.rate",
+      "region": "DE",
+      "value": 18.86,
+      "unit": "percent of disposable income",
+      "label": "18.9% (2025)",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/tec00131/default/table",
+      "year": 2025,
+      "sourceId": "eurostat-tec00131"
+    },
+    {
+      "metric": "savings.rate",
+      "region": "HR",
+      "value": 9.04,
+      "unit": "percent of disposable income",
+      "label": "9.0% (2024)",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/tec00131/default/table",
+      "year": 2024,
+      "sourceId": "eurostat-tec00131"
+    },
+    {
+      "metric": "savings.rate",
+      "region": "UK",
+      "value": 9.7,
+      "unit": "percent of disposable income",
+      "label": "9.7% (2025)",
+      "sourceUrl": "https://www.ons.gov.uk/economy/grossdomesticproductgdp/timeseries/nrjs/ukea",
+      "year": 2025,
+      "sourceId": "ons-nrjs"
+    },
+    {
+      "metric": "savings.rate",
+      "region": "US",
+      "value": 5.4,
+      "unit": "percent of disposable income",
+      "label": "5.4% (2025)",
+      "sourceUrl": "https://fred.stlouisfed.org/series/PSAVERT",
+      "year": 2025,
+      "sourceId": "bea-psavert"
+    },
+    {
+      "metric": "savings.rate",
+      "region": "EU27",
+      "value": 26.1,
+      "unit": "percent of households",
+      "label": "about 1 in 4 EU households spent more than their income (around 2020, experimental)",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/icw_sr_03/default/table",
+      "year": 2020,
+      "sourceId": "eurostat-icw"
+    },
+    {
+      "metric": "cushion.months",
+      "region": "EU27",
+      "value": 46.2,
+      "unit": "percent of households",
+      "label": "about half of EU households could not keep their living standard for 3 months on savings (2020)",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/ilc_odbt15/default/table",
+      "year": 2020,
+      "sourceId": "eurostat-ilc_odbt15"
+    },
+    {
+      "metric": "cushion.months",
+      "region": "HR",
+      "value": 35.0,
+      "unit": "percent of households",
+      "label": "about a third of households in Croatia could not keep their living standard for 3 months on savings (2020)",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/ilc_odbt15/default/table",
+      "year": 2020,
+      "sourceId": "eurostat-ilc_odbt15"
+    },
+    {
+      "metric": "cushion.months",
+      "region": "US",
+      "value": 55,
+      "unit": "percent of adults",
+      "label": "55% of US adults have three months of expenses set aside (2025)",
+      "sourceUrl": "https://www.federalreserve.gov/publications/files/2025-report-economic-well-being-us-households-202605.pdf",
+      "year": 2025,
+      "sourceId": "fed-shed-2025"
+    },
+    {
+      "metric": "shock.cover",
+      "region": "DE",
+      "value": 1300,
+      "unit": "EUR",
+      "label": "EUR 1300 test; 31.9% could not cover it from own money (2025)",
+      "sourceUrl": "https://www.destatis.de/Europa/DE/Thema/Bevoelkerung-Arbeit-Soziales/Soziales-Lebensbedingungen/Kein_Geld.html",
+      "year": 2025,
+      "sourceId": "destatis-unexpected-2025",
+      "shareUnable": 31.9
+    },
+    {
+      "metric": "shock.cover",
+      "region": "HR",
+      "value": 494,
+      "unit": "EUR",
+      "label": "EUR 494 test; 31.2% could not cover it from own money (2025)",
+      "sourceUrl": "https://podaci.dzs.hr/media/tsgdvqvh/zudp-2026-1-1-pokazatelji-siroma%C5%A1tva-i-socijalne-isklju%C4%8Denosti-u-2025.pdf",
+      "year": 2025,
+      "sourceId": "dzs-poverty-2025",
+      "shareUnable": 31.2
+    },
+    {
+      "metric": "shock.cover",
+      "region": "UK",
+      "value": 850,
+      "unit": "GBP",
+      "label": "GBP 850 test; 26% could not cover it from own money (2025)",
+      "sourceUrl": "https://www.ons.gov.uk/peoplepopulationandcommunity/wellbeing/bulletins/publicopinionsandsocialtrendsgreatbritain/june2025",
+      "year": 2025,
+      "sourceId": "ons-opn-2025-06",
+      "shareUnable": 26
+    },
+    {
+      "metric": "shock.cover",
+      "region": "US",
+      "value": 400,
+      "unit": "USD",
+      "label": "USD 400 test; 37% could not cover it from own money (2025)",
+      "sourceUrl": "https://www.federalreserve.gov/publications/files/2025-report-economic-well-being-us-households-202605.pdf",
+      "year": 2025,
+      "sourceId": "fed-shed-2025",
+      "shareUnable": 37
+    },
+    {
+      "metric": "shock.cover",
+      "region": "EU27",
+      "value": 29.2,
+      "unit": "percent of population",
+      "label": "29.2% of people in the EU could not meet an unexpected expense from own resources (2025)",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/ilc_mdes04/default/table",
+      "year": 2025,
+      "sourceId": "eurostat-ilc_mdes04"
+    },
+    {
+      "metric": "housing.share",
+      "region": "EU27",
+      "value": 18.9,
+      "unit": "percent of disposable income",
+      "label": "18.9% on average (2025)",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/ilc_mded01/default/table",
+      "year": 2025,
+      "sourceId": "eurostat-ilc_mded01"
+    },
+    {
+      "metric": "housing.share",
+      "region": "DE",
+      "value": 24.1,
+      "unit": "percent of disposable income",
+      "label": "24.1% on average (2025)",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/ilc_mded01/default/table",
+      "year": 2025,
+      "sourceId": "eurostat-ilc_mded01"
+    },
+    {
+      "metric": "housing.share",
+      "region": "HR",
+      "value": 11.5,
+      "unit": "percent of disposable income",
+      "label": "11.5% on average (2025)",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/ilc_mded01/default/table",
+      "year": 2025,
+      "sourceId": "eurostat-ilc_mded01"
+    },
+    {
+      "metric": "housing.share",
+      "region": "DE",
+      "value": 27.9,
+      "unit": "percent of net income",
+      "label": "renters spend 27.9% of net income on rent (2022)",
+      "sourceUrl": "https://www.destatis.de/DE/Themen/Gesellschaft-Umwelt/Wohnen/Tabellen/tabelle-wo7-mieten-einzugsjahr.html",
+      "year": 2022,
+      "sourceId": "destatis-mietbelastung-2022"
+    },
+    {
+      "metric": "housing.share",
+      "region": "UK",
+      "value": 34,
+      "unit": "percent of gross income",
+      "label": "private renters 34%, mortgagors 19% of gross income (England, 2024-25)",
+      "sourceUrl": "https://www.gov.uk/government/statistics/chapters-for-english-housing-survey-2024-to-2025-headline-findings-on-demographics-and-household-resilience/chapter-2-housing-costs-and-affordability",
+      "year": 2025,
+      "sourceId": "ehs-2024-25"
+    },
+    {
+      "metric": "housing.share",
+      "region": "US",
+      "value": 49,
+      "unit": "percent of renter households",
+      "label": "49% of US renter households paid more than 30% of income (2024)",
+      "sourceUrl": "https://nlihc.org/resource/jchss-2026-state-nations-housing-report-finds-cost-burdens-renters-continue-rise-amid",
+      "year": 2024,
+      "sourceId": "jchs-son-2026"
+    },
+    {
+      "metric": "housing.share",
+      "region": "EU27",
+      "value": 7.7,
+      "unit": "percent of people",
+      "label": "7.7% of people live in households spending over 40% of disposable income on housing (2025)",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/ilc_lvho07a/default/table",
+      "year": 2025,
+      "sourceId": "eurostat-ilc_lvho07a"
+    },
+    {
+      "metric": "housing.share",
+      "region": "DE",
+      "value": 11.2,
+      "unit": "percent of people",
+      "label": "11.2% of people live in households spending over 40% of disposable income on housing (2025)",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/ilc_lvho07a/default/table",
+      "year": 2025,
+      "sourceId": "eurostat-ilc_lvho07a"
+    },
+    {
+      "metric": "housing.share",
+      "region": "HR",
+      "value": 3.2,
+      "unit": "percent of people",
+      "label": "3.2% of people live in households spending over 40% of disposable income on housing (2025)",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/ilc_lvho07a/default/table",
+      "year": 2025,
+      "sourceId": "eurostat-ilc_lvho07a"
+    },
+    {
+      "metric": "housing.share",
+      "region": "EU27",
+      "value": 18.6,
+      "unit": "percent of market-rate renters",
+      "label": "18.6% of people renting at market rates spend over 40% of disposable income on housing (2025)",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/ilc_lvho07a/default/table",
+      "year": 2025,
+      "sourceId": "eurostat-ilc_lvho07a"
+    },
+    {
+      "metric": "housing.share",
+      "region": "DE",
+      "value": 13.2,
+      "unit": "percent of market-rate renters",
+      "label": "13.2% of people renting at market rates spend over 40% of disposable income on housing (2025)",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/ilc_lvho07a/default/table",
+      "year": 2025,
+      "sourceId": "eurostat-ilc_lvho07a"
+    },
+    {
+      "metric": "housing.share",
+      "region": "HR",
+      "value": 19.8,
+      "unit": "percent of market-rate renters",
+      "label": "19.8% of people renting at market rates spend over 40% of disposable income on housing (2025)",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/ilc_lvho07a/default/table",
+      "year": 2025,
+      "sourceId": "eurostat-ilc_lvho07a"
+    },
+    {
+      "metric": "spending.foodAtHome",
+      "region": "EU27",
+      "value": null,
+      "min": 16.3,
+      "max": 20.7,
+      "unit": "percent of spending",
+      "label": "16.3% to 20.7% across income groups (2020)",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/hbs_str_t223/default/table",
+      "year": 2020,
+      "sourceId": "eurostat-hbs_str_t223",
+      "kind": "groupRange"
+    },
+    {
+      "metric": "spending.foodAtHome",
+      "region": "DE",
+      "value": null,
+      "min": 11.7,
+      "max": 14.7,
+      "unit": "percent of spending",
+      "label": "11.7% to 14.7% across income groups (2020)",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/hbs_str_t223/default/table",
+      "year": 2020,
+      "sourceId": "eurostat-hbs_str_t223",
+      "kind": "groupRange"
+    },
+    {
+      "metric": "spending.foodAtHome",
+      "region": "HR",
+      "value": null,
+      "min": 22.2,
+      "max": 38.1,
+      "unit": "percent of spending",
+      "label": "22.2% to 38.1% across income groups (2020)",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/hbs_str_t223/default/table",
+      "year": 2020,
+      "sourceId": "eurostat-hbs_str_t223",
+      "kind": "groupRange"
+    },
+    {
+      "metric": "spending.foodAtHome",
+      "region": "UK",
+      "value": null,
+      "min": 9.0,
+      "max": 14.0,
+      "unit": "percent of spending",
+      "label": "9.0% to 14.0% across income groups (2025)",
+      "sourceUrl": "https://www.ons.gov.uk/peoplepopulationandcommunity/personalandhouseholdfinances/expenditure/bulletins/familyspendingintheuk/april2024tomarch2025",
+      "year": 2025,
+      "sourceId": "ons-family-spending-fye2025",
+      "kind": "groupRange"
+    },
+    {
+      "metric": "spending.foodAtHome",
+      "region": "US",
+      "value": null,
+      "min": 7.6,
+      "max": 11.2,
+      "unit": "percent of spending",
+      "label": "7.6% to 11.2% across income groups (2024)",
+      "sourceUrl": "https://www.bls.gov/cex/tables/calendar-year/mean-item-share-average-standard-error/cu-income-quintiles-before-taxes-2024.xlsx",
+      "year": 2024,
+      "sourceId": "bls-ce-2024",
+      "kind": "groupRange"
+    },
+    {
+      "metric": "spending.eatingOut",
+      "region": "EU27",
+      "value": null,
+      "min": 3.2,
+      "max": 5.6,
+      "unit": "percent of spending",
+      "label": "3.2% to 5.6% across income groups (2020)",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/hbs_str_t223/default/table",
+      "year": 2020,
+      "sourceId": "eurostat-hbs_str_t223",
+      "kind": "groupRange"
+    },
+    {
+      "metric": "spending.eatingOut",
+      "region": "DE",
+      "value": null,
+      "min": 3.6,
+      "max": 5.7,
+      "unit": "percent of spending",
+      "label": "3.6% to 5.7% across income groups (2020)",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/hbs_str_t223/default/table",
+      "year": 2020,
+      "sourceId": "eurostat-hbs_str_t223",
+      "kind": "groupRange"
+    },
+    {
+      "metric": "spending.eatingOut",
+      "region": "HR",
+      "value": null,
+      "min": 1.0,
+      "max": 3.4,
+      "unit": "percent of spending",
+      "label": "1.0% to 3.4% across income groups (2020)",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/hbs_str_t223/default/table",
+      "year": 2020,
+      "sourceId": "eurostat-hbs_str_t223",
+      "kind": "groupRange"
+    },
+    {
+      "metric": "spending.eatingOut",
+      "region": "UK",
+      "value": null,
+      "min": 3.5,
+      "max": 6.0,
+      "unit": "percent of spending",
+      "label": "3.5% to 6.0% across income groups (2025)",
+      "sourceUrl": "https://www.ons.gov.uk/peoplepopulationandcommunity/personalandhouseholdfinances/expenditure/bulletins/familyspendingintheuk/april2024tomarch2025",
+      "year": 2025,
+      "sourceId": "ons-family-spending-fye2025",
+      "kind": "groupRange"
+    },
+    {
+      "metric": "spending.eatingOut",
+      "region": "US",
+      "value": null,
+      "min": 4.8,
+      "max": 6.2,
+      "unit": "percent of spending",
+      "label": "4.8% to 6.2% across income groups (2024)",
+      "sourceUrl": "https://www.bls.gov/cex/tables/calendar-year/mean-item-share-average-standard-error/cu-income-quintiles-before-taxes-2024.xlsx",
+      "year": 2024,
+      "sourceId": "bls-ce-2024",
+      "kind": "groupRange"
+    },
+    {
+      "metric": "spending.transport",
+      "region": "EU27",
+      "value": null,
+      "min": 8.0,
+      "max": 15.0,
+      "unit": "percent of spending",
+      "label": "8.0% to 15.0% across income groups (2020)",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/hbs_str_t223/default/table",
+      "year": 2020,
+      "sourceId": "eurostat-hbs_str_t223",
+      "kind": "groupRange"
+    },
+    {
+      "metric": "spending.transport",
+      "region": "DE",
+      "value": null,
+      "min": 8.5,
+      "max": 20.5,
+      "unit": "percent of spending",
+      "label": "8.5% to 20.5% across income groups (2020)",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/hbs_str_t223/default/table",
+      "year": 2020,
+      "sourceId": "eurostat-hbs_str_t223",
+      "kind": "groupRange"
+    },
+    {
+      "metric": "spending.transport",
+      "region": "HR",
+      "value": null,
+      "min": 5.9,
+      "max": 19.9,
+      "unit": "percent of spending",
+      "label": "5.9% to 19.9% across income groups (2020)",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/hbs_str_t223/default/table",
+      "year": 2020,
+      "sourceId": "eurostat-hbs_str_t223",
+      "kind": "groupRange"
+    },
+    {
+      "metric": "spending.transport",
+      "region": "UK",
+      "value": null,
+      "min": 9.0,
+      "max": 16.0,
+      "unit": "percent of spending",
+      "label": "9.0% to 16.0% across income groups (2025)",
+      "sourceUrl": "https://www.ons.gov.uk/peoplepopulationandcommunity/personalandhouseholdfinances/expenditure/bulletins/familyspendingintheuk/april2024tomarch2025",
+      "year": 2025,
+      "sourceId": "ons-family-spending-fye2025",
+      "kind": "groupRange"
+    },
+    {
+      "metric": "spending.transport",
+      "region": "US",
+      "value": null,
+      "min": 14.9,
+      "max": 20.6,
+      "unit": "percent of spending",
+      "label": "14.9% to 20.6% across income groups (2024)",
+      "sourceUrl": "https://www.bls.gov/cex/tables/calendar-year/mean-item-share-average-standard-error/cu-income-quintiles-before-taxes-2024.xlsx",
+      "year": 2024,
+      "sourceId": "bls-ce-2024",
+      "kind": "groupRange"
+    },
+    {
+      "metric": "spending.foodAtHome",
+      "region": "DE",
+      "value": 14.0,
+      "unit": "percent of consumption",
+      "label": "14.0% of household spending goes on food, drink and tobacco (2024)",
+      "sourceUrl": "https://www.destatis.de/DE/Themen/Gesellschaft-Umwelt/Einkommen-Konsum-Lebensbedingungen/Konsumausgaben-Lebenshaltungskosten/Tabellen/privater-konsum-d-lwr.html",
+      "year": 2024,
+      "sourceId": "destatis-lwr-2024"
+    },
+    {
+      "metric": "spending.foodAtHome",
+      "region": "HR",
+      "value": 27.0,
+      "unit": "percent of consumption",
+      "label": "27.0% of household spending goes on food and soft drinks (2022)",
+      "sourceUrl": "https://podaci.dzs.hr/media/fc1gtjzj/zudp-2023-1-2-osnovne-karakteristike-potro%C5%A1nje-ku%C4%87anstava-u-2022.pdf",
+      "year": 2022,
+      "sourceId": "dzs-hbs-2022"
+    },
+    {
+      "metric": "spending.foodAtHome",
+      "region": "UK",
+      "value": 10.9,
+      "unit": "percent of spending",
+      "label": "GBP 73.70 of GBP 676.60 a week, 10.9% (FYE 2025)",
+      "sourceUrl": "https://www.ons.gov.uk/peoplepopulationandcommunity/personalandhouseholdfinances/expenditure/bulletins/familyspendingintheuk/april2024tomarch2025",
+      "year": 2025,
+      "sourceId": "ons-family-spending-fye2025"
+    },
+    {
+      "metric": "spending.foodAtHome",
+      "region": "US",
+      "value": 9.1,
+      "unit": "percent of spending",
+      "label": "9.1% of spending, leaving out insurance and pensions (2024)",
+      "sourceUrl": "https://www.bls.gov/cex/tables/calendar-year/mean-item-share-average-standard-error/cu-income-quintiles-before-taxes-2024.xlsx",
+      "year": 2024,
+      "sourceId": "bls-ce-2024"
+    },
+    {
+      "metric": "spending.eatingOut",
+      "region": "DE",
+      "value": 6.6,
+      "unit": "percent of consumption",
+      "label": "6.6% on restaurants and accommodation (2024)",
+      "sourceUrl": "https://www.destatis.de/DE/Themen/Gesellschaft-Umwelt/Einkommen-Konsum-Lebensbedingungen/Konsumausgaben-Lebenshaltungskosten/Tabellen/privater-konsum-d-lwr.html",
+      "year": 2024,
+      "sourceId": "destatis-lwr-2024"
+    },
+    {
+      "metric": "spending.eatingOut",
+      "region": "UK",
+      "value": 5.1,
+      "unit": "percent of spending",
+      "label": "GBP 34.60 a week on restaurants, cafes and takeaways, 5.1% (FYE 2025)",
+      "sourceUrl": "https://www.ons.gov.uk/peoplepopulationandcommunity/personalandhouseholdfinances/expenditure/bulletins/familyspendingintheuk/april2024tomarch2025",
+      "year": 2025,
+      "sourceId": "ons-family-spending-fye2025"
+    },
+    {
+      "metric": "spending.eatingOut",
+      "region": "US",
+      "value": 5.7,
+      "unit": "percent of spending",
+      "label": "5.7% of spending, leaving out insurance and pensions (2024)",
+      "sourceUrl": "https://www.bls.gov/cex/tables/calendar-year/mean-item-share-average-standard-error/cu-income-quintiles-before-taxes-2024.xlsx",
+      "year": 2024,
+      "sourceId": "bls-ce-2024"
+    },
+    {
+      "metric": "spending.transport",
+      "region": "DE",
+      "value": 13.8,
+      "unit": "percent of consumption",
+      "label": "13.8% of household spending (2024)",
+      "sourceUrl": "https://www.destatis.de/DE/Themen/Gesellschaft-Umwelt/Einkommen-Konsum-Lebensbedingungen/Konsumausgaben-Lebenshaltungskosten/Tabellen/privater-konsum-d-lwr.html",
+      "year": 2024,
+      "sourceId": "destatis-lwr-2024"
+    },
+    {
+      "metric": "spending.transport",
+      "region": "HR",
+      "value": 15.5,
+      "unit": "percent of consumption",
+      "label": "15.5% of household spending (2022)",
+      "sourceUrl": "https://podaci.dzs.hr/media/fc1gtjzj/zudp-2023-1-2-osnovne-karakteristike-potro%C5%A1nje-ku%C4%87anstava-u-2022.pdf",
+      "year": 2022,
+      "sourceId": "dzs-hbs-2022"
+    },
+    {
+      "metric": "spending.transport",
+      "region": "UK",
+      "value": 14.2,
+      "unit": "percent of spending",
+      "label": "GBP 96.40 a week, 14.2% (FYE 2025)",
+      "sourceUrl": "https://www.ons.gov.uk/peoplepopulationandcommunity/personalandhouseholdfinances/expenditure/bulletins/familyspendingintheuk/april2024tomarch2025",
+      "year": 2025,
+      "sourceId": "ons-family-spending-fye2025"
+    },
+    {
+      "metric": "spending.transport",
+      "region": "US",
+      "value": 19.4,
+      "unit": "percent of spending",
+      "label": "19.4% of spending, leaving out insurance and pensions (2024)",
+      "sourceUrl": "https://www.bls.gov/cex/tables/calendar-year/mean-item-share-average-standard-error/cu-income-quintiles-before-taxes-2024.xlsx",
+      "year": 2024,
+      "sourceId": "bls-ce-2024"
+    },
+    {
+      "metric": "debt.rate",
+      "region": "EU27",
+      "value": 8.59,
+      "unit": "percent a year",
+      "label": "new consumer loans in the euro area average 8.59% APRC; extended card credit 16.54% (Aug 2026)",
+      "sourceUrl": "https://data-api.ecb.europa.eu/service/data/MIR",
+      "year": 2026,
+      "sourceId": "ecb-mir-2026-08"
+    },
+    {
+      "metric": "debt.rate",
+      "region": "DE",
+      "value": 8.99,
+      "unit": "percent a year",
+      "label": "new consumer loans in Germany average 8.99% APRC; overdrafts 9.46%; card credit 17.52% (Aug 2026)",
+      "sourceUrl": "https://data-api.ecb.europa.eu/service/data/MIR",
+      "year": 2026,
+      "sourceId": "ecb-mir-2026-08"
+    },
+    {
+      "metric": "debt.rate",
+      "region": "HR",
+      "value": 5.41,
+      "unit": "percent a year",
+      "label": "new consumer loans in Croatia average 5.41% APRC; overdrafts 5.55% (Aug 2026)",
+      "sourceUrl": "https://data-api.ecb.europa.eu/service/data/MIR",
+      "year": 2026,
+      "sourceId": "ecb-mir-2026-08"
+    },
+    {
+      "metric": "debt.rate",
+      "region": "UK",
+      "value": 9.96,
+      "unit": "percent a year",
+      "label": "new UK personal loans average 9.96%; credit cards 21.55%; overdrafts 20.27% (Aug 2026)",
+      "sourceUrl": "https://www.bankofengland.co.uk/statistics/money-and-credit/2026/august-2026",
+      "year": 2026,
+      "sourceId": "boe-money-credit-2026-08"
+    },
+    {
+      "metric": "debt.rate",
+      "region": "US",
+      "value": 11.9,
+      "unit": "percent a year",
+      "label": "US 24-month personal loans average 11.90%; credit card plans 21.19% (Aug 2026)",
+      "sourceUrl": "https://fred.stlouisfed.org/series/TERMCBCCALLNS",
+      "year": 2026,
+      "sourceId": "fed-g19-2026-08"
+    },
+    {
+      "metric": "debt.serviceShare",
+      "region": "EU27",
+      "value": 24.1,
+      "unit": "percent of households",
+      "label": "24.1% of EU households were repaying a loan other than a mortgage (2020)",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/ilc_odbt04/default/table",
+      "year": 2020,
+      "sourceId": "eurostat-ilc_odbt04"
+    },
+    {
+      "metric": "debt.serviceShare",
+      "region": "HR",
+      "value": 31.8,
+      "unit": "percent of households",
+      "label": "31.8% of households in Croatia were repaying a loan other than a mortgage (2020)",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/ilc_odbt04/default/table",
+      "year": 2020,
+      "sourceId": "eurostat-ilc_odbt04"
+    }
+  ],
+  "gaps": [
+    {
+      "metric": "subscriptions.monthlySpend",
+      "region": "EU27",
+      "reason": "No official or representative survey of subscription spend found. Germany has streaming-only figures (2.8 paid services, Simon-Kucher 2025); Croatia has none. Show the person's own trend without a comparison."
+    },
+    {
+      "metric": "subscriptions.monthlySpend",
+      "region": "DE",
+      "reason": "No official or representative survey of subscription spend found. Germany has streaming-only figures (2.8 paid services, Simon-Kucher 2025); Croatia has none. Show the person's own trend without a comparison."
+    },
+    {
+      "metric": "subscriptions.monthlySpend",
+      "region": "HR",
+      "reason": "No official or representative survey of subscription spend found. Germany has streaming-only figures (2.8 paid services, Simon-Kucher 2025); Croatia has none. Show the person's own trend without a comparison."
+    },
+    {
+      "metric": "shock.cover",
+      "region": "EU27",
+      "reason": "The EU test amount differs by country (each country's monthly poverty threshold). With no country set, use cushion.months instead."
+    },
+    {
+      "metric": "debt.serviceShare",
+      "region": "UK",
+      "reason": "No official debt-to-income line for consumers found; FCA rules define persistent card debt (CONC 6.7.27R) instead. Show the share without a band."
+    }
+  ],
+  "sources": [
+    {
+      "id": "eurostat-tec00131",
+      "title": "Gross household saving rate (tec00131)",
+      "publisher": "Eurostat",
+      "url": "https://ec.europa.eu/eurostat/databrowser/view/tec00131/default/table",
+      "published": "2026-10-07",
+      "dataYear": 2025,
+      "measure": "Gross saving / gross disposable income, households and NPISH, national accounts",
+      "sample": "National accounts aggregate",
+      "official": true,
+      "notes": "Includes the change in pension entitlements; gross of depreciation. DE 2025 and HR 2024 provisional."
+    },
+    {
+      "id": "eurostat-ilc_mdes04",
+      "title": "Inability to face unexpected financial expenses (ilc_mdes04)",
+      "publisher": "Eurostat",
+      "url": "https://ec.europa.eu/eurostat/databrowser/view/ilc_mdes04/default/table",
+      "published": "2026-09-17",
+      "dataYear": 2025,
+      "measure": "Share of population in households that cannot meet an unexpected expense from own resources; the amount is each country's monthly at-risk-of-poverty threshold",
+      "sample": "EU-SILC, household survey",
+      "official": true,
+      "notes": ""
+    },
+    {
+      "id": "eurostat-ilc_lvho07a",
+      "title": "Housing cost overburden rate (ilc_lvho07a, ilc_lvho07c)",
+      "publisher": "Eurostat",
+      "url": "https://ec.europa.eu/eurostat/databrowser/view/ilc_lvho07a/default/table",
+      "published": "2026-09-17",
+      "dataYear": 2025,
+      "measure": "Share of population in households whose total housing costs (net of housing allowances) exceed 40% of disposable income (net of housing allowances)",
+      "sample": "EU-SILC",
+      "official": true,
+      "notes": ""
+    },
+    {
+      "id": "eurostat-ilc_mded01",
+      "title": "Share of housing costs in disposable household income (ilc_mded01)",
+      "publisher": "Eurostat",
+      "url": "https://ec.europa.eu/eurostat/databrowser/view/ilc_mded01/default/table",
+      "published": "2026-09-17",
+      "dataYear": 2025,
+      "measure": "Mean share of housing costs (rent, mortgage interest, utilities, maintenance; no imputed rent, no mortgage principal) in disposable income",
+      "sample": "EU-SILC",
+      "official": true,
+      "notes": ""
+    },
+    {
+      "id": "eurostat-hbs_str_t223",
+      "title": "Structure of consumption expenditure by income quintile (hbs_str_t223)",
+      "publisher": "Eurostat",
+      "url": "https://ec.europa.eu/eurostat/databrowser/view/hbs_str_t223/default/table",
+      "published": "2025-10-22",
+      "dataYear": 2020,
+      "measure": "Per mille of total consumption expenditure by COICOP purpose, by income quintile",
+      "sample": "Household Budget Survey, 2020 wave",
+      "official": true,
+      "notes": "2020 wave falls in the pandemic for some countries; eating out and transport are depressed. Totals include imputed rent; DE and HR are re-based without it here."
+    },
+    {
+      "id": "eurostat-nama_10_cp18",
+      "title": "Household final consumption by purpose, COICOP 2018 (nama_10_cp18)",
+      "publisher": "Eurostat",
+      "url": "https://ec.europa.eu/eurostat/databrowser/view/nama_10_cp18/default/table",
+      "published": "2026-10-09",
+      "dataYear": 2024,
+      "measure": "Household consumption by purpose, million EUR, domestic concept",
+      "sample": "National accounts",
+      "official": true,
+      "notes": "Used only for two ratios at EU level: imputed rent 11.5% of consumption; food-service share of restaurants and accommodation 0.772."
+    },
+    {
+      "id": "eurostat-ilc_odbt15",
+      "title": "Households able to keep their living standard on savings, by duration (ilc_odbt15)",
+      "publisher": "Eurostat",
+      "url": "https://ec.europa.eu/eurostat/databrowser/view/ilc_odbt15/default/table",
+      "published": null,
+      "dataYear": 2020,
+      "measure": "Months a household could keep the same standard of living on deposits and cash alone, with no income and no borrowing (EU-SILC 2020 module, HV080)",
+      "sample": "EU-SILC 2020 ad hoc module",
+      "official": true,
+      "notes": "Germany did not report this item."
+    },
+    {
+      "id": "eurostat-icw",
+      "title": "Income, consumption and wealth: saving rate and dissaving households (icw_sr_03, icw_pov_03)",
+      "publisher": "Eurostat",
+      "url": "https://ec.europa.eu/eurostat/databrowser/view/icw_sr_03/default/table",
+      "published": null,
+      "dataYear": 2020,
+      "measure": "Experimental statistics from statistical matching of EU-SILC and HBS",
+      "sample": "Matched micro data",
+      "official": true,
+      "notes": "Eurostat: interpret with caution, significant measurement errors."
+    },
+    {
+      "id": "eurostat-ilc_odbt04",
+      "title": "Households with loans other than a main-residence mortgage (ilc_odbt04)",
+      "publisher": "Eurostat",
+      "url": "https://ec.europa.eu/eurostat/databrowser/view/ilc_odbt04/default/table",
+      "published": null,
+      "dataYear": 2020,
+      "measure": "Share of households repaying non-mortgage loans",
+      "sample": "EU-SILC 2020 module",
+      "official": true,
+      "notes": "DE value flagged low reliability."
+    },
+    {
+      "id": "destatis-unexpected-2025",
+      "title": "Kein Geld fuer unerwartete Ausgaben (EU comparison)",
+      "publisher": "Destatis",
+      "url": "https://www.destatis.de/Europa/DE/Thema/Bevoelkerung-Arbeit-Soziales/Soziales-Lebensbedingungen/Kein_Geld.html",
+      "published": "2026-05-11",
+      "dataYear": 2025,
+      "measure": "Share of population unable to meet an unexpected expense of at least EUR 1,300 from own funds",
+      "sample": "EU-SILC (Germany)",
+      "official": true,
+      "notes": ""
+    },
+    {
+      "id": "destatis-lwr-2024",
+      "title": "Konsumausgaben privater Haushalte (LWR 2024)",
+      "publisher": "Destatis",
+      "url": "https://www.destatis.de/DE/Themen/Gesellschaft-Umwelt/Einkommen-Konsum-Lebensbedingungen/Konsumausgaben-Lebenshaltungskosten/Tabellen/privater-konsum-d-lwr.html",
+      "published": "2026-08-17",
+      "dataYear": 2024,
+      "measure": "Average consumption spending per household per month by purpose",
+      "sample": "Laufende Wirtschaftsrechnungen",
+      "official": true,
+      "notes": ""
+    },
+    {
+      "id": "destatis-mietbelastung-2022",
+      "title": "Mietbelastung nach Einzugsjahr (Mikrozensus 2022)",
+      "publisher": "Destatis",
+      "url": "https://www.destatis.de/DE/Themen/Gesellschaft-Umwelt/Wohnen/Tabellen/tabelle-wo7-mieten-einzugsjahr.html",
+      "published": null,
+      "dataYear": 2022,
+      "measure": "Gross cold rent as a share of household net income, main-tenant households",
+      "sample": "Mikrozensus (final results)",
+      "official": true,
+      "notes": "Time-series break against earlier years."
+    },
+    {
+      "id": "dzs-poverty-2025",
+      "title": "Pokazatelji siromastva i socijalne iskljucenosti u 2025. (ZUDP-2026-1-1)",
+      "publisher": "DZS (Croatian Bureau of Statistics)",
+      "url": "https://podaci.dzs.hr/media/tsgdvqvh/zudp-2026-1-1-pokazatelji-siroma%C5%A1tva-i-socijalne-isklju%C4%8Denosti-u-2025.pdf",
+      "published": "2026-03-20",
+      "dataYear": 2025,
+      "measure": "Share unable to meet an unexpected expense of EUR 494 from own resources",
+      "sample": "EU-SILC (Croatia)",
+      "official": true,
+      "notes": ""
+    },
+    {
+      "id": "dzs-hbs-2022",
+      "title": "Osnovne karakteristike potrosnje kucanstava u 2022. (ZUDP-2023-1-2)",
+      "publisher": "DZS (Croatian Bureau of Statistics)",
+      "url": "https://podaci.dzs.hr/media/fc1gtjzj/zudp-2023-1-2-osnovne-karakteristike-potro%C5%A1nje-ku%C4%87anstava-u-2022.pdf",
+      "published": "2024-04-25",
+      "dataYear": 2022,
+      "measure": "Structure of household consumption, without imputed rent",
+      "sample": "HBS, 1,391 households interviewed",
+      "official": true,
+      "notes": ""
+    },
+    {
+      "id": "ons-nrjs",
+      "title": "Households saving ratio (NRJS)",
+      "publisher": "ONS",
+      "url": "https://www.ons.gov.uk/economy/grossdomesticproductgdp/timeseries/nrjs/ukea",
+      "published": "2026-09-30",
+      "dataYear": 2025,
+      "measure": "Household and NPISH saving ratio, national accounts",
+      "sample": "National accounts",
+      "official": true,
+      "notes": ""
+    },
+    {
+      "id": "ons-opn-2025-06",
+      "title": "Public opinions and social trends, Great Britain: June 2025",
+      "publisher": "ONS",
+      "url": "https://www.ons.gov.uk/peoplepopulationandcommunity/wellbeing/bulletins/publicopinionsandsocialtrendsgreatbritain/june2025",
+      "published": "2025-07-18",
+      "dataYear": 2025,
+      "measure": "Share of adults unable to pay an unexpected but necessary expense of GBP 850",
+      "sample": "Opinions and Lifestyle Survey, 4-29 June 2025, 9,564 households sampled",
+      "official": true,
+      "notes": "The July 2026 bulletin no longer reports this item."
+    },
+    {
+      "id": "ehs-2024-25",
+      "title": "English Housing Survey 2024 to 2025, chapter 2: housing costs and affordability",
+      "publisher": "MHCLG",
+      "url": "https://www.gov.uk/government/statistics/chapters-for-english-housing-survey-2024-to-2025-headline-findings-on-demographics-and-household-resilience/chapter-2-housing-costs-and-affordability",
+      "published": "2025-12-04",
+      "dataYear": 2025,
+      "measure": "Mean share of gross household income spent on rent or mortgage (repayment and interest)",
+      "sample": "English Housing Survey, England only",
+      "official": true,
+      "notes": "Updated 2026-07-09."
+    },
+    {
+      "id": "ons-family-spending-fye2025",
+      "title": "Family spending in the UK: April 2024 to March 2025 (Workbooks 1 and 2)",
+      "publisher": "ONS",
+      "url": "https://www.ons.gov.uk/peoplepopulationandcommunity/personalandhouseholdfinances/expenditure/bulletins/familyspendingintheuk/april2024tomarch2025",
+      "published": "2026-06-11",
+      "dataYear": 2025,
+      "measure": "Weekly household expenditure and shares by disposable income decile (Table A8)",
+      "sample": "Living Costs and Food Survey, about 5,000 households",
+      "official": true,
+      "notes": ""
+    },
+    {
+      "id": "dbt-subscription-traps-2023",
+      "title": "Subscription traps: impact assessment (BEIS056(F)-22-CCP)",
+      "publisher": "Department for Business and Trade",
+      "url": "https://assets.publishing.service.gov.uk/media/64464e6f529eda00123b02c4/annex_2-subscription_traps_impact_assessment.pdf",
+      "published": "2023-04-20",
+      "dataYear": 2022,
+      "measure": "Subscriptions held per adult and per holder; average monthly cost per subscription; spending by sex (Barclaycard 2020)",
+      "sample": "Synthesis of Opinium, FSI, Zuora, Barclaycard and YouGov surveys",
+      "official": true,
+      "notes": "Excludes regulated sectors: energy, telecoms, financial services."
+    },
+    {
+      "id": "self-subscriptions-2026",
+      "title": "The Cost of Unused Subscriptions",
+      "publisher": "Self Financial",
+      "url": "https://self.inc/info/cost-of-unused-paid-subscriptions",
+      "published": "2026-05-08",
+      "dataYear": 2026,
+      "measure": "Active paid subscriptions and monthly spend, asked of US adults who pay for at least one",
+      "sample": "Online poll, March 2026, 1,272 US adults",
+      "official": false,
+      "notes": "Commercial poll; method detail thin."
+    },
+    {
+      "id": "cnet-subscriptions-2026",
+      "title": "Average American now spending $111 a month on subscriptions (CNET survey, as reported)",
+      "publisher": "WFSB / CNET",
+      "url": "https://www.wfsb.com/2026/07/16/average-american-now-spending-111-month-subscriptions-study-finds/",
+      "published": "2026-07-16",
+      "dataYear": 2026,
+      "measure": "Monthly subscription spend reported by US adults",
+      "sample": "CNET survey (2025 wave: YouGov, 2,440 adults)",
+      "official": false,
+      "notes": "cnet.com was not reachable; figure taken from press coverage."
+    },
+    {
+      "id": "ec-digital-fairness-2024",
+      "title": "Digital fairness fitness check, SWD(2024) (as quoted by Sveriges Konsumenter)",
+      "publisher": "European Commission",
+      "url": "https://commission.europa.eu/document/download/707d7404-78e5-4aef-acfa-82b4cf639f55_en",
+      "published": "2024-10-03",
+      "dataYear": 2024,
+      "measure": "Share of EU consumers who frequently keep paying for inactive subscriptions",
+      "sample": "Commission consumer survey",
+      "official": true,
+      "notes": "Figure read in the Sveriges Konsumenter 2024 report, page 37 reference."
+    },
+    {
+      "id": "fed-shed-2025",
+      "title": "Economic Well-Being of U.S. Households in 2025",
+      "publisher": "Federal Reserve Board",
+      "url": "https://www.federalreserve.gov/publications/files/2025-report-economic-well-being-us-households-202605.pdf",
+      "published": "2026-05-13",
+      "dataYear": 2025,
+      "measure": "Emergency savings, $400 expense, credit card balances",
+      "sample": "SHED, about 13,000 adults, October 2025",
+      "official": true,
+      "notes": ""
+    },
+    {
+      "id": "bls-ce-2024",
+      "title": "Consumer Expenditures in 2024 (USDL-25-1586) and Table 1101, quintiles of income before taxes",
+      "publisher": "BLS",
+      "url": "https://www.bls.gov/cex/tables/calendar-year/mean-item-share-average-standard-error/cu-income-quintiles-before-taxes-2024.xlsx",
+      "published": "2025-12-19",
+      "dataYear": 2024,
+      "measure": "Annual spending by item and income quintile",
+      "sample": "Consumer Expenditure Surveys",
+      "official": true,
+      "notes": "Shares re-based here without personal insurance and pensions (mostly payroll deductions, invisible on statements)."
+    },
+    {
+      "id": "bea-psavert",
+      "title": "Personal saving rate (PSAVERT)",
+      "publisher": "BEA via FRED",
+      "url": "https://fred.stlouisfed.org/series/PSAVERT",
+      "published": "2026-09-26",
+      "dataYear": 2025,
+      "measure": "Personal saving as a share of disposable personal income",
+      "sample": "National accounts",
+      "official": true,
+      "notes": "2025 value is the mean of the twelve monthly rates (my calculation)."
+    },
+    {
+      "id": "hud-chas",
+      "title": "CHAS background: cost burden definitions",
+      "publisher": "HUD",
+      "url": "https://www.huduser.gov/portal/datasets/cp/CHAS/bg_chas.html",
+      "published": null,
+      "dataYear": 2026,
+      "measure": "Cost burden: housing costs incl. utilities over 30% of monthly income; severe over 50%",
+      "sample": "Definition",
+      "official": true,
+      "notes": "Income is before tax. Page read 2026-10-11; publication date not shown."
+    },
+    {
+      "id": "jchs-son-2026",
+      "title": "State of the Nation's Housing 2026 (as summarised by NLIHC)",
+      "publisher": "Harvard JCHS / NLIHC",
+      "url": "https://nlihc.org/resource/jchss-2026-state-nations-housing-report-finds-cost-burdens-renters-continue-rise-amid",
+      "published": "2026-07-13",
+      "dataYear": 2024,
+      "measure": "Renter households paying more than 30% of income for housing",
+      "sample": "American Community Survey",
+      "official": false,
+      "notes": "JCHS page not reachable; figure from the NLIHC summary."
+    },
+    {
+      "id": "ecb-mir-2026-08",
+      "title": "MFI interest rate statistics (MIR), August 2026",
+      "publisher": "ECB",
+      "url": "https://data-api.ecb.europa.eu/service/data/MIR",
+      "published": "2026-10-01",
+      "dataYear": 2026,
+      "measure": "New-business rates on consumer credit (APRC), overdrafts, extended credit card credit, house purchase loans",
+      "sample": "Bank reporting",
+      "official": true,
+      "notes": "Croatian extended credit card rate (3.56%) looks like a classification artefact; not used."
+    },
+    {
+      "id": "boe-money-credit-2026-08",
+      "title": "Money and Credit, August 2026",
+      "publisher": "Bank of England",
+      "url": "https://www.bankofengland.co.uk/statistics/money-and-credit/2026/august-2026",
+      "published": "2026-09-29",
+      "dataYear": 2026,
+      "measure": "Effective rates on credit cards, overdrafts and new personal loans",
+      "sample": "Bank reporting",
+      "official": true,
+      "notes": ""
+    },
+    {
+      "id": "fed-g19-2026-08",
+      "title": "Consumer credit G.19 rates (TERMCBCCALLNS, TERMCBPER24NS)",
+      "publisher": "Federal Reserve via FRED",
+      "url": "https://fred.stlouisfed.org/series/TERMCBCCALLNS",
+      "published": "2026-10-07",
+      "dataYear": 2026,
+      "measure": "Credit card plan rate, all accounts; 24-month personal loan rate",
+      "sample": "Bank reporting",
+      "official": true,
+      "notes": ""
+    },
+    {
+      "id": "hnb-dsti-2025",
+      "title": "Consumer lending criteria (DSTI and LTV limits)",
+      "publisher": "Croatian National Bank",
+      "url": "https://www.hnb.hr/en/-/kriteriji-kreditiranja-potrosaca",
+      "published": "2025-01-22",
+      "dataYear": 2025,
+      "measure": "Monthly debt service to consumer income capped at 45% (housing loans) and 40% (non-housing loans)",
+      "sample": "Macroprudential rule",
+      "official": true,
+      "notes": "A lending limit, not a measure of hardship."
+    },
+    {
+      "id": "fannie-b3-6-02",
+      "title": "Selling Guide B3-6-02, debt-to-income ratios",
+      "publisher": "Fannie Mae",
+      "url": "https://selling-guide.fanniemae.com/sel/b3-6-02/debt-income-ratios",
+      "published": "2025-04-02",
+      "dataYear": 2025,
+      "measure": "Maximum total debt-to-income ratio, 36% manual underwriting (45% with compensating factors)",
+      "sample": "Underwriting rule",
+      "official": false,
+      "notes": "On gross monthly income. A lending limit, not a measure of hardship."
+    },
+    {
+      "id": "rpf-wiki-2026",
+      "title": "r/personalfinance wiki: How to handle $ (archived 2026-08-20)",
+      "publisher": "r/personalfinance moderators",
+      "url": "https://web.archive.org/web/20260820074738/https://www.reddit.com/r/personalfinance/wiki/commontopics/",
+      "published": "2026-08-20",
+      "dataYear": 2026,
+      "measure": "Community guidance: debts much over 4% are high interest; a 1-month fund is fine while paying debts over 10%",
+      "sample": "Community wiki",
+      "official": false,
+      "notes": ""
+    }
+  ]
+}

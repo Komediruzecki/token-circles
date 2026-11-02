@@ -65,7 +65,11 @@ export function shareCardSvg(id: AchievementId): string {
 </svg>`
 }
 
-async function toPng(svg: string): Promise<Blob> {
+/**
+ * Draws an SVG document to a PNG of `width` by `height`, through an `<img>` and a canvas. The
+ * drawing is scaled to the canvas, so an SVG with only a viewBox comes out at full size too.
+ */
+export async function toPng(svg: string, width = 1200, height = 630): Promise<Blob> {
   const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }))
   try {
     const img = new Image()
@@ -79,11 +83,11 @@ async function toPng(svg: string): Promise<Blob> {
       img.src = url
     })
     const canvas = document.createElement('canvas')
-    canvas.width = 1200
-    canvas.height = 630
+    canvas.width = width
+    canvas.height = height
     const ctx = canvas.getContext('2d')
     if (!ctx) throw new Error('no canvas context')
-    ctx.drawImage(img, 0, 0)
+    ctx.drawImage(img, 0, 0, width, height)
     return await new Promise<Blob>((resolve, reject) => {
       canvas.toBlob((b) => {
         if (b) resolve(b)
@@ -95,21 +99,30 @@ async function toPng(svg: string): Promise<Blob> {
   }
 }
 
-export async function shareBadge(id: AchievementId): Promise<'shared' | 'downloaded'> {
-  const def = achievementById(id)
-  const png = await toPng(shareCardSvg(id))
-  const file = new File([png], `token-circles-${id}.png`, { type: 'image/png' })
+/** A PNG to the platform's share sheet where it takes files, else saved as a download. */
+export async function shareOrSave(
+  png: Blob,
+  name: string,
+  words: { title: string; text: string }
+): Promise<'shared' | 'downloaded'> {
+  const file = new File([png], name, { type: 'image/png' })
   const nav = window.navigator as Navigator & { canShare?: (d: ShareData) => boolean }
   if (typeof nav.share === 'function' && nav.canShare?.({ files: [file] })) {
-    await nav.share({ files: [file], title: def.name, text: def.share })
+    await nav.share({ files: [file], title: words.title, text: words.text })
     return 'shared'
   }
   const a = document.createElement('a')
   a.href = URL.createObjectURL(png)
-  a.download = file.name
+  a.download = name
   a.click()
   setTimeout(() => {
     URL.revokeObjectURL(a.href)
   }, 10_000)
   return 'downloaded'
+}
+
+export async function shareBadge(id: AchievementId): Promise<'shared' | 'downloaded'> {
+  const def = achievementById(id)
+  const png = await toPng(shareCardSvg(id))
+  return shareOrSave(png, `token-circles-${id}.png`, { title: def.name, text: def.share })
 }

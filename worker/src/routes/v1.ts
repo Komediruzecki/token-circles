@@ -3,6 +3,7 @@ import type { Context } from 'hono';
 import { autoDetectMapping } from '../../../shared/importMapping';
 import { detectBank, getAdapter, processFiles, toDetectInput } from '../../../shared/bankImport';
 import type { BankId } from '../../../shared/bankImport';
+import { storedBankFormats } from '../../../shared/bankFormats';
 import type { AppEnv } from '../index';
 import { EMAIL_UNCONFIRMED, emailUnconfirmed } from '../auth';
 import { HttpError } from '../http';
@@ -193,6 +194,8 @@ v1Routes.post('/api/v1/import', async (c) => {
         parsedBy: parsed.parsedBy,
         ...(parsed.bank ? { bank: parsed.bank.id } : {}),
       }),
+      // The adapter that read the file, or none for the generic CSV path.
+      bank_formats: storedBankFormats(parsed.bank ? [parsed.bank.id] : []),
     });
   }
 

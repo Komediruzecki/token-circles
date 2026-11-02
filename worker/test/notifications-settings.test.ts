@@ -62,6 +62,8 @@ describe('PUT /api/notifications/settings', () => {
       budgetAlerts: true,
       spendingReport: true,
       billsReminders: true,
+      weekOneMails: true,
+      weekOneAhead: false,
       unsubscribed: false,
     });
 

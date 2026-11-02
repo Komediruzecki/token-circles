@@ -1,0 +1,212 @@
+/* The benchmark cards: a card each, with its band bar and "Where this comes from". */
+.cards {
+  display: grid;
+  gap: 12px;
+}
+
+.card {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--card-bg);
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 10px;
+}
+
+.eyebrow {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tag {
+  padding: 2px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.tag[data-kind='band'] {
+  border-color: color-mix(in oklab, var(--ring-b) 45%, transparent);
+  color: var(--text);
+}
+
+/* Figures borrowed from another region: dashed. A figure that is missing: dotted. */
+.tag[data-kind='borrowed'] {
+  border-style: dashed;
+}
+
+.tag[data-kind='missing'] {
+  border-style: dotted;
+}
+
+.title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.35;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.body {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.note {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+/* The band bar: three bands on one track, the person's mark, and the edges labelled under it. */
+.bar {
+  margin: 6px 0 4px;
+}
+
+.track {
+  position: relative;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--ring-track);
+}
+
+.track i {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+}
+
+.track i[data-band='low'] {
+  border-radius: 999px 0 0 999px;
+  background: color-mix(in oklab, var(--band) 60%, transparent);
+}
+
+.track i[data-band='typical'] {
+  background: var(--band-mid);
+}
+
+.track i[data-band='high'] {
+  border-radius: 0 999px 999px 0;
+  background: color-mix(in oklab, var(--band) 60%, transparent);
+}
+
+.mark {
+  position: absolute;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  margin-left: -8px;
+  border: 3px solid var(--card-bg);
+  border-radius: 999px;
+  background: var(--circle-now);
+  transform: translateY(-50%);
+}
+
+.edges {
+  position: relative;
+  height: 16px;
+  margin-top: 6px;
+}
+
+.edges span {
+  position: absolute;
+  top: 0;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--text-secondary);
+  transform: translateX(-50%);
+}
+
+.step {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 16px;
+  border: 1px solid color-mix(in oklab, var(--primary) 45%, transparent);
+  border-radius: 999px;
+  background: var(--primary-bg);
+  color: var(--primary-hover);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.step:hover {
+  border-color: var(--primary);
+}
+
+.step:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.where {
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.where summary {
+  display: flex;
+  align-items: center;
+  min-height: 48px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--primary-hover);
+  cursor: pointer;
+}
+
+.where summary:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.where p {
+  margin: 0 0 8px;
+}
+
+.sources {
+  display: grid;
+  gap: 6px;
+  margin: 0 0 8px;
+  padding-left: 18px;
+}
+
+/* Each source a 48 px target: a long title wraps inside it, and the publisher follows. */
+.sources a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 48px;
+  color: var(--primary-hover);
+  overflow-wrap: anywhere;
+}

@@ -2,10 +2,10 @@
  * The bank-import rules editor shows the active profile's rules, and Save writes them there.
  *
  * The rules are stored per profile (core/bankImport/rulesStore.ts), and the import flow copies
- * them into editable drafts once — in the Import page's onMount, or when the onboarding wizard
- * first reaches its import step. Both outlive a profile switch: the page stays mounted (#317), and
- * the wizard is mounted for the whole session and can be relaunched from Settings. So the editor
- * kept showing the previous profile's rules, and Save wrote them under the new profile's key.
+ * them into editable drafts once, in the Import page's onMount. The page outlives a profile
+ * switch (#317), so the editor kept showing the previous profile's rules, and Save wrote them
+ * under the new profile's key. The setup wizard's statement step has no editor: it reads the
+ * active profile's stored rules each time it reads a statement.
  *
  * A quick-add bumps profileVersion as well (App.tsx, audit F-05), so reloading the drafts on every
  * bump would throw away unsaved rule edits each time a transaction is added. The drafts reload
@@ -17,9 +17,22 @@ import { bumpProfileVersion, setCurrentProfile, setPage } from '../../core/appSt
 import { skipOnboarding, startOnboarding } from '../../core/onboardingStore'
 import type { Profile } from '../../types/models'
 
-/** No server data is needed: the rules live in localStorage. Lists come back empty. */
-function serve(init?: RequestInit): Response {
-  const body = (init?.method ?? 'GET').toUpperCase() === 'GET' ? [] : { ok: true }
+/**
+ * No server data is needed: the rules live in localStorage. Lists come back empty, and an import's
+ * dry run names the categories in the rows' category column as new.
+ */
+function serve(init?: RequestInit, url = ''): Response {
+  const method = (init?.method ?? 'GET').toUpperCase()
+  let body: unknown = method === 'GET' ? [] : { ok: true }
+  if (method === 'POST' && url.startsWith('/api/import/execute')) {
+    const { rows, mapping } = JSON.parse(init?.body as string) as {
+      rows: string[][]
+      mapping: { category?: number }
+    }
+    const column = mapping.category
+    const named = column === undefined ? [] : rows.map((row) => row[column]).filter(Boolean)
+    body = { new_categories: [...new Set(named)], duplicates: 0, duplicate_indices: [] }
+  }
   return new Response(JSON.stringify(body), {
     status: 200,
     headers: { 'content-type': 'application/json' },
@@ -27,7 +40,7 @@ function serve(init?: RequestInit): Response {
 }
 
 vi.mock('../../core/apiFetch', () => ({
-  apiFetch: async (_url: string, init?: RequestInit) => serve(init),
+  apiFetch: async (url: string, init?: RequestInit) => serve(init, url),
 }))
 
 /** What each profile has saved: different on every field the editor shows. */
@@ -209,13 +222,32 @@ describe('the Import page', () => {
 })
 
 describe('the onboarding wizard', () => {
-  it('shows the active profile’s rules when relaunched after a profile switch', async () => {
+  /** A Revolut statement, hand-typed: one charge each profile's rules name differently. */
+  const STATEMENT =
+    'Type,Product,Started Date,Completed Date,Description,Amount,Fee,Currency,State,Balance\n' +
+    'CARD_PAYMENT,Current,2026-06-14 10:00:00,2026-06-14 10:00:00,Market bakery,-8.40,0,EUR,COMPLETED,991.60\n' +
+    'CARD_PAYMENT,Current,2026-06-15 10:00:00,2026-06-15 10:00:00,Petrol station,-52.00,0,EUR,COMPLETED,939.60\n'
+
+  /** Choose the statement on the step, and wait for it to be read: the categories it names. */
+  async function readStatement(): Promise<string> {
+    const input = byTestId('onboarding-import-input') as HTMLInputElement
+    const file = new File([STATEMENT], 'revolut.csv', { type: 'text/csv' })
+    Object.defineProperty(input, 'files', { value: [file], configurable: true })
+    input.dispatchEvent(new Event('change', { bubbles: true }))
+    await vi.waitFor(() => {
+      expect(byTestId('onboarding-import-file')?.getAttribute('data-state')).toBe('ready')
+    })
+    return byTestId('onboarding-import-categories')?.textContent ?? ''
+  }
+
+  it('reads a statement with the active profile’s rules when relaunched after a profile switch', async () => {
     startOnboarding('import')
     const { OnboardingWizard } = await import('../../components/onboarding/OnboardingWizard')
     dispose = render(() => <OnboardingWizard selectProfiles={() => {}} />, host)
     await settle()
-    await openRulesEditor()
-    expect(drafts()).toEqual(DRAFTS['1'])
+    const first = await readStatement()
+    expect(first).toContain('Groceries')
+    expect(first).not.toContain('Fuel')
 
     skipOnboarding()
     await settle()
@@ -223,25 +255,20 @@ describe('the onboarding wizard', () => {
     await settle()
     startOnboarding('import')
     await settle()
-    await openRulesEditor()
+    const second = await readStatement()
 
-    expect(drafts()).toEqual(DRAFTS['2'])
+    expect(second).toContain('Fuel')
+    expect(second).not.toContain('Groceries')
   })
 
-  it('keeps unsaved rule edits when the import step is re-entered on the same profile', async () => {
+  it('shows no rules editor: the statement goes in with the rules the profile has', async () => {
     startOnboarding('import')
     const { OnboardingWizard } = await import('../../components/onboarding/OnboardingWizard')
     dispose = render(() => <OnboardingWizard selectProfiles={() => {}} />, host)
     await settle()
-    await openRulesEditor()
-    type(transferKeywordsInput()!, 'top-up, savings')
+    await readStatement()
 
-    skipOnboarding()
-    await settle()
-    startOnboarding('import')
-    await settle()
-    await openRulesEditor()
-
-    expect(drafts().transferKeywords).toBe('top-up, savings')
+    expect(transferKeywordsInput()).toBeNull()
+    expect(values('Category (pick or type)')).toEqual([])
   })
 })

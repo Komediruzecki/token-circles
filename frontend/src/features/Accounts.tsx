@@ -32,6 +32,7 @@
  */
 
 import { createEffect, createMemo, createResource, createSignal, For, Show } from 'solid-js'
+import { takesCreditLine } from '../../../shared/accountSchema'
 import AccountConstellation from '../components/AccountConstellation'
 import Badge from '../components/Badge'
 import ConfirmButton from '../components/ConfirmButton'
@@ -62,6 +63,9 @@ interface Account {
   bank_name?: string
   starting_balance?: number
   starting_date?: string | null
+  /** A credit card's limit or a Giro account's overdraft, and the yearly rate on money owed. */
+  credit_limit?: number | null
+  credit_rate?: number | null
   last_activity?: string
   profile_id: number
 }
@@ -510,9 +514,64 @@ export default function Accounts() {
                     <option value="savings">Savings</option>
                     <option value="ib">Investment / Brokerage</option>
                     <option value="cash">Cash</option>
+                    <option value="credit">Credit Card</option>
                   </select>
                 )}
               </Field>
+              <Show when={takesCreditLine(accountForm.values.type)}>
+                <Field
+                  form={accountForm}
+                  name="credit_limit"
+                  label={`${accountForm.values.type === 'credit' ? 'Credit Limit' : 'Overdraft Limit'} (${getLocalCurrency()})`}
+                  class={styles.formGroup}
+                  labelClass={styles.formLabel}
+                  hintClass={styles.formHint}
+                  hint={
+                    accountForm.values.type === 'credit'
+                      ? 'The most the card lets you owe.'
+                      : "How far below zero the bank lets this account go. Leave it blank if there's no overdraft."
+                  }
+                >
+                  {(control) => (
+                    <input
+                      {...control}
+                      type="text"
+                      inputmode="decimal"
+                      class={styles.formControl}
+                      placeholder="0.00"
+                      data-test-id="account-credit-limit"
+                      value={accountForm.values.credit_limit}
+                      onInput={(e) => accountForm.set('credit_limit', e.currentTarget.value)}
+                    />
+                  )}
+                </Field>
+                <Field
+                  form={accountForm}
+                  name="credit_rate"
+                  label="Interest Rate (%)"
+                  class={styles.formGroup}
+                  labelClass={styles.formLabel}
+                  hintClass={styles.formHint}
+                  hint={
+                    accountForm.values.type === 'credit'
+                      ? 'The yearly rate the card charges on money you owe.'
+                      : 'The yearly rate the bank charges while the account is below zero.'
+                  }
+                >
+                  {(control) => (
+                    <input
+                      {...control}
+                      type="text"
+                      inputmode="decimal"
+                      class={styles.formControl}
+                      placeholder="e.g., 15.9"
+                      data-test-id="account-credit-rate"
+                      value={accountForm.values.credit_rate}
+                      onInput={(e) => accountForm.set('credit_rate', e.currentTarget.value)}
+                    />
+                  )}
+                </Field>
+              </Show>
               <Field
                 form={accountForm}
                 name="bank_name"
@@ -577,9 +636,16 @@ export default function Accounts() {
                 labelClass={styles.formLabel}
                 hintClass={styles.formHint}
                 hint={
-                  modalMode() === 'edit'
-                    ? 'Correcting this adjusts the starting balance so your transaction history stays intact.'
-                    : undefined
+                  [
+                    accountForm.values.type === 'credit'
+                      ? 'Money you owe on the card is a balance below zero, like -350.'
+                      : '',
+                    modalMode() === 'edit'
+                      ? 'Correcting this adjusts the starting balance so your transaction history stays intact.'
+                      : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ') || undefined
                 }
               >
                 {(control) => (

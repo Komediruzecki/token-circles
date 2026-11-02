@@ -36,6 +36,9 @@ const PARKING_LINES: Array<[string, number]> = [
   ['ZET TEST TICKET 0000', -2],
 ]
 
+/** A line only the restaurant rule matches. */
+const RESTAURANT_LINES: Array<[string, number]> = [['RESTORAN TEST 0000', -24]]
+
 function statement(lines: Array<[string, number]>): Uint8Array {
   const rows = lines.map(([description, amount], i) => {
     const day = `2026-01-${String(i + 1).padStart(2, '0')}`
@@ -134,12 +137,12 @@ describe('local-first import: rule categories in a fresh space', () => {
     await seedDefaultCategories(1)
     const rows = await ruleRows()
 
-    // Groceries sits beside main's default Food; folding it is the defaults' change, not this one.
-    expect((await run(rows, true)).new_categories).toEqual(['Groceries'])
+    // Every name these rules give is a default, Groceries included, so nothing is new.
+    expect((await run(rows, true)).new_categories).toEqual([])
 
     const done = await run(rows, false)
     expect(done.imported).toBe(6)
-    expect(done.created_categories).toEqual(['Groceries'])
+    expect(done.created_categories).toEqual([])
     expect(await filedUnder()).toEqual({
       'PETROL TEST STATION 0000': 'Transportation',
       'PARKING TEST GARAGE 0000': 'Transportation',
@@ -158,7 +161,7 @@ describe('local-first import: a space that holds the names the rules gave before
     const before = (await categories()).length
     const rows = await ruleRows()
 
-    expect((await run(rows, true)).new_categories).toEqual(['Groceries'])
+    expect((await run(rows, true)).new_categories).toEqual([])
     await run(rows, false)
 
     expect(await filedUnder()).toEqual({
@@ -169,7 +172,7 @@ describe('local-first import: a space that holds the names the rules gave before
       'ISPLATA PLACE TEST EMPLOYER': 'Salary Eur',
       'KONZUM TEST STORE 0000': 'Groceries',
     })
-    expect((await categories()).length).toBe(before + 1)
+    expect((await categories()).length).toBe(before)
   })
 
   it('creates no new name beside an old one when the space has no defaults', async () => {
@@ -199,7 +202,7 @@ describe('local-first import: a space that holds the names the rules gave before
     await addCategory('Transport', 'expense')
     const rows = await ruleRows()
 
-    expect((await run(rows, true)).new_categories).toEqual(['Groceries'])
+    expect((await run(rows, true)).new_categories).toEqual([])
     await run(rows, false)
 
     const filed = await filedUnder()
@@ -233,5 +236,28 @@ describe('local-first import: a category the file names itself', () => {
     await run(rows, false)
 
     expect(await filedUnder()).toEqual({ 'TEST EMPLOYER PAY': 'Salary' })
+  })
+})
+
+describe('local-first import: a restaurant', () => {
+  it('goes under the default Eating out, and no Restaurant is offered', async () => {
+    await seedDefaultCategories(1)
+    const rows = await ruleRows(RESTAURANT_LINES)
+
+    expect((await run(rows, true)).new_categories).toEqual([])
+    await run(rows, false)
+
+    expect(await filedUnder()).toEqual({ 'RESTORAN TEST 0000': 'Eating out' })
+  })
+
+  it('keeps going to Restaurant in a space made from the old rules', async () => {
+    await seedDefaultCategories(1)
+    await addCategory('Restaurant', 'expense')
+    const rows = await ruleRows(RESTAURANT_LINES)
+
+    expect((await run(rows, true)).new_categories).toEqual([])
+    await run(rows, false)
+
+    expect(await filedUnder()).toEqual({ 'RESTORAN TEST 0000': 'Restaurant' })
   })
 })

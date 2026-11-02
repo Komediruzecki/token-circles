@@ -3,14 +3,16 @@
  * app against the local Worker, booted both ways (boot.ts): as dev does, and as a fresh browser
  * on production does, local-first.
  *
- * A link is spent only with its own account's session. Opened in a browser without it, the link
- * stays unspent, the browser keeps a marker the page cannot read, and the app asks for a sign-in.
- * Signing in there finishes the link, without opening it again.
+ * A link is spent with its own account's session. A confirm link is also spent in the browser that
+ * signed up, while the sign-up's marker lasts, and signs in there with no password asked. Opened in
+ * any other browser, the link stays unspent, the browser keeps a marker the page cannot read, and
+ * the app asks for a sign-in: for a confirm link, the password of the address it waits for (Finish
+ * signing up). Signing in there finishes the link, without opening it again.
  *
  * A password account signs in, and uses the app, only once its address is confirmed. Signing up
  * says to check the inbox. Its password is refused as a wrong one is, with a way to send the link
- * again, until the browser signing in has opened the link. A session from before addresses had to
- * be confirmed gets Confirm your email instead of the app.
+ * again, until the link is opened. A session from before addresses had to be confirmed gets Confirm
+ * your email instead of the app.
  *
  * The link's raw token only exists in the mail, which no test can read, so the spec gives the
  * account's newest link a token hash it knows, through the local-D1 side door
@@ -39,6 +41,7 @@ import {
   signInWithPassword,
   storedMode,
 } from './boot'
+import type { Boot } from './boot'
 import { accountMade, confirmAccount, sql, sqlRows } from './db'
 import { E2E_API_BASE, E2E_BASE } from './e2e-constants'
 
@@ -48,13 +51,18 @@ const CONFIRMED = 'Email confirmed. Your account is all set.'
 const CHANGED = 'Email changed. Your account uses the new address from now on.'
 /** What a refused password sign-in says, for a wrong password and an address not confirmed yet. */
 const REFUSED =
-  "That email and password don't match, or the email isn't confirmed yet. Just signed up? Open the link we emailed you in this browser, then sign in. Opened it in another browser or on another device? Sign in there first."
+  "That email and password don't match, or the email isn't confirmed yet. Just signed up? Open the link we emailed you within an hour in the browser you signed up in and you're signed in. Later, or anywhere else, it asks you to sign in first."
+/** What the step that finishes a sign-up says once the link it opened no longer waits. */
+const GONE =
+  "This link can't finish here anymore. Open the newest link in your email, or send a fresh one."
 
 test.use({ storageState: { cookies: [], origins: [] } })
 
 const sha256Hex = (s: string) => createHash('sha256').update(s).digest('hex')
 const runEmail = (what: string) =>
   `e2e-link-${what}-${randomBytes(6).toString('hex')}@tokencircles.test`
+/** An address as the finish step shows it: its first character, three dots and its domain. */
+const masked = (email: string) => `${email[0]}•••@${email.split('@')[1]}`
 
 /** Give the newest link of `purpose` mailed to `email` a token the spec knows; return its link. */
 async function plantLink(email: string, purpose: 'confirm' | 'change'): Promise<string> {
@@ -113,6 +121,53 @@ async function signedInFromBefore(api: APIRequestContext, email: string): Promis
   sql(`UPDATE users SET email_verified = 0 WHERE email = '${email}'`)
 }
 
+/**
+ * Sign up through the sign-in screen of this browser, wait for Check your inbox, and mark the new
+ * account's setup decided, so the wizard does not open over the app once the link signs it in.
+ */
+async function signUpHere(page: Page, boot: Boot, email: string): Promise<void> {
+  sql(
+    "DELETE FROM rate_limits WHERE bucket LIKE 'register%' OR bucket LIKE 'login%' OR bucket LIKE 'confirm-resend%'"
+  )
+  await openSignIn(page, boot, E2E_BASE)
+  await page.getByText('Create one').click()
+  await page.locator('#login-email').fill(email)
+  await page.locator('#login-password').fill(PASSWORD)
+  await page.locator('button[type="submit"]').click()
+  await expect(page.getByTestId('check-inbox-address')).toHaveText(email, { timeout: 30_000 })
+  await accountMade(email)
+  await markSetupDecided(page.context(), email)
+}
+
+/**
+ * Finish signing up on the step a confirm link opened signed out lands on: it shows which address
+ * the link waits for (masked), and takes the address and its password. Waits for the signed-in
+ * app.
+ */
+async function finishSignUp(page: Page, email: string): Promise<void> {
+  await expect(page.getByTestId('finish-signup-address')).toHaveText(masked(email), {
+    timeout: 30_000,
+  })
+  await expect(page.getByRole('button', { name: 'Logout' })).toHaveCount(0)
+  await expect(page.locator('#finish-signup-email')).toHaveValue('')
+  await page.locator('#finish-signup-email').fill(email)
+  await page.locator('#finish-signup-password').fill(PASSWORD)
+  await page.getByTestId('finish-signup-submit').click()
+  await expect(page.getByRole('button', { name: 'Logout' })).toBeVisible({ timeout: 30_000 })
+}
+
+/** Send the address and password on the finish step, and see that the link can't finish there. */
+async function cannotFinish(page: Page, email: string): Promise<void> {
+  await expect(page.getByTestId('finish-signup-address')).toHaveText(masked(email), {
+    timeout: 30_000,
+  })
+  await page.locator('#finish-signup-email').fill(email)
+  await page.locator('#finish-signup-password').fill(PASSWORD)
+  await page.getByTestId('finish-signup-submit').click()
+  await expect(page.getByTestId('finish-signup-gone')).toHaveText(GONE, { timeout: 30_000 })
+  await expect(page.getByRole('button', { name: 'Logout' })).toHaveCount(0)
+}
+
 /** Sign in on the sign-in screen with the right password, and see it refused. */
 async function refusedSignIn(page: Page, email: string): Promise<void> {
   await page.locator('#login-email').fill(email)
@@ -160,6 +215,14 @@ async function marker(context: BrowserContext) {
   return (await context.cookies()).find((c) => c.name === 'fm_email_link')
 }
 
+/** The marker a sign-up leaves its browser, as the browser stores it. */
+async function signUpMarker(context: BrowserContext) {
+  return (await context.cookies()).find((c) => c.name === 'fm_signup')
+}
+
+const sessionOf = async (context: BrowserContext) =>
+  (await context.cookies()).find((c) => c.name === 'fm_session')
+
 /**
  * Land on the app with the link's answer, as the browser does after the redirect: in a page load
  * of its own. From a page already on the app, going to its address with only another fragment
@@ -201,7 +264,7 @@ for (const boot of BOOTS) {
   // boot only: main runs every case in both boots.
   const serverSmoke = boot === 'server' ? ' @smoke' : ''
   test.describe(`booted as ${boot === 'prod' ? 'a fresh browser on production' : 'dev boots'}`, () => {
-    test(`a confirm link opened without a session finishes once signed in there (${boot}) @smoke`, async ({
+    test(`a confirm link opened in a browser that did not sign up asks for the password there, and finishes (${boot}) @smoke`, async ({
       page,
       context,
       request,
@@ -223,23 +286,92 @@ for (const boot of BOOTS) {
           sameSite: 'Lax',
         })
 
-        await land(page, fragment)
-        await expect(page.getByTestId('auth-notice')).toHaveText(
-          'Sign in to confirm your address.',
-          {
-            timeout: 30_000,
-          }
+        const told = page.waitForResponse(
+          (r) => r.url().endsWith('/api/auth/email-link') && r.request().method() === 'GET'
         )
+        await land(page, fragment)
+        await expect(page.getByTestId('finish-signup-address')).toHaveText(masked(email), {
+          timeout: 30_000,
+        })
+        // The Worker says which address by its first character and its domain, and no more.
+        expect(await (await told).json()).toEqual({ waiting: 'confirm', email: masked(email) })
+        await expect(page.getByText(email)).toHaveCount(0)
         // A local-first browser moved to account mode to get here.
         expect(await storedMode(page)).toBe('self-hosted')
 
-        await signInWithPassword(page, email, PASSWORD)
+        await finishSignUp(page, email)
 
         await expect(toast(page, CONFIRMED)).toBeVisible({ timeout: 30_000 })
         expect(accountState(email)).toMatchObject({ email_verified: 1, waiting: 0 })
         expect(await marker(context)).toBeUndefined()
       } finally {
         await deleteRunAccounts(page, [email])
+      }
+    })
+
+    test(`a confirm link opened in the browser that signed up signs in there, with no password asked (${boot}) @smoke`, async ({
+      page,
+      context,
+    }) => {
+      test.setTimeout(150_000)
+      const email = runEmail('same-browser')
+      try {
+        await bootApp(context, boot)
+        await signUpHere(page, boot, email)
+        expect(await signUpMarker(context)).toMatchObject({
+          path: '/api/auth/verify-email',
+          httpOnly: true,
+          sameSite: 'Lax',
+        })
+        const link = await plantLink(email, 'confirm')
+
+        const fragment = await openLink(page, link)
+
+        expect(fragment).toBe('#everified=1&signed_in=1')
+        expect(accountState(email)).toMatchObject({ email_verified: 1, waiting: 0 })
+        expect(await signUpMarker(context)).toBeUndefined()
+        expect(await marker(context)).toBeUndefined()
+        expect(await sessionOf(context)).toBeDefined()
+        await land(page, fragment)
+        await expect(page.getByRole('button', { name: 'Logout' })).toBeVisible({ timeout: 30_000 })
+        await expect(toast(page, CONFIRMED)).toBeVisible({ timeout: 30_000 })
+        expect(await storedMode(page)).toBe('self-hosted')
+      } finally {
+        await deleteRunAccounts(page, [email])
+      }
+    })
+
+    test(`a confirm link opened in another browser asks for the password there, and signs in there only (${boot}) @smoke`, async ({
+      page,
+      context,
+      browser,
+    }) => {
+      test.setTimeout(180_000)
+      const email = runEmail('other-browser')
+      const elsewhere = await browser.newContext({ storageState: { cookies: [], origins: [] } })
+      const there = await elsewhere.newPage()
+      try {
+        await bootApp(context, boot)
+        await signUpHere(page, boot, email)
+        const link = await plantLink(email, 'confirm')
+        await bootApp(elsewhere, boot, email)
+
+        const fragment = await openLink(there, link)
+        expect(fragment).toBe('#everified_error=signin_required')
+        expect(accountState(email)).toMatchObject({ email_verified: 0, waiting: 1 })
+        await land(there, fragment)
+        await finishSignUp(there, email)
+
+        await expect(toast(there, CONFIRMED)).toBeVisible({ timeout: 30_000 })
+        expect(accountState(email)).toMatchObject({ email_verified: 1, waiting: 0 })
+        // The browser that signed up was not signed in by any of it.
+        expect(await sessionOf(context)).toBeUndefined()
+        await page.reload()
+        await expect(page.locator('#login-email')).toBeVisible({ timeout: 30_000 })
+        await expect(page.getByRole('button', { name: 'Logout' })).toHaveCount(0)
+      } finally {
+        await deleteRunAccounts(there, [email])
+        await elsewhere.close()
       }
     })
 
@@ -295,13 +427,7 @@ for (const boot of BOOTS) {
         expect(accountState(email)).toMatchObject({ email_verified: 0, waiting: 1 })
 
         await land(page, fragment)
-        await expect(page.getByTestId('auth-notice')).toHaveText(
-          'Sign in to confirm your address.',
-          {
-            timeout: 30_000,
-          }
-        )
-        await signInWithPassword(page, email, PASSWORD)
+        await finishSignUp(page, email)
 
         await expect(toast(page, CONFIRMED)).toBeVisible({ timeout: 30_000 })
         expect(accountState(email)).toMatchObject({ email_verified: 1, waiting: 0 })
@@ -310,7 +436,7 @@ for (const boot of BOOTS) {
       }
     })
 
-    test(`with the cookies cleared after the only open, the password is refused and the link still works (${boot})`, async ({
+    test(`with the cookies cleared after the only open, the password finishes nothing and the link still works (${boot})`, async ({
       page,
       context,
       request,
@@ -323,21 +449,18 @@ for (const boot of BOOTS) {
         await bootApp(context, boot, email)
 
         await land(page, await openLink(page, link))
-        await expect(page.getByTestId('auth-notice')).toHaveText(
-          'Sign in to confirm your address.',
-          {
-            timeout: 30_000,
-          }
-        )
+        await expect(page.getByTestId('finish-signup-address')).toHaveText(masked(email), {
+          timeout: 30_000,
+        })
         // The marker was the browser's only record that it opened the link.
         await context.clearCookies()
 
-        // Nothing here proves the mailbox now: the password is refused, as a wrong one is.
-        await refusedSignIn(page, email)
+        // Nothing here proves the mailbox now: the password finishes nothing, and the step says so.
+        await cannotFinish(page, email)
         expect(accountState(email)).toMatchObject({ email_verified: 0, waiting: 1 })
-        // Opened again, the link still works: the next sign-in here confirms the address.
+        // Opened again, the link still works: the password here confirms the address.
         await land(page, await openLink(page, link))
-        await signInWithPassword(page, email, PASSWORD)
+        await finishSignUp(page, email)
         await expect(toast(page, CONFIRMED)).toBeVisible({ timeout: 30_000 })
         expect(accountState(email)).toMatchObject({ email_verified: 1, waiting: 0 })
       } finally {
@@ -374,13 +497,8 @@ for (const boot of BOOTS) {
         expect(accountState(other)).toMatchObject({ email_verified: 1 })
 
         await page.getByRole('button', { name: 'Logout' }).click()
-        await expect(page.getByTestId('auth-notice')).toHaveText(
-          'Sign in to confirm your address.',
-          {
-            timeout: 30_000,
-          }
-        )
-        await signInWithPassword(page, email, PASSWORD)
+        // Signed out, the screen asks for the password of the address the link waits for.
+        await finishSignUp(page, email)
 
         await expect(toast(page, CONFIRMED)).toBeVisible({ timeout: 30_000 })
         expect(accountState(email)).toMatchObject({ email_verified: 1, waiting: 0 })
@@ -410,7 +528,7 @@ for (const boot of BOOTS) {
       }
     })
 
-    test(`the marker of a link that expired since does not let the password in, and a fresh browser that opens it is told why (${boot})`, async ({
+    test(`the marker of a link that expired since finishes nothing with the password, and a fresh browser that opens it is told why (${boot})`, async ({
       page,
       context,
       request,
@@ -422,19 +540,16 @@ for (const boot of BOOTS) {
         const link = await plantLink(email, 'confirm')
         await bootApp(context, boot, email)
         await land(page, await openLink(page, link))
-        await expect(page.getByTestId('auth-notice')).toHaveText(
-          'Sign in to confirm your address.',
-          {
-            timeout: 30_000,
-          }
-        )
+        await expect(page.getByTestId('finish-signup-address')).toHaveText(masked(email), {
+          timeout: 30_000,
+        })
         sql(
           `UPDATE email_verifications SET expires_at = '2020-01-01T00:00:00.000Z'
            WHERE user_id = (SELECT id FROM users WHERE email = '${email}') AND used_at IS NULL`
         )
 
-        // The link the marker names proves nothing now: the password is refused, as a wrong one is.
-        await refusedSignIn(page, email)
+        // The link the marker names proves nothing now: the password finishes nothing.
+        await cannotFinish(page, email)
 
         expect(accountState(email)).toMatchObject({ email_verified: 0, waiting: 1 })
 
@@ -471,17 +586,15 @@ for (const boot of BOOTS) {
         const link = await plantLink(email, 'confirm')
         await bootApp(context, boot, email)
         await land(page, await openLink(page, link))
-        await expect(page.getByTestId('auth-notice')).toHaveText(
-          'Sign in to confirm your address.',
-          {
-            timeout: 30_000,
-          }
-        )
+        await expect(page.getByTestId('finish-signup-address')).toHaveText(masked(email), {
+          timeout: 30_000,
+        })
         // The other device, where the account is signed in, opens the same link.
         const elsewhere = await request.get(link, { maxRedirects: 0 })
         expect(new URL(elsewhere.headers()['location']).hash).toBe('#everified=1')
 
-        const answer = await finishAnswer(page, () => signInWithPassword(page, email, PASSWORD))
+        // The address is confirmed, so the password signs in here as it does anywhere.
+        const answer = await finishAnswer(page, () => finishSignUp(page, email))
 
         expect(answer).toEqual({ outcome: 'none', change: false })
         await expect(toast(page, CONFIRMED)).toHaveCount(0)
@@ -492,7 +605,7 @@ for (const boot of BOOTS) {
       }
     })
 
-    test(`signing up says to check the inbox, the password is refused until the link is opened, and then it signs in (${boot})${serverSmoke}`, async ({
+    test(`signing up says to check the inbox, the password is refused until the link is opened, and the link signs in the browser that signed up (${boot})${serverSmoke}`, async ({
       page,
       context,
     }) => {
@@ -512,9 +625,9 @@ for (const boot of BOOTS) {
         await expect(page.getByTestId('check-inbox-address')).toHaveText(email, {
           timeout: 30_000,
         })
-        // It says where to sign in: in the browser that opens the link.
+        // It says where the link signs in by itself, and where it asks for the password.
         await expect(page.getByTestId('check-inbox-lead')).toHaveText(
-          `We sent a link to ${email}. Open it in this browser, then sign in with your password. Opening it in another browser or on another device? Sign in there first.`
+          `We sent a link to ${email}. Open it within an hour in the browser you signed up in and you're signed in. Later, or anywhere else, it asks you to sign in first.`
         )
         await accountMade(email)
         // Made here, so its setup is marked decided before this browser signs in to it.
@@ -537,9 +650,11 @@ for (const boot of BOOTS) {
         await expect.poll(() => newestConfirmLink(email)).toBeGreaterThan(first)
         expect(accountState(email)).toMatchObject({ email_verified: 0, waiting: 1 })
 
-        // The newest link, opened in this browser, lets the next sign-in here in.
-        await land(page, await openLink(page, await plantLink(email, 'confirm')))
-        await signInWithPassword(page, email, PASSWORD)
+        // The newest link, opened in the browser that signed up, signs in with no password asked.
+        const fragment = await openLink(page, await plantLink(email, 'confirm'))
+        expect(fragment).toBe('#everified=1&signed_in=1')
+        await land(page, fragment)
+        await expect(page.getByRole('button', { name: 'Logout' })).toBeVisible({ timeout: 30_000 })
         await expect(toast(page, CONFIRMED)).toBeVisible({ timeout: 30_000 })
         expect(accountState(email)).toMatchObject({ email_verified: 1, waiting: 0 })
       } finally {
@@ -547,7 +662,7 @@ for (const boot of BOOTS) {
       }
     })
 
-    test(`a session from before gets Confirm your email, which sends the link again and signs out, and the link lets it in (${boot})${serverSmoke}`, async ({
+    test(`a session from before gets Confirm your email, which sends the link again and signs out, and the link signs it in again (${boot})${serverSmoke}`, async ({
       page,
       context,
     }) => {
@@ -582,16 +697,15 @@ for (const boot of BOOTS) {
         )
         expect(newestConfirmLink(email)).toBeGreaterThan(first)
 
-        // Sign out, then open the newest link here: the next sign-in confirms the address.
+        // Sign out, then open the newest link here. This browser signed the account up within the
+        // hour, so the link confirms the address and signs in with no password asked.
         await page.getByTestId('confirm-email-sign-out').click()
         await expect(page.locator('#login-email')).toBeVisible({ timeout: 30_000 })
-        expect((await context.cookies()).find((c) => c.name === 'fm_session')).toBeUndefined()
-        await land(page, await openLink(page, await plantLink(email, 'confirm')))
-        await expect(page.getByTestId('auth-notice')).toHaveText(
-          'Sign in to confirm your address.',
-          { timeout: 30_000 }
-        )
-        await signInWithPassword(page, email, PASSWORD)
+        expect(await sessionOf(context)).toBeUndefined()
+        const fragment = await openLink(page, await plantLink(email, 'confirm'))
+        expect(fragment).toBe('#everified=1&signed_in=1')
+        await land(page, fragment)
+        await expect(page.getByRole('button', { name: 'Logout' })).toBeVisible({ timeout: 30_000 })
         await expect(toast(page, CONFIRMED)).toBeVisible({ timeout: 30_000 })
         expect(accountState(email)).toMatchObject({ email_verified: 1, waiting: 0 })
       } finally {

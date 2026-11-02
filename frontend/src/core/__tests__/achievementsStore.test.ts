@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Mock } from 'vitest'
 
 const calls: Record<string, unknown[]> = {}
@@ -24,10 +24,14 @@ vi.mock('../api', () => ({
     getCategories: vi.fn(async () => calls.categories ?? [{ id: 1, name: 'Food' }]),
     getBills: vi.fn(async () => calls.bills ?? []),
     getLoans: vi.fn(async () => calls.loans ?? []),
+    getAccounts: vi.fn(async () => calls.accounts ?? []),
     getLoan: vi.fn(async (id: number) =>
       (calls.loans as Array<{ id: number }>)?.find((l) => l.id === id)
     ),
   },
+  // The setup wizard's store keeps its decision through these (onboardingStore.ts).
+  apiGet: vi.fn(async () => ({})),
+  apiPut: vi.fn(async () => ({})),
 }))
 const toasts: string[] = []
 vi.mock('../toastStore', () => ({ addToast: vi.fn((m: string) => toasts.push(m)) }))
@@ -45,10 +49,17 @@ import {
   unlocks,
 } from '../achievementsStore'
 import { api } from '../api'
+import {
+  completeOnboarding,
+  onboardingOpen,
+  skipOnboarding,
+  startOnboarding,
+} from '../onboardingStore'
+import { addToast } from '../toastStore'
 
 /** The mocked client's members as plain mocks, to hold, count and re-stub. */
 const apiMock = api as unknown as Record<
-  'getSettings' | 'updateSettings' | 'getLoan' | 'getBudgets',
+  'getSettings' | 'updateSettings' | 'getLoan' | 'getAccounts' | 'getBudgets',
   Mock
 >
 
@@ -358,6 +369,28 @@ describe('badges are per profile', () => {
     expect(snapshot()!.bills.map((b) => b.name)).toEqual(['Power'])
   })
 
+  it("keeps only the active profile's accounts, for Getting started's cushion", async () => {
+    householdOfTwoAndThree()
+    calls.accounts = [
+      { id: 1, name: 'Savings', type: 'savings', balance: 900, profile_id: 2 },
+      { id: 2, name: 'Theirs', type: 'savings', balance: 5000, profile_id: 3 },
+    ]
+
+    await refreshAchievements()
+
+    expect(snapshot()!.accounts!.map((a) => a.name)).toEqual(['Savings'])
+  })
+
+  it('works the badges out when the accounts cannot be read, and holds them as unknown', async () => {
+    apiMock.getAccounts.mockRejectedValueOnce(new Error('offline'))
+    calls.transactions = month(thisMonth)
+
+    await refreshAchievements()
+
+    expect(snapshot()!.accounts).toBeNull()
+    expect(unlocks().map((u) => u.id)).toContain('first-entry')
+  })
+
   it('restores dismissed advice under the per-profile key', async () => {
     householdOfTwoAndThree()
     calls.budgets = [budget(2)]
@@ -493,9 +526,18 @@ describe('a profile switch while an evaluation is running', () => {
  * A write that lands while an evaluation runs, after the evaluation has read its lists. The ask
  * it sets off (AchievementsHost, 1.2 s after the write) used to be handed the running evaluation,
  * whose lists predate the write, and nothing evaluated again: a badge the write earned waited for
- * the next write.
+ * the next write, and Getting started kept the account list from before a second account was
+ * added.
  */
 describe('a refresh asked for while an evaluation is running', () => {
+  const account = (id: number, name: string) => ({
+    id,
+    name,
+    type: 'savings',
+    balance: 1000,
+    profile_id: 1,
+  })
+
   const firstBudget = {
     profile_id: 1,
     category_id: 1,
@@ -505,6 +547,23 @@ describe('a refresh asked for while an evaluation is running', () => {
     end_date: null,
     created_at: `${thisMonth}-02`,
   }
+
+  it('evaluates once more when the running one ends, so the snapshot holds the new account', async () => {
+    localStorage.setItem('currentProfileId', '1')
+    calls.accounts = [account(1, 'Rainy day')]
+    const release = holdSettings()
+    const running = refreshAchievements()
+    expect(apiMock.getAccounts).toHaveBeenCalledTimes(1)
+
+    // POST /api/accounts lands after the running evaluation read the accounts.
+    calls.accounts = [account(1, 'Rainy day'), account(2, 'Holiday')]
+    const asked = refreshAchievements()
+    release()
+    await Promise.all([running, asked])
+
+    expect(snapshot()!.accounts!.map((a) => a.name)).toEqual(['Rainy day', 'Holiday'])
+    expect(apiMock.getAccounts).toHaveBeenCalledTimes(2)
+  })
 
   it('evaluates once more when the running one ends, so the badge the write earned is there', async () => {
     localStorage.setItem('currentProfileId', '1')
@@ -557,5 +616,139 @@ describe('a refresh asked for while an evaluation is running', () => {
     await refreshAchievements()
     await new Promise((resolve) => setTimeout(resolve, 20))
     expect(apiMock.getSettings).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('badges earned while the setup wizard is open', () => {
+  afterEach(() => {
+    if (onboardingOpen()) skipOnboarding()
+  })
+
+  it('are saved at once and announced when setup closes, not over it', async () => {
+    startOnboarding('import')
+    calls.transactions = [...month(thisMonth)]
+
+    const newly = await refreshAchievements()
+
+    expect(newly.length).toBeGreaterThan(1)
+    expect(saved(0).unlocks).toHaveLength(newly.length)
+    expect(toasts).toEqual([])
+
+    completeOnboarding()
+
+    expect(toasts).toEqual([`${newly.length} badges earned from your history so far.`])
+  })
+
+  it('from two evaluations are each announced by name when setup closes, as outside it', async () => {
+    seed(
+      JSON.stringify({
+        v: 1,
+        unlocks: [
+          { id: 'first-entry', earnedOn: '2026-07-01', unlockedAt: '2026-08-01T00:00:00.000Z' },
+        ],
+      })
+    )
+    startOnboarding('account')
+    calls.transactions = [...month(thisMonth)]
+    const first = await refreshAchievements()
+    calls.transactions = [...month(monthsAgo(2)), ...month(monthsAgo(1)), ...month(thisMonth)]
+    const second = await refreshAchievements()
+    expect(first.length).toBeGreaterThan(0)
+    expect(second.length).toBeGreaterThan(0)
+    expect(toasts).toEqual([])
+
+    skipOnboarding()
+
+    expect(toasts).toHaveLength(first.length + second.length)
+    for (const toast of toasts) expect(toast).toMatch(/^Badge unlocked: .+\.$/)
+  })
+
+  it('are not announced on another profile, when setup closes after a switch', async () => {
+    localStorage.setItem('currentProfileId', '1')
+    startOnboarding('import')
+    calls.transactions = [...month(thisMonth)]
+    await refreshAchievements()
+
+    localStorage.setItem('currentProfileId', '2')
+    completeOnboarding()
+
+    expect(toasts).toEqual([])
+  })
+})
+
+describe('the badges a print comes with', () => {
+  /** The months from `n` months ago up to this one, each tracked. */
+  const run = (n: number) => Array.from({ length: n }, (_, i) => month(monthsAgo(n - 1 - i))).flat()
+  /** The action the toast with this text was given. */
+  const actionOf = (text: string) => {
+    const call = vi.mocked(addToast).mock.calls.find(([m]) => m === text)
+    expect(call, text).toBeDefined()
+    return (call![2] as { action: { label: string; onClick: () => void } }).action
+  }
+  const stored = (...ids: string[]) => {
+    seed(
+      JSON.stringify({
+        v: 1,
+        unlocks: ids.map((id) => ({
+          id,
+          earnedOn: '2026-01-01',
+          unlockedAt: '2026-01-02T00:00:00.000Z',
+        })),
+      })
+    )
+  }
+  afterEach(() => {
+    window.location.hash = ''
+  })
+
+  it('A year names the first print, and its action opens #progress/prints', async () => {
+    stored('first-entry', 'named-everything')
+    calls.transactions = run(12)
+    await refreshAchievements()
+    const text = 'Badge unlocked: A year. Your first print is on Progress.'
+    expect(toasts).toContain(text)
+    const action = actionOf(text)
+    expect(action.label).toBe('See my print')
+    action.onClick()
+    expect(window.location.hash).toBe('#progress/prints')
+    // A badge that brings no print still points at the badges.
+    expect(actionOf('Badge unlocked: One month.').label).toBe('See badges')
+  })
+
+  it('A year is announced last, so another badge earned with it does not hide the print', async () => {
+    stored('first-entry', 'named-everything', 'one-month', 'a-quarter')
+    // Money kept every month: A perfect year comes the same month as A year.
+    calls.transactions = Array.from({ length: 12 }, (_, i) => monthsAgo(11 - i)).flatMap((m) => [
+      { date: `${m}-01`, type: 'income', amount: 100, category_id: 1 },
+      ...month(m),
+    ])
+    const newly = await refreshAchievements()
+    expect(newly.map((u) => u.id)).toEqual(expect.arrayContaining(['a-year', 'perfect-year']))
+    expect(toasts.at(-1)).toBe('Badge unlocked: A year. Your first print is on Progress.')
+  })
+
+  it('Two years says a new print is on Progress', async () => {
+    stored('first-entry', 'named-everything', 'one-month', 'a-quarter', 'a-year')
+    calls.transactions = run(24)
+    await refreshAchievements()
+    const text = 'Badge unlocked: Two years. A new print is on Progress.'
+    expect(toasts).toContain(text)
+    expect(actionOf(text).label).toBe('See my print')
+  })
+
+  it('the first run counts the prints with the badges', async () => {
+    calls.transactions = run(12)
+    const newly = await refreshAchievements()
+    const one = `${newly.length} badges and your first print from your history so far.`
+    expect(toasts).toEqual([one])
+    expect(actionOf(one).label).toBe('See my print')
+  })
+
+  it('the first run over two years counts two prints', async () => {
+    calls.transactions = run(24)
+    const newly = await refreshAchievements()
+    const two = `${newly.length} badges and 2 prints from your history so far.`
+    expect(toasts).toEqual([two])
+    expect(actionOf(two).label).toBe('See my prints')
   })
 })

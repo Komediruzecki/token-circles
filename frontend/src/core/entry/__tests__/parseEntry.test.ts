@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { DEFAULT_CATEGORIES } from '../../storage/idb'
 import { normalizeAmount, parseEntry } from '../parseEntry'
 import type { ParseCategory } from '../parseEntry'
 
@@ -78,6 +79,69 @@ describe('parseEntry — category', () => {
     const r = parseEntry('12 zzz', ctx)
     expect(r.categoryId).toBeNull()
     expect(r.categoryGuess).toBeNull()
+  })
+})
+
+/** The words the hints know for eating out and for groceries, as a person types them. */
+const EATING_OUT = [
+  'coffee',
+  'latte',
+  'cafe',
+  'lunch',
+  'dinner',
+  'breakfast',
+  'restaurant',
+  'snack',
+  'meal',
+]
+const GROCERIES = ['grocery', 'groceries', 'food']
+
+/** The local-first defaults, as the Command Bar hands categories to the parser. */
+const DEFAULTS: ParseCategory[] = DEFAULT_CATEGORIES.map((c, i) => ({
+  id: i + 1,
+  name: c.name,
+  type: c.type,
+  kind: c.kind,
+  parent_id: null,
+}))
+
+const guess = (text: string, categories: ParseCategory[]) =>
+  parseEntry(text, { categories, today: '2026-07-13' }).categoryGuess
+
+describe('parseEntry — category, by kind', () => {
+  it('on the default categories, guesses Eating out and Groceries for the words that mean them', () => {
+    for (const word of EATING_OUT) expect(guess(`${word} 4.50`, DEFAULTS), word).toBe('Eating out')
+    for (const word of GROCERIES) expect(guess(`${word} 32`, DEFAULTS), word).toBe('Groceries')
+    // The other hints find their default by kind as well.
+    expect(guess('uber 18', DEFAULTS)).toBe('Transportation')
+    expect(guess('netflix 15.99', DEFAULTS)).toBe('Subscriptions')
+    expect(guess('pharmacy 9', DEFAULTS)).toBe('Healthcare')
+    expect(guess('concert 40', DEFAULTS)).toBe('Entertainment')
+    expect(guess('salary 3000', DEFAULTS)).toBe('Salary')
+  })
+
+  it('goes by a kind stored under any name, or taken from a parent', () => {
+    const categories: ParseCategory[] = [
+      { id: 1, name: 'Kafići', type: 'expense', kind: 'eating_out' },
+      { id: 2, name: 'Namirnice', type: 'expense', kind: 'groceries' },
+    ]
+    expect(guess('latte 3.40', categories)).toBe('Kafići')
+    expect(guess('groceries 20', categories)).toBe('Namirnice')
+    // Listed first, a child with no kind of its own goes by its parent's.
+    const market: ParseCategory = { id: 3, name: 'Wochenmarkt', type: 'expense', parent_id: 2 }
+    expect(guess('grocery 20', [market, ...categories])).toBe('Wochenmarkt')
+  })
+
+  it('on a profile that still has Food, guesses Food for all of them', () => {
+    for (const word of [...EATING_OUT, ...GROCERIES]) {
+      expect(guess(`${word} 4.50`, CATS), word).toBe('Food')
+    }
+  })
+
+  it('once Eating out sits beside Food, sends the eating-out words there', () => {
+    const split: ParseCategory[] = [...CATS, { id: 9, name: 'Eating out', type: 'expense' }]
+    for (const word of EATING_OUT) expect(guess(`${word} 4.50`, split), word).toBe('Eating out')
+    expect(guess('grocery 32', split)).toBe('Food')
   })
 })
 

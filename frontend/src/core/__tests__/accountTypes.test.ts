@@ -23,30 +23,38 @@ describe('a type v4 renamed shows as the type that replaced it', () => {
 })
 
 describe('each type has its own colour and icon', () => {
-  it('gives the four types the colours the page has always used', () => {
-    expect(['giro', 'savings', 'ib', 'cash'].map(accountTypeTone)).toEqual([
+  it('gives the four types the colours the page has always used, and a credit card its own', () => {
+    expect(['giro', 'savings', 'ib', 'cash', 'credit'].map(accountTypeTone)).toEqual([
       'primary',
       'success',
       'info',
       'warning',
+      'expense',
     ])
   })
 
   it('gives no two types the same icon, and none the plain one', () => {
-    const icons = ['giro', 'savings', 'ib', 'cash'].map(accountTypeIcon)
-    expect(new Set(icons).size).toBe(4)
-    expect(icons).not.toContain(accountTypeIcon('credit'))
+    const icons = ['giro', 'savings', 'ib', 'cash', 'credit'].map(accountTypeIcon)
+    expect(new Set(icons).size).toBe(5)
+    expect(icons).not.toContain(accountTypeIcon('sock_drawer'))
+  })
+})
+
+describe('a credit card is a type this build has', () => {
+  it('shows its own word, not the plain account', () => {
+    expect(accountTypeBadge('credit')).toBe('credit')
+    expect(accountTypeTone('credit')).not.toBe('default')
   })
 })
 
 describe('a type this build does not have is a plain account', () => {
-  it.each(['credit', 'loan'])('%s: the word "account", the plain colour', (stored) => {
+  it.each(['sock_drawer'])('%s: the word "account", the plain colour', (stored) => {
     expect(accountTypeBadge(stored)).toBe('account')
     expect(accountTypeTone(stored)).toBe('default')
   })
 
   it('does not take a type from the prototype chain', () => {
     expect(accountTypeTone('constructor')).toBe('default')
-    expect(accountTypeIcon('constructor')).toBe(accountTypeIcon('credit'))
+    expect(accountTypeIcon('constructor')).toBe(accountTypeIcon('sock_drawer'))
   })
 })

@@ -83,8 +83,9 @@ import type { SignedInAccount } from './core/api.js'
 import type { PageName } from './router.tsx'
 import type { Account, Category, Profile } from './types/models'
 
-// Loaded on demand: only pristine first-run profiles (or an explicit relaunch
-// from the tour menu) ever open the wizard, so it stays out of the main chunk.
+// Loaded on demand: only a new account whose setup is not finished, a pristine local-first
+// workspace, or a relaunch from the tour menu ever opens the wizard, so it stays out of the
+// main chunk (core/onboardingStore.ts says when).
 const OnboardingWizard = lazy(() => import('./components/onboarding/OnboardingWizard'))
 
 export function App() {
@@ -361,7 +362,7 @@ export function App() {
       }
     }
     setShowDropdown(false)
-    // Fresh signups land with a pristine profile — offer the setup wizard.
+    // A new account whose setup is not finished meets the wizard, at the step it reached.
     void maybeOfferOnboarding()
   }
 
@@ -572,9 +573,10 @@ export function App() {
 
     _setIsLoading(false)
 
-    // First-run setup: offer the onboarding wizard to pristine profiles (no
-    // accounts, no transactions, never seen/skipped it). Runs after the loading
-    // gate clears so it never delays app start; the check itself is two GETs.
+    // First-run setup: offer the wizard where it applies (core/onboardingStore.ts): signed in,
+    // an account whose record is not finished, from one GET of /api/account/state; local-first,
+    // a workspace with no accounts, transactions or bills and no decision. Runs after the loading
+    // gate clears so it never delays app start.
     if (loggedIn || !serverMode) void maybeOfferOnboarding()
   })
 

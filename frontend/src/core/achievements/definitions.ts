@@ -54,9 +54,6 @@ export interface AchievementDef {
   share: string
 }
 
-/** A month is tracked when it holds at least this many transactions dated inside it. */
-export const TRACKED_MONTH_MIN_TRANSACTIONS = 3
-
 export const BANDS: Record<Band, { label: string; rings: number }> = {
   beginnings: { label: 'Beginnings', rings: 1 },
   building: { label: 'Building', rings: 2 },

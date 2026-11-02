@@ -17,6 +17,7 @@ import type { UserRow } from '../reminders';
 import { enforce } from '../ratelimit';
 import { requireFeature } from '../plan';
 import { localNow } from '../local-date';
+import { WEEK_ONE_LIST, weekOneAhead } from '../weekOne';
 
 // Email/reminder preferences + test/trigger/unsubscribe. Per-type prefs live in `settings`
 // (email_notifications, email_budget_alerts, email_spending_report) on the active profile;
@@ -29,9 +30,13 @@ export const notificationsRoutes = new Hono<AppEnv>();
 notificationsRoutes.get('/api/notifications/settings', requireAuth, async (c) => {
   const userId = c.get('userId');
   const pid = await getProfileId(c);
-  const user = await db.first<{ email: string | null; notifications_unsubscribed: number | null }>(
+  const user = await db.first<{
+    email: string | null;
+    week_one_mails: number;
+    notifications_unsubscribed: number | null;
+  }>(
     c.env.DB,
-    'SELECT email, notifications_unsubscribed FROM users WHERE id = ?',
+    'SELECT email, week_one_mails, notifications_unsubscribed FROM users WHERE id = ?',
     userId
   );
   const rows = await db.all<{ key: string; value: string }>(
@@ -48,6 +53,11 @@ notificationsRoutes.get('/api/notifications/settings', requireAuth, async (c) =>
     budgetAlerts: flag('email_budget_alerts'),
     spendingReport: flag('email_spending_report'),
     billsReminders: flag('email_bills_reminders'),
+    // The week-one mails (weekOne.ts): the account's own switch, and whether one of them can still
+    // come. `unsubscribed` below stops them too, whatever the switch says. Settings shows the
+    // switch only while a mail can still come.
+    weekOneMails: user?.week_one_mails !== 0,
+    weekOneAhead: await weekOneAhead(c.env, userId),
     unsubscribed: !!user?.notifications_unsubscribed,
   });
 });
@@ -93,6 +103,15 @@ notificationsRoutes.put('/api/notifications/settings', requireAuth, async (c) =>
   if ('budgetAlerts' in b) await set('email_budget_alerts', b.budgetAlerts);
   if ('spendingReport' in b) await set('email_spending_report', b.spendingReport);
   if ('billsReminders' in b) await set('email_bills_reminders', b.billsReminders);
+  // The week-one switch belongs to the account, and no plan gates it: Free gets these mails.
+  if (typeof b.weekOneMails === 'boolean') {
+    await db.run(
+      c.env.DB,
+      'UPDATE users SET week_one_mails = ? WHERE id = ?',
+      b.weekOneMails ? 1 : 0,
+      userId
+    );
+  }
   return c.json(pendingEmail ? { ok: true, pendingEmail } : { ok: true });
 });
 
@@ -275,12 +294,43 @@ const unsubscribedPage = (c: UnsubscribeContext) =>
   unsubscribePage(
     c,
     'You are unsubscribed',
-    `Token Circles will not send this address any more reminder mails: no budget alerts, spending reports or bill reminders. ${STILL_ARRIVES} To get them again, press Send me reminders again in Settings, Email reminders.`
+    `Token Circles will not send this address any more reminder mails: no budget alerts, spending reports, bill reminders or first-week mails. ${STILL_ARRIVES} To get them again, press Send me reminders again in Settings, Email reminders.`
   );
+
+// `&list=week-one` is the stop link of the week-one mails (weekOne.ts): it turns off those two
+// mails only (users.week_one_mails), and leaves every other mail as it is. Without a list, the
+// link stops every reminder mail, the week-one mails included, as it always has.
+
+const weekOneStoppedPage = (c: UnsubscribeContext) =>
+  unsubscribePage(
+    c,
+    'First-week mails are off',
+    `Token Circles will not send this address its first-week mails. Budget alerts, spending reports and bill reminders keep their own settings. ${STILL_ARRIVES}`
+  );
+
+/** The page of a week-one stop link: one button, and nothing changes until it is pressed. */
+async function weekOneUnsubscribePage(c: UnsubscribeContext, token: string) {
+  const user = await db.first<{ week_one_mails: number; notifications_unsubscribed: number }>(
+    c.env.DB,
+    'SELECT week_one_mails, notifications_unsubscribed FROM users WHERE unsubscribe_token = ?',
+    token
+  );
+  if (!user) return unknownToken(c);
+  if (!user.week_one_mails || user.notifications_unsubscribed) return weekOneStoppedPage(c);
+  return unsubscribePage(
+    c,
+    'Stop first-week mails?',
+    `Press Unsubscribe to stop the two mails Token Circles sends in a new account's first week. Budget alerts, spending reports and bill reminders keep their own settings. ${STILL_ARRIVES}`,
+    {
+      action: `/api/notifications/unsubscribe?token=${encodeURIComponent(token)}&list=${WEEK_ONE_LIST}`,
+    }
+  );
+}
 
 notificationsRoutes.get('/api/notifications/unsubscribe', async (c) => {
   const token = c.req.query('token');
   if (!token) return missingToken(c);
+  if (c.req.query('list') === WEEK_ONE_LIST) return weekOneUnsubscribePage(c, token);
   const user = await db.first<{ notifications_unsubscribed: number | null }>(
     c.env.DB,
     'SELECT notifications_unsubscribed FROM users WHERE unsubscribe_token = ?',
@@ -291,7 +341,7 @@ notificationsRoutes.get('/api/notifications/unsubscribe', async (c) => {
   return unsubscribePage(
     c,
     'Stop reminder mails?',
-    `Press Unsubscribe to stop budget alerts, spending reports and bill reminders to this address. ${STILL_ARRIVES}`,
+    `Press Unsubscribe to stop budget alerts, spending reports, bill reminders and first-week mails to this address. ${STILL_ARRIVES} You can turn them back on with Send me reminders again in Settings, Email reminders.`,
     { action: `/api/notifications/unsubscribe?token=${encodeURIComponent(token)}` }
   );
 });
@@ -299,6 +349,16 @@ notificationsRoutes.get('/api/notifications/unsubscribe', async (c) => {
 notificationsRoutes.post('/api/notifications/unsubscribe', async (c) => {
   const token = c.req.query('token');
   if (!token) return missingToken(c);
+  if (c.req.query('list') === WEEK_ONE_LIST) {
+    // The week-one switch only. notifications_unsubscribed is left as it is.
+    const res = await db.run(
+      c.env.DB,
+      'UPDATE users SET week_one_mails = 0 WHERE unsubscribe_token = ?',
+      token
+    );
+    if (!res.meta.changes) return unknownToken(c);
+    return weekOneStoppedPage(c);
+  }
   // SQLite counts a row the WHERE matched as changed even when the flag was already 1, so an
   // account that is already unsubscribed still answers with the done page.
   const res = await db.run(

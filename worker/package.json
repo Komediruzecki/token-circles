@@ -14,6 +14,7 @@
     "d1:migrate:dev": "wrangler d1 migrations apply finance-manager-dev --remote --env dev",
     "d1:migrate:prod": "wrangler d1 migrations apply finance-manager --remote --env prod",
     "d1:exec:local": "wrangler d1 execute finance-manager --local --command",
+    "first-week-counts": "node scripts/first-week-counts.ts",
     "r2:create:dev": "wrangler r2 bucket create finance-manager-receipts-dev",
     "r2:create:prod": "wrangler r2 bucket create finance-manager-receipts",
     "secret:dev": "wrangler secret put JWT_SECRET --env dev && wrangler secret put GOOGLE_CLIENT_SECRET --env dev && wrangler secret put TURNSTILE_SECRET --env dev",

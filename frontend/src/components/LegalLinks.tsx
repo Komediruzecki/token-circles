@@ -6,9 +6,11 @@
  * finance app that is the first thing a careful person looks for, and the first question a launch
  * post gets. Same origin as the landing, so the links are absolute on purpose.
  */
+import { ABOUT_SITE } from '../../../shared/articles'
 import styles from './LegalLinks.module.css'
 
-export const MARKETING_SITE = 'https://about.tokencircles.com'
+/** The marketing site: shared/articles.ts keeps its address, for the articles linked from the app. */
+export const MARKETING_SITE = ABOUT_SITE
 export const PRIVACY_URL = `${MARKETING_SITE}/privacy`
 export const TERMS_URL = `${MARKETING_SITE}/terms`
 

@@ -62,7 +62,7 @@ describe('worldwide category matching', () => {
     const w = DEFAULT_CATEGORY_RULES_WORLDWIDE
     expect(matchCategory('AMAZON PRIME MEMBERSHIP', w)).toBe('Subscriptions')
     expect(matchCategory('amazon marketplace', w)).toBe('Shopping')
-    expect(matchCategory('UBER EATS', w)).toBe('Dining')
+    expect(matchCategory('UBER EATS', w)).toBe('Eating out')
     expect(matchCategory('uber trip 123', w)).toBe('Transportation')
   })
 

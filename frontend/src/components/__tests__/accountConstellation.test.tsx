@@ -54,9 +54,20 @@ function legend(accounts: ConstellationAccount[]) {
 
 describe('the constellation legend', () => {
   it('names a type this build does not have "Account", in the plain colour', () => {
-    const rows = legend([account(1, 'Everyday', 'giro'), account(2, 'Visa', 'credit')])
-    expect(rows.Visa.label).toBe('Account')
+    const rows = legend([account(1, 'Everyday', 'giro'), account(2, 'Sock drawer', 'sock_drawer')])
+    expect(rows['Sock drawer'].label).toBe('Account')
+    expect(rows['Sock drawer'].color).not.toBe(rows.Everyday.color)
+  })
+
+  it('names a credit card "Credit Card", in a colour of its own', () => {
+    const rows = legend([
+      account(1, 'Everyday', 'giro'),
+      account(2, 'Visa', 'credit'),
+      account(3, 'Sock drawer', 'sock_drawer'),
+    ])
+    expect(rows.Visa.label).toBe('Credit Card')
     expect(rows.Visa.color).not.toBe(rows.Everyday.color)
+    expect(rows.Visa.color).not.toBe(rows['Sock drawer'].color)
   })
 
   it('names a type v4 renamed as the type that replaced it, in its colour', () => {

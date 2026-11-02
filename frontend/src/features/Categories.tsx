@@ -30,7 +30,15 @@
  * Categories Component
  * Manages expense and income categories with CRUD operations
  */
-import { createMemo, createResource, createSignal, For } from 'solid-js'
+import { createMemo, createResource, createSignal, For, Show } from 'solid-js'
+import {
+  categoryLookup,
+  effectiveKind,
+  KIND_LABELS,
+  kindForName,
+  KINDS,
+  readKind,
+} from '../../../shared/guidance/kinds'
 import CategoryIcon, { getCategorySvg } from '../components/CategoryIcon'
 import ConfirmButton from '../components/ConfirmButton'
 import { Field, FormNotice, SubmitButton } from '../components/form'
@@ -59,6 +67,11 @@ interface Category {
   color: string
   icon: string | null
   profile_id: number
+  parent_id?: number | null
+  /** What it holds (shared/guidance/kinds.ts), or null while the name decides. */
+  kind?: string | null
+  /** 1 or 0 once the person says whether it is needed every month; null while the kind decides. */
+  essential?: number | boolean | null
   budget?: number
 }
 
@@ -122,7 +135,46 @@ export default function Categories() {
     color: DEFAULT_COLOR,
     editing: editingCategory,
     onSaved: closeCategoryModal,
+    // Kind and "Needed every month" start from the kind the app goes by: the parent's, or the
+    // one the name suggests.
+    kinds: true,
+    guessKind: (category) =>
+      effectiveKind({ ...category, type: 'expense' }, categoryLookup(categories())),
   })
+  // The Kind field's empty choice: no kind stored, so the app goes by the guess. It says which.
+  /** Where the kind the app goes by comes from while none is picked: the name, the parent, none. */
+  const guessFrom = (): 'name' | 'parent' | null => {
+    const kind = categoryForm.guessed()
+    if (kind === null) return null
+    return kindForName(categoryForm.values.name) === kind ? 'name' : 'parent'
+  }
+  const guessedKindLabel = () => {
+    const kind = categoryForm.guessed()
+    if (kind === null) return 'None yet'
+    return `From the ${guessFrom()}: ${KIND_LABELS[kind]}`
+  }
+  /** The Kind field's help, which says what its empty choice stands for. */
+  const kindHelp = () => {
+    if (readKind(categoryForm.values.kind)) return 'What this category holds.'
+    switch (guessFrom()) {
+      case 'name':
+        return "What this category holds. Until you pick one, it's guessed from the name."
+      case 'parent':
+        return 'What this category holds. Until you pick one, it follows the parent category.'
+      default:
+        return "What this category holds. The name doesn't suggest one, so pick the closest."
+    }
+  }
+  /** Why "Needed every month" is ticked or not, while it follows the kind; null once it doesn't. */
+  const essentialGuess = (): string | null => {
+    if (!categoryForm.essentialFollows()) return null
+    const kind = readKind(categoryForm.values.kind) ?? categoryForm.guessed()
+    if (kind === null)
+      return "Ticked while it has no kind. Untick it if this one isn't needed every month."
+    return categoryForm.values.essential
+      ? `Ticked to match its kind, ${KIND_LABELS[kind]}. Untick it if this one isn't needed every month.`
+      : `Unticked to match its kind, ${KIND_LABELS[kind]}. Tick it if this one is needed every month.`
+  }
   const openCategoryModal = (category: Category | null) => {
     setEditingCategory(category)
     categoryForm.open(category)
@@ -464,7 +516,9 @@ export default function Categories() {
                     class={styles.formControl}
                     placeholder="e.g., Food, Rent"
                     value={categoryForm.values.name}
-                    onInput={(e) => categoryForm.set('name', e.currentTarget.value)}
+                    onInput={(e) => {
+                      categoryForm.setName(e.currentTarget.value)
+                    }}
                     required
                   />
                 )}
@@ -490,6 +544,65 @@ export default function Categories() {
                   </select>
                 )}
               </Field>
+              {/* What an expense category holds. Both start from a guess the name gives. */}
+              <Show when={categoryForm.values.type === 'expense'}>
+                <Field
+                  form={categoryForm}
+                  name="kind"
+                  label="Kind"
+                  class={styles.formGroup}
+                  labelClass={styles.formLabel}
+                  hintClass={styles.fieldHint}
+                  hint={kindHelp()}
+                >
+                  {(control) => (
+                    <select
+                      {...control}
+                      class={styles.formControl}
+                      data-test-id="category-kind"
+                      value={categoryForm.values.kind}
+                      onInput={(e) => {
+                        categoryForm.chooseKind(e.currentTarget.value)
+                      }}
+                    >
+                      {/* `selected` on each option as well: the select's value is set before
+                          its options exist when the dialog opens on a category. */}
+                      <option value="" selected={categoryForm.values.kind === ''}>
+                        {guessedKindLabel()}
+                      </option>
+                      <For each={KINDS}>
+                        {(kind) => (
+                          <option value={kind} selected={categoryForm.values.kind === kind}>
+                            {KIND_LABELS[kind]}
+                          </option>
+                        )}
+                      </For>
+                    </select>
+                  )}
+                </Field>
+                <div class={styles.formGroup}>
+                  <label class={styles.checkRow}>
+                    <input
+                      type="checkbox"
+                      data-test-id="category-essential"
+                      aria-describedby="category-essential-hint"
+                      checked={categoryForm.values.essential}
+                      onChange={(e) => {
+                        categoryForm.chooseEssential(e.currentTarget.checked)
+                      }}
+                    />
+                    <span>Needed every month</span>
+                  </label>
+                  <span id="category-essential-hint" class={styles.fieldHint}>
+                    Spending you'd have whatever happens, like rent or groceries.
+                    {/* While the box is a guess, why it is ticked or not: the hint's end. */}
+                    <Show when={essentialGuess()}>
+                      {' '}
+                      <span data-test-id="category-essential-guess">{essentialGuess()}</span>
+                    </Show>
+                  </span>
+                </div>
+              </Show>
               <Field
                 form={categoryForm}
                 name="icon"

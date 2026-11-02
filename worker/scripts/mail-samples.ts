@@ -13,6 +13,7 @@ import {
   renderAccountExists,
   renderBillsReminder,
   renderBudgetAlert,
+  renderConfirmEmail,
   renderEmailChange,
   renderEmailChangeNotice,
   renderEmailVerification,
@@ -24,6 +25,8 @@ import {
   renderSubscriptionEnded,
   renderSupportAck,
   renderTestBasic,
+  renderWeekOneDay2,
+  renderWeekOneDay7,
   renderWelcome,
   type RenderedEmail,
 } from '../src/emailTemplates.ts';
@@ -56,12 +59,17 @@ export function mailSamples(opts: SampleOptions = {}): MailSample[] {
   const appUrl = opts.appUrl ?? 'https://tokencircles.com';
   const assetOrigin = opts.assetOrigin ?? appUrl;
   const unsubUrl = sampleLink('/api/notifications/unsubscribe');
+  const weekOneUnsubUrl = `${unsubUrl}&list=week-one`;
   return [
     {
-      name: 'welcome-confirm',
-      template: 'renderWelcome',
+      name: 'confirm-email',
+      template: 'renderConfirmEmail',
       render: () =>
-        renderWelcome({ appUrl, assetOrigin, verifyUrl: sampleLink('/api/auth/verify-email') }),
+        renderConfirmEmail({
+          link: sampleLink('/api/auth/verify-email'),
+          ttlHours: 24,
+          assetOrigin,
+        }),
     },
     {
       name: 'confirm-email-fresh-link',
@@ -236,6 +244,35 @@ export function mailSamples(opts: SampleOptions = {}): MailSample[] {
           }),
           'renderBillsReminder'
         ),
+    },
+    {
+      name: 'week-one-day-2',
+      template: 'renderWeekOneDay2',
+      render: () => renderWeekOneDay2({ appUrl, assetOrigin, unsubUrl: weekOneUnsubUrl }),
+    },
+    {
+      name: 'week-one-day-7',
+      template: 'renderWeekOneDay7',
+      render: () =>
+        renderWeekOneDay7({
+          counts: {
+            entriesImported: 1284,
+            monthsTracked: 7,
+            windowMonths: 13,
+            subscriptions: 6,
+            bills: 2,
+            uncategorised: 38,
+          },
+          step: {
+            title: 'Import the rest of your year',
+            reason: '7 of the last 13 months are tracked. A month counts once it holds 3 entries.',
+            hash: '#import',
+            label: 'Import',
+          },
+          appUrl,
+          assetOrigin,
+          unsubUrl: weekOneUnsubUrl,
+        }),
     },
   ];
 }

@@ -9,6 +9,2502 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ## [Unreleased]
 
+### Deploy notes
+
+- `0033_welcome_once.sql` is data only: it adds a `reminder_dedup` row `(user_id, 'welcome')` for
+  every account, so no account that exists before it gets the new Welcome. The migration runs
+  before the deploy, so a password account that signs up in between gets the old welcome, with its
+  confirm link, and the new Welcome when it confirms.
+- `0034_user_state.sql` adds one table, `user_state (user_id, key, value, updated_at)` with primary
+  key `(user_id, key)`. Only `/api/account/state` reads or writes it, so it is safe to apply before
+  the code that uses it.
+- `0035_onboarding_existing_accounts.sql` is data only: it writes a finished `onboarding` record
+  (`outcome: 'existing'`, `step` and `started_at` null) for every account with an account, a
+  transaction or a bill in any of its profiles, or an `onboarding` row in any profile's settings.
+  An account with none of those keeps meeting the wizard, as it did before. Until the Worker serves
+  `/api/account/state`, the new app's read of it fails and the app opens no wizard; an account that
+  signs up between the migration and the app's deploy and decides the wizard there has the decision
+  in its settings, which the app sends to the record.
+- `0036_category_kinds.sql` adds two nullable columns to `categories`, `kind TEXT` and
+  `essential INTEGER`, with no default and no rewrite: every existing category reads NULL for both,
+  which the app reads as "go by the name". Safe to apply before the code: the Worker before it
+  names its columns on every insert, and the client before it drops keys its schema lacks.
+- `0037_account_credit.sql` adds two nullable columns to `accounts`, `credit_limit REAL` and
+  `credit_rate REAL`, with no default and no rewrite. Safe to apply before the code, for the same
+  reasons. The code also writes a new `accounts.type`, `credit`: a client from before the tolerant
+  account reader (`fix(accounts)`, the reader keeps a type it lacks) fails to load a list holding
+  one, so that fix ships in an earlier release, and no rollback goes past it once a credit account
+  exists.
+- `0038_import_bank_formats.sql` adds one nullable column to `import_logs`, `bank_formats TEXT`,
+  with no default and no rewrite: every existing log reads NULL. Safe to apply before the code: the
+  Worker before it names its columns on every insert.
+- `0039_week_one_mails.sql` adds `users.week_one_mails INTEGER NOT NULL DEFAULT 1` and the index
+  `idx_reminder_dedup_key_sent ON reminder_dedup(dedup_key, sent_at)`. Safe to apply before the
+  code: nothing before it reads either.
+- `0040_week_one_existing_accounts.sql` is data only: it adds `reminder_dedup` rows
+  `(user_id, 'week-one:day2')` and `(user_id, 'week-one:day7')` for every account, so no account
+  that exists before the week-one mails gets one. It must ship with 0033 or after it, never
+  before: 0033 dates every existing account's Welcome claim to the day it runs, and the week-one
+  windows count from that claim. An account that signs up between the migrations and the deploy
+  is made by the old code, which writes no Welcome claim. A Google sign-up then, or a password
+  sign-up that confirms before the deploy, never gets one, so it gets no week-one mail. A password
+  sign-up that confirms after the deploy gets its claim from the new code when it confirms, so it
+  gets the new Welcome and, counted from that confirmation, the week-one mails like any new
+  account.
+- `wrangler.jsonc` adds a fourth trigger, `30 8 * * *`, to dev and prod: the week-one mails run on
+  it alone. The deploy registers it; nothing else is needed.
+
+### Account email and sign-in
+
+- **`#forgot-password` opens the sign-in screen on the reset form**
+  (`frontend/src/components/LoginScreen.tsx`), at load or when the fragment changes to it with the
+  screen open. Leaving the form takes the fragment off with `replaceState`, so neither a reload nor
+  the app after signing in opens it again. It is a route outside the page router, like
+  `#reset-password` (`isNonPageRoute` in `frontend/src/core/hashRoute.ts`): a signed-in app stays
+  on its page instead of showing the 404, and `periodStore` keeps the period off it. The Reset
+  password button of `renderAccountExists` links there. Only account mode has a sign-in screen, so
+  `consumeForgotPasswordLink` (`frontend/src/core/forgotPasswordLink.ts`, called in `index.tsx`
+  before render) moves a browser in local-first mode to account mode first, always, as a confirm
+  link that needs a sign-in does (`toAccountMode`); a fresh production browser starts in
+  local-first mode (`VITE_DEFAULT_STORAGE=dexie`). Data kept on the device is not touched. `frontend/tests/forgot-password-link.spec.ts` opens the link under both boots.
+- **The confirm link signs in the browser that signed up.** `POST /api/auth/register` now hashes
+  the password before its answer, for every address alike (nothing is read before the answer, so
+  it takes the same time whether or not the address has an account), and its answer leaves the
+  browser a sign-up marker: an HttpOnly cookie `fm_signup`, host-only,
+  `Path=/api/auth/verify-email`, `SameSite=Lax`, `Secure` outside development, `Max-Age=3600`
+  (`worker/src/signup-marker.ts`). Every sign-up the route takes sets it with the same attributes,
+  whether the address is new, waiting for its link, confirmed or a Google account's, so the answer
+  still says nothing about the address; a 400, 429 or captcha 403 sets none. The value is
+  `v1.<exp>.<id>.<mac>`: `exp` is the sign-up's time plus `SIGNUP_MARKER_SECONDS`, `id` is 16
+  random bytes, and `mac` is HMAC-SHA256 over the JSON
+  `["signup-marker","v1",exp,id,address,passwordHash]` with a key derived from `JWT_SECRET` by
+  HKDF-SHA256 under the label `token-circles signup-marker v1 env=<APP_ENV>`. The derivation moved
+  to `worker/src/derived-key.ts` and is shared with the login check, whose key is unchanged. The
+  value holds neither the address nor anything from the password; the hash it signs is the one
+  this sign-up computed, which the work after the answer stores for a new account.
+  - `GET /api/auth/verify-email`, for an unspent, unexpired link opened without its account's
+    session, now signs in (`signInFromSignUp` in `worker/src/routes/auth.ts`) when every one of
+    these holds: the link's purpose is `confirm`; its account is a password account that still
+    waits for it (`emailUnconfirmed`); the account's address is the link's; the account has no
+    confirmed TOTP; and one of the first three `fm_signup` values verifies for the link's address
+    and the account's stored `password_hash`, byte for byte, with `exp` in
+    `(now, now + SIGNUP_MARKER_SECONDS]` and a 22-character id. Then `spendLink` claims the link,
+    as on every other path. On `confirmed` the route calls `issueSessionCookie` with the
+    `token_version` it read before the spend, logs `login ok confirm_link`, and answers
+    `302 #everified=1&signed_in=1` with the session cookie and the marker cleared (`Max-Age=0`).
+    A session of another account that the request carried ends first, since the new cookie takes
+    its place: its `auth_sessions` row is deleted by id and account, as `POST /api/auth/logout`
+    deletes it, and that account's other sessions stay. When the bound insert writes no session (the account signed out everywhere in between), the
+    answer is `#everified=1`: the address is confirmed and the person signs in as usual. Any other
+    case keeps the answer it had: `signin_required` with the `fm_email_link` marker, or the link's
+    own outcome.
+  - The marker matches the browser that set the account's current password. Signing up again at
+    an address that waits, with the password the account has, stores that sign-up's hash in its
+    place before the fresh link is mailed (`checkSignUpPassword`:
+    `UPDATE ... WHERE id = ? AND password_hash = <the one checked> AND email_verified = 0`), so the
+    browser that signed up last is the one the link signs in. With another password the account
+    keeps its first one, and the first browser's marker is the one that matches. A new password
+    since the sign-up means a new hash, and no marker from before matches it. Every sign-up runs
+    that one check after its answer, whatever the address: against the waiting account's hash, or
+    against `DUMMY_PASSWORD_HASH`, as a sign-in to an address with no account does, for a new
+    address, a confirmed one and a Google account's. The work after the answer is one PBKDF2
+    check for every address.
+  - `GET /api/auth/email-link` is new (`WORKER_ONLY` in `shared/contract/routes.ts`; 30 a minute
+    per IP). From the browser's `fm_email_link` marker it answers
+    `{ waiting: 'confirm', email: '<masked>' }` for an unspent, unexpired confirm link whose
+    account still waits at that address, and `{ waiting: null }` for anything else. The address
+    goes out as `maskedAddress` writes it: the first character of the part before the last `@`,
+    then `•••` whatever that part's length, then `@` and the whole domain (`k•••@example.com`).
+    The full address is not in this answer. It spends nothing and checks no password.
+  - The rule is in one place, `shared/confirmLinkSignIn.ts`:
+    `CONFIRM_LINK_SIGN_IN = { sameBrowser: true, seconds: 3600 }`. With `sameBrowser: false` no
+    sign-up sets a marker and no marker signs in, and `seconds` is the marker's `Max-Age` and its
+    longest `exp`; a test holds it to the link's 24 hours or less. The words follow the rule:
+    `whereTheLinkSignsIn` and `notYourSignUp` write the two confirm mails, Check your inbox and the
+    refused sign-in (`SIGN_IN_REFUSED`). `worker/src/emailTemplates.ts` imports the module by file
+    name, `.ts` included, so `worker/scripts/` still load the templates under plain Node; that is
+    what `allowImportingTsExtensions` in `worker/tsconfig.json` is for.
+  - Mails: Confirm's headline is "One click and you're in." (maff's call of 2026-10-11, held back
+    until the link did it) and its preheader "Confirm your address. The link works for 24 hours."
+    Both confirm mails say "Open it within an hour in the browser you signed up in and you're
+    signed in. Later, or anywhere else, it asks you to sign in first.", and the line for
+    someone who never signed up starts "Didn't sign up for Token Circles? Don't open the link."
+  - App: `consumeEmailVerifyRedirect` also moves the device to account mode on
+    `everified=1&signed_in=1`. A confirm link that answered `signin_required` opens the sign-in
+    screen on Finish signing up (`frontend/src/components/FinishSignUp.tsx`, stage `finish` of
+    `LoginScreen`): it asks `GET /api/auth/email-link` (`api.confirmLinkWaiting`, which returns
+    `{ masked }`), says "This link is for k•••@example.com. Enter that address and its password to
+    confirm it and sign in.", and takes the address in an empty, editable `username` field and the
+    password in a `current-password` one, so a password manager fills both. It sends them to
+    `POST /api/auth/login`, which spends the link it finds in the marker for that account, as a
+    sign-in from the form does. Another account's address and password sign in to that account,
+    and the app says the link is for another account, as after any sign-in. A 401 asks the route
+    again: while the link waits the form says "That email and password don't match. Try again, or
+    reset your password."; once it does not, the step says "This link can't finish here anymore.
+    Open the newest link in your email, or send a fresh one.", with Send the link again. A page
+    open longer than `LINK_WAITING_MS` sends nothing and says the same. With no answer from the
+    route the screen goes back to the sign-in form and "Sign in to confirm your address.". The
+    second factor, Forgot your password? and the back gesture lead where the form's do, with the
+    address typed kept. A change link keeps the form and its notice.
+  - Tests: `worker/test/confirm-link-sign-in.test.ts` (44 new); the mail tests in
+    `worker/test/email-verification.test.ts`; `sign-in-same-answer.test.ts` and
+    `sign-up-after-answer.test.ts` now write the marker's value as V where they compare answers,
+    and `sign-up-after-answer.test.ts` counts the PBKDF2 derivations a sign-up makes, by salt, for
+    each kind of address (1 new);
+    `frontend/src/components/__tests__/finishSignUp.test.tsx` (15 new),
+    `frontend/src/core/__tests__/confirmLinkSignIn.test.ts` (6 new), 3 new in
+    `frontend/src/core/__tests__/emailVerification.test.ts`, 1 new in
+    `loginScreen.backGesture.test.tsx` and in `loginScreen.linkNotice.test.tsx`; and
+    `frontend/tests/email-confirm-link.spec.ts`, with two new `@smoke` cases in both boots (the
+    link in the browser that signed up signs in; in a second browser it asks for the password,
+    signs in there, and leaves the first signed out). The cases that open a link in a browser that
+    did not sign up finish on the new step, typing the address and the password, and the first
+    of them checks that the route answers the masked address and the page shows no full one; the
+    two that sign up in the browser that opens the link now land signed in.
+
+- **The page that finishes a confirm link names the sign-in on its captcha, and checks the address
+  as the sign-in form does** (`frontend/src/components/FinishSignUp.tsx`). Main's #683 has each
+  captcha widget name the form it is drawn for, and the Worker's login takes only the sign-in
+  action; this page, new on this branch, sends to that login and now passes
+  `CAPTCHA_ACTIONS.signIn` (the merge with main did not compile without it). Its check was
+  `signInProblems`, empty fields only, so an address not in the format went to the Worker and came
+  back as a wrong password; it now runs the sign-in form's `signInChecks('login', ...)`, which
+  marks it first and keeps the empty-field messages as they were.
+- **Tests:** `captchaForms.test.tsx` runs its per-screen suite on this page too (the widget's
+  action, the box, a held press, a refused send), and clears the waiting link it notes;
+  "draws the widget for its form" fails without the action. `finishSignUp.test.tsx` "marks an
+  address not in the format" fails before the change.
+
+### Mails
+
+- **Confirm and the Welcome are two mails, and the Welcome goes once** (`worker/src/welcome.ts`,
+  migration `0033_welcome_once.sql`). A password sign-up gets Confirm (`renderConfirmEmail`): the
+  link that opens the account and nothing else, where 5.17.1 sends one Welcome with the confirm link
+  in it. `renderWelcome` loses its `verifyUrl` form, and the catalogue's `welcome-confirm` sample is
+  `confirm-email`. Confirm is on the 5.17.1 layout with `MailSpec.unconfirmed`, as the fresh link
+  (`renderEmailVerification`) is, so neither carries a link into the app. Until the same-browser
+  sign-in ships, Confirm says the link asks for a sign-in, in any browser, and promises no one-click
+  confirm (maff's call of 2026-10-11): "One link, one sign-in, and you're in." The
+  Welcome (`renderWelcome`) goes to an account once: when its address is first confirmed, by its
+  link (opened with its own session, a password sign-in in the browser that opened it, or
+  `POST /api/auth/email-link/finish`), a change link (a Google account stored with no confirmed
+  address that adds one in Settings: `applyEmailChange` claims it in the move's batch with
+  `claimWelcomeOnMove`, only while `email_verified = 0` and only when the move happens, and
+  `spendLink` mails it to the new address), Google sign-in, an emailed sign-in code or a reset link;
+  and at once for a Google sign-up with a confirmed address. The record is a `reminder_dedup` row
+  `(user_id, 'welcome')`. Each confirming D1 batch claims it before the write that confirms the
+  address, and only while `email_verified = 0` (`claimWelcomeOnConfirm`), so of two confirmations
+  that race only one sends it. The mail goes in `waitUntil`, best effort: a failed send is logged
+  (`[email] Resend <status>` by `sendMail` when Resend refuses it, `Welcome email failed:` when the
+  send throws) and is not retried; the claim stays. `resolveGoogleUser` returns `welcome`; `spendLink`
+  and `confirmWithOwnLink` take the route's welcomer.
+- **"Already has an account" has Reset password** (`renderAccountExists`): a quieter second button
+  after Sign in that opens the sign-in screen on the reset form, `#forgot-password` (above). In
+  5.17.1 the mail has Sign in alone and says the reset is on the sign-in screen.
+- **The week-one mails** (`worker/src/weekOne.ts`, renderers `renderWeekOneDay2` and
+  `renderWeekOneDay7` in `emailTemplates.ts`). Day 2 goes only while no transaction in any of the
+  account's profiles has an `import_id`; day 7 only once one does. Day 0 is the account's Welcome
+  claim, the `reminder_dedup (user_id, 'welcome')` row every confirm path writes in the batch that
+  confirms the address, so no new column records when an address was confirmed; its `sent_at` is
+  UTC, as are the windows: day 2 in `[2, 5)` days, day 7 in `[7, 10)` (`WEEK_ONE`). They run on a
+  trigger of their own, `30 8 * * *` (`WEEK_ONE_CRON`), and `index.ts` `scheduled` runs nothing
+  else on it, because D1 allows an invocation 1,000 queries on Workers Paid and the 08:00 run's
+  reminders and sheet syncs spend from the same budget; a full week-one run is at most about 552
+  (`WEEK_ONE_BATCH`). Half an hour apart, the two senders never call Resend at once either. A
+  window of days instead of a day catches up a missed run.
+  Every confirmed account is eligible whatever its plan; they skip `withinQuota`/`recordSend`, so
+  Free's `remindersPerMonth` of 0 does not stop them and they do not count against a paid plan's.
+  `users.week_one_mails = 0` or `notifications_unsubscribed = 1` stops them. Each send claims
+  `week-one:day2` or `week-one:day7` first, with the mail's condition, the switch and the
+  unsubscribe in the same `INSERT OR IGNORE ... SELECT`, so a re-fired cron or an import between
+  the query and the send is seen. A claim is given back only when Resend certainly refused the
+  mail (a 4xx, or no API key); a timeout, a network error or a 5xx keeps it, because a duplicate
+  is worse than a miss, and a 429 ends the run. At most 50 of each per run (`WEEK_ONE_BATCH`),
+  oldest day 0 first. Day 7 counts, from the profile with the most imported transactions:
+  entries imported, tracked months in the 13-month window (`shared/trackedMonths.ts`), active
+  subscriptions and bills, and entries other than transfers without a category; its next step is
+  the first of `shared/orientation.ts` `nextSteps` with the facts the Worker can count (the
+  subscription scan, the month in the red, the top category without a budget and the cushion read
+  as "does not apply"). No amount, category or merchant name reaches the mail.
+- **Day 2 names the YNAB file that imports** (`renderWeekOneDay2`). It said "and so do YNAB
+  exports", as the welcome did before main's #674, which sent people to either file of YNAB's
+  Export Plan download; only the Register file imports. The YNAB part is its own two sentences
+  now, the welcome's: "So does the Register file in a YNAB plan export, with its accounts and
+  transfers. Its starting balances go to accounts that are new or still empty." Guard:
+  `worker/test/week-one-mails.test.ts` "the day-2 mail itself" fails without the change. No mail
+  was sent for it.
+- **The week-one stop link and its headers.** The week-one sender passes `rendered.listUnsubscribe`,
+  which `renderMail` sets from `MailSpec.unsubUrl` (5.17.1), to `sendMail`'s `listUnsubscribe`
+  (#648), so a week-one mail's stop link and its List-Unsubscribe header are the same URL. `sendMail`
+  also returns Resend's `status` on a refusal, which the week-one sender reads.
+  `MailSpec.unsubLabel` words the footer link and its text line ("Stop first-week mails"); a mail
+  without one keeps "Unsubscribe".
+- **`/api/notifications/unsubscribe?token=...&list=week-one`** (`routes/notifications.ts`). GET
+  shows "Stop first-week mails?" with one button that posts back to the same URL, and changes
+  nothing; once they are off it says so with no button. POST, from the button or an RFC 8058
+  one-click request, sets `users.week_one_mails = 0` and leaves `notifications_unsubscribed` alone,
+  so a paid plan's reminders keep coming; it is idempotent and answers an unknown token 400. The
+  link without `list`, or with any other value, is the general unsubscribe as #648 made it, and
+  that stops the week-one mails too; its page and its done page now name first-week mails among
+  what it stops, and both say Send me reminders again in Settings turns them back on.
+  `worker/test/week-one-unsubscribe.test.ts`.
+- **Send me reminders again (#649) and the week-one stop.** `POST /api/notifications/resubscribe`
+  lifts `notifications_unsubscribed` only. A week-one stop (`week_one_mails = 0`, from the
+  `list=week-one` link or the Settings switch) is not undone by it; the week-one switch in
+  Settings turns it back on while a mail can still come. Both rows of the Email reminders card read
+  the same `unsubscribed` from `GET /api/notifications/settings`, so after a resubscribe the
+  week-one switch leaves its disabled state at once. The resubscribe route needs a plan with
+  reminders and #649 hides its button on Free, so a Free account that used the general unsubscribe
+  keeps its week-one mails off.
+- **The week-one switch in Settings** (`frontend/src/features/WeekOneMails.tsx`). `GET
+/api/notifications/settings` adds `weekOneMails`, `weekOneAhead` (the Welcome claim is under 10
+  days old and day 7, always the last, has not gone) and `unsubscribed`; `PUT` takes `weekOneMails` with no
+  plan gate. The switch sits in the Email reminders card outside the plan lock, shows only while
+  `weekOneAhead`, and saves by itself when flipped. After a general unsubscribe it shows off and
+  disabled. `ToggleField` takes `disabled`.
+
+### Onboarding
+
+- **Each wizard step opens at its top, with focus on its heading.** The body (`.body`,
+  `data-test-id="onboarding-body"`) kept its scroll position across a step change, so on a short
+  screen a step opened as far down as the last one was left: at 390x600, 45 px into "Name your
+  space" and 202 px into the import. Focus stayed on the Continue button, or fell to `<body>` when
+  that step's content went. An effect on `onboardingStep` (deferred, so not on open, where the panel
+  takes focus) sets the body's `scrollTop` to 0 at once and focuses the new step's heading
+  (`data-step-heading`, `tabindex="-1"`, `preventScroll`, no focus ring). Enter in the name,
+  Escape and the import step's `showTheWork` are unchanged. The report of "Name your space" opening
+  scrolled down at 1280x800 was the overlay scrolling (entry above, 450 px in one measured run),
+  not the body, whose `scrollTop` was 0 every time. `tests/onboarding.spec.ts` ("a new step opens at
+  its top") checks by mouse, by Enter, through a confirm and going back.
+
+### Local-only setup over the demo's example profiles
+
+- **The switch to local-only knows what it lands on.** `chooseLocalOnly` (OnboardingWizard.tsx)
+  reads the local database before its confirm with `readLocalWorkspace` (new
+  `components/onboarding/localOnly.ts`): only when `indexedDB.databases()` lists `finance-manager`,
+  opened with no version (no upgrade runs), the `profiles` store read and the connection closed; an
+  `upgradeneeded` (the database went between the listing and the open) aborts the creation, so the
+  read never makes a database, seeds the examples or writes anything. `classifyLocalProfiles` sorts
+  the result into `none`, `examples` (every profile an example name), `own` (their names, oldest
+  first) or `unknown` (no `databases()`, or a failed read), and `localOnlyQuestion` words the
+  confirm for each. It used to say "This browser already has a local workspace (from the demo,
+  say). You carry on with that one" whenever the database existed.
+- **A one-shot marker opens setup after the switch.** `chooseLocalOnly` sets
+  `finance_local_setup_pending` (`LOCAL_SETUP_PENDING_KEY`, `markLocalSetupPending` in
+  onboardingStore.ts). `whereToOfferOnboarding`, for the local owner with the marker, reads
+  `/api/profiles`: no profile of the person's own (`isExampleProfileName` false for none) answers
+  `space`, past the pristine check and any decision in the workspace's settings; one of their own
+  clears the marker and the pristine check runs as before; a failed read opens nothing and keeps
+  the marker. `decide()` (finish, skip, Close, Escape) and the space step's save clear it. Signed
+  in, the marker is never read.
+- **The space step never renames an example.** In local-first, with the current profile an example
+  (`overExample`), the form checks the name as a new profile's, offers "Personal Profile" instead of
+  the example's name, and `save` creates the profile and selects it through `props.selectProfiles`,
+  as the empty-workspace path does; "Run setup again" in the demo renamed Example Low Income before.
+  Under the currency, a fieldset (`onboarding-examples-choice`, SpaceQuestions.module.css's chips)
+  offers Remove them (default) or Keep them, with a note naming what goes. Remove runs after the
+  new profile is selected: `api.deleteProfile` for each example, the Danger Zone's path
+  (`DELETE /api/profiles/:id`, `profilesDelete`, `clearProfileData` with `deleteProfiles`), then
+  the app's profile list drops them and `bumpProfileVersion`. One that fails stays, and a warning
+  toast (`EXAMPLES_NOT_REMOVED`) names Settings, Exports, the Danger Zone; setup goes on. Accounts
+  are unchanged: `overExample` and the choice need `getStorageMode() === 'serverless'`.
+- **Deleting a local profile takes the seed's emergency fund plan with it.** `clearProfileData`
+  with `deleteProfiles` removed the profile's rows in every store with a `profile_id`, its
+  accounts' `balanceHistory` and its `PROFILE_SETTING_KEYS` settings, but not
+  `emergency_fund_config_<id>`, which `seedDemoProfiles` writes for each example and nothing reads:
+  it stayed in every settings read and backup. It goes now (`emergencyFundConfigKey`, idb.ts). The
+  delete leaves nothing on profile 0, so `fileUnfiledRows` ("Recovered entries") finds nothing.
+- **Tests.** `exampleProfilesRemoved.test.ts`: the real seed, then each example deleted through the
+  router, leaves no row, balance history or setting naming them (failed on the
+  `emergency_fund_config_` keys before). `onboardingAfterLocalOnly.test.ts`: the marker opens
+  `space` over examples, also where the settings say `completed`, clears over an own profile, and
+  goes on skip and finish. `localOnly.test.ts`: the read for each case, an older database left at
+  its version, no database made, and each confirm text. `onboardingOverExamples.test.tsx`: create
+  and select over an example, remove, keep, a failed removal, an own profile renamed as before,
+  accounts unchanged, and the confirm before the switch. `tests/onboarding-server.spec.ts` ("keeping
+  the data in this browser, over the demo"): the demo, then a new account's setup, local-only, the
+  space over the examples (checked at 375 px wide), Remove, and only "Our flat" left, in IndexedDB
+  and the header, with no setup on reload.
+
+### Setup wizard
+
+- **The setup wizard on a phone: three counted steps, one footer row, a statement in one tap.**
+  Frontend only: no migration and no API change. Measured with the same script before and after,
+  at 30 cells (widths 320, 360, 375, 390 and 430; heights 568, 667 and 844; dark and light), every
+  screen of the wizard at each:
+  - **Before**: the footer wrapped to 3 rows and 170.5 px at 320 to 390 wide (Back, Skip setup,
+    Don't import and the primary) on the account, import and subscriptions steps; the header was
+    80 px; the import step's column mapping was 1,438 px taller than its screen at 320x568 (5.5
+    screens), with 16 inputs under 16 px, which iOS Safari zooms into on focus; one screen had 32
+    targets under 44 px; text went down to 10.5 px; and the core path took 12 taps from opening
+    setup to an imported statement.
+  - **After**: the footer is 70 px and one row at every cell, its buttons 48 px; the header 56 px,
+    its buttons 44x44; every input 16 px; two screens scroll on a 568 px tall phone, About this space by 10 px (22 px at 320 wide) and the subscriptions by 23 px at 320 to 390 wide, and every other screen fits at all 30 cells; every target is 44 px or more (Getting started's next-step link on Done was the last, at 41 px: below), and the smallest text is 12 px, in the subscription scan and in Getting started; 6 taps from opening
+    setup to an imported statement (Continue, Continue, Add account, Choose a file, the file,
+    Import 7) and 8 to the dashboard (Track 2 subscriptions, Go to my dashboard).
+  - **Steps.** `ONBOARDING_STEPS` is unchanged. The wizard opens on `space`, whose first screen is
+    the name and base currency under "Welcome to Token Circles": the welcome screen (91 words, 5 em
+    dashes, nothing asked) is gone, and the local-only switch moved onto this screen in server
+    mode. While `benchmarksShown()`, `space` has a second screen, About this space
+    (`SpaceQuestions` with `compact`: the regions in two columns, each count on one row, every chip
+    44 px, `3+` for three or more via `short` in `regionWords.ts`). Account: "Add your main
+    account"; Enter in a field adds it, as the footer's Add account does, and adding one moves on
+    to the statement with no "created" toast. Back on the step it reads "Your accounts", lists them
+    and takes another. Statement: below. Subscriptions only after an import that brought
+    transactions in; with none, `import` goes to `done`. Done: one line of what was set up
+    ("Personal Profile has 1 account, 7 new transactions and 2 tracked subscriptions.") and Getting
+    started's next steps. `SHOWN_ONBOARDING_STEPS` (every stored step but `welcome`) is what Back
+    and Continue walk, and `openingStep()` opens none and `welcome` on `space`.
+  - **Header and footer.** The header has Back (the logo on the first screen), "Step N of 3" in an
+    orbit ring (`onboarding-progress`), and Close (`aria-label="Leave setup"`). Close and Escape
+    ask once, naming what is left on that step (`leaveSetupQuestion`), with Leave setup and Stay.
+    On the subscriptions it says "Your import is saved" only after a statement went in on this
+    visit; setup reopened there from an earlier one asks "Leave setup? Bills can scan your
+    transactions for subscriptions any time, and Settings can run setup again." On Done, Escape
+    finishes as Go to my dashboard does, without asking (the record comparison, below). Getting
+    started's next-step link, on Done and on Dashboard's card, is at least 44 px tall on a phone
+    (480 px wide or less, where its title and page stack and their text alone was 41 px) and on
+    any touch screen; with a mouse it keeps its height. The footer is one row: a quiet Skip on the optional steps and the primary filling the rest. A
+    step's Skip asks only when it would drop something: an account with a name or balance typed
+    in, a statement ready to import. On a phone the panel is the screen, capped at `100dvh`
+    (`100vh` first, for a browser without `dvh`): at 320x568 About this space had pushed the footer
+    22 px under the bottom edge. The middle's last 20 px fade while the step goes on below
+    (`data-more-below`), and once it is scrolled down its first 20 px fade too
+    (`data-more-above`): on a phone the header has no ground of its own, and a heading scrolled up
+    under it was cut hard at the edge. `scroll-padding-top` and `-bottom` stop a control brought
+    into view clear of both.
+  - **No orbit field behind the text on a phone.** At 620 px and narrower the panel is the screen
+    and has no ground, so the orbit field drew straight behind the step: its haze behind the middle
+    of every step, its tokens drifting across the leads and the headings. Measured on the painted
+    screen (Tests, below) before this change, at 390x844 in the light theme: the space step's lead
+    1.4:1 with a token behind it, the currency hint 3.75:1, the account's balance hint 3.57:1 and
+    the list of banks 4.04:1; in the dark theme each step's heading 2.81:1, under the 3:1 large
+    text needs, and each lead 1.47:1. The field is not drawn there now (`.backdrop`,
+    `display: none`): the sky's gradient stays, and the progress ring and Done keep their orbits.
+    Wider, it stays behind the glass panel; the only lines under AA there were the plan's, and
+    those from its own colour (next).
+  - **`--primary` as text.** The link buttons (Keep my data in this browser only, Bring in another
+    statement) and the subscription scan's plan (`.plan`, "Standard" beside Netflix) set
+    `--primary` as their text colour: in dawn-light 4.13:1 on the sky's middle, 3.72:1 at its top,
+    and 4.0:1 for the plan on its own tint. Both read
+    `color-mix(in oklab, var(--primary) 70%, var(--text))` now: `#2e53a7` in dawn-light (5.18:1
+    at the worst, the sky's top under the tint), and lighter, so stronger, on the dark themes
+    (`#92b5ff` in orbit-dark, `#85bcfd` in instrument-deck). The plan is on Bills' scan too.
+  - **A chosen chip's text** (`SpaceQuestions.module.css`) reads `--on-primary` instead of
+    `#ffffff` with a dark-theme rule for `var(--bg)`: the same colour in all three themes, from one
+    token, so PR #670's guard against a colour literal on a primary fill passes it.
+  - **The statement** (`components/onboarding/FirstImport.tsx`, on `createImportFlow`). One file.
+    A bank the adapters detect is processed, mapped and previewed (the dry run) in the background,
+    with the defaults the Import page's tap-through took: the bank's own columns, every
+    transaction that is not a duplicate, every new category, no budgets from spending. The account
+    comes preselected: the one the bank names, else the one setup just created on this visit, else
+    one the profile has (the newest in the statement's currency, else the newest whose currency is
+    not known), and a new one named for the bank only when no account fits: a profile with none, or
+    only accounts kept in another currency. Setup reopens at the statement after a
+    reload (the person away at the bank's app, exporting the file) or when run again over a profile
+    with accounts; before, it offered "New account: Revolut EUR" there, and one tap on Import made a
+    second account beside the first and split the money between them (`loadBankAccounts` now
+    carries each account's currency). The card names the bank and the count on one line
+    ("Revolut · 7 new transactions") and the dates on the next (`onboarding-import-dates`), each
+    date held together with no-break spaces: on one line, the card wrapped inside a date at 390
+    wide ("14 Apr to 1" / "Jul") and left a "·" at a line's end at 320. The screen shows the file, the bank, the account, how many transactions are
+    new and the categories it adds, and the footer says `Import N`. N is the ticked rows less the
+    rows the dry run found stored, by index: `existingDuplicateIndices` in `importFlow.ts`, from
+    the dry run's `duplicate_indices`. A statement's repeats of its own rows are unticked already
+    and in that list too, so subtracting the dry run's count took them off twice
+    (`firstImportCount.test.ts`). A statement with nothing new says so. A file the defaults cannot
+    import (a bank the adapters do not know, a table of any other kind, a file that does not read)
+    offers Open in Import, which finishes setup and hands the file to the Import page
+    (`features/import/importHandoff.ts`; `Import.tsx` takes it once the page is active, on Bank
+    Imports for a bank it knows, else on File Upload, which goes on to the column mapping), or Skip.
+  - **A YNAB Register file in the statement step.** Main's #674 made a Register file (Export
+    Plan's download) import each row into the account its Account column names
+    (`namesItsAccounts(row)` in `features/import/importFlow.ts`, true when the adapter's
+    `meta.accounts` is not empty); the account chosen for the file is only the fallback for a row
+    without one. The step still showed "Goes into" with the account it had preselected, "New
+    account: YNAB" on a profile with none, and after the import said "Imported 3 transactions into
+    YNAB." (or "into Main checking", the account setup had just made), though no row went there.
+    For such a file the step now drops "Goes into" for `onboarding-import-accounts`, "Each row goes
+    to its own account: Test Checking and Test Savings." (the file's accounts, up to three, then
+    "and N more"), and the done line names the accounts the new rows went into, each row's own
+    account and a transfer's other end, read from the dry run's rows when Import is tapped
+    (`importedInto` in `FirstImport.tsx`; afterwards every row of the file counts as here already),
+    or their count past three ("into 5 accounts"). A file that names no accounts keeps "Goes into"
+    and its done line as before.
+    - No empty account came of it, before or after: the preselected target stays on the file
+      (`flow.updateBankFile(0, { targetAccount })`) as the fallback, and the import creates
+      accounts only from the rows' accounts and transfer ends. The cases below asserted the
+      accounts before the change and passed that part: `Test Checking` and `Test Savings` only on
+      a fresh profile, and the account setup made has no transactions.
+    - The merge of 5.17.5 had dropped main's YNAB sentence from this step (main put it on the old
+      wizard's full importer). It is back on the picker as `onboarding-import-ynab`, under the
+      banks line, in main's words with one verb changed: "Choose the Register file" for "Drop":
+      the step's file input is hidden and its label is no drop target, so nothing can be dropped
+      there.
+    - Tests: `onboardingFirstImport.test.tsx` "a YNAB Register file" (4: the picker sentence; no
+      "Goes into" and the accounts line; only the two named accounts made and the done line; the
+      account setup made gets no rows and is not named). All four failed before the change (the
+      picker sentence missing, the select present, "into YNAB.", "into Main checking.").
+      E2E, cloud: `onboarding-server.spec.ts` "a YNAB Register file goes into the accounts it
+      names, and none for the file, on the Worker" (@smoke). Run on the code before the change
+      it failed at the picker sentence; with those checks taken out it showed "Main Checking" and
+      "New account: YNAB" in "Goes into", the Worker holding Main Checking (no rows), Test
+      Checking and Test Savings, and "Imported 3 transactions into Main Checking.".
+  - **Badges wait for the wizard** (`core/achievementsStore.ts`). Badges earned while
+    `onboardingOpen()` are held and announced when it closes, for the profile still in use, as one
+    summary on a first run. Setup's own writes earn them (a first account, a first import); their
+    toasts stacked over the header's Back and Close, and See badges changed the page behind.
+  - **`SubscriptionScan`** takes `hideRescan` (setup scans once, right after its import) and `quiet`
+    (no "added" toast: setup's summary says it). Under `pointer: coarse` its rows, price field and
+    frequency are 44 px tall with 16 px text, and the merchant line wraps instead of being cut
+    short. That applies to the Bills scan on a phone as well.
+  - **`--on-primary`**, the text colour on a `--primary` fill, per theme: `#ffffff` in dawn-light
+    (white is 4.6:1 on its primary), `#0a0e1c` in orbit-dark (white is 2.7:1, this 7.1:1) and
+    `#0b0d10` in instrument-deck (white is 2.5:1, this 7.7:1). Setup's primary button uses it; a
+    chosen chip already had dark text on the dark themes (`var(--bg)`). `TagsPage.module.css`
+    (`.primaryButton`) and `ApiAccess.module.css` (`.primaryBtn`) already read
+    `var(--on-primary, #fff)`, so they get the dark text on the dark themes too. The app's other
+    primary fills still set white: a follow-up.
+  - The tour menu's entry reads "Run setup again (your space, an account, a statement)"; it read
+    "Run the Setup Wizard (accounts, imports, subscriptions)".
+  - **Tests**: unit `onboardingFirstImport.test.tsx` (21, two of them setup reopened at the
+    statement over accounts the profile has, two the leave question on the subscriptions, four a
+    YNAB Register file),
+    `firstImportCount.test.ts` (3), `firstImportDates.test.ts` (3), Escape on Done in
+    `onboardingDoneStep.test.tsx`, `importOpensHandedFile.test.tsx` (3), three held-badge cases in `achievementsStore.test.ts`, two
+    in `SubscriptionScan.test.tsx`, and the wizard's own suites rewritten
+    (`onboardingForms.test.tsx`, `onboardingOnTheAccount.test.ts`, `onboardingStore.test.ts`,
+    `onboardingSpaceAnswersFail.test.tsx`, `createdProfileIsSelected.test.tsx`,
+    `importRulesFollowProfile.test.tsx`). E2E: `onboarding.spec.ts` rewritten, with three `@smoke`
+    cases (the core path; a statement imported in one tap, through Track 2 subscriptions to the
+    summary; a file the defaults cannot read, opened in Import), every line of text read on the
+    painted screen, and every step on a touch screen at 390x844, 375x667 and 320x568 in both themes
+    (header 56 px, its buttons 44x44, one footer row with 48 px buttons, 16 px fields, nothing
+    under the screen's edge, the statement card's two lines one line each, Done's next-step links
+    44 px). The painted screen is `tests/painted-contrast.ts`: each line of text made transparent,
+    the screen captured with the orbit field's animations stopped at six points of their orbits,
+    and the line's colour composited over every pixel of its box, the worst kept; WCAG AA, 4.5:1,
+    or 3:1 for large text. It reads every screen from the space to Done, wide and at 390x844 and
+    320x568, in both themes, and on a phone it also fails any line the field paints behind (a
+    capture with the field hidden, compared pixel by pixel). It replaces an estimate from computed
+    colours that left the field out. Held sideways, the step's heading, lead and first question show
+    above the footer as it opens, and the top fades once scrolled. Signed in
+    (`onboarding-server.spec.ts`): the space step with Keep my data in this browser only, read the
+    same way at three sizes, and an account added, the page reloaded, setup reopened at the
+    statement and the statement imported into that account: one account on the Worker, seven
+    transactions in it, and back on the account step the form blank for another.
+    `onboarding-server.spec.ts`, `onboarding-form-errors.spec.ts`, `onboarding-page-behind.spec.ts`
+    (its short-phone case now scrolls About this space: the name screen fits 320x568),
+    `orientation.spec.ts`, `circles.spec.ts`, `dashboard-circles.spec.ts`, release `s04` 4.7 and
+    `s13` 13.3 follow the new steps. The specs that leave the wizard from a locator handler accept
+    its confirm by `confirm-accept`: its button reads Leave setup now, not Confirm.
+  - **Test ids.** Gone: `onboarding-step-welcome`, `onboarding-account-date`,
+    `onboarding-import-loading`, `onboarding-import-process-bank`, `onboarding-import-summary`,
+    `onboarding-import-to-mapping`, `onboarding-import-to-preview`. New: `onboarding-step-about`,
+    `onboarding-progress`, `onboarding-account-skip`, `onboarding-subs-skip`,
+    `onboarding-done-summary`, `onboarding-backdrop` (the orbit field), and on the statement
+    `onboarding-import-` `choose`, `input`, `pick`, `banks`, `file`, `meta`, `dates`, `remove`, `target`, `categories`, `nothing-new`, `problem`, `open`,
+    `done` and `another`. Same id, new place: `onboarding-skip` (the header's Close, still asking),
+    `onboarding-back` (the header's Back), `onboarding-account-create` (the footer's Add account),
+    `onboarding-import-skip` (the footer's Skip), `onboarding-import-selected` (`Import N`),
+    `onboarding-subs-add-continue` (`Track N subscriptions`).
+
+- **How old and new setup records compare.** The record's step names and its forward-only rule
+  are unchanged (`shared/accountStateKeys.ts` points here). What a name means moved with the new
+  steps:
+
+  | `step`          | Started before this build             | Started from this build                                  |
+  | --------------- | ------------------------------------- | -------------------------------------------------------- |
+  | `welcome`       | opened, nothing answered              | never written; an old record at it reopens on `space`    |
+  | `space`         | went past the welcome, on the name    | opened (the first write), on the name or About           |
+  | `account`       | the space saved                       | the space saved, and About answered where it shows       |
+  | `import`        | past the account step                 | past the account step                                    |
+  | `subscriptions` | past the import step, imported or not | imported transactions on the statement step              |
+  | `done`          | past the subscriptions step           | past subscriptions, or past the statement with no import |
+
+  `outcome: completed` came only from Done's Finish. It now also comes from Open in Import, at
+  step `import`, and from Escape on Done: before this build Escape there asked "Leave setup?" and,
+  confirmed, recorded `skipped` at step `done`; now it finishes as Finish does, records
+  `completed` and asks nothing, since the person reached Done. An old `skipped` at `done` is
+  therefore a new `completed` at `done`: count them together. So the comparable counts are: old `welcome` and `space` together against new `space`
+  (stopped before saving a space); `account` and `import` as they are; old `subscriptions` and
+  `done` against new `subscriptions` and `done` (got past the import step). New records say who
+  imported during setup only up to `subscriptions`: one at `done` may have come straight from the
+  statement step, so whether it imported is in its transactions, not its record. Split the cohorts
+  on `started_at` (UTC, `YYYY-MM-DD HH:MM:SS`) at this build's deploy time; a record started before
+  and taken up after it keeps an old name until it writes a new one. `existing` (migration 0035)
+  stays out of both:
+
+  ```sql
+  SELECT json_extract(value, '$.started_at') >= '<deploy time, UTC>' AS this_build,
+         json_extract(value, '$.outcome') AS outcome,
+         json_extract(value, '$.step') AS step,
+         COUNT(*) AS records
+  FROM user_state
+  WHERE key = 'onboarding' AND json_extract(value, '$.outcome') IS NOT 'existing'
+  GROUP BY 1, 2, 3
+  ORDER BY 1, 2, 3;
+  ```
+
+### State that follows the account
+
+- **`user_state` and `/api/account/state`.** `GET /api/account/state` answers every key
+  (`onboarding`, `tours`, `getting_started`), null where nothing is stored, with
+  `Cache-Control: no-store`; `PUT /api/account/state/:key` writes one key. Both take a session only
+  (`requireAuth`, so an account waiting for its confirm link gets 403 `EMAIL_UNCONFIRMED`) and serve
+  the session's own account. The keys are an allowlist (`shared/accountStateKeys.ts`; any other key
+  answers 404 and stores nothing). The stored value is rebuilt from the checked fields
+  (`checkUserStateWrite` in `shared/accountState.ts`; a refusal is 400 `{ error, fields }`) and is
+  capped at 1 KB of JSON. The onboarding record only moves forward: the furthest step is kept, the
+  first write stamps `started_at` with server time, `completed` or `skipped` stamps `finished_at`,
+  and a finished record never changes again. A client cannot send `existing`. A write stores its
+  result only while the row still holds the value it read (compare-and-swap, three attempts, then
+  503), so a step from a stale tab cannot undo a finish from another. Deleting the account deletes
+  its rows, and `worker/test/account-deletion.test.ts` now checks that every table with a `user_id`
+  column has a delete in `routes/account.ts`. Worker-only in the contract guard: local-first keeps
+  the same state in localStorage.
+- **The setup wizard's record is on the account** (`frontend/src/core/onboardingStore.ts`, the
+  account's state in `core/accountState.ts`). Signed in, the app reads `GET /api/account/state`
+  once per account and opens the wizard when `onboarding` is not finished, at its `step`, with no
+  pristine-profile check: a wizard left after the import step reopens there. Each step further than
+  the record's, and Finish or Skip with the step it was decided on, is a
+  `PUT /api/account/state/onboarding`; a relaunch over a finished record sends nothing. A decision
+  kept from before the record (this browser's `finance_onboarding:account-<id>` flag, or the
+  profile's `onboarding` setting) is sent once as `{ outcome }` and the wizard stays closed. The
+  flag is removed once the record is finished, and a decision whose PUT fails is kept in it, so the
+  next start sends it again. A failed read opens nothing and sends nothing. The settings mirror and
+  the pristine-profile check are local-first only now. `/api/account/state` bumps no data-version
+  counter and dispatches no `tc:data-changed` (`isUserStatePath` in `shared/accountStateKeys.ts`,
+  used by `dataVersions.ts` and `dataChangedEvent.ts`), so a wizard step reloads no page and runs
+  no badge check. E2E: `global.setup.ts` finishes the fixture account's record through the route,
+  so the specs that wrote the fixture's flag no longer do; `onboarding-server.spec.ts` covers a new
+  account, resume after a reload, a skip seen from a second browser, a flag sent once and a second
+  account in one browser; the cloud form-errors spec opens the wizard from the tour menu.
+  `onboardingDecided` flags for other accounts still work, through the same one-time send. A spec
+  that signs a new account in through the page now meets the wizard there, whatever the profile
+  holds: mark the account first (`bootApp(context, boot, email)` once it exists), as
+  `sign-in-form-errors.spec.ts` does before it opens Manage Account.
+- **The tours finished are on the account** (`frontend/src/core/spotlightStore.ts`). Signed in,
+  `endSpotlight` adds the tour, or every tour after the full tour, to `tours.seen` with
+  `PUT /api/account/state/tours`. The writes go in order, so a tour ended while another's write is
+  out is kept, and each is made on a list that was read: a list that cannot be read is never
+  replaced. Reset All Tours sends `{ seen: [], reset: true }`. The tour menu reads the list as it
+  opens (`loadAccountTours`), and its badges and count follow the list as it arrives. An account
+  with no list yet takes this browser's `finance_spotlight_tours` map once; the map stays, and local-first
+  keeps using it. `scripts/walk-tours.mjs` clears the fixture account's list before each load, as
+  its init script clears the browser's. No notice keeps a dismissal in localStorage (advice
+  dismissals were already in the profile's settings), so tours are the only state that moved.
+- **Tours are added on the Worker; only a reset replaces them.** `PUT /api/account/state/tours`
+  adds the ids sent to the stored list (stored ones first, each once), so a tour finished on one
+  device is kept when another device, holding a copy read before it, finishes a different one.
+  `reset: true` replaces the list with the ids sent (400 `reset` when it is not a boolean). Reset
+  All Tours sends `{ seen: [], reset: true }`, which stores an empty list rather than deleting the
+  row: an account with no row takes this browser's map again at the next load, which would undo
+  the reset. `endSpotlight` sends only the tours its copy does not have yet, and
+  `scripts/walk-tours.mjs` clears the fixture account's list with a reset.
+- **A value another build wrote is read for what it holds, and never replaced unread**
+  (`shared/accountState.ts`). An onboarding step this build does not know (one a newer build adds,
+  read after a rollback or by an installed older app) reads as `step: null`, and the record keeps
+  `started_at`, `finished_at` and `outcome`, so a finished record stays finished and no wizard
+  opens. A tours list keeps its well-formed ids and drops only the others (a write still refuses
+  an ill-formed id). The PUT goes through `applyUserStateWrite`, which merges over that lenient
+  read, leaves the row byte for byte when the merge changes nothing, and refuses with 409 a row it
+  cannot read at all (not JSON, a bad time, a list that is not a list), leaving it as it is. The
+  app treats the 409 as any failed write: a decision stays in this browser's flag, a tour is not
+  marked. GET answers such a row as `'unreadable'` (next entry). The frontend stand-ins of the
+  Worker read and write through the same functions.
+- **A row this build cannot read is unknown, not empty.** `GET /api/account/state` answers
+  `'unreadable'` (`UNREADABLE` in `shared/accountState.ts`) for a key whose row another build wrote
+  in a shape this one cannot read, and `null` only where there is no row; `answerUserState` builds
+  the answer, for the route and for the frontend stand-ins. The app's `readUserState` reads a key
+  as `UNREADABLE` when the answer holds that, or any value it cannot read, and as `null` only when
+  the key is absent or null. The app treats such a key as unknown and sends nothing over it: an
+  `onboarding` row opens no wizard, records no step and takes no decision (a relaunched wizard
+  closes without a write, and this browser's flag stays unsent); a `getting_started` row shows no
+  card, is not begun by the wizard and is not hidden; a `tours` row is not replaced, and the tour
+  menu shows this browser's `finance_spotlight_tours` map instead, where a tour finished now is
+  kept and Reset All Tours starts over. Before, GET answered such a row as `null`, so the wizard
+  opened once on that device and its writes were refused with 409.
+- **An onboarding outcome this build does not know reads as finished.** `readOnboardingRecord`
+  reads an `outcome` it does not know (one a newer build adds) as `null` when the record has a valid
+  `finished_at`, and keeps `step`, `started_at` and `finished_at`, as an unknown step reads as no
+  step. `onboardingFinished` asks for a finish time, not an outcome, so that record is finished: no
+  wizard opens, this browser's flag goes as it does for any finished record, a write over it answers
+  200 and leaves the row byte for byte. The GET answer that carries it (`outcome: null` with a
+  `finished_at`) reads back as finished in the app. An outcome, known or not, with no `finished_at`
+  still cannot be read.
+
+### Orientation
+
+- **The advice kind `unbudgeted-subscription` is `unbudgeted-category`**
+  (`frontend/src/core/achievements/advice.ts`): it flags the biggest category spent on this month
+  with no budget and no bill behind it, which is not always a subscription. Card ids follow
+  (`unbudgeted-category:<category id>:<month>`). `parseDismissed` (`achievements/records.ts`)
+  reads a dismissal stored under the old name as the new one, so the card stays hidden, and the
+  next save stores the new id. The card's words do not change.
+- **The advice counts are computed in one place** (`frontend/src/core/achievements/monthFacts.ts`):
+  `uncategorisedIn` (entries with no category, transfers aside), `monthInTheRed` (what a month of
+  three or more entries earned and spent, when it spent more) and `biggestUnbudgeted` (the
+  category spent on most with no budget and no bill). advice.ts calls them, and so do the Getting
+  started steps, so the two read the same numbers. What advice says does not change.
+- **One definition of a tracked month, and of a year on file** (`shared/trackedMonths.ts`). A month
+  is tracked with `TRACKED_MONTH_MIN_TRANSACTIONS` (3) entries of any type dated inside it
+  (`isTrackedMonth`, `trackedMonthsOf`). A year on file is `YEAR_ON_FILE_MONTHS` (12) tracked months
+  among the `YEAR_WINDOW_MONTHS` (13) calendar months that end with this one
+  (`trackedMonthsInYearWindow`), so a year imported up to last month counts. The
+  badges (`evaluate.ts` calls `trackedMonthsOf`), the year in review, the streak card and Getting
+  started all read it, and `achievements/definitions.ts` no longer exports the constant. The "A
+  year" badge still needs twelve tracked months in a row; a year on file allows one month missing.
+- **Each count of months names what it counts.** Dashboard had three numbers for the same months:
+  the badge rail's streak (tracked months in a row, up to this month or last), the "A year" badge
+  (twelve in a row, at any time) and Getting started's import-year step (tracked months among the
+  last 13, gaps allowed). The rule for a tracked month stays one (3 or more entries). The step's
+  reason now names its window, "8 of the last 13 months are tracked." or "None of the last 13
+  months is tracked yet.", where it said "You have 8 tracked months from the past year." The rail
+  (`streakLabel` in `components/BadgeRail.tsx`) and the Progress record say "4 months in a row"
+  (one: "1 month in a row") where they said "4 months tracked"; the badge's rule already reads
+  "Twelve tracked months in a row." `hasYearOnFile` had no caller and is gone.
+  `core/__tests__/monthCountsOnDashboard.test.ts` holds what each surface says for the same entries
+  in three cases (eight months with a gap, a whole year in 2024 and nothing since, twelve of the
+  last thirteen with a gap).
+- **Progress says what the rail says at a zero streak.** The record on Progress takes its words
+  from `streakLabel` (`components/BadgeRail.tsx`), so with no streak running it reads "Start a
+  streak", as the rail does, where it read "0 months in a row" (on main, "0 months tracked").
+  `features/__tests__/progressPage.test.tsx` checks the zero case.
+- **Getting started rules** (`shared/orientation.ts`). `orientationSteps(facts)` returns the steps
+  whose rule applies, in rule order (`import-year`, `review-subscriptions`, `sort-uncategorised`,
+  `budget-top-category`, `heavy-month`, `loan-payoff`), and `nextSteps` the first
+  `NEXT_STEPS_SHOWN` (3). Each step has a title, a reason in counts and months (never amounts) and
+  a hash link. A rule added later goes in its place in `RULES` without moving the others.
+  `frontend/src/core/orientation.ts` (`orientationFacts`) builds the facts from the achievements
+  snapshot, which now holds whole transaction and bill rows (`Transaction[]`, `Bill[]`).
+- **The subscription scan's window and tick rule are exported**
+  (`features/subscriptionDetection.ts`: `SCAN_WINDOW_DAYS`, `recentForScan`, `worthTracking`), so
+  `SubscriptionScan.tsx` and the Getting started count read the same rows and tick the same
+  proposals. The scan behaves as before.
+- **The Getting started card and the wizard's last step** (`components/GettingStarted.tsx`).
+  `NextSteps` lists `nextSteps(orientationFacts(snapshot))`, each step a link to its page.
+  `GettingStartedCard` sits on Dashboard between the period bar and the badge rail, and shows while
+  the account's `getting_started` record exists, is not hidden, and a step applies. The wizard's
+  done step runs `refreshAchievements()` and lists the steps; following one completes setup.
+- **The Getting started record** (`core/gettingStarted.ts`): `getting_started` in user_state signed
+  in, `finance_getting_started:local` in local-first. `onboardingStore`'s `decide` makes it
+  `{ hidden: false }` on the first finish or skip only: adopting an older decision, a wizard
+  relaunched over a finished record, and (signed in) an account whose state could not be read make
+  none. Hide writes `{ hidden: true }`, and hidden is for good: the Worker stores `{ hidden: false }`
+  over a stored `true` as `true` (`checkUserStateWrite`), so a tab that read the account before
+  another device hid the card cannot bring it back when its wizard ends. Local-first writes
+  `{ hidden: false }` only when this browser holds no record, read in the same call.
+- **Links that open something on a page.** `takeHashFlag(page, flag)` (`core/hashRoute.ts`) answers
+  `?flag=1` once and takes it off the address with `history.replaceState`. `#bills?scan=1` opens the
+  subscription scan on the Subscriptions tab. `#transactions?uncategorised=1` lists the active
+  profile's entries with no category, transfers aside, from all time (the rows Auto Categorize
+  offers), under a note with "Show every entry". The heavy-month step links to
+  `#transactions?period=YYYY-MM`, because Analytics shows a year at a time.
+- **The uncategorised link clears the list's other filters.** Following
+  `#transactions?uncategorised=1` sets type All, clears the search and the category, account and
+  tag filters, shows reconciled entries, and sets period All and page 1, so the list holds the
+  entries the step counted. A filter left from earlier used to narrow it, and a category filter
+  emptied it.
+- **Hide is a full touch target, and the unsorted share is one number.** The card's Hide is styled
+  as the app's secondary card actions (Progress's advice links: a pill with the border colour and
+  body text) and is at least 44 px tall; `orientation.spec.ts` measures it. `sort-uncategorised`
+  rounds the share once (`unsortedPercent`) and applies above 10 of that number, so 10.3% (shown
+  as 10%) no longer counts as more than one in ten. The comments that still described the
+  wizard's pristine-profile check for signed-in accounts (`App.tsx`, `OnboardingWizard.tsx`) say
+  what decides it now.
+- **E2E:** `tests/orientation.spec.ts` (three `@smoke` cases in both modes) pastes a generated
+  statement on Import and checks the steps and reasons on the card and the done step. The
+  own-account helpers of `onboarding-server.spec.ts` moved to `tests/own-account.ts`.
+- **Getting started costs nothing unless it can be seen.** `GettingStartedCard` works the steps
+  out only while its record is shown (`hidden === false`) and Dashboard is the page on screen
+  (`getPage()`): pages stay mounted, and the badges are evaluated again after every write, so the
+  card used to scan the whole history for an account with no record, a hidden card, or a Dashboard
+  nobody was looking at. It works them out once per snapshot, a frame and a task after the change
+  (not inside the render), and once on coming back to Dashboard when the snapshot changed
+  meanwhile. The wizard's done step still works them out on the spot (`currentNextSteps`). The
+  scan itself is quicker for everyone, the Bills scan included, with the same results:
+  `MERCHANT_KEYS` holds every catalogue name, alias and brand keyword normalised once when the
+  module loads (it used to be done for each transaction), and `withinEditDistance` answers "at
+  most n edits" with a length check, an early stop and two reused rows instead of a full table per
+  token pair. Node, ms per Getting started computation on statement-like rows, before and after:
+  1,000 rows 582 / 35, 3,000 1,797 / 83, 5,000 2,925 / 143, 10,000 5,981 / 279. Chromium at 3,000
+  entries: Dashboard's load held the main thread 1,465 ms with no record and 1,463 ms with the card
+  shown; now nothing over 50 ms with no record, and one 89 ms task with the card shown. A category
+  saved on another page cost 1,452 to 1,456 ms; now nothing.
+- **A lapsed budget is no budget in Getting started either.** 5.17.0 made Progress's advice count
+  a category as budgeted only with a budget row for this month (`budgetsForMonth`), while the
+  budget-top-category step still counted any budget ever set. `biggestUnbudgeted(list, month,
+budgets, bills)` in `achievements/monthFacts.ts` applies `budgetsForMonth` (the one helper, in
+  `achievements/budgets.ts` since #647), so both call it the same way: advice with this month's
+  entries, the step with the last full month's, both against this month's budgets, so setting the
+  budget the step asks for takes the step away. `OrientationSource.budgets` holds whole budget rows
+  (`BudgetRow`). `core/__tests__/orientationFacts.test.ts` checks that a category budgeted
+  only in an earlier month has no budget in both, and that this month's budget takes it off both.
+
+### Guidance
+
+- **Category kinds** (`shared/guidance/kinds.ts`, migration 0036). `KINDS` are the fifteen ids of
+  the guidance research (housing, utilities, groceries, eating_out, transport, health, insurance,
+  childcare, debt, subscriptions, shopping, leisure, gifts, taxes, other), `ESSENTIAL_KINDS` the
+  eight a month costs whatever happens. `kindForName` guesses from English names: the defaults, the
+  old Food (groceries), the bank import's rule names (Restaurant and Dining eating_out, Fuel and
+  Car (Gas) transport, Travel leisure, Apartment (Bills) utilities, Bank Fees taxes, Transfers
+  none), then whole words in the name, accents stripped. `effectiveKind` is a category's own
+  kind, else its parent's stored kind, else its name's guess, else its parent's name's guess, and
+  none for a category that is not an expense. `essentialOf` says whether a category is needed every
+  month and why (`chosen`, `kind`, or `no-kind`: a category with no effective kind counts as
+  essential, per category).
+- **Categories store `kind` and `essential`** in both runtimes. `shared/categorySchema.ts` reads a
+  kind in any case (one of `KINDS`, blank is none) and `essential` as 1, 0 or null (true and false
+  too); both are refused on a category that is not an expense, and an edit that makes a category
+  another type clears both. `GET /api/categories` lists them on the Worker, and local-first's
+  `normalizeCategory` reads a row from before as null for both. The client's `CategorySchema` takes
+  `kind` as any string, so a kind a later build adds cannot fail the list (`effectiveKind` ignores
+  it), and `essential` as a boolean or 1/0.
+- **The defaults split Food** (`worker/src/profileData.ts`, `frontend/src/core/storage/idb.ts`):
+  Groceries (shopping-cart) and Eating out (utensils) in both runtimes, and every expense default
+  carries its kind. The local-first demo files "Grocery shopping" under Groceries and "Dining out"
+  under Eating out (it was Entertainment), and budgets both. `DELETE /api/categories` matches a
+  category called Food to Groceries (`resetName`, `shared/defaultCategories.ts`), so a reset renames
+  it with its entries and budgets instead of deleting it, and folds a Groceries the person made
+  into it (F9 below); the Danger Zone's confirmation says both.
+- **Imports give a new expense category the kind its name suggests**, on the Worker
+  (`imports.ts`) and in local-first (`importFlow.ts`). In the cloud, where a new account has no
+  categories, that is how most categories get one.
+- **The Categories dialog** shows Kind and "Needed every month" for an expense category
+  (`categoryForm.ts`, `kinds: true`). Kind shows the stored kind; its empty choice is no kind
+  stored, labelled with the guess the app then goes by (`effectiveKind` over the page's
+  categories, so a child goes by its parent): "From the name: Eating out", "From the parent:
+  Groceries", or "None yet: counts as needed every month" (now "None yet": "The no-kind state
+  says it once" below). The box follows the kind shown, or that
+  guess, until it is changed. A new category sends the kind shown (null for the empty choice) and
+  the box once changed; an edit sends either only when the person changed it (review F4 and F5
+  below). The Budgets, Bills and Goals dialogs send neither. `tests/quick-entry-phone.spec.ts` makes
+  Groceries, not Food.
+- **Tests:** `frontend/src/core/__tests__/guidanceKinds.test.ts` (the guess, the order of
+  `effectiveKind`, `essentialOf`, the local defaults), `worker/test/category-kinds.test.ts` (the
+  migration's columns, the Worker defaults), four contract scenarios in both runtimes (kinds
+  stored, edited and refused; the reset's rename; an import's kinds; a backup and restore keeping
+  both columns, which the Worker's restore copies by `PRAGMA table_info` and local-first's as whole
+  rows), `api.getCategories.kinds.test.ts`, `categoryKindField.test.tsx`, `demoFoodSplit.test.ts`
+  and `dangerZoneCategoriesReset.test.tsx`.
+- **Credit cards and overdrafts** (`shared/accountSchema.ts`, migration 0037). `credit` joins
+  `ACCOUNT_TYPES` (MCP `create_account` describes it as "a credit card"), and every place that
+  offers a type offers it: the Accounts dialog, the transaction form's new-account row, the import's
+  mapping step and the wizard. `credit_limit` (0 or more) and `credit_rate` (a yearly percentage
+  from 0 to 100) are read by `takesCreditLine` types only, a credit card and a Giro account: a create
+  of another type that sends either is refused at that field, and an edit that gives the account
+  another type clears both. The balance stays signed, so money owed is below zero and balance,
+  import and transfer code is unchanged. Both runtimes store both columns; `normalizeAccount` reads
+  a local row from before them as null for both, and the client's `AccountSchema` takes both as
+  optional numbers. The Accounts dialog shows Credit Limit or Overdraft Limit and Interest Rate for
+  those two types, and cash accounts get a banknote icon so the card icon is a credit card's.
+  With #621 merged, every display that reads the type through `knownAccountType` shows a credit
+  card as one: `accountTypeTone` gives it `expense` and `accountTypeIcon` the card, with cash on
+  the banknotes (both maps live in `core/accountTypes.ts` now), the constellation names it "Credit
+  Card" as every place that offers the type does (so does the refusal, "Choose Giro, Savings,
+  Investment, Cash or Credit Card."), the Transactions select says "credit", and the edit dialog opens it on Credit Card, not
+  "Other account". The import and MCP `create_account` take `credit` as they take every type on
+  the list.
+- **Tests:** `worker/test/account-credit.test.ts` (the migration's columns), a contract scenario in
+  both runtimes (stored, read, refused on another type and out of range, cleared on a type change
+  or a blank), a backup scenario (both columns survive a restore), the rules in
+  `accountSchema.test.ts`, the dialog, the badge and the icons in `accountForm.test.tsx`, both
+  readers (`api.getAccounts.test.ts`, `accountTypeRead.test.ts`), and
+  `src/__tests__/accountTypeChoices.test.ts`, which fails when a place that offers account types
+  and `ACCOUNT_TYPES` disagree. The tests that used `credit` as the type a build does not have use
+  `sock_drawer` now, as #621's own tests do: a type no build will have, where `loan` could become
+  one. A credit card on
+  each display: `accountTypes.test.ts`, `accountsPageTypes.test.tsx`,
+  `accountConstellation.test.tsx`, `transactionsAccountTypeWord.test.tsx` and the edit dialog in
+  `accountForm.test.tsx`; the import takes one in a contract scenario (`imports.ts`, both
+  runtimes), and `mcp-tools-write.test.ts` checks `create_account` does.
+- **Import logs keep the bank formats a session read** (`shared/bankFormats.ts`, migration 0038):
+  the adapter ids, comma-separated, in a column of their own, because both runtimes cut `details`
+  at 8000 characters. Every writer goes through `storedBankFormats`, which keeps the ids in
+  `BANK_FORMAT_IDS` (the registry's, which a test holds equal) each once and drops the rest:
+  `POST /api/import-logs` in both runtimes (the Import page sends the recognised statements'
+  formats from the Bank Imports tab, `importedBankFormats`, and none from the other tabs), and
+  `/api/v1/import` (the adapter that read the file). The email import and the Google Sheet sync read
+  plain tables and write null. Local-first lists a log from before it with `bank_formats: null`, as
+  the Worker answers. Nothing reads the column yet; the region choice will.
+- **Tests:** `worker/test/import-bank-formats.test.ts` (the migration's column),
+  `v1-import-bank.test.ts` (the API import names its adapter, the generic path none),
+  `bankFormats.test.ts` (the reader, the registry, what the import page sends),
+  `importLogFormatsRead.test.ts` (a local log from before reads null), two scenarios in both
+  runtimes (stored and dropped; kept by a backup and restore), and `tests/import.spec.ts`, where a
+  Revolut statement imported through the Bank Imports tab is logged as `revolut`.
+- **A deduction lowers income; it is never spending** (`shared/guidance/flows.ts`). A deduction is
+  pay that never reaches an account (tax, a pension contribution at source): `flowsOf` answers
+  `income` (income less deductions), `deductions` and `spending` (expenses only) for a set of
+  entries at the amounts the caller gives, `flowsByMonth` the same per month, and `savedOf` income
+  less spending. Achievements read through it: saving months (the same months as before, since
+  income beat expenses plus deductions exactly when income less deductions beat expenses), the
+  average monthly spend behind rainy-day (deductions out), the year in review (income net of
+  deductions, expenses without them, the same saved) and `monthInTheRed` (the same months, its
+  figures net). Balances and the emergency fund calculator already read a deduction this way.
+  Earned badges stay earned. No form creates a deduction; the API, the MCP and older data hold
+  them.
+- **Tests:** `guidanceFlows.test.ts` (a table of entry sets) and
+  `achievements/__tests__/deductions.test.ts`, a guard on each place achievements count spending
+  (rainy-day, saving months, the year in review, a month in the red) and on the code: a sum listing
+  expense and deduction together, anywhere in `frontend/src` or `shared/`, fails it.
+- **The guidance answers** (`shared/guidance/answers.ts`): one record per profile, the JSON text of
+  an object in the settings under `guidance` (local-first: `guidance:<profile id>`), with no route
+  or column of its own. `guidance` joins `PROFILE_SETTING_KEYS`, whose local-first pattern is now
+  built from the list, so the record goes with a deleted profile, survives "Clear profile data" as
+  the retirement plan does ("Clear all data" takes it), and follows its profile through a backup
+  within and between the runtimes. `PUT /api/settings` checks it in both (`readSetting`,
+  `checkAnswers`): the JSON text of one object, at most 4,096 bytes, `region` a short id, `adults`
+  a whole number from 1 to 99 and `children` one from 0 to 99; a field this build does not know is
+  stored as sent. `readAnswers` reads `region` (DE, HR, EU27, UK, US, elsewhere, skipped),
+  `adults` and `children`, and takes a value it cannot read, like a region a later build adds, as
+  unanswered. `mergeAnswers` changes only the fields given (null clears one) and keeps every other,
+  known or not. In the app, `core/guidanceAnswers.ts` saves through one function that re-reads the
+  record just before it writes, with this tab's saves queued, and in cloud mode refuses a save for
+  a profile that is no longer active rather than file it under another.
+- **Tests:** `guidanceAnswers.test.ts` (the reader, the merge, the write rules, the cap counted in
+  bytes), `guidanceAnswersStore.test.ts` (in both modes: a save keeps an answer another tab saved
+  meanwhile, two saves started together keep both, a newer build's fields survive, a failed save
+  does not block the next, the profile check), two contract scenarios in both runtimes (stored as
+  sent, per profile, with a field this build does not know; refused when not well formed, the
+  stored record kept), a backup scenario, `guidance answers` as a stored kind (so the delete,
+  clear and restore scenarios count it in both runtimes), and the restores between runtimes in
+  `exportPerProfileSettings.test.ts` and `worker/test/backup-profile-settings.test.ts`.
+- **Setup asks where you live and who the space covers** (guidance.md 5.5, as written), on "Name
+  your space", in both modes: `components/guidance/SpaceQuestions.tsx`, radio groups drawn as
+  chips, with Germany, Croatia, Another EU country (EU27), United Kingdom, United States and
+  Somewhere else, adults 1, 2 or 3 or more and children 0, 1, 2 or 3 or more. Both are optional.
+  The step saves the answers chosen on it, for the profile the app writes to, after the rename or
+  the new profile; a region left unanswered is saved as `skipped` unless the record already holds
+  one, read from the record just before the write (`spaceAnswerChanges`; `saveAnswers` now also
+  takes a function of that record). Reopening the step shows the stored answers.
+- **Settings, General, About this space** (`components/guidance/AboutThisSpace.tsx`) shows the
+  active profile's answers and how the region was set; choosing another answer saves it at once,
+  and Ask again (now "Remove answer") clears one. It reloads with the profile, the settings and
+  the import logs.
+- **The region choice** (`shared/guidance/region.ts`, design section 3, moved here from commit 8
+  so Settings can say how the region was set): the answer (Somewhere else compares with the EU
+  average), else the bank formats of the profile's import logs (DKB and Sparkasse Germany, Erste
+  and PBZ Croatia, ING the EU average; Revolut, Wise, YNAB and N26 no hint; most sessions win, a
+  tie goes to the latest), else the base currency (EUR, GBP, USD), else the EU average. Its words
+  are `components/guidance/regionWords.ts`, like "Compared with Germany, going by your DKB
+  statements.".
+- **Tests:** `guidanceRegion.test.ts` (a `chooseRegion` table), `regionWords.test.ts`, the wizard's
+  questions in `onboardingForms.test.tsx` (as written; saved with the space; skipped; the stored
+  answers shown and kept; a newer build's region never replaced), `AboutThisSpace.test.tsx` (the
+  notes for an answer, the bank formats of this profile only, the base currency and nothing; a
+  change saved on the freshest record; Ask again; a failed save; another profile), and E2E in both
+  modes: `onboarding.spec.ts` (answer, see and change in Settings, survive a reload; a region left
+  unanswered) and `onboarding-server.spec.ts` (the record on the Worker, Settings, Ask again).
+- **The recurring-payment finder** (`frontend/src/features/recurringPayments.ts`):
+  `detectSubscriptions` hands it the expenses no catalogue or brand name matched, so a payment is
+  proposed once at most. It skips an entry filed under a transfer or account category, or under
+  Transfers (where the bank import files a transfer it could not match), and a cash withdrawal (F2
+  below), and groups the rest by
+  payee: the beneficiary, else the description, else the payor, normalised and without digits. A
+  payee is proposed when three or more of its charges keep to one amount (`pickAmountCluster`),
+  the median gap has a cadence, at least three gaps in four have that cadence, and the last charge
+  is at most one and a half periods old. The gaps rule keeps everyday shopping out: a cafe paid one
+  price on random days has a median gap of about a week. Four charges or more at a monthly or yearly
+  cadence are `medium`; three, or a weekly or fortnightly cadence, `low`, which the scan leaves
+  unticked and Getting started does not count. A result has
+  `matchedVia: 'recurring'`, the payee's name without the words that are numbers, the key
+  `recurring:<payee key>`, `alreadyTracked` when a bill's name has that key or the key of the
+  name proposed, and `billType`: `subscription`
+  when the category most of its charges are filed under goes by subscriptions or leisure
+  (`effectiveKind`), else `bill`, with that `categoryId`. Named finds are
+  `subscription`, as before. The scan shows a finder row as "Regular payment to {payee}" with no
+  brand's look, and adds it as its bill type in its category; the scan and Getting started pass
+  the categories to `detectSubscriptions`. What both scans share moved to
+  `features/chargePatterns.ts`. In the 750-day window a yearly payment has three charges at most,
+  so the finder only ever guesses one.
+- **Tests:** `recurringPayments.test.ts` (a gym at four, three and two charges, weekly, through a
+  paused month, stopped, already tracked; amounts that drift, that wander, and a cafe at one price
+  on random days; transfers; no payment found twice; bill or subscription by kind, by a parent's
+  kind and by the most common category; the payee's key and name) and `SubscriptionScan.test.tsx`
+  (the rows and the bills they add, a payment under Transfers left out, the count Getting started
+  shows).
+- **A regular payment added as a bill is not proposed again** (review F1). The finder named a
+  payee without every word holding a digit and cut the name at 60 characters, but checked a bill
+  by the payee's whole key, so "FIT24 STUDIO" was proposed as "STUDIO", proposed again once added,
+  and Getting started's review step never cleared; the same for "O2 Germany", "STAN 4B NAJAM" and
+  any payee over 60 characters. `payeeName` now drops only a word with no letters, or one with at
+  least four digits and more digits than letters (a reference or an account number), and
+  `alreadyTracked` also holds when a bill's key is the key of the name proposed.
+- **Tests:** `recurringPayments.test.ts` (names that keep "FIT24", "O2" and "4B" and drop numbers;
+  a proposal added as a bill and scanned again, for a payee holding digits, one over 60 characters
+  and one with an account number) and `orientationFacts.test.ts` (Getting started's step goes once
+  the proposal is a bill).
+- **The finder proposes regular bills, not habits** (review F2). On the review's invented years it
+  ticked cash taken out every week or so (41 years in 50), the Saturday bakery (47 in 50), and a
+  monthly payment to a person and a pharmacy co-pay as subscriptions (50 in 50). Now:
+  - a find is `medium` only at a monthly or yearly cadence; weekly and fortnightly finds are `low`,
+    listed and unticked;
+  - an entry whose beneficiary, description or payor says it is a cash withdrawal is skipped
+    (`isCashWithdrawal`: ATM, cash withdrawal, Revolut's "Cash at", Geldautomat, Bargeld..., the
+    "GA NR" of a Sparkasse or DKB withdrawal, Dutch geldautomaat, Bankomat..., isplata gotovine).
+    No adapter fixture holds a withdrawal, so the words come from the banks' own statement texts.
+    The import's categorisation does not change;
+  - a find is a `bill` unless its category's effective kind is subscriptions or leisure, so a
+    payment to a person, a co-pay and a find with no category are bills (`SUBSCRIPTION_KINDS`
+    replaces `BILL_KINDS`);
+  - Getting started's facts gain `billsSpotted`, the counted finds that are bills, and the step
+    says "Review the 3 regular payments we spotted" while there is one, "subscriptions" otherwise.
+- **Tests:** `recurringPaymentsHistories.test.ts` (the review's histories as tests, seeds 1 to 50:
+  shopping, the bakery and the salary never ticked, cash never proposed, the payment to a person,
+  the co-pay, a gym and the rent likely and bills every year), `recurringPayments.test.ts` (weekly
+  and fortnightly guesses, each bank's cash wording, bill or subscription by kind),
+  `orientation.test.ts` and `orientationFacts.test.ts` (the step's words, `billsSpotted`).
+- **Quick entry guesses by kind** (review F3, `frontend/src/core/entry/parseEntry.ts`). Its hints
+  pointed coffee, lunch, groceries and the like at a category whose name holds "food", which the
+  new defaults no longer have, so 11 of 12 such words got no guess and the Command Bar's Save
+  waited for a category. Each hint now names a kind (eating_out: coffee, latte, cafe, lunch,
+  dinner, breakfast, restaurant, snack, meal; groceries: grocery, groceries, food; transport,
+  housing, subscriptions, health, shopping, utilities and leisure for the rest) and a name fragment:
+  a category is matched by its effective kind first (`effectiveKind`, so a child goes by its
+  parent), then by name as before, so a profile that still has Food finds it. The Command Bar
+  passes each category's kind and parent, and its placeholder reads "Type an entry, like "coffee
+  4.50", "groceries 32 yesterday" or "salary 3000"".
+- **Tests:** `parseEntry.test.ts` (the local-first defaults, a kind under another name and from a
+  parent, a profile with Food, Food beside Eating out), `worker/test/quick-entry-defaults.test.ts`
+  (the Worker's defaults) and `components/__tests__/quickEntryGuessByKind.test.tsx` (the Command
+  Bar files by kind, and every example in its placeholder gets a category on the defaults).
+- **The category dialog stores what it shows** (review F4). Its "No kind" choice ticked "Needed
+  every month" (no kind counts as essential) but saved kind and choice as null, which the app reads
+  as the name's guess: "Coffee beans" saved that way counted as eating out, not needed. The empty
+  choice now says which guess it stands for, the box follows that guess, a box the person changed is
+  sent as chosen even with no kind, and reopening shows what was saved. `categoryForm` gains
+  `guessed()`, which the page's label reads.
+- **An edit never clears what this build cannot read** (review F5). An edit sent `kind: null` for a
+  kind only a later build knows (this build shows it as the guess), clearing it on a change of
+  colour. An edit now sends `kind` only when the field changed, and `essential` only when the
+  person changed the box and it differs from what the dialog opened with or from what the stored
+  choice or the kind makes of it after the save.
+- **Tests:** `categoryKindField.test.tsx` (the labels; a guess saved as no kind and reopened as
+  shown; a ticked box with no kind; an edit whose box is back to how it opened but differs from the
+  new kind; a later build's kind kept on a change of colour, in the real local-first router) and
+  `categoryFormBody.test.ts` (the bodies: a colour edit sends neither key).
+- **A failed answers save never stops the wizard** (review F8). "Name your space" saved the answers
+  after the rename or the new profile in the same `save`, so a failure there showed "Couldn't save
+  your space. Try again." about a space that was saved. The answers' save is now caught on its own:
+  the step moves on and a warning toast says "Your space is saved, but your answers didn't save.
+  You can give them in Settings, under About this space." The answers stay chosen, so going back
+  to the step shows them and its save tries them again.
+- **Tests:** `onboardingSpaceAnswersFail.test.tsx` (the failure path, on the real local-first
+  router: the profile renamed, the next step shown, the toast, no notice on the form).
+- **Reset merges budgets too** (review F9). When a reset kept Food (renamed Groceries) and folded a
+  Groceries the person made into it, the kept category ended with both budgets for the same month
+  (300 and 200), in both runtimes. A moved budget for the same period and start date as one the
+  kept category has is now added to that one and removed (`budgetMergeStatements` in
+  `worker/src/profileData.ts`, the budgets branch of `resetProfileCategories` in `idb.ts`); of two
+  kept budgets that match, the one with the lower id takes it. A budget with no match moves as
+  before. `budgets_zero_based`, which no route reads, is repointed as before. The Danger Zone says
+  "Food becomes Groceries and keeps its entries and budgets. A Groceries you already have becomes
+  part of it, and budgets for the same period are added together."
+- **Tests:** a contract scenario in both runtimes (Food and an own Groceries, budgeted for March,
+  the own one for April too: one Groceries, its entry moved, March's budgets one of 500, April's
+  moved as it is) and `dangerZoneCategoriesReset.test.tsx` (the confirmation's words).
+- **About this space reads the same for both questions** (visual pass 3a, finding 3). An answered
+  household had no status line, and its Ask again sat at the far right of the note row
+  (`.note` was `justify-content: space-between` around an empty span): x 292 at 390 wide and
+  x 1142 at 1280. The region's sat under its line at 390 (x 39) but at the far right at 1280
+  (x 1142, its line ending at x 671). The household's line
+  is now `householdText` (`components/guidance/regionWords.ts`), in the chips' words: "1 adult,
+  no children.", "2 adults, 1 child.", "3 or more adults, 3 or more children."; half answered,
+  "2 adults. Children not answered yet." or "Adults not answered yet. 1 child."; neither, "Not
+  answered yet.". A count above three reads as "3 or more". The note row starts at the left, so
+  Ask again follows its line, 12 px after the last word when it fits (household at 390: line
+  39-155, button at 167) and under the line's start when not (region at 390). At 390 with
+  Settings scrolled to its end, nothing in the card or elsewhere on the page is under the
+  floating + button (button y 776-828, card ends at y 606), before and after.
+- **Tests:** `regionWords.test.ts` (every combination, and counts above three),
+  `AboutThisSpace.test.tsx` (the line for a full, a half and a cleared answer; Ask again clears
+  it) and `onboarding.spec.ts` ("Remove answer" follows each status line at 390 and 1280 wide:
+  beside the last word or under the line's start; nothing in the card under the + button at the
+  end).
+- **The category dialog says where its guesses come from** (visual pass 3a, findings 4 and 5).
+  While "Needed every month" follows the kind (no choice stored, and the box not changed in this
+  dialog), the words under it say why: "Ticked to match its kind, Housing. Untick it if this one
+  isn't needed every month.", "Unticked to match its kind, Eating out. Tick it if this one is
+  needed every month." or, with no kind, "Ticked because it has no kind yet. Untick it if this one
+  isn't needed every month." (now "Ticked while it has no kind. ...", below). The kind named is the one the app goes by, so the line follows the
+  Kind field. The line goes once the box is changed, never shows for a stored choice, and the box's
+  `aria-describedby` reads it out. (It was a line of its own; it is now the last sentences of the
+  box's one hint: "Needed every month keeps the form's spacing" below.) `categoryForm` gains
+  `essentialFollows()`, from two signals (changed in this dialog, choice stored), where it kept a
+  plain flag. The Kind help said "Until you pick one, it's guessed from the name." even with no
+  guess; it now follows the field: the name's guess keeps that sentence, the parent's says "it
+  follows the parent category", none says "The name doesn't suggest one, so pick the closest.",
+  and a picked kind reads "What this category holds."
+- **Tests:** `categoryKindField.test.tsx` (the three lines, the line following the Kind field,
+  leaving on a change, absent for a stored choice and shown for a stored kind with no choice; the
+  help for the name's guess, the parent's, none and a picked kind).
+- **44 px touch targets on a phone** (visual pass 3a, finding 6). At the app's phone width
+  (`max-width: 768px`) the region and count chips (setup and Settings share
+  `SpaceQuestions.module.css`) and Ask again have `min-height: 44px`, and so does the "Needed
+  every month" row in the category dialog (`.check-row`, a label, so the whole row toggles the
+  box). At 390 wide: chips 36.3 to 44 px (13 in setup, 13 in Settings), Ask again 18.1 to 44 px,
+  the row 21 to 44 px (the box itself stays 16 px). At 1280 every one keeps its size. Ask again
+  still sits on its status line's baseline. With Settings scrolled to its end at 390, the card ends
+  at y 606 and the + button starts at y 776: nothing is under it.
+- **Tests:** `onboarding.spec.ts` (every chip and Ask again in setup and Settings: 44 px or more at
+  390, under 40 at 1280) and `categories.spec.ts` (the row: 44 px or more at 390, under 30 at
+  1280, and a tap at its far end toggles the box).
+- **Groceries and Eating out draw their own icons** (visual pass 3a, finding 7). Local-first's
+  defaults carried no icon, so Groceries fell to the food pattern in `CategoryIcon.tsx` (a coffee
+  mug, as "grocer" sits in it) and Eating out to the fallback tick ("eat" must stand alone). The
+  local-first defaults now give these two the Worker's icons, `shopping-cart` and `utensils`
+  (`DEFAULT_CATEGORIES` in `idb.ts` takes an optional `icon`; the rest still come from the name),
+  and the name matching checks `/grocer/` (cart) and `/eating\s*out|dining\s*out/` (utensils;
+  since widened to every meal, below) before the food family, so an existing Groceries or Eating out with no icon of its own (`''`,
+  `tag`, `folder` or none) shows them in both runtimes. A reset renaming Food to Groceries keeps an
+  icon the person chose (`resetKeepsIcon`, `shared/defaultCategories.ts`); Food's old default icon
+  (`utensils` on the Worker) or none becomes the cart. Before, the Worker set every kept default's
+  icon back to the default's, a chosen one on Food included, and local-first kept Food's icon
+  whatever it was; a default matched by its own name is still set back to the default's icon.
+- **Tests:** `CategoryIconResolve.test.ts` (Groceries and Eating out with no icon, any case; a
+  chosen icon wins; Food unchanged), `guidanceKinds.test.ts` (the local defaults' two icons;
+  `resetKeepsIcon`), `worker/test/category-kinds.test.ts` (the Worker's), and the reset contract
+  scenarios in both runtimes (Food with `utensils` and with no icon becomes the cart; Food with
+  `coffee` keeps it; Eating out set back to `utensils`). `CategoryIcon.test.ts`'s copy of the
+  pattern table has the two new rows.
+- **Children can't be missed on a phone** (visual pass 3a, finding 8). On "Name your space" at
+  390x844, with the 44 px chips, the footer starts at y 770 and the Children legend sat at y
+  793-811, its chips at 817-861, with 105 px left to scroll and nothing saying so. The step's lead
+  is one line, without the dash ("Yours, a partner's or the household's. Add more later.", was
+  two; now "A profile is one space. You can add more later.", below), and the two questions keep the form's 14 px rhythm (`--space-questions-gap`, which
+  `.stepForm` sets; Settings keeps 18). Children's legend now starts at y 768 and its chips at
+  792, still under the footer, with 80 px to scroll, so the step showed a cue while it goes on
+  below (`data-more-below`), read on the middle's scroll and by a `ResizeObserver` on the middle
+  and the step in it; at the end it goes. The cue was a shadow along the footer's top; it is now a
+  fade, and Children's legend shows as the step opens (the entry "Children shows as Name your space
+  opens" below).
+- **Tests:** `onboarding.spec.ts` (the new lead, the 14 px gap, the cue at 390x844, none at the
+  end, back on scrolling up, none at 390x1000 or 1280x800; now "the step's bottom fades while it
+  goes on below").
+- **About this space says what its answers belong to** (visual pass 3a, finding 9). The card's
+  subtitle ("Your answers choose the official figures your numbers are compared with.") said what
+  the region's own line says ("We compare your numbers with official statistics for that
+  place."). The answers belong to the space in both runtimes: local-first keeps them under
+  `guidance:<profile id>`, and the Worker's settings rows are keyed by profile (`PUT
+/api/settings` writes `(key, value, profile_id)` for the active profile). The subtitle is now
+  "Each space keeps its own answers." `onboarding.spec.ts` checks it at 390 and 1280.
+- **The account dialog's hints keep the dialogs' leading** (visual pass 3a, finding 10). Its
+  hints (`.form-hint`, `AccountsPage.module.css`, used only by the account dialog) are `Field`'s
+  inline `<span>`s, so their lines took the field's 24 px line box, whatever their own 16.8 px
+  line-height said: 24 px between the overdraft hint's two lines, against 18 px in the Categories
+  dialog, whose `.field-hint` is a block. `.form-hint` is a block with a 1.5 line-height, as there:
+  18 px a line at 390 and 1280. The rule is local to the Accounts page, so nothing else moves.
+  `accounts-crud.spec.ts` measures the two lines at 390.
+- **Children shows as "Name your space" opens** (visual pass 3a-2, N1 and finding 8). At 390x844
+  the Children legend sat at y 768-786 under a footer starting at y 770, and the footer's shadow
+  was all but invisible in dark (1.09:1). The questions' lead is one line ("Both are optional.
+  Change them later in Settings.", was "Both questions are optional. You can change the answers
+  in Settings.", two lines), and so is the currency help ("Totals and charts use it. Accounts can
+  still hold others.", was "Totals and charts are shown in this currency. Individual accounts can
+  still hold others.", two). At 390x844, both themes, the legend now sits at y 733-751 and its
+  chips at 757-801, with 45 px to scroll (was 80). The cue is a mask, not a shadow:
+  `data-more-below` moved from the footer to the scrolling middle, whose last 20 px fade into the
+  panel while the step goes on below (`mask-image`, with the `-webkit-` form for older WebKit), so
+  it needs no colour per theme; the footer no longer draws a shadow or needs positioning. It shows
+  at 390x844 and 375x667 in both themes, and not at the step's end, at 390x1000 or at 1280x800.
+- **Tests:** `onboarding.spec.ts` ("the step's bottom fades while it goes on below, and Children
+  shows as it opens", light and dark: both hints one line, the Children legend wholly above the
+  footer with its chips under it, the mask on and no footer shadow, none at the end, at 390x1000
+  or at 1280x800, on again at 375x667) and `onboardingForms.test.tsx` (the lead's words).
+- **The number chips are 44 by 44 px on a phone** (visual pass 3a-2, N2 and finding 6). At 390
+  wide the one-digit chips were 44 px tall but 35 to 39 px wide ("1" 35, "2" 38, "0" 39). In the
+  same `max-width: 768px` rule as their height, every chip has `min-width: 44px` and centres its
+  label (`justify-content: center`): at 390 the "1", "2" and "0" chips are 44x44 in setup and in
+  Settings, label centred to 0.0 px; region and "3 or more" chips keep their widths (76 to 155 px);
+  at 1280 every chip keeps its size (35 to 155 by 36.3).
+- **Tests:** `onboarding.spec.ts` ("the space questions' chips and Remove answer are at least 44
+  px on a phone": every chip at least 44 wide as well as tall, its label within 0.5 px of its
+  centre, in setup and Settings).
+- **Needed every month and Ask again keep the form's spacing on a phone** (visual pass 3a-2, N3
+  and N5). The 44 px hit areas had pushed what a person sees apart. Measured on the text itself at
+  390: the Kind help ended 31.5 px above "Needed every month" (20 before the 44 px rule) and the
+  hint started 20.5 px under it (9 before); in Settings the region's wrapped Ask again started
+  18.1 px under its status line (5.1 before) and 33.1 px above the household question (20.1). The
+  row (`.check-row`, `CategoriesPage.module.css`) and Ask again (`.askAgain`,
+  `SpaceQuestions.module.css`) keep `min-height: 44px` and take back what they grew by with
+  negative block margins (-11.5 px from the row's 21 px line, -13 px from Ask again's 18 px), so
+  the gaps are 20 and 9 px again, the same as at 1280, and Ask again's words start 7.1 px under a
+  wrapped line (the note's row gap is 4 px, was 2) and 20.1 px above the next question. The row is
+  positioned, so it paints over the hint its lower edge reaches into and takes the tap there; Ask
+  again comes after its line and does already. No chip loses a tap at its edges. The general hint
+  and the guess line are one hint (`#category-essential-hint`): the guess is its last sentences,
+  in a span that keeps `data-test-id="category-essential-guess"`, and the box is described by that
+  one hint; at 390 that is three lines where it was four.
+- **Tests:** `categories.spec.ts` ("its whole row toggles the box ..., with the form's spacing":
+  20 and 9 px within 2, at 390 and 1280; at 390 taps at the row's top and bottom edges toggle it),
+  `onboarding.spec.ts` ('on a phone "Remove answer" sits 6 to 8 px under a wrapped line and takes
+  a tap at either edge'; the placement test reads Ask again's words, not its box) and
+  `categoryKindField.test.tsx` (the box's one hint ends with the guess; the whole description).
+- **"Name your space" says what a space is** (visual pass 3a-2, N4). The step's heading says
+  "space" and its field "Profile name", and the lead ("Yours, a partner's or the household's. Add
+  more later.") bridged neither. It is now "A profile is one space. You can add more later.",
+  one line at 390 and at 375 (298 px of 352 and 337; the old lead was two lines at 375). Of the
+  two briefed candidates both fit ("Each profile is one space. Add more later." 266 px); this one
+  is two whole sentences and says what "more" means. Nothing is renamed: whether the field should
+  say "Space name" is maff's call.
+- **Tests:** `onboarding.spec.ts` (the fade test checks the lead's words and that it is one line
+  at 390).
+- **A meal draws utensils** (visual pass 3a-2, N6). A category named "Restaurant" showed the
+  coffee mug while its Kind said "From the name: Eating out": the food row in `CategoryIcon.tsx`
+  mapped restaurant, dining, eat, meal, lunch, dinner and breakfast to the mug. Read whole, the
+  row held food, dining, grocer, restaurant, eat, meal, lunch, dinner, breakfast, cafe and
+  coffee; the meals moved to the utensils row (which held Eating out and Dining out):
+  `/eating\s*out|dining|restaurant|\beat\b|\beating\b|meal|lunch|dinner|breakfast/i`. "eat" and
+  "eating" match only as words, so "Heating" and "Seat covers" do not become meals. Food, cafe and
+  coffee keep the mug (grocer stays in the row, behind the cart row before it). A chosen icon still
+  wins. CHANGELOG's Groceries and Eating out line now names the meals.
+- **Tests:** `CategoryIconResolve.test.ts` (the real `getCategorySvg`: ten meal names draw
+  utensils; Coffee, Cafe and Food the mug; Heating and Seat covers not utensils; a chosen icon on
+  Restaurant wins) and `CategoryIcon.test.ts`'s copy of the table (Restaurant and Dining).
+- **An import gives a new category the same icons** (`worker/src/routes/imports.ts`
+  `getCategoryIcon`). When `/api/import/execute` created a category, its food row stored `coffee`
+  for groceries and every meal, and a stored icon counts as chosen: a Restaurants made by an
+  import while signed in kept the mug, while local-first's import stores `tag` and the name
+  matching draws utensils. The row is split as `CategoryIcon.tsx` splits it: `/grocer/` the cart,
+  the meals (with "eat" and "eating" only as words) `utensils`, food, cafe and coffee the mug.
+  Categories an earlier import made keep the icon it stored. CHANGELOG's line says so.
+- **Tests:** `import-dedup-categories.test.ts` ("gives a new category the icon the app draws for
+  its name"): Groceries, Restaurants, Work lunches, Coffee and Heating through a real import.
+- **The no-kind state says it once** (visual pass 3a-2, N7). With a name that suggests no kind,
+  the dialog said "needed every month" three ways: the Kind field's empty choice ("None yet:
+  counts as needed every month"), and the words under the box ("Ticked because it has no kind
+  yet. ..."), which also read oddly. The empty choice now reads "None yet" when nothing gives a
+  guess ("From the name: X" and "From the parent: X" stay), and the words under the box "Ticked
+  while it has no kind. Untick it if this one isn't needed every month." The Kind help for that
+  state ("What this category holds. The name doesn't suggest one, so pick the closest.") is
+  unchanged.
+- **Tests:** `categoryKindField.test.tsx` ("None yet" in both places it was asserted; with no
+  kind, of the empty choice, the Kind help and the words under the box only the last says "needed
+  every month"; the new guess words).
+- **Ask again's 44 px stay clear of the chips** (found while measuring W7). With its negative
+  margins, Ask again's hit area reaches 13 px above its line; beside a short household line at
+  390 ("1 adult, no children.") its top edge (y 560.3) reached 3 px into the Children chips above
+  (bottom y 563.3), where the chips, positioned, took the taps: 20 px of its width answered a chip.
+  At the phone width the status line now starts 14 px under the chips (`.note`, was 10): the
+  chips end at y 559.3, the button's top edge is its own across its whole width, and its hit area
+  at its centre is 44 px (y 560 to 604). The region's wrapped line keeps its 7.1 px.
+- **Tests:** `onboarding.spec.ts` (the edge-tap test answers both questions in full, so the
+  household's button sits beside its line under the chips, and checks no Ask again overlaps a
+  chip).
+- **"Ask again" is "Remove answer"** (visual pass 3a-2, N9). In Settings the button clears the
+  answer and asks nothing at that moment; the question comes back only as an unanswered one. Its
+  visible label is now "Remove answer" ("Clear answer" could read as "a clear answer"). Test ids
+  (`settings-space-*-ask-again`), the `AskAgain` component, `onAskAgain` and `.askAgain` keep their
+  names; comments and test names that named the label say "Remove answer". After a removal the
+  status line still says what happens now: the region's reason line ("Not answered yet. Compared
+  with the EU average, going by your base currency, EUR.") and "Not answered yet." for the
+  household. The wider label still sits beside the household's short line at 390 (its words from
+  x 167 to x 262) and under the region's wrapped line, 7.1 px down; at 1280 both sit beside
+  their lines.
+- **Tests:** `AboutThisSpace.test.tsx` (both buttons read "Remove answer"; the region's reason
+  line after a removal), and the renamed tests in `onboarding.spec.ts`, `AboutThisSpace.test.tsx`
+  and `guidanceAnswersStore.test.ts`.
+- **The questions' lead names them and sits with them** (visual pass 3a-3, A). "Both are
+  optional." sat halfway between the fields and "Where do you live?" (14 px each way, 17.3 and
+  18.3 px between the text), so "Both" could mean Profile name and Base currency. It reads "Both
+  questions are optional. Change them later in Settings.", one line at 390, 375 and 1280 (320 px
+  of text in a 352 px box at 390, 337 at 375). `.questionsLead` (`margin: 6px 0 -6px`) gives it 20
+  px from the fields and 8 px to the first question (23.3 and 12.3 px between the text); the
+  margins cancel out, so Children's legend stays at y 733-751 at 390x844.
+- **Tests:** `onboarding.spec.ts` ("the questions' lead names them, on one line, nearer the
+  questions than the fields": its words, one line and less room below than above at 390x844,
+  375x667 and 1280x800), and the lead's words in `onboardingForms.test.tsx`.
+- **The fade says "more below" only while there is** (visual pass 3a-3, B). `readMoreBelow`
+  (`OnboardingWizard.tsx`) compared the visible bottom with the middle's whole scroll height, so a
+  step stopped inside the middle's bottom padding (14 px on a phone, 18 px wider) still faded its
+  last 20 px: tapping through the questions at 390x844 left the middle 14 px short of its end, the
+  picked Children chip at y 726-770 against a bottom at 770, its lower half faded. It compares with
+  where the step ends now, the scroll height less the bottom padding `window.getComputedStyle`
+  reads (half a pixel's slack, so one pixel of the step below still fades). `.body` has
+  `scroll-padding-bottom: 20px`, so a control brought into view stops above the fade: the same taps
+  now leave the middle at its end, the chip at y 712-756 and nothing faded. At 375x667 the taps
+  already reached the end.
+- **Tests:** `onboarding.spec.ts` ("the fade is on only while the step goes on below, and a row
+  brought into view stops above it", 375x667): no fade with the visible bottom at the step's end
+  or one pixel short of the scroll end, a fade with one pixel of the step below, and the last
+  region chip brought into view from the top ending 20 px or more above the middle's bottom.
+- **Each "Remove answer" says which answer it removes** (visual pass 3a-3, F). About this space's
+  two buttons had the same name and nothing else, so a screen reader's list of buttons gave
+  "Remove answer" twice. Each question's legend has an id (`<prefix>-region-question`,
+  `<prefix>-household-question`, in `SpaceQuestions.tsx`) and its button points at it with
+  `aria-describedby`: "Remove answer", described as "Where do you live?" or "Who does this space
+  cover?". The visible label and the test ids are unchanged.
+- **Tests:** `onboarding.spec.ts` ("each "Remove answer" is described by the question it clears":
+  both buttons' accessible name and description as Chromium computes them) and
+  `AboutThisSpace.test.tsx` (what each button's `aria-describedby` points at).
+- **CHANGELOG: the meal line has its verb** (visual pass 3a-3, E). "and one named for a meal a
+  knife and fork" reads "and one named for a meal shows a knife and fork"; the rest of the line is
+  unchanged.
+- **The benchmarks** (`shared/guidance/benchmarks.ts` and `benchmarks.json`): the official figures
+  a person's numbers are set beside, for eleven metrics and five regions. The JSON is the guidance
+  research's file, shipped whole: 164 bands, each with its edges, source URL, year and strength;
+  the references the copy quotes; the gaps (a metric a region has no figure for, and why); a
+  derivation per metric and region; and the sources. Three changes from the research copy: it
+  cited the app's own plan as a source at a `file://` path on the machine it was written on, so
+  that source and its citations (15 bands, 5 derivations) are left out; the five cushion
+  derivations, which credited that plan with their edges, name the sources they keep instead; and
+  it is formatted as the repo's JSON is, the data otherwise the same. `bandFor` takes the metric,
+  the region, the value
+  and `{ tenure, hasHousingLoan }`, and answers the band the value falls in, or null for a gap, a
+  value that is not a number and one below what the metric can be; a tenure without rows of its
+  own reads as not given (the UK's mortgage row), and no answer as no housing loan. Beside it:
+  `bandsFor`, `referencesFor`, `gapFor` (the file's stated gap, or a borrowing the app does not
+  use), `derivationFor` and `sourceFor`. Two decisions are written down here: `BAND_RULE` (D5:
+  typical runs from 0.75 times the lowest group average to 1.25 times the highest, and the savings
+  rate is the official rate plus or minus 5 points), which records the rule the research's
+  generator drew the file's bands with and redraws nothing, and `BORROWED_BANDS_USED` (D4 and D9:
+  the UK's subscription count for the euro regions and Croatia's debt-payment lines for Germany and
+  the EU are used and named as borrowed; the euro regions have no subscription-spend band, the UK
+  no debt-payment band). `benchmarks.ts` is the only module that imports the JSON, and nothing
+  imports `benchmarks.ts` yet, so no chunk of the app carries it.
+- **Tests:** `guidanceBenchmarks.test.ts`: the file (every section, an https source and a year on
+  every figure, citations that resolve, no path on anyone's machine); bands or a stated gap for
+  every metric and region; no overlap or hole for any household a metric's rows tell apart, probed
+  at and either side of every edge; a table of what each region `chooseRegion` can pick gets; the
+  UK's tenure rows and the 45% line with a housing loan; D4 and D9 (every borrowing listed, the
+  lender named, a "no" leaving a gap that says why); D5 (every band the rule drew, subscriptions
+  included, held to it); the values of the three people in the research's examples landing in the
+  bands it gave them; and who reads the file (only `benchmarks.ts` imports the JSON, and nothing in
+  `shared/guidance/` imports from outside `shared/`).
+- **A person's numbers** (`shared/guidance/facts.ts`, `guidanceFacts`), worked out on the device
+  from what the app holds, with the same code in both runtimes. The window is the last twelve
+  tracked months before this one (fewer when there are fewer; this month is left out while it is
+  under way), and an average needs three of them (`MIN_MONTHS_FOR_AVERAGES`). Income is income less
+  deductions and spending is expenses (`flows.ts`), in the base currency, less the expenses filed
+  under a category that holds transfers (`holdsTransfers`), which are money moved, not spent; own
+  income leaves out the categories the person marks as support they expect to stop. Essential
+  spending goes by
+  `essentialOf`, and spending with no category counts as needed too (`unsure` says how much was
+  counted that way). Every account is read at its balance today: the stored balance less what the
+  entries dated after today moved (`accountsToday`). Liquid money is savings and cash at that
+  balance and the lowest total the current accounts ended a day on in the last 30 days (today and
+  the 29 before it), read back together as one pool through the entries (`balanceMoves` books an
+  entry as local-first's `computeBalanceDeltas` does), each account from zero up on each day, and
+  null without a savings, cash or current account. Invested is the investment accounts or the
+  portfolio, whichever holds more, plus savings held elsewhere. Debts are the loans
+  with a balance left, at the rate their schedule charges for the next payment, and credit cards
+  and current accounts below zero whose balance is carried, unless the person says they carry no
+  balance on either; a debt is expensive from `EXPENSIVE_DEBT_RATE` (10%), and a card or overdraft
+  with no rate given is too. A card's payment is what went into it, a month on average over the
+  last three full months, and a card it covers is cleared each month and carries none. The
+  savings rate is worked out with and without the loan principal the window's installments and
+  extra payments repaid.
+- **The seven circles** (`shared/guidance/circles.ts`, `placeCircle`). A circle is reached when the
+  one inside it is and its own required checks are met, so the current circle is the first one not
+  reached, and a hard month moves a person inward. A check is met, not met, or not known yet, and
+  says why it is not known (`unknown`): the accounts could not be read, or nothing on file says yet
+  (too few months, no account money could be in, a question not answered). Until a year is on file
+  the placement is provisional and has no next step of its own (Getting started's lead); after that
+  the next step is the current circle's first check not met, and says when that check is not
+  known. A required check not known leaves the placement provisional too. Solid ground checks free
+  money first, in Germany,
+  Croatia, the UK and the US (`FREE_MONEY_REGIONS`), then debt at 10% or more, then three months of
+  essentials; six months is on its checklist, not required. Room to choose counts liquid money
+  beyond six months towards two years of spending; Work optional is invested money that pays a year
+  of spending at the person's withdrawal rate (`targetFromSpend`); More than enough waits for the
+  person's own number. The yearly-bills set-aside guidance.md lists for Solid ground is not checked:
+  nothing links a yearly bill to a set-aside yet (guidance.md's own gap table says so). Decisions,
+  each in one place: D1 `CIRCLES`, D2 `CIRCLE_NAMES`, D10 `CLEAR_PICTURE_MONTHS` (12, read by the
+  first circle's check and by the facts' `firm`), D11
+  `MORE_THAN_ENOUGH_DEFAULT` (null), and D6 `LOAN_PRINCIPAL_IS_SAVING` in facts.ts (true: principal
+  repaid counts as kept). The cushion lines (`FIRST_CUSHION_MONTHS` 1, `FULL_CUSHION_MONTHS` 6) and
+  `EXPENSIVE_DEBT_RATE` are held by tests to the benchmarks' band edges in every region, so the app
+  still imports nothing from `benchmarks.ts`. Nothing shows the circles yet.
+- **Getting started can suggest a cushion** (`shared/orientation.ts`, rule `cushion`, in the slot
+  its comment kept between heavy-month and loan-payoff). "Build a one-month cushion" shows while the
+  money a person can reach covers less than a month of essential spending (`cushionOf`, the facts'
+  own window, essentials and liquid money), and links to Goals. The reason counts whole days, never
+  an amount: "The money you can reach covers 28 days of what you need.", "1 day", and "doesn't
+  cover a day" below one. `OrientationFacts.cushionMonths` is null with fewer than three tracked
+  months or no account money could be in, and the step does not show then.
+- **The achievements snapshot holds the accounts** (`achievementsStore.ts`), read beside the other
+  lists, kept to the active profile, and null when the read fails, so the badges are worked out all
+  the same. That is one more request per evaluation. Getting started reads them from the snapshot
+  (`core/orientation.ts`), so it still computes only while it is visible on Dashboard, after paint;
+  at 3,000 entries one computation takes about as long as before.
+- **Tests:** `guidanceFacts.test.ts` (the window and a year on file, income and support, the sorted
+  share, essentials with choices, kinds and no kind, a space whose categories have no kind, the low
+  point and its 30 days, future entries, transfers, old type names, `balanceMoves` against
+  `computeBalanceDeltas`, loans at the rate now, cards and overdrafts with and without a rate, a
+  card's payment, invested money, D6, and the lines shared with the benchmarks),
+  `guidanceCircles.test.ts` (the order and names, reaching, provisional, Solid ground's checklist,
+  D11, and a family moved from circle 4 to 3 by a car repair paid from savings),
+  `guidanceExamples.test.ts` (the three people of the research's examples: Mia in circle 1 with 7
+  months and the cushion as her third step, the Leipzig family in circle 4, Jordan in circle 2;
+  where the examples' savings rates differ from the app's, the test says why),
+  `orientation.test.ts` and `orientationFacts.test.ts` (the step's threshold, days, words, link and
+  place), `GettingStarted.test.tsx`, `achievementsStore.test.ts`, `localRows-apiContract.test.ts`,
+  and `tests/orientation.spec.ts`, where the step shows under a month of savings and leaves past
+  one, local-first and signed in.
+- **Current accounts are read back as one pool** (review 3b-1, finding 1). A move between two of a
+  person's own current accounts took the money out of reach for 30 days: each account was read
+  back on its own, so the one the money left was low after the move and the one it reached was low
+  before it. In the app, in both modes, a move of 400 from one bank to another brought "covers 18
+  days" for money that never left the person's hands. The current accounts are now read back
+  together, as guidance.md 3.1 words it ("the lowest current-account balance"): each one's
+  end-of-day balance from zero up, added up per day, and the lowest of those totals. Savings and
+  cash still count at their balance, so money moved in from savings counts from the day the low
+  point passes it, an under-count; reading savings and cash back as well is not built. The
+  read-back covers exactly the last 30 days, today and the 29 before it: an entry on the first of
+  them is no longer undone (finding 13). `balanceMoves` says it follows local-first's booking, and
+  that the Worker books a transfer with no account to go to the other way: older data only, as
+  both runtimes refuse a new one (finding 7).
+- **Tests:** `guidanceFacts.test.ts` (a move between two current accounts, a switch of banks, a
+  salary passed on to a spending account, an overdraft beside another account, money moved in from
+  savings and still held or spent, money put by, and the first of the 30 days) and
+  `tests/orientation.spec.ts` (two current accounts and a move between them leave the step as it
+  was, local-first and signed in).
+- **One balance today for every account the facts read** (review 3b-1, finding 6). Both runtimes
+  store a balance with every entry in it, those dated after today too, and only the current
+  accounts' read-back took those back out. Savings at 600 after a rent of 900 booked for later in
+  the month read as 600, the current account beside it as 1,500. `accountsToday` now takes the
+  entries dated after today back out of every balance the facts read: savings, cash and current
+  accounts, cards and current accounts below zero, and investment accounts. A rent booked ahead no
+  longer reads as an overdraft either. The comments that called the stored balance "now" say what
+  it holds.
+- **Tests:** `guidanceFacts.test.ts` (a rent booked ahead on a current account, savings and cash;
+  a card's payment booked ahead and an overdraft that a booked rent made; an investment account
+  with money booked into it).
+- **Money moved is not spending** (review 3b-1, finding 2). An expense filed under Transfers, where
+  the bank import's worldwide rules file a transfer whose other account they cannot tell, counted
+  as spending and, as Transfers has no kind, as needed every month. 1,000 a month put by at a bank
+  the app does not hold, beside 400 of real needs, read as 1,400 needed and a cushion of 21 days
+  instead of 2.5 months. `holdsTransfers` (`shared/guidance/kinds.ts`) is now the one rule for what
+  holds transfers: a transfer or account category, a category named as the import's rule sets
+  file transfers (`TRANSFER_CATEGORY_NAMES`: Transfers; the Croatian set has none), and a category
+  filed inside one. The facts leave the expenses filed under one out of spending, the needed
+  spending and the sorted share, and so out of the cushion, circle 2 and the savings rate, whatever
+  the person ticked for the category. The recurring-payment finder had its own copy of the rule and
+  now uses this one, so it also skips a category filed inside Transfers. Other is unchanged: its
+  name gives it the kind other, so it counts as spending and not as needed, and the Croatian rule
+  set files an unpaired transfer there. Income filed under Transfers still counts as income.
+- **Tests:** `guidanceFacts.test.ts` (1,000 a month under Transfers beside 400 of groceries: the
+  spending, the needed spending, the sorted share, the cushion, the savings rate and circle 2; a
+  transfer and an account category, Transfers in capitals and padded, one ticked as needed, and a
+  category inside Transfers; Other still spending and not needed), `guidanceKinds.test.ts`
+  (`holdsTransfers`, a category inside one, and the list held to the bank import's rule sets: every
+  name on it is one they file under, and every rule that files by the word transfer files under
+  one) and `recurringPayments.test.ts` (a category inside Transfers).
+- **The cushion step says "what you spend" while nothing says what is needed** (review 3b-1,
+  finding 2). In a space whose categories have no kind, such as ones named in a language the guess
+  does not read, every expense counts as needed, and the step said "covers 28 days of what you
+  need" about what was all of the spending. guidance.md 3.1 asks for that figure to be labelled as
+  such. When everything counted as needed was counted only because nothing said otherwise, the
+  facts say so (`unsure.all`), `cushionOf` answers `against: 'spending'`, Getting started carries
+  it as `cushionAgainst`, and the step says "of what you spend". One category needed by its kind or
+  by the person's tick, and it says "of what you need" again. With too few months there is no
+  figure, and `against` is `'needs'`.
+- **Tests:** `guidanceFacts.test.ts` (a space with no kinds, and against what: no kinds, a category
+  the profile no longer has, one with a needed kind, one ticked, too few months, nothing needed),
+  `orientation.test.ts` (the three wordings of what you spend), `orientationFacts.test.ts` (the
+  same spending under Croatian names: "covers 22 days of what you spend") and
+  `guidanceExamples.test.ts` (Mia's step, from `cushionOf`).
+- **A check not known is never a step to take** (review 3b-1, finding 3). With a year on file and
+  the accounts read, the review's person (32,000 within reach, 1,500 needed) is in circle 5 with
+  two years as the next step. When the accounts could not be read, or only an investment account
+  was on file, the same person was placed in circle 3 with "first cushion" as the next step, as if
+  the cushion were known to be short. `placeCircle` now tells a check it could not read from one
+  not met: a check not known says why (`unknown`), `'unread'` when the accounts could not be read
+  and `'not-on-file'` when nothing on file says yet, so a failed read is no longer "no accounts".
+  `next` carries it, so the circles panel (commit 10) can read the accounts again or ask, instead
+  of advising. A required check not known leaves the placement provisional at the circles it could
+  read. A figure read without the accounts (two years, work optional, more than enough) can only
+  grow once they are read: one that reaches its target is met, one below it is not known. The
+  number for More than enough not given is a check not known, so a person at circle 7 without one
+  is placed provisionally and asked for it.
+- **Tests:** `guidanceCircles.test.ts` (the review's three cases from the person's own entries:
+  the full picture, the accounts not read, only an investment account; a figure read without the
+  accounts below and above its target; why each check is not known; free money unanswered asked
+  about without making the placement provisional; the next step's `unknown` on every case it had)
+  and `guidanceExamples.test.ts` (the examples' next steps).
+- **A card paid off each month is not expensive debt** (review 3b-1, finding 4). Every card below
+  zero counted as a carried balance, expensive without a rate, so a card spent on mid-month and
+  cleared at its end held a person at Solid ground with "no expensive debt" as the next step until
+  they answered the card question. guidance.md 3.1 counts a carried balance. Unanswered, a card's
+  entries now decide (`cardCarried`): when what went into it, a month on average over the last
+  `CARD_PAYMENT_MONTHS` full months, covers what it owes today, it is cleared each month and left
+  out of the debts; when its entries go back to the first of those months and do not cover it,
+  its balance is carried; when they do not go back that far, nobody knows yet. Such a card is
+  `carried: null` and `expensive: null` (a rate below the line keeps it cheap either way), and the
+  debt check is not known (`'not-on-file'`), so the next step is the card question, never "pay off
+  expensive debt". The answer, when given, beats the entries: no leaves every card and overdraft
+  out, yes counts every card below zero as carried. An overdraft is carried, as before. Every debt
+  says `carried` now.
+- **Tests:** `guidanceFacts.test.ts` (a card cleared each month, one carrying 2,000, one opened in
+  September, one with no entries, the first of the three months as the edge of enough history,
+  each of the three with either answer, a cheap card, an overdraft, and the debt check for each)
+  and `guidanceCircles.test.ts` (a card too new to say: the card question as the next step, and
+  either answer deciding).
+- **Living off investments is paying your way** (review 3b-1, finding 5). A retiree with no income
+  on file, 3,000 a month spent from a current account that transfers from 2,000,000 invested
+  fill, was held at circle 2 with own income as the next step. Work optional's check (invested
+  money pays for the spending at the withdrawal rate) now meets the own-income check as well, and
+  the check says so (`via: 'work-optional'`); its value and target stay own income and spending.
+  Own income short of spending while the investments could not be read is not known (`'unread'`)
+  instead of a step to take.
+- **Tests:** `guidanceCircles.test.ts` (the review's retiree, from a year of entries, placed at
+  circle 7; the same person with 100,000 invested, held at circle 2; own income with the accounts
+  not read).
+- **Infinity reads above every edge** (review 3b-1, finding 9). With nothing needed every month the
+  cushion is Infinity months (`cushionMonthsOf`), and `bandFor` answered no band for it, as for a
+  value that is no number. It now lies above every edge, in the band open above, so that cushion
+  reads high; only NaN has no band. Every metric's bands in every region have one open above.
+- **Tests:** `guidanceBenchmarks.test.ts` (Infinity in the band open above for every metric and
+  region with bands, high for the cushion in all five; NaN and minus Infinity below a share still
+  none) and `guidanceFacts.test.ts` (a cushion with nothing needed set beside the bands).
+- **Each decision's place controls it** (review 3b-1, finding 10). The facts' `firm` read the
+  badges' year (`YEAR_ON_FILE_MONTHS`), so D10's `CLEAR_PICTURE_MONTHS` did not decide when the
+  circles firm up, though guidance.md section 7 makes that handoff part of D10. It reads
+  `CLEAR_PICTURE_MONTHS` now. D5's `BAND_RULE` draws nothing: the research's generator drew the
+  file's bands with it, outside this repo. Its comment and the module's say so, and a test now holds
+  every band the rule drew to it, subscriptions included, from the published averages they were
+  drawn from, so a different width fails until the file is drawn again. The two phase 3b commit
+  messages that said each decision lives in one place, that D5 lives in `BAND_RULE`, and that the
+  facts are worked out the same way signed in or not were reworded before anything was pushed.
+- **Tests:** `guidanceClearPicture.test.ts` (D10 at six months firms the facts at six, with the
+  badges' year still twelve) and `guidanceBenchmarks.test.ts` (every band drawn from group
+  averages or the savings points, against `BAND_RULE`).
+- **The benchmarks' words name what they mean** (review 3b-1, findings 11 and 12). `gapFor`'s
+  answer for a borrowing the app does not use named the lender by its id ("the app does not borrow
+  HR's"); it names it as the copy does, from the file's `inCopy`: "Croatia's", "the UK's". The five
+  cushion derivations still said "Edges come from the method", a source the file no longer holds.
+  Each now says where the edges come from, the r/personalfinance wiki (one month while paying debts
+  above 10%, three to six months in full), and names the region's figures that give context:
+  Eurostat's for the EU and Croatia, Destatis for Germany, the ONS for the UK and the Federal
+  Reserve for the US.
+- **Tests:** `guidanceBenchmarks.test.ts` (both lenders by name; every cushion derivation names
+  each source it keeps, and no method).
+- **The answers record holds the circles' questions** (`shared/guidance/answers.ts`): nine fields,
+  each checked on write in both runtimes; a field another build wrote is kept; free money keeps the
+  region it was asked for and the two amounts their currency, and the facts read each only while it
+  still applies. The fields are `supportCategoryIds`, `carriesCardBalance`, `freeMoney`,
+  `setsAsideYearly`, `savedElsewhere`, `enoughPerYear`, `tenure`, `kindsAsked` and `savingsGoal`;
+  `factsAnswersOf` gives the facts their part. Free money gains `partly`, the US match's "Some of
+  it", which is the step still to take. A Worker restore gives categories new ids, so it moves
+  `supportCategoryIds` with them (`withSupportCategoriesMoved`); local-first's restore keeps ids.
+- **Tests:** `guidanceAnswers.test.ts` (each field read, refused when malformed, merged and
+  cleared; free money only in its region, the amounts only in their currency; the support list
+  across new ids), `guidanceCircles.test.ts` (`partly` not met), and the contract scenarios in both
+  runtimes (`settings`: the record with every field, one refusal per field; `backup`: the support
+  answer on the categories it named after a restore).
+- **Benchmarks gate** (`frontend/src/core/guidanceGate.ts`): `benchmarksShown()` is false in the
+  production build unless `VITE_ENABLE_BENCHMARKS=true`, as account deletion's gate. The free-money
+  check, setup's region and household questions and the cards that follow are built behind it.
+  CHANGELOG lines for gated pieces are kept below until it opens. With the gate closed,
+  `placeCircle(facts, { freeMoney: false })` leaves the free-money check out of Solid ground (never
+  required, so no circle moves), "Name your space" asks neither question and saves no answer (no
+  `skipped` region), and Settings has no About this space card until the circles' own questions
+  join it. A function, not a module constant, so a test can `vi.stubEnv('MODE', 'production')`.
+- **Tests:** `guidanceGate.test.ts` (production, the override, every other mode),
+  `guidanceCircles.test.ts` (free money left out moves no circle, for every answer and cushion),
+  `onboardingSpaceAnswersFail.test.tsx` (production asks neither question and writes no record)
+  and `settingsAboutThisSpace.test.tsx` (no card in production).
+- **Solid ground checks yearly bills** (`circles.ts`): with an active yearly entry on Bills, an
+  optional check after the debt check, its amount the yearly total over 12, met when the person says
+  they set it aside. Optional, so no one's circle moves. The facts take the profile's Bills entries
+  (`GuidanceInput.bills`) and count the active ones of both types with a yearly frequency
+  (`yearlyBillsOf`: count, a year of them, and that over 12), and the answer `setsAsideYearly`.
+- **Tests:** `guidanceFacts.test.ts` (which entries count), `guidanceCircles.test.ts` (shown only
+  with yearly bills, its place after the debts, met, not met and not known; a person in each circle
+  and one past the seventh keep their place whatever the answer) and `guidanceExamples.test.ts` (the
+  family in Leipzig sets EUR 64 a month aside for EUR 768 of yearly bills and stays in the fourth).
+- **Guidance store** (`frontend/src/core/guidance.ts`): region, facts and placement from the
+  achievements snapshot, the profile's holdings and its retirement settings, worked out after paint
+  and only while Progress or Dashboard is on screen, once for both pages. The store reads the
+  answers record and the withdrawal rate itself from `GET /api/settings`, again after each settings
+  write: a settings write starts no badge evaluation (`dataChangedEvent.ts`), so a copy carried in
+  the snapshot would stay as it was before every answer. Holdings come from
+  `GET /api/portfolio/holdings`, the profile's rows at what was paid, again after each portfolio
+  write; a reread that changes nothing works nothing out. `guidanceView()` answers null while the
+  view on hand is another profile's. The snapshot gains `profileId` and loans with `id` and `name`;
+  `BillSchema` keeps `frequency`, `is_active` and `type`, which `z.object` dropped; `afterPaint`
+  moves to `core/afterPaint.ts` for Getting started and the store.
+- **Tests:** `guidanceStore.test.ts` (nothing worked out off screen or for a page left before it
+  painted, once for both pages; a new evaluation, a settings write and a portfolio write each
+  followed; a profile switch answers nothing until the new profile's inputs are in; accounts that
+  did not load read as not known; the withdrawal rate where each runtime keeps the plan).
+- **The ledger** (`shared/guidance/ledger.ts`, `nextStep.ts`): row text per circle and state,
+  rounding that never shows a check as met early, and the next step: Getting started's first step
+  until a year is on file, then the current circle's first check not met. Shares floor below 100%
+  until met, gaps round up to a whole unit, months floor to one decimal and days to whole days;
+  nothing marked as needed reads as such, never Infinity. "Then:" names the next two steps, one
+  step for checks that wait on the same thing (accounts that did not load, an account to add), and
+  never the own-number question before Work optional is reached, as row 7 says. A check not known
+  is asked or read again: the card, yearly-bills, free-money (gate open) and own-number questions
+  are answered on the card, saved through `saveAnswers` and handed to the store with
+  `takeAnswers`; Reload runs the badge evaluation again. The store adds `rows`, `status` and
+  `next`, and reads Getting started's steps only while less than a year is on file (their
+  subscription scan reads every entry). `formatWholeCurrency` (`core/api.ts`) writes the whole
+  units; `CircleGlyph` draws each ring from the theme's new `--ring-a`, `--ring-b`, `--ring-track`,
+  `--band`, `--band-mid` and `--circle-now`. `#progress/<n>` (`PAGES_WITH_PATHS` gains `progress`,
+  `core/progressRoute.ts`) opens a circle in place of the page, with focus on its heading, and
+  Escape or "All seven circles" goes back with focus on its row; the list stays mounted under it.
+  ProgressPage.module.css's controls grow to 48 px (dismiss, Share, Show more) and its 10 px and
+  11.5 px text to 12 px.
+- **Tests:** `guidanceLedger.test.ts` (every row and state, 0, 1, 3, 11 and 12 months, not read,
+  no account, Infinity, via investments, circle 7 unset and set, all reached, the rounding),
+  `guidanceNextStep.test.ts` (Getting started's step until a year is on file, every check and kind
+  of not known once it is, free money only with the gate open, "Then:" without repeats),
+  `guidanceStore.test.ts` (rows, status and step in whole units; Getting started's step before a
+  year), `circleGlyph.test.tsx`, `circles-phone.spec.ts` (at 390 px each circle's number is 12 px
+  or more as drawn and each row a 48 px target; nothing scrolls sideways at 320 px),
+  `progressRoute.test.ts`, `hashRoute.test.ts`,
+  `progressCircles.test.tsx` (rows, links and their names, the card's questions saved and handed on,
+  a failed save, the amount refused at 0, Reload, the circle view's focus in and out) and
+  `circles.spec.ts` `@smoke` in both modes (a year in Solid ground; the circle view by its row,
+  Escape and a reload).
+- **Circle view** (`shared/guidance/circleView.ts`, `CircleView.tsx`): each circle's checks in the
+  method's order, met, not yet or not known yet, with what a check not known waits on (an answer,
+  the accounts read again, three tracked months, or Work optional for the own number), and the
+  person's numbers behind them: the months the averages cover, and where the money in reach is
+  (`liquidPartsOf` in `facts.ts`: savings, current accounts at their 30-day low and cash, adding up
+  to `liquidOf`). The questions that feed the circles are asked where each answer is first needed
+  (`circleQuestions`): support per income category in Paying your way; essentials per spending
+  category in the cushion circles while some spending counts as needed only by default, saved as
+  one `asOneWrite` (each category's `essential` where it changes or was a default, then
+  `kindsAsked`); the card question while a card or an overdraft is below zero; yearly bills; free
+  money with the gate open; savings held elsewhere in Room to choose; and the own number once More
+  than enough is the circle worked on. A question Your next step asks on the view is asked there
+  only, and a choice that does not save goes back. Settings, About this space shows in every build
+  again: the circles' answers, each changeable or removed so its circle asks again, with setup's
+  region and household questions only while the gate is open. `facts.ts` adds `windowCategories`
+  and `uncategorisedEntries`; the view carries its money `words`; the chips and the amount form
+  move to `questionParts.tsx`.
+- **Tests:** `guidanceCircleView.test.ts` (every check's words and state, the waiting reasons, the
+  numbers per circle, which questions each circle asks), `guidanceFacts.test.ts` (the money in
+  reach by kind, the window's categories, entries without one), `progressCircles.test.tsx` (checks
+  and numbers on screen, the card question under its check and not twice, a failed save put back,
+  support keeping ids off screen, the essentials write set), `settingsAboutThisSpace.test.tsx`
+  (production keeps the answers and holds back the space questions; change, remove, a categories
+  read that fails), and `circles.spec.ts` (the card question answered in Solid ground, kept
+  through a reload and listed in About this space, both modes, `@smoke`).
+- **Benchmark cards** (`shared/guidance/cards.ts`, `BenchmarkCards.tsx`): with the gate open, How
+  you compare sits beside the checks in Breathing room, Solid ground and Room to choose
+  (`CARD_CIRCLES`), in a second column from 1024 px, under the region the figures are for and a
+  Change link to Settings. Five metrics: the savings rate (circle 5), the cushion in months and the
+  unexpected bill (3 and 4), each debt's rate against what new loans, cards and overdrafts cost (4),
+  and debt payments as a share of income (4). Each band reads both ways with the person's number in
+  the title; a band borrowed from another region names that region, a region with no official
+  figure says so, and "Where this comes from" gives the band rule, each source with its publisher
+  and year, and the strength of the evidence. A card on fewer than 12 months says it firms up at 12.
+  The unexpected-bill card shows only while the base currency is the region's: its test is an
+  amount, and the Worker has no exchange rates to convert it. `benchmarks.json` and the cards load
+  as their own chunk, by `import()` from the circle view on the first card, so a closed gate never
+  fetches them. `facts.ts` adds each loan's last payment month (`Debt.ends`) and the window's
+  heaviest month with its largest category (`heaviestMonth`); `benchmarks.json`'s savings-rate
+  formula says which income and spending it counts.
+- **Tests:** `guidanceCards.test.ts` (every card's bands both ways, borrowed and missing figures,
+  the cash-led and principal-led savings lines, the unexpected bill only in the region's currency,
+  debt rates above, close to and below the market, months short of a year), `guidanceFacts.test.ts`
+  (a loan's last payment month; the heaviest month, the earliest of equals, its largest category or
+  none), `benchmarksChunk.test.ts` (the static import graph from the entry, Progress and Dashboard
+  never reaches the benchmarks; the circle view loads them with `import()`),
+  `progressCircles.test.tsx` (cards beside the checks only with the gate open, and only in circles 3
+  to 5), `circles.spec.ts` (the cushion card in Solid ground, local-first), `circles-phone.spec.ts`
+  (each source a 48 px target once Where this comes from opens, at 390 px) and the release case
+  `s17-benchmarks-gate.spec.ts` (a production build shows the circles, holds back How you compare
+  and the free-money check, and never fetches the cards' chunk; it fails on a build with the gate
+  open).
+- **Spending shares** (`shared/guidance/cards.ts`, `facts.ts`): with the gate open, Paying your way
+  compares groceries, eating out and transport as shares of spending, and housing (the housing and
+  utilities kinds) as a share of take-home pay. `spendingByKind` in `facts.ts` is each kind's
+  spending a month over the window, by the kind each category goes by (`effectiveKind`: its own,
+  its parent's, or the one its name suggests). The share cards wait for 90% of the spending to have
+  a category (`SORTED_SHARE`, the file's minimum); until then one card says how much has one and
+  links to the entries without. The housing card asks "How do you live?" while it has no answer
+  (`tenure`; social housing is a choice of its own only where the UK is compared with): it picks
+  the UK's rows and the renter lines (Croatia's market renters, Germany's renters, US renters), and
+  a mortgage counts as a housing loan for the debt-payment lines. About this space lists the answer
+  while the gate is open. `benchmarks.json` gains the overburden shares Eurostat publishes for the
+  EU, Germany and Croatia (everyone, and people renting at market rates, 2025), which the high band
+  quotes. A card can ask a question (`ask`) and can have no sources yet (`where: null`).
+- **Tests:** `guidanceCards.test.ts` (each share and housing band per region, renters, the UK by
+  tenure, the overburden line, the sorted minimum, "about half" held to its figure),
+  `guidanceFacts.test.ts` (spending by kind: a category's own, its parent's and its name's kind; no
+  category, no kind and money moved in none; none without an average), `progressCircles.test.tsx`
+  (Paying your way's four cards, the tenure question on the housing card only, saved and handed on,
+  a failed save said beside the card, the UK's choices), `settingsAboutThisSpace.test.tsx` (the
+  tenure answer held back in production, changed and removed in other builds) and `circles.spec.ts`
+  (the housing card's question answered local-first and kept in About this space).
+- **Subscription cards** (`shared/guidance/cards.ts`, `facts.ts`): with the gate open, Paying your
+  way opens with the active subscriptions on Bills (type `subscription`, not paused, above 0;
+  `subscriptionsOf`), counted per adult and costed a month with `monthlyEquivalent`, which moved to
+  `shared/subscriptionMath.ts` (the frontend module re-exports it). The count is compared
+  everywhere, the euro regions with the UK's figure and a tag saying so; the spend only in the UK
+  and the US, and only while the base currency is the region's. The card shows the higher of the
+  two bands, from 3 tracked months, and says it firms up at 12, once the yearly ones have come
+  round (`benchmarks.json`'s minimum). The euro regions' card says only the count is compared: Bills keeps no record of what
+  was active when, so there is no earlier spend to set beside today's (D4's own trend). While no
+  adult count is on file the card counts one and asks "Who does this space cover?" on itself; the
+  question is setup's (`HouseholdQuestion`, now its own component in `SpaceQuestions.tsx`), and a
+  chip whose save fails goes back to the answer before.
+- **Tests:** `guidanceFacts.test.ts` (what counts as an active subscription and its monthly cost;
+  none without the bills), `guidanceCards.test.ts` (guidance.md 5.2's three US cards, the higher of
+  the two bands, the spend only in the region's currency, the euro regions' borrowed count and
+  their note, per adult with 2 and with 3 or more, the quoted figures held to the file, none before
+  3 months and provisional under 12),
+  `progressCircles.test.tsx` (the household question on the card, saved and gone once answered, a
+  failed save puts the chip back).
+- **Dashboard** (`frontend/src/features/Dashboard.tsx`): Your next step takes Getting started's
+  place (`components/guidance/DashboardNextStep.tsx`) once its record is hidden, there is none, or a
+  year is on file (`facts.firm`); nothing is written, so a year that lapses brings Getting started
+  back. It waits until both the circles and the record are known (`gettingStartedKnown`), so it
+  never shows one and swaps it for the other. The card is `NextStepCard` with `compact` and "See all
+  seven circles" (48 px) to `#progress`. The `savings-gauge` widget replaces the `savings-rate` tail
+  widget at a fixed spot under the metrics grid, on by default; `loadWidgetPrefs` splices it into
+  saved layouts as visible and now drops ids this build no longer has, `savings-rate` among them.
+  The gauge reads `facts.savings` over the last 12 tracked months, not the period bar, and the ring
+  says how many months it covers; the title and the D6 principal line moved to
+  `shared/guidance/savingsWords.ts`, which the savings card uses too. The goal is `savingsGoal` in
+  the answers record, set on the gauge; a browser goal other than 20 (`localStorage.savingsGoal`)
+  moves to the first profile that opens Dashboard without one and is then cleared, and a failed
+  save keeps it for the next visit (`core/savingsGoal.ts`). Behind the gate: the band arc, the
+  "Typical in {region}" legend, the savings card's sentence for the band (`savingsBand` in
+  `cards.ts`, loaded with `import()` only while the gate is open) and the region note; without a
+  goal of its own the band is the target, and with the gate closed 20% is, as before.
+  `SavingsRateCard` is gone; `OrbitGauge` gains a band arc, a value text and an aria label, and its
+  caption renders at 12 px or more.
+- **Tests:** `dashboardWidgets.test.ts` (the gauge after the metrics and on by default, unknown ids
+  dropped from an older layout), `savingsGoal.test.ts` (the browser goal moves once, 20 and junk are
+  cleared, a profile's own goal stays, a failed save keeps it), `SavingsGauge.test.tsx` (the year
+  from the facts and the ring's months, own and default goals, below zero, the principal line,
+  provisional and waiting, setting a goal, a goal out of range, a failed save; the band, sentence,
+  region note and band target with the gate open, none of it closed), `SavingsGaugeGate.test.tsx`
+  (the cards chunk is never loaded while the gate is closed), `DashboardNextStep.test.tsx` (the
+  four rows of the table, a lapsed year, nothing until both are known), `guidanceCards.test.ts`
+  (`savingsBand`; the card's first paragraph is the band's sentence in every region and band),
+  `benchmarksChunk.test.ts` (the gauge loads the cards with `import()`),
+  `dashboardFollowsWrites.test.tsx` (the gauge drawn once, under the metrics),
+  `circles-phone.spec.ts` (the next step and the gauge at 390 px: 48 px targets, the region note's
+  Change among them, and 12 px text), and E2E
+  `dashboard-circles.spec.ts` (`@smoke` signed in: Getting started until a year is on file, then Your
+  next step and its link to Progress; both modes: the gauge keeps to the year when the period
+  changes, and a browser goal moves to the profile once) and `orientation.spec.ts` (Your next step
+  after Getting started is hidden).
+- **Advice circles** (`frontend/src/core/achievements/advice.ts`, `ProgressAdvice.tsx`): each kind
+  maps to a circle (`ADVICE_CIRCLES`: uncategorised and streak-at-risk Clear picture; in-the-red,
+  budget-drift and unbudgeted-category Paying your way; goal-pace Breathing room). The card shows
+  it as a link, "Why: Paying your way", to `#progress/<n>`, a 48 px target.
+- **Tests:** `advice.test.ts` (each kind's circle, from cards `buildAdvice` makes) and
+  `progressAdvice.test.tsx` (each card's Why names its circle and opens it).
+- **Progress tour** in `SPOTLIGHT_TOURS` (`frontend/src/core/spotlightStore.ts`), after Dashboard's:
+  `progress-header`, `progress-next-step` and `progress-circles`. Both new anchors render in every
+  state: Your next step has a pending state and a state for every case, and the ledger lists its
+  seven rows before the circles are worked out. A tour started on a circle's view goes back to the
+  list, as the Loans tour does from a loan, and leaves focus where it is.
+- **Tests:** `spotlightStore.test.ts` (the tour's three anchors in order, on Progress),
+  `progressCircles.test.tsx` (the tour takes a circle's view back to the list, a circle opened under
+  it closes again, and focus stays off the row's link) and `TourSelectionModal.account.test.tsx`
+  (sixteen tours).
+- **Getting started's facts are worked out once per evaluation** (`frontend/src/core/orientationOnce.ts`,
+  `orientationFactsOnce(snap)`). While less than a year is on file, Dashboard shows the Getting
+  started card and the circles' store reads Getting started's steps for Your next step: each worked
+  the facts out after paint for the same snapshot, so the subscription scan ran twice. Both now read
+  them through a `WeakMap` keyed by the snapshot object, which every data change replaces. The
+  scan's window ends at the first reader's clock. Node, ms per evaluation at 3,000 rows, the card
+  and the store on one snapshot, median of 3 rounds: 199.3 before and 100.8 after at seven months
+  on file, 198.4 and 99.2 at eleven; the card alone is 96 to 104 either way.
+- **Tests:** `GettingStarted.test.tsx` (the card and the store's `workOut` on one evaluation work the
+  facts out once, whichever reads them first, and the store's next step is the card's first step).
+- **Back on Progress from another page moves no focus** (`frontend/src/features/Progress.tsx`).
+  The hashchange handler returned early on another page's address, so `opened` kept the circle that
+  was open: open circle 4, go to Dashboard, come back to `#progress`, and the page focused row 4
+  and scrolled to it. Another page's address now closes the circle (the address decides what opens
+  on the way back: `#progress/<n>` that circle, `#progress` the list), and a row takes focus only
+  when the hashchange's `oldURL` was that circle's own view.
+- **Tests:** `progressCircles.test.tsx` (that path moves no focus; the circle closes while another
+  page is on screen and its address opens it again; the test helpers fire hashchange with both
+  addresses, as a browser does, and the Change link's navigation lands inside its own test).
+- **The circles as drawn: the head, the links in running text and "You're here"**
+  (`CircleLedger.module.css`, `CircleView.module.css`, `SavingsGauge.module.css`,
+  `NextStepCard.module.css`, `dawn-light.css`, `orbit-dark.css`). The ledger's `.pill` carried its
+  row's grid placement, so the circle view, which borrows the pill's look, put it in a row of its
+  own under the head at 1280: the look is now `.pill` and the ledger row's placement `.pill-place`.
+  The inline Change links (the circle view's `.inline-link`, the gauge's `.inline`) were 48 px
+  `inline-flex` boxes that pushed their line apart; they are `inline-block` with
+  `padding-block: calc((48px - 1lh) / 2)` and the same negative margin, so the target stays 48 px
+  and the line keeps the paragraph's spacing. "You're here" reads two new per-theme tokens,
+  `--circle-now-bg` and `--circle-now-line`: light keeps its 18% tint, now mixed against
+  `--card-bg` so it is opaque; dark mixes 30% against the card in srgb with a 60% line (18% into
+  transparent read grey-violet over navy, and in oklab this orange and this navy meet near grey).
+  The text on it is 14.8:1 in light and 7.8:1 in dark. The circle view's title is `fit-content`,
+  so its focus outline is as wide as the name, and the check rows, the "Then:" line and the
+  gauge's goal line wrap with `text-wrap: pretty`.
+- **Tests:** `tests/circles-layout.spec.ts`, new and local-first (at 1280 the pill sits on the
+  glyph's row and the heading is as wide as its words; at 390 the paragraphs holding Change space
+  their lines by their own line height, with Change at least 48 by 48; in both themes the pill is
+  opaque, 4.5:1 or more and warm). `tests/circles-fixture.ts` holds the workspace it shares with
+  `circles-phone.spec.ts`.
+- **Behind the benchmarks gate: the gauge says the band once, and no debt payments compares
+  nothing** (`SavingsGauge.tsx`, `shared/guidance/cards.ts`). With no goal of their own, the
+  gauge's goal line read "No goal of your own yet. Typical in the EU: 9.3% to 19.3%." under a
+  legend that already says the band; it reads "No goal of your own yet.", with Set a goal under it.
+  `debtPaymentsCard` with payments at 0 kept its band tag ("Below typical"), its bar at 0% and a
+  "Plan your next goal" step; it now has no tag (band, borrowed or missing line), no note, no bar
+  and no step, and the title "No debt payments" and the households' figure say it.
+- **Tests:** `SavingsGauge.test.tsx` (the band's words appear once, the goal line is the sentence
+  alone, Set a goal follows), `guidanceCards.test.ts` (nothing paid: no tags, bar, step or note,
+  in the EU, the UK and Germany).
+- **A circle's words: the gap said where it is acted on, and the checks counted plainly**
+  (`shared/guidance/ledger.ts`, `circleView.ts`, `cards.ts`, `CircleView.tsx`). Solid ground's
+  view said the gap to three months four times. Its key figure, which is also the ledger row's,
+  now says where the cushion stands, "2 of 3 months put by", and inside the circle the person is
+  in, the gated cushion card leaves out its gap ("Next milestone: 3 months, €2,000 away.", and
+  under a month "You're €1,000 away."): `CardContext.current`, which the view sets for that
+  circle. Your next step and the check keep it. The checks' lead reads "It needs 2 of these, and
+  1 more is optional." where it read "2 are needed to reach it; 1 more is on its list.", and "It
+  needs this one." or "It needs both of these." when every check is needed. The debt check's
+  detail said "Your loans and cards are under 10% a year, or carry nothing." with none on file;
+  with an empty list it says "No loans or cards on file." Rows 5 and 6 say what their figure
+  counts: "Counts what you've invested, plus money in reach beyond six months of essentials." and
+  "Enough invested that taking 4% a year covers what you spend."
+- **Tests:** `guidanceLedger.test.ts` (the key figure and label, rows 5 and 6),
+  `guidanceCircleView.test.ts` (the checks' lead for one, two and some optional; no debts on file
+  against a cheap loan), `guidanceCards.test.ts` (the cushion card in and outside the current
+  circle), `progressCircles.test.tsx` (circle 4's view says "€2,000 to go" twice, in Your next
+  step and the check; circle 3's card still names the milestone), `tests/circles.spec.ts` (the
+  rows' figures and labels).
+- **A circle's glyph at 24 px and under: a faint solid track, no number**
+  (`CircleGlyph.tsx`). At Your next step's 20 px, the dotted orbit's dots sat a pixel apart and
+  blurred into a grey ring. At 24 px and under the track is one `--ring-track` line with no dash,
+  and the number is left out (it was left out under 26 before; the two now share one threshold).
+  The svg carries `data-track="solid"` or `"dotted"`.
+- **Tests:** `circleGlyph.test.tsx` (20 and 24 px: solid, no number; 25 and 36: dotted, with the
+  number).
+- **Advice says "Counts toward {circle}", under its detail line** (`ProgressAdvice.tsx`,
+  `ProgressPage.module.css`). "Why: Paying your way" sat in the card's action row beside its
+  button; the same link now reads "Counts toward Paying your way" and sits on its own row under
+  the detail, a 48 px flex target as wide as its words and lined up with the detail, whose height
+  spaces the action row after it (`.why + .advice-foot { margin-top: 0 }`). Same `#progress/<n>`
+  address and `data-test-id="advice-why"`. CHANGELOG's line for it says "counts toward".
+- **Tests:** `progressAdvice.test.tsx` (the words and address per card, straight after the detail
+  line, and not in the row with the card's button).
+- **The essentials question lists only what can be marked needed** (`shared/guidance/facts.ts`,
+  `kinds.ts`, `CircleView.tsx`). `sumWindow` added a category's income and its spending into one
+  total, and `windowCategoriesOf` listed every category with a total as an expense unless its type
+  was `income`. So money coming in under a transfer-typed category was listed as spending that
+  counts as needed, and the question's Save sent `PUT /api/categories/<id> { essential }`, which
+  both runtimes refuse on a category that is not an expense (`checkCategoryEdit`); a refund under
+  Groceries was added to what Groceries spent. The window now keeps `inBy` and `outBy` apart: the
+  income list is income categories with what they took in, and the spending list is the categories
+  `takesEssential` allows (new in kinds.ts: `takesKind(type)` and not `holdsTransfers`) with what
+  they spent. The question applies the same rule to the stored records it writes to, from the
+  snapshot's categories.
+- **Tests:** `guidanceFacts.test.ts` (a refund in Groceries, a transfer-typed category with money
+  in and out, and spending under an income category: Salary 3,000 and Groceries 1,000 a month, and
+  nothing else), `progressCircles.test.tsx` (a window row whose stored category is a transfer is
+  neither listed nor written; the test view's snapshot now holds the window's categories).
+- **The store's gate has tests that can fail** (`guidanceStore.test.ts`,
+  `tests/release/s17-benchmarks-gate.spec.ts`). Nothing failed if the store ignored the benchmarks
+  gate: the store test now works the circles out for Germany with a free-money answer on file,
+  under `MODE=production` with `VITE_ENABLE_BENCHMARKS` unset (the view's `gate` is false and
+  circle 4 has no free-money check) and under `development` (the gate is open and the same answer
+  meets the check). Replacing both `benchmarksShown()` calls in `core/guidance.ts` with `true`
+  fails the first; with `false`, the second. s17 ran on the demo's euros, which read as the EU,
+  where the free-money check never shows, so its check could not fail: it now sets US dollars as
+  the base currency, and also checks the free-money question and the Dashboard gauge its header
+  promises (no band, no comparison sentence, no region line, no "Typical in"; the 20% goal shows).
+- **Your next step reads the accounts before advising on income** (`shared/guidance/nextStep.ts`).
+  With own income short and the accounts unread, the own-income check is not known (the accounts
+  might hold investments that cover it), and the status line said so, but the step said "Close the
+  €500 a month gap" and opened Budgets. The own-income case now answers `reloadStep('the income
+check')` first, as the cushion and debt cases do.
+- **Tests:** `guidanceNextStep.test.ts` (the review's P2 case: the step is Reload your accounts,
+  "They didn't load, so the income check is waiting.", with no meter; read and with nothing
+  invested, the gap is the step).
+- **About this space: every Remove answer brings its question back** (`CircleAnswers.tsx`). The
+  list says "Remove an answer and its circle asks again.", which the essentials row did not do:
+  the essentials question asks while some spending counts as needed only because nothing says
+  otherwise, and its Save writes a choice to every such category, so clearing `kindsAsked` left
+  nothing to ask about (the review's P5). That row now has no Remove answer, only its line and
+  Open Categories, where the choices are kept; `Answered`'s `remove` is optional.
+- **Tests:** `progressCircles.test.tsx` (every Remove in the list, pressed: the essentials row has
+  none and links to `#categories`; each other answer, removed, is asked again by its circle for
+  someone it applies to, in the circle's list or its next step, with nothing chosen or typed: the
+  card, yearly bills, free money, how the household lives, support, savings elsewhere and the own
+  number; a new row with Remove has to join the list).
+- **The browser's savings goal never replaces the profile's** (`core/savingsGoal.ts`).
+  `adoptBrowserGoal` decided on the view: with the view's settings read failed, it showed no goal,
+  and a browser holding 15 was saved over a profile holding 30. It now saves with `saveAnswers`'
+  function form, deciding on the record as the save reads it again: `savingsGoal` is set only
+  when the record has none, and the browser's copy is cleared once the save lands, either way.
+- **Tests:** `savingsGoal.test.ts` (its `saveAnswers` stand-in now reads a stored record and works
+  the function form out; new: the profile holds 30, the view shows none, the browser holds 15, and
+  the profile keeps 30, the circles get 30 and the browser's copy goes).
+- **Escape inside a field stays with the field** (`CircleView.tsx`). The circle's view closed on
+  any Escape inside it, so Escape in the savings-elsewhere or own-number amount, on a choice, or in
+  a list went back to the seven circles. Escape whose target is in an `input`, `textarea` or
+  `select` is now left alone; from anywhere else it still goes back. Going back still pushes a
+  history entry, as Loans does.
+- **Tests:** `progressCircles.test.tsx` (Escape in an amount, on a choice, in a text area and in a
+  list keeps `#progress/5`; from the heading it goes back to `#progress`).
+- **Your next step has no comparison of its own** (`shared/guidance/nextStep.ts`,
+  `NextStepCard.tsx`, `core/guidanceGate.ts`). Departure from the plan: `NextStep.compare`, a
+  sentence quoting a regional figure under the step while the benchmarks gate is open, was null
+  on every step, and nothing was planned to fill it. It is gone, with the card's
+  `next-step-compare` line: a circle's How you compare carries the comparison, and the step's
+  `why` stays on the person's own numbers. The gate's list of what it holds back no longer names
+  it.
+- **Tests:** `guidanceNextStep.test.ts`: "never quotes a regional figure in the why" read only
+  `compare`, which was always null; it now reads `why` for eight steps (sorting, both own-income
+  sentences, the US and UK free-money questions, a cushion under a month, Solid ground and Room to
+  choose): no region named, no "typical", "average", "median", "households", "adults" or "people
+  in". A why that quotes the EU's households, names the US or gives a typical figure fails it.
+- **Three small things in the circles' words** (`CircleQuestions.tsx`, `shared/guidance/circleView.ts`,
+  `core/api.ts`). The note "You gave $0. Your circles count it again once you save it in EUR" showed
+  for a "No" (saved as 0) in another currency; it now needs an amount above 0. A check row not met
+  could read "€2,000 in, €2,000 out a month." beside Not yet, as two figures rounded to the same
+  whole unit: own income, a month of essentials, two years, work optional and your own number now
+  say the gap instead ("€1 a month short of covering what you spend.", "29 days: €1 to a month of
+  essentials.", "€1 to go"), and keep both figures when met. `formatWholeCurrency` printed "-€0"
+  for anything from -0.5 to 0; what rounds to nothing is now "€0" (Intl keeps the sign of a
+  negative that rounds to zero; half and more still rounds away from zero).
+- **Tests:** `progressCircles.test.tsx` (the note for 12,000 dollars, none for 0),
+  `guidanceCircleView.test.ts` (each of the five rows at a figure that rounds the same, and two
+  years met), `currencies.test.ts` (-0.4, -0 and 0.4 read "€0"; -0.5 reads "-€1").
+- **The why's region check matches whole words without a built RegExp**
+  (`guidanceNextStep.test.ts`). 'never quotes a regional figure in the why' built
+  ``new RegExp(`\\b${place}\\b`)`` for each region, the one new lint warning on the branch
+  (security/detect-non-literal-regexp). It now splits the why into words and looks for the place
+  among them. The mutations that put "the US" or "EU households" into a why still fail it.
+- **Spending filed under an income category is no longer counted as needed** (`shared/guidance/facts.ts`).
+  An expense under a category that can take no kind (an income category; transfer and account
+  categories were already left out as money moved) counted as needed by default and as one of the
+  categories nothing said anything about. Nothing can mark such a category needed, and since review
+  1 the essentials question does not list it, so the default could never be changed. It now counts
+  as spending only. What the circles ask changes with it: where such a category was the only one
+  counted as needed by default, circles 3 and 4 no longer ask which categories are needed.
+- **Tests:** `guidanceFacts.test.ts` (60 a month under Salary: spending 940, needed 630, one category
+  unsure; with it the only unsure one, circles 3 and 4 ask nothing). Fails before the change.
+- **The ledger never sets two figures that read the same side by side short of a target**
+  (`shared/guidance/ledger.ts`). The check rows got this rule in review 9; the ledger's rows, which
+  the circle view's key repeats, did not. Rows 5 to 7 could read "€60,000 of €60,000: 99%"; they now
+  read "€1 short of €60,000: 99%". Row 2's detail could read "€2,500 in, €2,500 out a month." beside
+  "Own income covers 99% of spending"; it now reads "€1 a month short of covering what you spend."
+  (support left out explains a difference of its own, so those figures stay). Row 3's detail reads
+  "€1 short of a month of essentials." (or "of spending") in place of two equal figures. Met, every
+  row keeps both figures.
+- **Tests:** `guidanceLedger.test.ts`, a target cents away on rows 2, 3, 5, 6 and 7, and met cases
+  that keep both figures. Fails before the change; each condition reverted alone fails it.
+- **A circle's numbers say each thing once** (`shared/guidance/circleView.ts`,
+  `shared/guidance/ledger.ts`). With savings the only money in reach, "Money you can reach €2,800"
+  sat over "Savings €2,800."; one part holding it all now gives the row alone, and current accounts
+  alone keep their note without the figure ("Your current accounts at their lowest in the last 30
+  days."). Solid ground met said "no debt at 10% or more" twice, in the circle's line and in row 4's
+  detail, on Progress and in the circle view's head; the detail now leaves it out while the check is
+  met, and still names the first debt at the line or the answer the check waits on.
+- **Tests:** `guidanceCircleView.test.ts` (savings, cash and current accounts alone),
+  `guidanceLedger.test.ts` and `progressCircles.test.tsx` (the phrase once on row 4 and once in the
+  view's head). Fail before the change. Mutation log: one equivalent mutant survives, the met early
+  return removed, since a met check has no debt at the line to name.
+- **"Counts toward", spelled one way on Progress** (`frontend/src/core/achievements/advice.ts`). The
+  "Some entries have no category" card read "counts towards" one line above the advice card's
+  "Counts toward ...". The app's visible copy spells it "toward" 8 times and "towards" twice, so the
+  card now says "counts toward". The other "towards", the Goals page's subtitle, is not on Progress
+  and stays.
+- **Tests:** `advice.test.ts` reads the card's detail. Fails before the change.
+- **A circle's pill sits beside its name on a phone** (`frontend/src/components/guidance/CircleView.tsx`
+  and its CSS). Below 400 px, "You're here" dropped to its own row under the circle's line, with
+  about 150 px free beside "Solid ground". The name and its pill now share a row at every width; only
+  a name too long for both pushes the pill under the name, above the line. From 360 up every
+  circle's pill sits beside its name; at 320, five of the seven drop under it.
+- **Tests:** `circles-layout.spec.ts`, every circle at 320, 360, 390 and 1280: beside the name
+  whenever name and pill fit with room to spare, under it at its start when they don't, never under
+  the circle's line. Fails before the change (circle 1 at 320, the pill under the line).
+- **"Your next step" on Progress is set as a label** (`NextStepCard.module.css`). Progress gives the
+  card's label an h2, and the app sets every h2 in the display face, so it read in the serif while
+  Dashboard, the circle view and the mock use the spaced-out sans label. The label now inherits the
+  body face at either heading level.
+- **Tests:** `circles-layout.spec.ts`: the label on Progress (an h2) matches Dashboard's in face,
+  size, weight, case and spacing, and its face is the body's and the circle view's label's. Fails
+  before the change (Fraunces on Progress).
+- **The copy the benchmarks gate holds back is compiled out of a production build**
+  (`frontend/vite.config.ts`, `shared/guidance/questions.ts`,
+  `frontend/src/components/guidance/regionWords.ts`). The gate only hid it: the free-money
+  questions for Germany, Croatia, the UK and the US, setup's region and household questions, the
+  housing card's tenure question and the lines saying how the region was set still shipped, in
+  `questionParts-*.js` and `regionWords-*.js`, which Dashboard, Progress and Settings fetch. Vite now
+  defines `__BENCHMARKS_SHOWN__` by the gate's own test (`MODE !== 'production'`, or
+  `VITE_ENABLE_BENCHMARKS=true`), and both files read it behind a `typeof` check, so shared code still
+  builds for the Worker and runs in tests, where nothing defines it and the copy stays. In a
+  production build the minifier drops the copy; a build with the gate open, and `--mode dev`, keep it.
+  `benchmarksShown()` stays the runtime switch the UI and its tests use. The benchmark cards' own
+  chunk (`cards-*.js`, with `benchmarks.json`) is still emitted and still never fetched while the
+  gate is closed; this change does not touch it.
+- **Tests:** release `s17-benchmarks-gate.spec.ts` greps the candidate's scripts for 11 held-back
+  lines and expects none, after checking a line every build carries is there. It found all 11 in a
+  production build before the change, none after, and all 11 again in a build with
+  `VITE_ENABLE_BENCHMARKS=true` (the control, which fails the spec as before).
+  `guidanceGate.test.ts` loads both modules with the constant false, true and undefined; each of 8
+  guard mutations fails it.
+- **A circle's view says each figure once** (`shared/guidance/circleView.ts`,
+  `shared/guidance/nextStep.ts`, `CircleView.tsx`, `NextStepCard.tsx`). The reported Solid ground view said
+  €2,800 and €1,460 three times each and "1.9" four times: in the key figure, Your next step's why
+  and its bar, the cushion check and Your numbers. Each part now has one job. Your numbers holds
+  the inputs; the key figure says where the circle stands; Your next step says what to do and the
+  gap (`NextStep.whyHere`, "€1,580 to go."), and draws no bar in its own circle, where the ring and
+  the key figure are the same measure; a check says what it needs ("€4,380 would be three
+  months."), and the gap only while no step on the view says it. The key figure's detail line stays
+  on Progress: in the view the checks and Your numbers say each part of it. The same pattern is
+  gone from the other six circles: Clear picture (months and share sorted), Paying your way (in and
+  out), Breathing room (days, reach and need), the debt and yearly-bills checks (owed and rate are
+  Your numbers' debts; the asked sentence is the step's), Room to choose, Work optional and More
+  than enough (value and target are the key figure's; the rate is Your numbers'). Dashboard and the
+  Progress list keep the step's full why and its bar.
+- **Tests:** `progressCircles.test.tsx` renders that Solid ground view (each of €2,800, €1,460,
+  1.9 and €1,580 once) and nine circle states, where no figure in Your next step or a check is the
+  key figure's or Your numbers', and no two of them share one; `guidanceCircleView.test.ts` and
+  `guidanceNextStep.test.ts` pin the new lines; `circles.spec.ts` expects the card question's
+  check without a line of its own. All fail before the change (34 unit tests).
+- **A circle's heading takes focus without a focus box** (`CircleView.module.css`). Opening a
+  circle moves focus to its heading ("Solid ground") from script, so a screen reader starts there,
+  and `:focus-visible` drew a 2 px outline round it (#3B6FE0 light, #6E9BFF dark), most plainly
+  when the circle was opened from the keyboard. The heading is not a control (`tabindex="-1"`): it
+  keeps the focus and draws no outline.
+- **Tests:** `circles-layout.spec.ts` opens Solid ground with Enter and with a click, in light and
+  dark, and reads the focused heading's outline style. Fails before the change ("solid", from the
+  keyboard, light).
+- **Spending under a deleted category counts as spending with no category**
+  (`shared/guidance/facts.ts`). Deleting a category today clears it from its entries in both
+  runtimes (the Worker's `deleteProfileCategory`, local-first's `deleteCategory`, since #384 in July
+  2026). Before that fix both deleted the row alone, and nothing has cleared the entries left
+  pointing at it since, in D1 or in IndexedDB. The guidance counted that spending as needed, as
+  sorted, and as a category nothing said anything about: Breathing room and Solid ground then asked
+  which categories are needed every month, a question that cannot list a category that is gone.
+  It now counts as spending with no category: needed and among what nothing said anything about,
+  as before, but not sorted, counted with the entries without a category, and not a category to
+  ask about.
+- **Tests:** `guidanceFacts.test.ts`: the same spending under a deleted category and under none
+  gives the same facts, and with it the only spending nothing says anything about, the circles
+  ask nothing. Fails before the change.
+- **The no-category advice card says "it" for one entry** (`frontend/src/core/achievements/advice.ts`,
+  `uncategorised()`). Its detail read "Categorise them and this month counts toward ..." over a
+  single entry; one entry now reads "Categorise it and ...". Only the `detail` line changed: #662
+  on main changes the same card's `title` and `figure`. Merging main here conflicts on those three
+  lines already (this branch's "toward", 3c5f5f2e, against main's "towards"); the resolution takes
+  #662's title and figure and this detail line.
+- **Tests:** `advice.test.ts`, one entry and two. Fails before the change.
+- **The sorted check says its requirement as the other checks do** (`shared/guidance/circleView.ts`).
+  "90% of your spending needs a category." could read as 90% still lacking one; it now reads "A
+  category on 90% of your spending.", with the gap after it while no step on the view says it.
+- **Tests:** `guidanceCircleView.test.ts`. Fails before the change (2 tests).
+
+- **The chosen answer chips read `--on-primary`** (`components/guidance/Questions.module.css`,
+  `SpaceQuestions.module.css`): white with a dark-theme override to `--bg` before, the same
+  colours, now from the token main's contrast fix added; `primaryFillText.test.ts` flagged both.
+
+- **Where the 10% debt line comes from, said wherever the person's own debt is held to it**
+  (`shared/guidance/facts.ts` `EXPENSIVE_DEBT_NOTE`, `nextStep.ts`, `circleView.ts`,
+  `components/guidance/CircleView.tsx`). "10% is a rule of thumb from personal-finance guides, not an
+  official line." The benchmark card's note said so, but that card is behind the benchmarks switch,
+  while Solid ground's check and the debt steps state the 10% line without it. The sentence is now
+  the `fine` print under all three debt steps (a loan to compare, a card or overdraft with no rate,
+  one with a rate) and a new optional `note` under Solid ground's debt check, set as small print
+  after "Needed to reach". The check leaves it out only while a debt step on the same view carries
+  it; the card's balance question there does not, so the note stays. The overview's circle line and
+  gap line still state 10% without it, one tap from the circle view that carries it.
+- **Tests:** `guidanceNextStep.test.ts`, `guidanceCircleView.test.ts`. Fail before the change (2
+  tests).
+
+- **No step to sort a year with no spending in it** (`shared/guidance/nextStep.ts`). With a year on
+  file and no expense in it, the sorted check is not known (`sortedShare` null, `'not-on-file'`), and
+  Clear picture's placement leaves it as the next check. Its step read the share as 0: "Sort the
+  entries without a category", "0% of your spending has a category", a 0% meter and a link to an
+  empty list. A check not known is never a step to take (`circles.ts`), so the sorted case no
+  longer reads a share while it is not known; what it says instead is the entry below.
+- **Tests:** `guidanceNextStep.test.ts`, a year of 13 months of one income and three transfers
+  between a current and a savings account, no expense: the step is not the sorted one. Fails
+  before the change.
+
+- **Two more held-back lines are compiled out of a production build**
+  (`frontend/src/components/guidance/regionWords.ts`, `components/onboarding/OnboardingWizard.tsx`,
+  `components/guidance/CircleView.tsx`). Setup's About this space lead, "Both are optional. They
+  pick the official figures we compare your numbers with.", shipped in `OnboardingWizard-*.js`, and
+  the "How you compare" heading in `Progress-*.js`, although each shows only with the benchmarks
+  gate open. Both are now `SPACE_QUESTIONS_LEAD` and `COMPARE_TITLE` in `regionWords.ts`, behind
+  the same `__BENCHMARKS_SHOWN__` test as the region questions. The benchmark cards' own chunk is
+  unchanged, and short labels inside the gated components (the cards' "Where this comes from")
+  still ship, hidden at run time; s17's note now says so.
+- **Tests:** `guidanceGate.test.ts` reads both with the constant false, true and undefined; fails
+  before the change (2 tests). Release `s17-benchmarks-gate.spec.ts` lists both among its 13
+  held-back lines. A production build before the change had both (one file each), none after, and
+  all 13 again with `VITE_ENABLE_BENCHMARKS=true`.
+
+- **A year with no spending asks for the account you spend from, and "all seven circles" waits
+  for the seventh** (`shared/guidance/nextStep.ts`). With the sorted step gone, a firm year with no
+  spending had no step at all, and `nextStepOf` fell through to "You've reached all seven
+  circles." while the person was placed at Clear picture. The sorted check, not known for want of
+  spending, now has its own step: "Add the account you spend from", why "There's no spending on
+  file yet, so Clear picture has nothing to sort. Import the statements of the account you pay
+  from.", with Open Import; inside Clear picture's view it reads "There's no spending on file yet,
+  so there's nothing to sort." The fall-through no longer returns the all-reached step: with a
+  circle still to reach and no step from it out, the step is "See what <circle> still needs",
+  which opens that circle's view (`#progress/<n>`), whose checks say which is not known. Only a
+  placement with no current circle says all seven are reached.
+- **Tests:** `guidanceNextStep.test.ts`: the year of income and transfers with no expense gets the
+  new step, with no share in its words; a placement with Paying your way's income check not known
+  and no words for it gets the circle step, not all-reached. Both fail before the change.
+
+### Prints
+
+- **The seal is drawn once, for the browser and the Worker** (`shared/prints/seal.ts`,
+  `shares.ts`, `describe.ts`). `drawSeal(slots, { palette, detail, engraveFrom })` returns an SVG
+  string from twelve slots of whole-number shares (`spent` 0 to 100 of the heaviest month in the
+  set, `kept` -100 to 100 of the month furthest from even; null for a month not on the seal).
+  `checkSlots` throws a `RangeError` for anything else, so an amount wired in fails instead of being
+  drawn. Three levels of detail: `print` (900 px and up, the saved image and the mail), `screen`
+  (the shelf) and `thumb` (under 160 px). Colours sit in `style` attributes: `PAPER` is literal for
+  images, `THEME` reads `var(--seal-*)`. No `<text>`, `<title>`, `<desc>` or `<foreignObject>`, and
+  well-formed XML, so it rasterises through an `<img>` and a canvas. `sealShares` is the one place
+  amounts become shares; `sealSummary` and `monthLine` give the seal's words from the same shares.
+  `shared/fixtures/sealSample.ts` pins the SHA-256 of each detail for an invented year, checked by
+  `frontend/src/core/__tests__/printsSeal.test.ts` and `worker/test/seal-drawing.test.ts`, so both
+  runtimes draw the same text. Bump `SEAL_VERSION` when a change would draw a stored print
+  differently.
+- **Which months make a print** (`frontend/src/core/prints/shelf.ts`). `shelfOf` cuts each run of
+  tracked months (the badges' set, `evaluation.trackedMonths`) into twelves from its first month:
+  every whole twelve is a print, and the newest run's months after its last twelve are the plate.
+  The first print is therefore the "A year" badge's window (`monthReaching(tracked, 12)`), checked
+  over 400 generated records. `shelfView` sums each month with `flowsOf` and `baseAmount`, as the
+  badges do, and hands on only `sealShares` output, with `live` (the newest run ends this month or
+  last), `gap` (the month after a run that is not live, with its entry count) and `running` (this
+  month, once tracked). Nothing is stored: a print is worked out from the snapshot each time.
+- **Seal colours for both themes** (`orbit-dark.css`, `dawn-light.css`): `--seal-ink`,
+  `--seal-band` (`--primary`), `--seal-rule`, `--seal-copper`, `--seal-hub` (`--card-bg`) for the
+  plate drawn on the card, and `--seal-sheet-edge` for a finished print's paper (transparent in the
+  dark theme; `#d8d1c2` in the light one, where cream on white is 1.12:1). On `--card-bg` ink,
+  band and copper measure 11.61, 6.22 and 8.36:1 (dark) and 12.17, 4.63 and 3.86:1 (light); the
+  light copper is `#c46a2c`, not `--accent-warm` (`#d97f2e`, 2.99:1 on white).
+  `src/__tests__/sealContrast.test.ts` reads both theme files and holds each mark at 3:1 on the
+  card, and PAPER's marks on its sheet; it fails with `--accent-warm` as the light copper.
+- **A Prints section on Progress** (`features/PrintsShelf.tsx`, `PrintsShelf.module.css`), between
+  Worth a look and What you have earned, under an `OrbitalDivider` "Prints" (meta "One for every
+  twelve months in a row", test id `progress-divider-prints`). Its body carries `data-test-id` and
+  `data-tour` `progress-prints` in every state: an empty plate (frame and hour marks) with how a
+  month counts; the plate filling in ("6 of 12 months" and how many more finish it, or, when the
+  newest run stopped, "up to {month}" and the month after it with its entries); then the newest
+  print on paper, the next plate at 96 px beside its status, and from two prints on Every print,
+  newest first, where a tap features that print. The seal is `role="img"` with `sealSummary` as
+  its label. It reads the badges' snapshot through `shelfView`, so it fetches nothing and holds no
+  amount; `printsShelf.test.tsx` scans the rendered page for any (class names aside, which CSS
+  modules hash). Copy lives in `core/prints/copy.ts`. Above 640 px the seal is
+  `clamp(260px, 28vw, 440px)` beside its words; at 640 and under one column, the seal up to
+  340 px, and the prints in a strip that scrolls inside itself. The phone column's
+  `minmax(0, 1fr)` and the grid items' `min-width: 0` each let the strip be narrower than its
+  prints. With neither, it grows to about 2,800 px for 26, and the page, which clips sideways
+  overflow, cuts off the prints past the screen's edge where nobody can scroll to them.
+- **The seal engraves once it settles in view** (`core/settledInView.ts`, `PrintsShelf.tsx`). The
+  figure waits until 70% of it has stayed on screen for 500 ms, or 3 s after any of it first shows,
+  checked on scroll (capture phase), resize, a 30 ms kickoff and a 900 ms heartbeat as
+  `OrbitalDivider` does, since IntersectionObserver and rAF stall in throttled tabs. Then the new
+  petals draw clockwise (450 ms each, 55 ms apart, `pathLength="1"` dashes), the band's months fade
+  in from 500 ms (300 ms each, 35 ms apart) and an empty plate's twelve hour marks come in turn.
+  `data-engraving` on the figure goes `armed` (new parts held back), `engraving`, then is removed
+  after `engraveMs`; it is set only while something waits to engrave, so a seal can never stay
+  hidden. Petals already engraved in this page load are marked `data-drawn` by
+  `drawSeal(..., { engraveFrom })` and stay still, so a plate that grows engraves only its new
+  month; a reload engraves once more. Reduced motion never sets the attribute, and the CSS sits
+  under `prefers-reduced-motion: no-preference`. The hour marks carry `class="seal-hours"` and
+  their `--i` only when `engraveFrom` is given, so the pinned hashes do not move.
+- **Tap a petal to read its month** (`PrintsShelf.tsx`, `sealSector` in `shared/prints/seal.ts`).
+  Over the seal sits an `aria-hidden` SVG with one path per filled month (`data-test-id`
+  `prints-wedge`, `data-slot`): its whole 30-degree sector from the hub's rim (r 62) to the
+  border's outer rule (r 568), so the target is the sector, not the petal's thin lines. A tap or
+  click picks the month until it is tapped again; a mouse pointing at a sector previews it
+  (`pointerType === 'mouse'` only, so a finger's `pointerenter` does not). The readout under a
+  hairline (`prints-readout`, `aria-live="polite"`) gives `monthLine` for that month, or "Tap a
+  petal to see its month.", and the other months' petal and band groups get `data-dim` (45%
+  opacity, a 160 ms fade unless motion is reduced). The drawing is an `innerHTML` string, so an
+  effect marks its `[data-slot]` groups after each draw. "Month by month" (`prints-months`), a
+  `<details>` with a 48 px summary styled as the benchmark cards' one, lists every filled month's
+  line in clock order, so nothing needs a pointer. Featuring another print clears the reading;
+  the empty plate has nothing to read. A second click on the petal being read lets go of the
+  mouse's preview too, or with the pointer still on it the click seemed to do nothing.
+- **Prints stay off Progress's first task** (`PrintsShelf.tsx`, `core/prints/thumbs.ts`,
+  `whenNearScreen` in `core/settledInView.ts`, `scripts/prints-perf.mjs`). The shelf is worked
+  out and drawn a task after Progress first renders (the section holds its place, `aria-busy`,
+  until then). Every print in the strip is an `<img>` of a `data:` SVG in `PAPER`'s literal
+  colours (`thumbSrc`, memoised by shares, 200 kept); the plate stays inline, as `THEME`'s CSS
+  variables do not resolve inside an image. An image is drawn only once its slot is within a
+  screen of the viewport (one shared watch for all slots: scroll in the capture phase, resize, a
+  30 ms kickoff, a 900 ms heartbeat, stopped when none wait), then queued by `inTurn`, which runs
+  at most `PER_TASK` (2) jobs a task. The strip is keyed by each print's first month, so a fresh
+  snapshot keeps every button and image. Month names come from one `Intl.DateTimeFormat`, each
+  month formatted once: `toLocaleDateString` built a formatter per call, about 30 ms of a
+  6x-throttled first render. `scripts/prints-perf.mjs` measures the built app on the example
+  profiles (26 prints) at 390x844, DPR 3, and judges no task over 50 ms at 4x from the Prints
+  divider until all 26 images are in. On 2026-10-31 (load average about 7, five runs a rate, the
+  log in the phase 4 scratch folder): none over 50 ms at 1x or 4x, and at 6x a median of none
+  (4 in 25 runs' worth, worst 99 ms). Progress's own first task, before the shelf, was 69 ms at
+  4x; with the shelf inside it, an earlier build measured about 120 ms against about 80 ms a task
+  later. Run it by hand before a release, not in CI.
+- **The A year toast points at the first print** (`core/achievementsStore.ts`,
+  `core/progressRoute.ts`, `core/scrollAndHold.ts`, `core/prints/windows.ts`). "Badge unlocked: A
+  year. Your first print is on Progress." with "See my print"; Two, Three, Five and Ten years say
+  "A new print is on Progress.", as a run reaching 24, 36, 60 or 120 months completes a print
+  that month. A first run that holds prints counts them: "{n} badges and your first print from
+  your history so far." or "{n} badges and {m} prints ...", with "See my print(s)"; without one
+  it is unchanged, as is every other badge's toast and its "See badges". The count is
+  `shelfOf(trackedMonths)`, moved with the print windows into `core/prints/windows.ts` so the
+  store loads neither the drawing nor the money (`shelf.ts` re-exports them). The action is
+  `openPrints()`: `#progress/prints`, or, when the address already says so, a hashchange
+  dispatched again, as an address set to itself fires none. `sectionFromHash` reads it;
+  `circleFromHash` still answers null, so the list shows. Progress, on mount or that hashchange,
+  scrolls the Prints divider to the top and holds it there while the page above fills in
+  (`scrollAndHold`: checked every 100 ms, scrolled again when it moved, for 3 s from when it is
+  found, given up after 10 s, ended at once by the person's wheel, touch, pointer or key). The
+  release suite's `BADGE_TOAST` and s06's `SUMMARY` read both first-run wordings: the example
+  profiles' first run now says "... and 26 prints ...". Badges earned in the same evaluation are
+  announced with a print's badge last, since each toast on the channel replaces the one before:
+  A year and A perfect year (twelve saving months in a row) often come the same month, and in
+  evaluation order A perfect year hid the print's toast, as the E2E case found.
+- **Progress's tour stops at the prints** (`core/spotlightStore.ts`): a fourth step, "Prints",
+  on `[data-tour="progress-prints"]`, the section's body, which is rendered in every state (empty
+  plate, plate, prints, and the place it holds while the shelf draws). `spotlightStore.test.ts`
+  pins the four steps in order.
+- **Share a print as an image** (`core/prints/share.ts`, `core/achievements/shareCard.ts`). On a
+  finished print only, a 48 px "Share" (`prints-share`) draws the seal on paper at `print`
+  detail, with `width` and `height` of 1200 added to the root so an `<img>` sizes it, and
+  rasterises it through `toPng(svg, width, height)`, which now scales the drawing to the canvas.
+  `shareOrSave` (split out of `shareBadge`, which uses it unchanged) hands the PNG to the share
+  sheet where `navigator.canShare({ files })` says yes, and downloads it otherwise, as
+  `token-circles-print-{first month}-to-{last month}.png`, titled "My first print" for print 1
+  and "My print" after, with "Twelve months of my money, drawn as a seal by Token Circles." No
+  text in the image. A download says "Print saved as a PNG."; a failure "Could not draw the print
+  as an image."; a share sheet closed without sharing (`AbortError`) says nothing, unlike the
+  badges' Share, which still calls a closed sheet a failure.
+- **Prints in the browser, in both storage modes** (`frontend/tests/prints.spec.ts`,
+  `prints-layout.spec.ts`, `prints-fixture.ts`). `prints.spec.ts` has ten cases, local-first on the
+  example profiles or a new space, and signed in on a new profile of the fixture account:
+  - the example profiles' newest print, every earlier one and the next plate (`@smoke`);
+  - a year of entries whose twelfth month brings the "A year" toast, with "See my print" going
+    to the first print (`@smoke`);
+  - an empty plate;
+  - a plate at 6 of 12 with the missing month named;
+  - a tapped petal read out as the month list says it, then let go by a second tap;
+  - an earlier print taking the newest one's place;
+  - no amount on the page with five-digit entries;
+  - `#progress/prints` through a reload;
+  - deleting a month's entries takes the print away while "A year" stays earned;
+  - Share downloading a 1200 by 1200 PNG where the share sheet takes no files.
+
+  `prints-layout.spec.ts` checks the drawing in seven cases:
+  - one column at 390 and the seal beside its words at 1280, in both themes;
+  - nothing past the screen's edge at 320, 360 and 390 with 26 prints. The app clips sideways
+    overflow, so the case measures every part's right edge rather than the page's width;
+  - text at 12 px and controls at 48 px, with the month list open;
+  - a print focused from the keyboard at 390 with its whole ring inside the strip: the first
+    print, the pressed one, the first in view after a scroll, and the last;
+  - ink, band and copper at 3:1 on the card, measured in the page;
+  - reduced motion showing a finished print;
+  - an engraving that waits out of view past the 3 s fallback, then finishes.
+
+  Each layout case failed with what it guards broken: the strip's desktop grid, a light copper of
+  `#f0c8a8`, motion not reduced, the fallback starting out of view, the 640 px breakpoint, a 32 px
+  Share, an 11 px month list, the strip without both of its narrowing rules, and the strip without
+  its room for the ring on any one side, without its scroll padding, or with the pressed print's
+  ring drawn inside it.
+
+- **The seal's words when months tie or spend nothing** (`shared/prints/describe.ts`). Months
+  with equal spending shares share a rank, and shares are whole percents of the heaviest month,
+  so 1,000 and 1,004 both read 100. A seal whose months all shared one share named the same
+  months as both the most and the least, and a flat year listed all twelve twice. With one share
+  across the seal, the label now says "Every month spent about the same." and a tapped month
+  "spent about the same as the other 2 months". When that share is 0, which happens only when the
+  heaviest month spent nothing, they say "None of these months spent anything." and "spent
+  nothing". When only some months tie, the words are unchanged. `printsSeal.test.ts` fails
+  without the change.
+- **A profile switch drops a picked print** (`PrintsShelf.tsx`). Every example profile has prints
+  from the same months. So a print picked on one profile (Print 21, from January 2020) stayed
+  featured and pressed after a switch to another, which had a print from January 2020 too. The
+  pick now clears when the snapshot's `profileId` changes, and coming back shows the newest print.
+  What was engraved is kept by profile and first month (`{profileId}:{from}`, or
+  `{profileId}:empty`), so another profile's seal of the same months engraves as its own. A month
+  being read already cleared on every new snapshot. `printsShelf.test.tsx` fails with either
+  change taken out.
+- **Back from a circle reaches its row from `#progress/prints` too** (`features/Progress.tsx`,
+  `core/progressRoute.ts`). A circle opened from the page at `#progress/prints` went Back to that
+  address, and the page took it as a request for the prints: it scrolled the Prints divider to the
+  top and left focus on the page's body. From `#progress`, the same steps focused the circle's
+  row. Coming back from a circle's view now focuses its row and stops any hold on the prints. A
+  hashchange from a circle's view to `#progress/prints` is either Back or See my print, and only
+  `openPrints` knows which: it sets a marker the page reads once (`printsAsked`), and mounting
+  clears one the page was not there to hear. `progressCircles.test.tsx` fails with the row put
+  after the prints, without the marker, or without the clear on mount.
+- **A focused print's ring shows whole on a phone** (`PrintsShelf.module.css`). At 640 px and
+  under, the strip scrolls sideways, and a box that scrolls clips what its children draw outside
+  it: the focus ring, 2 px wide and 3 px out, lost its top on every print and its left on the
+  first. The strip now keeps 5 px clear on every side (`padding: 5px 5px 6px`, given back by
+  `margin: 5px -5px 0`, so the prints line up as before) and has `scroll-padding-inline: 5px`. A
+  snap therefore stops a print 5 px in from the edge rather than flush with it, which, without the
+  scroll padding, it did even before any scroll. The pressed print's ring, which phones drew inside
+  the print, is outside again as on a desktop. Inside, it sat on the cream paper at 2.41:1 in the
+  dark theme, and a focused pressed print's ring at 1.84:1. Outside, on the card, they measure
+  6.22 and 8.15:1 (4.63 and 6.09:1 in the light theme). `prints-layout.spec.ts` fails with any of
+  those changes taken out.
+- **A month's rank counts every month that spent more** (`shared/prints/describe.ts`). Months with
+  equal shares shared a rank, and the months below them counted only the distinct shares above.
+  On the example profile's Print 26, nine months spent more than December 2025, which read "spent
+  the eighth most of these 12 months". A month now ranks 1 plus the number of months with a
+  strictly larger share (competition ranking: 100, 90, 90, 80 rank 1, 2, 2, 4), so December
+  reads "the tenth most". Every month on the smallest share still reads "the least", and the
+  label names them all; one share across the seal still reads "Every month spent about the
+  same.". `printsSeal.test.ts` "counts every month that spent more" fails without the change, and
+  with `>=` for `>` or "least" taken as the last rank.
+- **Tab brings a cut-off print wholly into the strip** (`PrintsShelf.tsx`). At 640 px and under,
+  Chromium scrolls a focused element into view only when none of it shows. At 390, Tab from the
+  third print to the fourth, of which 17 of 96 px showed, left the strip at `scrollLeft` 0. The
+  strip now calls `scrollIntoView({ block: 'nearest', inline: 'nearest' })` on a print that takes
+  focus from the keyboard (`:focus-visible`), which honours the strip's 5 px scroll padding, so
+  the ring shows too. The scroll is instant, as the browser's own focus scroll is, so reduced
+  motion needs nothing more. A print tapped or clicked is left where it was aimed: without that
+  guard the print slid out from under the pointer between press and release, and the click
+  missed it. `prints-layout.spec.ts` "Tab to a print the strip cuts off" fails without the
+  scroll, and with the guard taken out.
+- **The Prints heading lands clear of the menu button** (`components/Layout.module.css`). Up to
+  768 px the menu button is fixed at the top left (x and y 12 to 48). Every "See my print" lands at
+  `#progress/prints`, where `scrollAndHold` scrolls the Prints divider to the top with
+  `scrollIntoView({ block: 'start' })`. The divider's 18 px scroll margin put it at y 18 and the
+  word "Prints" at x 29 to 79, y 23 to 44, half under the button. `.main`'s 56 px top padding
+  clears the button only at the top of the page, and every divider and anything else scrolled
+  into view on a phone shared the problem: Tags' rules section, fragments, focus. The root now
+  has `scroll-padding-top: calc(env(safe-area-inset-top, 0px) + 48px)` while the button shows,
+  and a divider's own margin adds to it, so the heading lands 18 px under the button. The
+  breakpoint is the button's, 768 px, not 640: at 700 the heading sat under it too.
+  `prints-layout.spec.ts` "the Prints heading sits clear of the menu button", at 390 and 700,
+  fails without the rule, and at 700 with it at 640 px. Main shipped the same rule in 5.17.5 as
+  #676, for Tags' rules; the merge of 5.17.5 keeps main's copy, which has the same value.
+- **The tour's Prints step points at the seal** (`PrintsShelf.tsx`). Its `data-tour` anchor was
+  the whole shelf, which at 390 by 844 with 26 prints is 1016 px tall, and 1550 px with Month by
+  month open. A spotlight taller than the screen put the tip over the shelf's words, and
+  Spotlight's scroll-into-view pulled back every scroll, as the target could never sit 80 px
+  clear of both edges. The anchor is now the seal's figure (`prints-figure`), which the empty
+  plate, a plate filling in and a print all draw. The spotlight is 350 by 350 px at 390, and 372
+  by 372 at 1280. Before the badges' snapshot arrives the shelf holds its place without a seal,
+  and the step waits for it as it waits for a lazy page (`waitForTarget`, 6 s).
+  `printsShelf.test.tsx` "points the tour at the seal" fails with the anchor back on the shelf,
+  for the empty plate, a plate, the first print and 26 prints. The tour walk passes at 1280 and
+  at 390.
+
+### Articles
+
+- **The articles the app links to, in one list** (`shared/articles.ts`). `ARTICLES` maps an
+  `ArticleId` (`bank-year`, `one-month`, `first-cushion`) to the title and path of an article on
+  about.tokencircles.com, and `articleUrl(id)` gives its address. `ABOUT_SITE` is that origin, and
+  `LegalLinks.tsx`'s `MARKETING_SITE` now reads it. The articles live in disjoint-colliders,
+  `packages/tokencircles/src/pages/articles/<name>.md`, whose tests pin the three file names as
+  `articleLinks.test.ts` pins the paths here: a rename has to land on both sides.
+- **A surface names its article by id**, in an optional field that is absent everywhere else:
+  `OrientationStep.article` (import-year `bank-year`, heavy-month `one-month`, cushion
+  `first-cushion`), `NextStep.article` (year-on-file `bank-year`, first-cushion `first-cushion`,
+  and Getting started's article while the step is Getting started's), `NumberRow.article` (circle
+  1's Months on file, `one-month`), `CheckRow.article` (circle 3's A month of essentials,
+  `first-cushion`, left out while the step on the same view is the first cushion, so the view
+  links the article once) and `AdviceCard.article` (a month in the red, `one-month`).
+- **`ArticleLink`** (`components/guidance/ArticleLink.tsx`) draws one: the article's title after a
+  page icon, opening in a new tab with `rel="noopener noreferrer"`, "(article, opens in a new tab)"
+  for screen readers, and a target at least 44 px tall whose negative margins keep the spacing
+  around it. Getting started and Your next step put it under the step's reason, the circle view
+  under the check's line or the number's link, and Worth a look under the card's why line.
+- **The day-2 mail has a second button**, Steps for your bank, to `articleUrl('bank-year')`, as
+  the quieter of the two. At 640 px the two share a row in the 600 px card; at 375 px they stack.
+- **Tests:** `core/__tests__/articleLinks.test.ts` (the list, and every id each surface gives),
+  `components/guidance/__tests__/articleLinks.test.tsx` (where each surface puts the link),
+  `progressCircles.test.tsx` (the circle view), `advice.test.ts` and `week-one-mails.test.ts`
+  (the second button, read from the mail the cron sends). Each fails without the change.
+
+### Measuring the first week
+
+- **`pnpm -C worker run first-week-counts -- --env <dev|prod|local>`** prints the first-week
+  counts of the accounts that signed up in a window (`--from`/`--to`, UTC days, both included;
+  default the last 28 days): sign-ups (with a password, with Google), confirmed the address within
+  a day, imported within a day and within a week, each next step taken within a week, and how many
+  are still inside their first day or week. Counts and shares of sign-ups only, never an address,
+  a name or an id. Prints pressed reads "not recorded": nothing stores a print, and this adds no
+  table or column. Only cloud accounts are counted, and the output says so.
+- **Read from tables the Worker already has** (`worker/scripts/first-week.ts`, whose header holds
+  the step-to-table map). Day 0 is `users.created_at`; within a day is 0 to 86,400 s after it and
+  within a week 0 to 604,800 s, both ends included, compared with `unixepoch()`. Confirmed reads
+  the Welcome claim, `reminder_dedup (user_id, 'welcome').sent_at`, the day 0 the week-one mails
+  count from, for the accounts made after migration 0033 ran (below). Imports read
+  `import_logs.created_at`; the steps read `bills`, `budgets` and `budgets_zero_based`,
+  `savings_goals` and `accounts` (`created_at`, an account an import made left out by its name in
+  the log's `created_accounts`), and `transactions.updated_at` for an entry with a category edited
+  after it was entered. A month in the red, the loan comparison and the questions leave no dated
+  row and read "not recorded".
+- **One SELECT through wrangler, read-only by construction** (`worker/scripts/first-week-counts.ts`).
+  dev and prod run `wrangler d1 execute <db> --remote --env <env> --json --command`; local runs
+  `--local`, with `--persist-to` for a D1 apart from the dev server's. Before wrangler is called,
+  `readOnlyRefusal` refuses anything that is not one SELECT or WITH statement: a write keyword
+  anywhere, a comment, a second statement, or any other first word.
+- **Tests:** `worker/test/first-week-counts.test.ts` seeds accounts in 2001 and asserts every
+  count, with sign-ups on the window's first and last second and one second either side, events at
+  exactly 24 h and 7 days and one second past each, a row dated before the sign-up, a second
+  profile, and import-made accounts; the guard against an UPDATE, DELETE, INSERT, DROP, two
+  statements, comments hiding a write, a CTE that deletes, a PRAGMA and an ATTACH; and the command's
+  arguments and wrangler calls with a stub runner. Each fails without the change.
+
+- **Confirmed within a day counts only the accounts made after migration 0033 ran**
+  (`worker/scripts/first-week.ts`). 0033 wrote a Welcome claim for every account that existed,
+  dated when it ran, so for a window that starts before 0033 an account made up to a day before it
+  read as confirmed within a day and an older one as not confirmed, whatever either did. The query
+  reads the moment from `d1_migrations.applied_at` for `0033_welcome_once.sql`, the row
+  `wrangler d1 migrations apply` writes in the same request as the migration (the test pool's
+  `applyD1Migrations` writes the same table), still in the one SELECT `readOnlyRefusal` lets
+  through. The table prints a new line, `after migration 0033 ran`, under the sign-ups; Confirmed's
+  share is of those accounts, and the notes under the table say so. A database with no row for
+  0033 counts no account as confirmed. An account made between 0033 and the deploy whose code
+  writes the claim has one only if it confirmed after the deploy, as the deploy notes say.
+- **Tests:** `worker/test/first-week-counts.test.ts` sets 0033's `applied_at` for the suite and
+  restores it after: in a window 0033 ran inside, an account made an hour before it and one nine
+  days before, each with the claim 0033 dated, count as neither confirmed nor counted, while one
+  made after it and confirmed an hour later counts (1 of 2, 50%); with no row for 0033, nothing
+  counts. Fails before the change (5 tests).
+
+### Fixed
+
+- **Saving the badge record no longer makes Dashboard, Progress and About this space read their
+  settings again.** The badge store (`frontend/src/core/achievementsStore.ts`) keeps the unlocks
+  and dismissed advice cards in the settings under `achievements` (`achievements:<profile>` in
+  local-first) and saves them with `PUT /api/settings` after every evaluation that earns a badge.
+  `apiFetch` bumped the `settings` counter for it like any settings write, so the circles
+  (`core/guidance.ts`, which follow `settings` and `portfolio`) asked for `GET /api/settings` and
+  `GET /api/portfolio/holdings` again on the next show of Dashboard or Progress, and About this
+  space for its settings on the next show of Settings, though none of them reads that key. Release
+  case `s04-import.spec.ts` 4.2 (cloud) failed on it whenever the evaluation that follows the
+  case's account arrangement landed after Dashboard was hidden: its last check saw those two GETs
+  on showing Dashboard. `invalidateForRequest` (`core/dataVersions.ts`) now takes the request body
+  from `apiFetch`, and a write to `/api/settings` whose body is a JSON object holding only keys in
+  `SETTINGS_ONLY_THEIR_STORE_READS` (`achievements`, a `:<digits>` suffix ignored) bumps nothing.
+  Any other key in the same body, a body that is not a JSON object, an empty object, or any other
+  settings route bumps `settings` as before. The list fails safe: a key missing from it costs a
+  refetch, never a stale page. Guards: `core/__tests__/dataVersions.test.ts` (the three badge-key
+  shapes bump nothing; mixed keys and unreadable bodies still bump),
+  `core/__tests__/apiFetch.test.ts` (both storage modes, through `apiFetch`) and
+  `core/__tests__/guidanceStore.test.ts` (the circles on Dashboard read neither settings nor
+  holdings after a badge save, and read settings after a currency save). All six fail without the
+  change.
+
+- **The circles follow a save of the retirement plan.** They work invested money out with the
+  plan's safe withdrawal rate, read from `retirement_settings` in `GET /api/settings`. The planner
+  saves the plan with `PUT /api/retirement/settings` (worker/src/routes/retirement-goals.ts, and
+  `/retirement/settings` in the local router), which bumps the `retirement` counter, while
+  `useGuidance` (`frontend/src/core/guidance.ts`) followed only `settings`, `portfolio` and the
+  profile. Dashboard and Progress kept the rate they first read until another settings or
+  portfolio write, or a profile switch. Badge saves had refreshed it by accident until the fix
+  above. `useGuidance` now follows `entityVersion('retirement')` too. It does not follow
+  `retirement-goals`: a goal holds no part of the plan. The planner is the only other reader of the
+  plan and applies its own save's answer. Guard: `core/__tests__/guidanceStore.test.ts` "follows a
+  retirement plan save, and not a retirement goal write" fails without the change ("expected 4 to
+  be 3").
+
+- **A badge refresh asked for while an evaluation runs gets one more evaluation.**
+  `refreshAchievements` (`frontend/src/core/achievementsStore.ts`) handed a call for the profile
+  whose evaluation was running that same running evaluation. AchievementsHost asks 1.2 s after a
+  write, so a write that landed after the running evaluation had read its lists (a second
+  `POST /api/accounts`, say) got an answer from before it, and nothing evaluated again until the
+  next write. The snapshot that Getting started, the circles and Progress read kept the old
+  account list, and a badge the write earned waited for the next write. The badges' half shipped
+  in 5.17.4. The setup wizard's done step (`OnboardingWizard.tsx` `loadNextSteps`) awaits
+  the same call to count what was just imported. Now such a call gets one further run, started
+  when the running one ends (settled or rejected). Every call made meanwhile shares it, and a call
+  during the further run queues one more after it, so asks fold and never loop. If another profile
+  is active when the running one ends, the further run is dropped and answers `[]`; the switch's
+  own refresh evaluates the new profile, as before. Guards in
+  `core/__tests__/achievementsStore.test.ts`, "a refresh asked for while an evaluation is
+  running": the running evaluation is held on its settings read, the accounts change, and a
+  refresh is asked for. Without the change the snapshot ends with `['Rainy day']` instead of
+  `['Rainy day', 'Holiday']`, and the fold case sees one settings read instead of two. Two more
+  cases pin that a switch drops the old profile's further run and that a run nobody asked again
+  during starts nothing. Main has the same change as #672, whose case checks that a budget added
+  mid-run earns `first-budget`; the merge keeps both cases here, and this entry stands for both.
+  No line in CHANGELOG.md: it had one under Fixed ("Getting started sees an account you add a
+  second or so after another change straight away"), but Getting started ships for the first
+  time in this release, so no one saw it wait, and the badges' half has its line under 5.17.4.
+
+- **A month that has not begun is not tracked** (`shared/trackedMonths.ts`,
+  `core/achievements/evaluate.ts`, `core/achievements/review.ts`). `trackedMonthsOf(dates, today)`
+  leaves out every month after `today`'s, and the badges' evaluation passes its own today. So
+  `evaluation.trackedMonths`, and everything that reads it, holds no month still to come. Three
+  entries dated in December, put in early in October, had made December a tracked month. The
+  prints, which read that list, started a plate there ("1 of 12 months", "Eleven more tracked
+  months in a row finish it."), as the phase 4 review found.
+  - What changes for the badges: each counts months only up to this one. That covers One month,
+    A quarter, Half a year, A year and Two to Twenty years (months in a row); Saver x3, Saver x6
+    and A perfect year (saving months); Named everything, Reconciled and The full picture (their
+    first such month); The comeback (runs of months); Every month of a year; and the average
+    monthly spending that Rainy day measures a goal against. A badge reached through a month
+    still to come could be earned early and dated to that month; now it waits for the month.
+    Badges already earned stay earned, as the unlock records only add.
+  - Unchanged: the streak, which counts back from this month; Held the line, Clean sweep and Six
+    months under, which read finished months only; and First entry and the entry counts, which
+    count entries, not months. Getting started and the circles already stopped at this month
+    (`trackedMonthsInYearWindow`, `windowMonths`).
+  - The year in review counts its tracked months the same way; its totals still hold every entry
+    dated in the year.
+  - Guard: `core/__tests__/trackedMonths.test.ts` "a month that has not begun" fails without the
+    change, for the badges, the prints and the year in review each.
+  - Main shipped the same fix in 5.17.5 as #675, with its own filter in `evaluate.ts` and
+    `review.ts`. The merge of 5.17.5 keeps this branch's `trackedMonthsOf(dates, today)` in their
+    place, so the rule lives in one file, and #675's cases in `evaluate.test.ts` and
+    `review.test.ts` pass on it. Its CHANGELOG.md line is the one under 5.17.5, so this entry has
+    no line of its own there.
+
+- **The restaurant and dining rules give the default Eating out.** In
+  `shared/bankImport/categoryRules.ts` the Croatian `Restaurant` rule and the Worldwide `Dining`
+  rule now give `Eating out`, the default this branch puts in place of Food, with
+  `formerly: ['Restaurant']` and `formerly: ['Dining']`. A newcomer's first import offered either
+  name as a new category beside the default; it now files those rows under Eating out. A space that
+  has a category under the old name keeps getting the rule's rows there, through
+  `ruleCategory(rule, categoryNames)` as #673 set up, and each rule keeps to its own old name: the
+  Croatian rule never files under a space's Dining, nor the Worldwide one under its Restaurant.
+  Keywords are unchanged, so the Worldwide rule's `cafe`, `coffee` and `starbucks` rows go to
+  Eating out as they went to Dining. No migration, and no stored category is renamed.
+  - Stored copies: `frontend/src/core/bankImport/earlierBuiltInRules.ts` gains `CROATIAN_5_17_5`
+    and `WORLDWIDE_5_17_5`, each group's built-in rules as 5.17.4 and 5.17.5 shipped them (git
+    show `v5.17.5`, unchanged since `v5.17.4`). `loadCategoryRules` reads a stored set equal to
+    either as the group's rules now, so a copy of them runs the fold and the mapping prompt sees no
+    edit.
+  - Tests: `ruleFormerNames.test.ts` "restaurants and takeaways" (Eating out in a default space,
+    the old name in a space that has it, never the other rule's old name);
+    `ruleCategoryNames.test.ts` drops `Restaurant` and `Dining` from the general names and lists
+    them as retired, so a rule that gives either again fails; `earlierBuiltInRules.test.ts` loads
+    the two 5.17.5 fixtures (`__tests__/fixtures/built-in-rules-*-v5.17.5.json`, written from
+    `git show v5.17.5`) as the rules now and files a restaurant and a pizza under Eating out
+    through them; `importFlow.ruleCategoryNames.test.ts` (local-first) and
+    `worker/test/import-rule-category-names.test.ts` (the Bank Imports tab on the Worker and
+    `POST /api/v1/import`) file a made-up restaurant line under Eating out with no new category,
+    and under Restaurant in a space that has it. Without the change every Eating out case fails;
+    the two import cases for a space that has Restaurant pass before and after, as the guard that
+    the fold keeps it. `categoryGroups.test.ts` expects Eating out for `UBER EATS`.
+
+### Lines for CHANGELOG.md when the benchmarks gate opens
+
+The production build holds back the benchmarks and the questions that choose their figures
+(`frontend/src/core/guidanceGate.ts`). The app shows CHANGELOG.md in production
+(`ChangelogModal.tsx`), so a line for a held piece would announce it there. These lines are written
+and reviewed with their commits and wait here; the commit that opens the gate moves them into
+CHANGELOG.md's [Unreleased].
+
+Added:
+
+- **Setup asks where you live and who the space covers**, to choose the official figures your numbers are compared with. Change the answers in Settings.
+- **Your savings rate, cushion and debts beside the official figures where you live.** Breathing room, Solid ground and Room to choose show the typical range, where you sit in it, and the source and year of every figure.
+- **Paying your way compares groceries, eating out, transport and housing** with what households where you live spend: the first three as shares of your spending, housing as a share of your take-home pay.
+- **Your subscriptions beside the usual count**, and in the UK and US beside the usual monthly spend, inside Paying your way.
+
+Changed:
+
+- **The savings rate shows the typical range where you live**, which is your target until you set your own.
+
 ## [5.17.6] — 2026-11-01
 
 ### Fixed

@@ -7,11 +7,13 @@ import {
   listTransactions,
 } from '../helpers';
 import { EXPORT_MESSAGES } from '../../exportColumns';
-import { expectOk, scenario } from '../types';
+import { answersRecord } from '../../guidance/answers';
+import { added, expectOk, scenario } from '../types';
 import type { ContractApi, Expect, Json, Owned } from '../types';
 import { account } from './accounts';
 import { sourceForm } from './importSources';
 import { fillProfile, NONE, profileList } from './profiles';
+import { ANSWERS, answersKeyOf } from './settings';
 
 /** The ids that own rows of their own, as a profile's lists read now. */
 async function ownedNow(api: ContractApi, expect: Expect): Promise<Owned> {
@@ -76,6 +78,18 @@ async function backUpAndRestore(api: ContractApi, expect: Expect) {
   return { before, mine, theirs, me, partner };
 }
 
+/**
+ * Takes the whole-account backup as it stands and restores it, as Settings does, and answers the
+ * restored "Me" profile to read it back from.
+ */
+async function restoredAsIs(api: ContractApi, expect: Expect): Promise<ContractApi> {
+  const taken = await api.unscoped.get('/api/export');
+  expectOk(expect, taken, 'GET /api/export');
+  expectOk(expect, await api.unscoped.post('/api/import', taken.body), 'POST /api/import');
+  const me = (await profileList(api.unscoped, expect)).find((p) => p.name === 'Me')!;
+  return api.as(me.id as number);
+}
+
 export const backup = [
   scenario(
     'a backup is taken and restored, and everything in it comes back',
@@ -100,6 +114,103 @@ export const backup = [
       const everyday = accounts.find((a) => a.name === 'Everyday');
       expectMoney(expect, await balanceOf(back, expect, everyday.id), 954.5, 'Everyday');
       expect((await api.stored(partner)).accounts).toBe(1);
+    }
+  ),
+
+  scenario(
+    "a backup keeps each category's kind and whether it is needed every month",
+    async (api, expect) => {
+      await added(api, expect, '/api/categories', {
+        name: 'Market',
+        type: 'expense',
+        color: '#aa5500',
+        kind: 'groceries',
+        essential: false,
+      });
+      await added(api, expect, '/api/categories', { name: 'Pets', type: 'expense' });
+
+      const back = await restoredAsIs(api, expect);
+      const categories = (await back.get('/api/categories')).body as Json[];
+      const named = (name: string) => categories.find((c) => c.name === name);
+      expect(named('Market')).toMatchObject({ kind: 'groceries', essential: 0 });
+      // A category whose kind is still a guess from its name has none stored, and gets none.
+      expect(named('Pets')).toMatchObject({ kind: null, essential: null });
+    }
+  ),
+
+  scenario("a backup keeps a credit card's limit and rate", async (api, expect) => {
+    await added(api, expect, '/api/accounts', {
+      name: 'Visa',
+      type: 'credit',
+      currency: 'EUR',
+      balance: -350,
+      credit_limit: 2000,
+      credit_rate: 15.9,
+    });
+
+    const back = await restoredAsIs(api, expect);
+    const accounts = (await back.get('/api/accounts')).body as Json[];
+    expect(accounts.find((a) => a.name === 'Visa')).toMatchObject({
+      type: 'credit',
+      credit_limit: 2000,
+      credit_rate: 15.9,
+    });
+  }),
+
+  scenario('a backup keeps the bank formats an import read', async (api, expect) => {
+    expectOk(
+      expect,
+      await api.post('/api/import-logs', {
+        import_id: 'contract-backup-formats',
+        source: 'statements',
+        imported: 2,
+        bank_formats: ['dkb', 'ing'],
+      }),
+      'POST the import log'
+    );
+
+    const back = await restoredAsIs(api, expect);
+    const logs = (await back.get('/api/import-logs')).body as Json[];
+    expect(logs.find((log) => log.import_id === 'contract-backup-formats')).toMatchObject({
+      bank_formats: 'dkb,ing',
+    });
+  }),
+
+  scenario('a backup keeps the guidance answers as they were sent', async (api, expect) => {
+    expectOk(
+      expect,
+      await api.put('/api/settings', { [answersKeyOf(api)]: ANSWERS }),
+      'PUT the answers'
+    );
+    const back = await restoredAsIs(api, expect);
+    const settings = await back.get('/api/settings');
+    expectOk(expect, settings, 'GET /api/settings');
+    expect(settings.body[answersKeyOf(back)]).toBe(ANSWERS);
+    // Only under the restored profile: the replaced one's key is gone with it.
+    if (api.runtime === 'local') expect(settings.body[answersKeyOf(api)]).toBeUndefined();
+  }),
+
+  scenario(
+    'a backup keeps the support answer on the categories it named, whatever ids they come back with',
+    async (api, expect) => {
+      const family = await addCategory(api, expect, 'Help from family', 'income');
+      const grant = await addCategory(api, expect, 'Study grant', 'income');
+      const answers = JSON.stringify({ region: 'DE', supportCategoryIds: [grant, family] });
+      expectOk(
+        expect,
+        await api.put('/api/settings', { [answersKeyOf(api)]: answers }),
+        'PUT the answers'
+      );
+
+      const back = await restoredAsIs(api, expect);
+      const categories = (await back.get('/api/categories')).body as Json[];
+      const idOf = (name: string) => categories.find((c) => c.name === name)!.id as number;
+      const settings = await back.get('/api/settings');
+      expectOk(expect, settings, 'GET /api/settings');
+      const record = answersRecord(settings.body[answersKeyOf(back)]);
+      expect(record.region).toBe('DE');
+      // The two categories, in the order they were answered, under the ids they came back with.
+      expect(record.supportCategoryIds).toEqual([idOf('Study grant'), idOf('Help from family')]);
     }
   ),
 

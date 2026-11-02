@@ -5,10 +5,13 @@
 import { describe, expect, it } from 'vitest'
 import {
   ACCOUNT_MESSAGES as M,
+  ACCOUNT_TYPE_WORDS,
+  ACCOUNT_TYPES,
   checkAccountCreate,
   checkAccountEdit,
   readAccountType,
   storedAccountType,
+  takesCreditLine,
 } from '../../../../shared/accountSchema'
 import { refusalOf } from '../../../../shared/refusal'
 
@@ -30,6 +33,8 @@ describe('a new account', () => {
         balance: 0,
         currency: null,
         notes: '',
+        credit_limit: null,
+        credit_rate: null,
       },
     })
   })
@@ -59,6 +64,8 @@ describe('a new account', () => {
         balance: 1250.5,
         currency: 'EUR',
         notes: 'For the summer',
+        credit_limit: null,
+        credit_rate: null,
       },
     })
   })
@@ -92,7 +99,7 @@ describe('a new account', () => {
     ['a blank name', { name: '   ' }, { name: M.name }],
     ['a name that is not text', { name: 7 }, { name: M.name }],
     ['a name over 100 characters', { name: 'x'.repeat(101) }, { name: M.nameLength }],
-    ['a type the app does not have', { name: 'A', type: 'credit' }, { type: M.type }],
+    ['a type the app does not have', { name: 'A', type: 'sock_drawer' }, { type: M.type }],
     ['a type that is not text', { name: 'A', type: 2 }, { type: M.type }],
     ['a balance that is not a number', { name: 'A', balance: '12abc' }, { balance: M.balance }],
     ['a balance of Infinity', { name: 'A', balance: Infinity }, { balance: M.balance }],
@@ -120,7 +127,7 @@ describe('a new account', () => {
   })
 
   it('names every field it refuses at once, and summarizes them', () => {
-    const checked = checkAccountCreate({ name: '', type: 'credit', balance: 'abc' })
+    const checked = checkAccountCreate({ name: '', type: 'sock_drawer', balance: 'abc' })
     expect(refused(checked)).toEqual({ name: M.name, type: M.type, balance: M.balance })
     expect(refusalOf(refused(checked))).toEqual({
       error: `${M.name} ${M.type} ${M.balance}`,
@@ -179,7 +186,9 @@ describe('an edit of an account', () => {
 
   it('refuses a change the rules refuse, at its field', () => {
     expect(refused(checkAccountEdit({ ...FORM, name: ' ' }, STORED))).toEqual({ name: M.name })
-    expect(refused(checkAccountEdit({ ...FORM, type: 'credit' }, STORED))).toEqual({ type: M.type })
+    expect(refused(checkAccountEdit({ ...FORM, type: 'sock_drawer' }, STORED))).toEqual({
+      type: M.type,
+    })
     expect(refused(checkAccountEdit({ starting_date: '2026-13-01' }, STORED))).toEqual({
       starting_date: M.startingDate,
     })
@@ -231,7 +240,7 @@ describe('an account type', () => {
     expect(readAccountType(' Savings ')).toBe('savings')
     expect(readAccountType('Checking')).toBe('giro')
     expect(readAccountType('retirement')).toBe('ib')
-    expect(readAccountType('credit')).toBeNull()
+    expect(readAccountType('sock_drawer')).toBeNull()
     expect(readAccountType('constructor')).toBeNull()
     expect(readAccountType(7)).toBeNull()
   })
@@ -240,11 +249,108 @@ describe('an account type', () => {
   // list still loads, the account shows as a plain one, and an edit sends the type back unchanged.
   it('is read back from storage as stored, a v4 name as its replacement, none as giro', () => {
     expect(storedAccountType('cash')).toBe('cash')
-    expect(storedAccountType('credit')).toBe('credit')
+    expect(storedAccountType('sock_drawer')).toBe('sock_drawer')
     expect(storedAccountType('checking')).toBe('giro')
     expect(storedAccountType('investment')).toBe('ib')
     expect(storedAccountType('constructor')).toBe('constructor')
     expect(storedAccountType(undefined)).toBe('giro')
     expect(storedAccountType('')).toBe('giro')
+  })
+})
+
+describe('a credit card and an overdraft', () => {
+  const CARD = { id: 7, name: 'Visa', type: 'credit', credit_limit: 2000, credit_rate: 15.9 }
+  const OVERDRAWN = { id: 8, name: 'Everyday', type: 'giro', credit_limit: 500, credit_rate: 9.5 }
+
+  it('is a type of its own, which an API client reads about in words', () => {
+    expect(ACCOUNT_TYPES).toContain('credit')
+    expect(readAccountType(' Credit ')).toBe('credit')
+    expect(ACCOUNT_TYPE_WORDS.credit).toBe('a credit card')
+    expect(M.type).toBe('Choose Giro, Savings, Investment, Cash or Credit Card.')
+  })
+
+  it('takes a limit and a rate on a credit card or a Giro account, and on no other type', () => {
+    expect(['credit', 'giro', 'checking', undefined, ''].map(takesCreditLine)).toEqual([
+      true,
+      true,
+      true,
+      true,
+      true,
+    ])
+    expect(['savings', 'ib', 'cash', 'investment', 'sock_drawer'].map(takesCreditLine)).toEqual([
+      false,
+      false,
+      false,
+      false,
+      false,
+    ])
+  })
+
+  it('reads a limit of 0 or more and a rate from 0 to 100, blank as none', () => {
+    const value = (body: object) => {
+      const checked = checkAccountCreate({ name: 'Visa', type: 'credit', ...body })
+      return checked.ok ? [checked.value.credit_limit, checked.value.credit_rate] : checked.fields
+    }
+    expect(value({ credit_limit: '2000', credit_rate: 15.9 })).toEqual([2000, 15.9])
+    expect(value({ credit_limit: 0, credit_rate: '0' })).toEqual([0, 0])
+    expect(value({ credit_limit: ' ', credit_rate: null })).toEqual([null, null])
+    expect(value({ credit_rate: 100 })).toEqual([null, 100])
+    expect(value({ credit_limit: -1, credit_rate: 100.5 })).toEqual({
+      credit_limit: M.creditLimit,
+      credit_rate: M.creditRate,
+    })
+    expect(value({ credit_limit: '2k', credit_rate: 'high' })).toEqual({
+      credit_limit: M.creditLimit,
+      credit_rate: M.creditRate,
+    })
+  })
+
+  it('refuses either on a new account of another type', () => {
+    expect(
+      refused(
+        checkAccountCreate({ name: 'Pot', type: 'savings', credit_limit: 100, credit_rate: 1 })
+      )
+    ).toEqual({ credit_limit: M.creditLimitType, credit_rate: M.creditRateType })
+    expect(refused(checkAccountCreate({ name: 'Pot', type: 'cash', credit_limit: '' }))).toEqual({})
+  })
+
+  it('takes both away when an edit makes the account another type, and keeps them otherwise', () => {
+    expect(checkAccountEdit({ type: 'savings' }, OVERDRAWN)).toEqual({
+      ok: true,
+      value: { type: 'savings', credit_limit: null, credit_rate: null },
+    })
+    expect(checkAccountEdit({ type: 'credit' }, OVERDRAWN)).toEqual({
+      ok: true,
+      value: { type: 'credit' },
+    })
+    expect(checkAccountEdit({ type: 'cash' }, { ...OVERDRAWN, credit_rate: null })).toEqual({
+      ok: true,
+      value: { type: 'cash', credit_limit: null },
+    })
+    expect(checkAccountEdit({ name: 'Card', credit_rate: '' }, CARD)).toEqual({
+      ok: true,
+      value: { name: 'Card', credit_rate: null },
+    })
+  })
+
+  it('refuses either on an edit of another type, and one sent with the type it leaves', () => {
+    const savings = { ...OVERDRAWN, type: 'savings', credit_limit: null, credit_rate: null }
+    expect(refused(checkAccountEdit({ credit_limit: 300 }, savings))).toEqual({
+      credit_limit: M.creditLimitType,
+    })
+    expect(refused(checkAccountEdit({ type: 'ib', credit_rate: 4 }, OVERDRAWN))).toEqual({
+      credit_rate: M.creditRateType,
+    })
+    // A type this build does not have takes neither, as it does not know what it is.
+    expect(
+      refused(checkAccountEdit({ credit_limit: 300 }, { ...savings, type: 'sock_drawer' }))
+    ).toEqual({
+      credit_limit: M.creditLimitType,
+    })
+    // The values the form shows, sent back unchanged, are no change.
+    expect(checkAccountEdit({ credit_limit: '500', credit_rate: '9.5' }, OVERDRAWN)).toEqual({
+      ok: true,
+      value: {},
+    })
   })
 })

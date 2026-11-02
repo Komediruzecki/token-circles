@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { JSX } from 'solid-js'
 
 vi.mock('../../core/appStore', () => ({ setPage: vi.fn() }))
+// The circles have tests of their own (progressCircles.test.tsx); here they are not worked out yet.
+vi.mock('../../core/guidance', () => ({ useGuidance: () => () => null, takeAnswers: vi.fn() }))
 const thisMonth = new Date().toISOString().slice(0, 7)
 const today = new Date().toISOString().slice(0, 10)
 const month = (m: string, n = 3, over: Record<string, unknown> = {}) =>
@@ -101,7 +103,7 @@ describe('Progress page', () => {
   it('shows the record over twelve months, the badges and the year in review', () => {
     const c = mount(() => <Progress />)
     expect(c.querySelector('[data-test-id="progress-streak"]')!.textContent).toBe(
-      '2 months tracked'
+      '2 months in a row'
     )
     expect(c.querySelectorAll('[data-month-cell]')).toHaveLength(12)
     expect(c.querySelectorAll('[data-month-cell][data-tracked="true"]')).toHaveLength(1)
@@ -113,14 +115,37 @@ describe('Progress page', () => {
     // The one earned badge appears on the timeline too, dated to the month it was earned.
     const timeline = c.querySelector('[data-test-id="badge-timeline"]')!
     expect(timeline.querySelectorAll('[data-timeline-stop]')).toHaveLength(1)
-    // The three section headings are the brand's orbit dividers, not plain rules.
-    expect(c.querySelectorAll('[data-test-id^="progress-divider-"]')).toHaveLength(3)
+    // The five section headings are the brand's orbit dividers, not plain rules, in page order.
+    expect(
+      [...c.querySelectorAll('[data-test-id^="progress-divider-"]')].map((d) =>
+        d.getAttribute('data-test-id')
+      )
+    ).toEqual([
+      'progress-divider-circles',
+      'progress-divider-advice',
+      'progress-divider-prints',
+      'progress-divider-earned',
+      'progress-divider-badges',
+    ])
     expect(c.textContent).toContain('Year in review')
     expect(c.textContent).toContain('Nothing leaves it')
   })
 
+  it('says what the badge rail says when no streak is running', () => {
+    const snap = (globalThis as never as { __snap: { streak?: number } }).__snap
+    snap.streak = 0
+    try {
+      const c = mount(() => <Progress />)
+      expect(c.querySelector('[data-test-id="progress-streak"]')!.textContent).toBe(
+        'Start a streak'
+      )
+    } finally {
+      delete snap.streak
+    }
+  })
+
   it('ends the strip last month while this one is not tracked, so the run it counts is lit', () => {
-    // Twelve full months and nothing tracked this month: "12 months tracked" over 12 lit tiles.
+    // Twelve full months and nothing tracked this month: "12 months in a row" over 12 lit tiles.
     const snap = (globalThis as never as { __snap: Record<string, unknown> }).__snap
     const before = { ...snap }
     const year = Array.from({ length: 12 }, (_, i) => addMonths(thisMonth, -1 - i))
@@ -128,7 +153,7 @@ describe('Progress page', () => {
     try {
       const c = mount(() => <Progress />)
       expect(c.querySelector('[data-test-id="progress-streak"]')!.textContent).toBe(
-        '12 months tracked'
+        '12 months in a row'
       )
       const cells = [...c.querySelectorAll('[data-month-cell]')]
       expect(cells).toHaveLength(12)
@@ -221,5 +246,40 @@ describe('Progress page', () => {
     ) as HTMLButtonElement
     link.click()
     expect(vi.mocked(setPage)).toHaveBeenCalledWith('budgets')
+  })
+})
+
+describe('#progress/prints', () => {
+  /** jsdom has no scrollIntoView: each call is recorded by the id of what it scrolled to. */
+  let scrolled: string[] = []
+  beforeEach(() => {
+    scrolled = []
+    Element.prototype.scrollIntoView = function (this: Element) {
+      scrolled.push(this.id)
+    }
+  })
+  afterEach(() => {
+    delete (Element.prototype as Partial<Element>).scrollIntoView
+    window.location.hash = ''
+    vi.useRealTimers()
+  })
+
+  it('opens the page scrolled to its Prints section, and goes back there when asked again', async () => {
+    window.location.hash = '#progress/prints'
+    // The address's own hashchange fires a task later; let it pass before the page mounts.
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    vi.useFakeTimers()
+    mount(() => <Progress />)
+    expect(scrolled).toEqual(['progress-sec-prints'])
+    // Asked again from a toast while there: the page is told again and scrolls back.
+    vi.advanceTimersByTime(5000)
+    window.dispatchEvent(new HashChangeEvent('hashchange'))
+    expect(scrolled).toEqual(['progress-sec-prints', 'progress-sec-prints'])
+  })
+
+  it('leaves the page where it is on its plain address', () => {
+    window.location.hash = '#progress'
+    mount(() => <Progress />)
+    expect(scrolled).toEqual([])
   })
 })

@@ -35,6 +35,8 @@ interface ImportMetaEnv {
   readonly VITE_API_BASE_URL?: string
   readonly VITE_API_URL?: string
   readonly VITE_CORS_ORIGINS?: string
+  /** "true" shows the benchmarks in a production build (core/guidanceGate.ts). */
+  readonly VITE_ENABLE_BENCHMARKS?: string
 }
 
 interface ImportMeta {

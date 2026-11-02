@@ -1,0 +1,100 @@
+[
+  {
+    "category": "Groceries",
+    "keywords": [
+      "kaufland",
+      "konzum",
+      "spar",
+      "lidl",
+      "plodine",
+      "dm drogerie",
+      "müller",
+      "muller",
+      "vrutak",
+      "bio&bio",
+      "tommy",
+      "studenac"
+    ]
+  },
+  {
+    "category": "Subscriptions",
+    "keywords": [
+      "netflix",
+      "spotify",
+      "google one",
+      "youtube",
+      "audible",
+      "apple",
+      "openai",
+      "anthropic",
+      "github",
+      "cloudflare",
+      "patreon"
+    ]
+  },
+  {
+    "category": "Transportation",
+    "formerly": ["Car (Gas)"],
+    "keywords": ["ina bp", "lukoil", "petrol", "crodux", "tifon", "shell", "benzinska"]
+  },
+  {
+    "category": "Bank Fees",
+    "keywords": [
+      "naknad",
+      "uplata naknade",
+      "pripis kamate",
+      "pasivne kamate",
+      "bank fee",
+      "vođenje računa",
+      "vodenje racuna"
+    ]
+  },
+  {
+    "category": "Utilities",
+    "formerly": ["Apartment (Bills)"],
+    "keywords": [
+      "pričuva",
+      "pricuva",
+      "vodne usluge",
+      "zbrinjavanje otpada",
+      "obračun plina",
+      "obracun plina",
+      "hep",
+      "a1 usluge",
+      "a1 hrvatska",
+      "plina za",
+      "osiguranj"
+    ]
+  },
+  {
+    "category": "Salary",
+    "formerly": ["Salary Eur"],
+    "keywords": [
+      "isplata plaće",
+      "isplata place",
+      "isplata potpore",
+      "naknada za prijevoz",
+      "plaća",
+      "salary",
+      "payroll"
+    ]
+  },
+  {
+    "category": "Healthcare",
+    "formerly": ["Health"],
+    "keywords": ["ljekarn", "ljekarne", "pharmacy", "poliklinik", "dom zdravlja"]
+  },
+  {
+    "category": "Restaurant",
+    "keywords": ["restaurant", "restoran", "rougemarin", "pizzeria", "caffe", "bistro"]
+  },
+  {
+    "category": "Shopping",
+    "keywords": ["about you", "reserved", "zara", "h&m", "steam", "amazon"]
+  },
+  {
+    "category": "Transportation",
+    "formerly": ["Transport"],
+    "keywords": ["zet", "garaža", "garaza", "parking", "hak", "enc", "autoceste"]
+  }
+]

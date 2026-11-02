@@ -158,8 +158,8 @@ describe('a bank import into a profile with the default categories', () => {
     await addCategories(1, DEFAULT_NAMES)
     const flow = await previewStatement()
 
-    // Groceries sits beside main's default Food; folding it is the defaults' change, not this one.
-    expect(flow.newCategories()).toEqual(['Groceries'])
+    // Every name these rules give is a default, Groceries included.
+    expect(flow.newCategories()).toEqual([])
     await flow.handleImport('all')
 
     expect(await filedUnder()).toEqual({
@@ -176,7 +176,7 @@ describe('a bank import into a profile made from the old rules', () => {
     await addCategories(1, [...DEFAULT_NAMES, 'Car (Gas)', 'Transport', 'Health'])
     const flow = await previewStatement()
 
-    expect(flow.newCategories()).toEqual(['Groceries'])
+    expect(flow.newCategories()).toEqual([])
     await flow.handleImport('all')
 
     expect(await filedUnder()).toEqual({
@@ -195,7 +195,7 @@ describe('a bank import into a profile that switched the mapping on 5.17.3', () 
     localStorage.setItem('bankImportCategoryRules:1', JSON.stringify(croatian5173))
     const flow = await previewStatement()
 
-    expect(flow.newCategories()).toEqual(['Groceries'])
+    expect(flow.newCategories()).toEqual([])
     await flow.handleImport('all')
 
     expect(await filedUnder()).toEqual({
@@ -215,7 +215,7 @@ describe('a bank import while the household shows another profile', () => {
     const flow = await previewStatement()
 
     // Profile 2's old names would have been offered to profile 1 as new categories.
-    expect(flow.newCategories()).toEqual(['Groceries'])
+    expect(flow.newCategories()).toEqual([])
     await flow.handleImport('all')
 
     expect(await filedUnder(1)).toEqual({
@@ -224,7 +224,7 @@ describe('a bank import while the household shows another profile', () => {
       'LJEKARNA TEST 0000': 'Healthcare',
       'KONZUM TEST STORE 0000': 'Groceries',
     })
-    expect(await categoryNames(1)).toEqual([...DEFAULT_NAMES, 'Groceries'])
+    expect(await categoryNames(1)).toEqual(DEFAULT_NAMES)
   })
 })
 

@@ -3,9 +3,13 @@
  * the page renders it and the tests pin it. Every card names the figure it was built from and
  * points at the page that shows it; none of it is computed anywhere but on this device.
  */
+import { isTrackedMonth, TRACKED_MONTH_MIN_TRANSACTIONS } from '../../../../shared/trackedMonths'
 import { budgetsForMonth } from './budgets'
-import { baseAmount, bucketByMonth, sumTypes } from './evaluate'
+import { bucketByMonth, sumTypes } from './evaluate'
+import { biggestUnbudgeted, monthInTheRed, uncategorisedIn } from './monthFacts'
 import { addMonths, monthOf } from './months'
+import type { ArticleId } from '../../../../shared/articles'
+import type { CircleNumber } from '../../../../shared/guidance/circles'
 import type { EvaluateInput, Tx } from './evaluate'
 
 export type AdviceKind =
@@ -13,24 +17,45 @@ export type AdviceKind =
   | 'goal-pace'
   | 'in-the-red'
   | 'uncategorised'
-  | 'unbudgeted-subscription'
+  | 'unbudgeted-category'
   | 'streak-at-risk'
 
 export interface AdviceCard {
   /** Stable across runs of the same data, so a dismissal sticks. */
   id: string
   kind: AdviceKind
+  /** The circle the advice serves (ADVICE_CIRCLES); the card's Why opens it. */
+  circle: CircleNumber
   tone: 'warn' | 'info'
   title: string
   detail: string
   /** The number the card is built from, already formatted. */
   figure: string
   link?: { page: string; label: string }
+  /** The article on about.tokencircles.com that answers the card's question (shared/articles.ts). */
+  article?: ArticleId
   /** Ranking weight within a tone; bigger is more urgent. */
   weight: number
   /** About a month already finished. Ranked after what is still happening this month. */
   past?: boolean
 }
+
+/**
+ * The circle each kind of advice serves (circles part 2, design.md commit 11): sorting and keeping
+ * the months going build Clear picture; a month in the red and spending past a budget, or with
+ * none, are Paying your way; a goal's pace is Breathing room, where money is first put by.
+ */
+export const ADVICE_CIRCLES: Readonly<Record<AdviceKind, CircleNumber>> = {
+  uncategorised: 1,
+  'streak-at-risk': 1,
+  'in-the-red': 2,
+  'budget-drift': 2,
+  'unbudgeted-category': 2,
+  'goal-pace': 3,
+}
+
+/** A card as each kind words it, before the circle it serves is added. */
+type Advice = Omit<AdviceCard, 'circle'>
 
 export interface AdviceInput extends EvaluateInput {
   categories: Array<{ id: number; name: string }>
@@ -63,13 +88,13 @@ function categoryName(input: AdviceInput, id: number | null): string {
   return input.categories.find((c) => c.id === id)?.name ?? 'an uncategorised category'
 }
 
-function budgetDrift(input: AdviceInput, byMonth: Map<string, Tx[]>): AdviceCard[] {
+function budgetDrift(input: AdviceInput, byMonth: Map<string, Tx[]>): Advice[] {
   const month = monthOf(input.today)
   const list = byMonth.get(month) ?? []
   if (list.length === 0) return []
   const money = input.money ?? round
   const elapsed = monthElapsed(input.today)
-  const cards: AdviceCard[] = []
+  const cards: Advice[] = []
   for (const b of budgetsForMonth(input.budgets, month)) {
     // The amount the Budgets card shows (amount, and remaining as amount less spent). The summary
     // also works out a budget with rollover (effective_budget, shared/budgetRollover.ts), but no
@@ -100,9 +125,9 @@ function budgetDrift(input: AdviceInput, byMonth: Map<string, Tx[]>): AdviceCard
   return cards
 }
 
-function goalPace(input: AdviceInput): AdviceCard[] {
+function goalPace(input: AdviceInput): Advice[] {
   const money = input.money ?? round
-  const cards: AdviceCard[] = []
+  const cards: Advice[] = []
   for (const g of input.goals) {
     if (!g.deadline || g.target_amount <= 0) continue
     const remaining = g.target_amount - g.current_amount
@@ -139,13 +164,11 @@ function monthsBetween(from: string, to: string): number {
   return n
 }
 
-function inTheRed(input: AdviceInput, byMonth: Map<string, Tx[]>): AdviceCard[] {
+function inTheRed(input: AdviceInput, byMonth: Map<string, Tx[]>): Advice[] {
   const last = addMonths(monthOf(input.today), -1)
-  const list = byMonth.get(last)
-  if (!list || list.length < 3) return []
-  const income = sumTypes(list, ['income'])
-  const out = sumTypes(list, ['expense', 'deduction'])
-  if (out <= income) return []
+  const red = monthInTheRed(byMonth.get(last))
+  if (!red) return []
+  const { income, out } = red
   const money = input.money ?? round
   return [
     {
@@ -156,16 +179,16 @@ function inTheRed(input: AdviceInput, byMonth: Map<string, Tx[]>): AdviceCard[] 
       detail: 'A month in the red breaks a saving streak. Worth a look at where it went.',
       figure: `${money(out - income)} over`,
       link: { page: 'analytics', label: 'Analytics' },
+      article: 'one-month',
       weight: out - income,
       past: true,
     },
   ]
 }
 
-function uncategorised(input: AdviceInput, byMonth: Map<string, Tx[]>): AdviceCard[] {
+function uncategorised(input: AdviceInput, byMonth: Map<string, Tx[]>): Advice[] {
   const month = monthOf(input.today)
-  const list = byMonth.get(month) ?? []
-  const n = list.filter((t) => t.type !== 'transfer' && t.category_id === null).length
+  const n = uncategorisedIn(byMonth.get(month) ?? [])
   if (n === 0) return []
   return [
     {
@@ -173,7 +196,7 @@ function uncategorised(input: AdviceInput, byMonth: Map<string, Tx[]>): AdviceCa
       kind: 'uncategorised',
       tone: 'info',
       title: n === 1 ? 'One entry has no category' : 'Some entries have no category',
-      detail: 'Categorise them and this month counts towards "Named everything".',
+      detail: `Categorise ${n === 1 ? 'it' : 'them'} and this month counts toward "Named everything".`,
       figure: plural(n, 'entry to categorise', 'entries to categorise'),
       link: { page: 'transactions', label: 'Transactions' },
       weight: n,
@@ -181,61 +204,48 @@ function uncategorised(input: AdviceInput, byMonth: Map<string, Tx[]>): AdviceCa
   ]
 }
 
-function unbudgetedSubscriptions(input: AdviceInput, byMonth: Map<string, Tx[]>): AdviceCard[] {
+/**
+ * The biggest category spent on this month with no budget and no bill behind it. Named
+ * `unbudgeted-category` for what it flags; it was `unbudgeted-subscription`, and a dismissal
+ * stored under that name still applies (parseDismissed in records.ts).
+ */
+function unbudgetedCategory(input: AdviceInput, byMonth: Map<string, Tx[]>): Advice[] {
   const month = monthOf(input.today)
-  // A category is budgeted when it has a budget this month: one set only for June has lapsed.
-  const budgeted = new Set(budgetsForMonth(input.budgets, month).map((b) => b.category_id))
-  const billed = new Set(
-    input.bills
-      .map((b) => b.category_id)
-      .filter((id): id is number => id !== null && id !== undefined)
-  )
-  const counts = new Map<number, number>()
-  for (const t of byMonth.get(month) ?? []) {
-    if (t.type !== 'expense' || t.category_id === null) continue
-    if (budgeted.has(t.category_id) || billed.has(t.category_id)) continue
-    counts.set(t.category_id, (counts.get(t.category_id) ?? 0) + baseAmount(t))
-  }
-  const top = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]
-  if (!top || top[1] <= 0) return []
+  const top = biggestUnbudgeted(byMonth.get(month) ?? [], month, input.budgets, input.bills)
+  if (!top) return []
   const money = input.money ?? round
   return [
     {
-      id: `unbudgeted-subscription:${top[0]}:${month}`,
-      kind: 'unbudgeted-subscription',
+      id: `unbudgeted-category:${top.categoryId}:${month}`,
+      kind: 'unbudgeted-category',
       tone: 'info',
-      title: `${categoryName(input, top[0])} has no budget`,
+      title: `${categoryName(input, top.categoryId)} has no budget`,
       detail: 'It is the biggest thing you spend on with nothing set aside for it.',
-      figure: money(top[1]),
+      figure: money(top.spent),
       link: { page: 'budgets', label: 'Budgets' },
-      weight: top[1],
+      weight: top.spent,
     },
   ]
 }
 
-const TRACKED_MIN = 3
 const LATE_IN_MONTH_DAYS = 8
 
-function streakAtRisk(
-  input: AdviceInput,
-  byMonth: Map<string, Tx[]>,
-  streak: number
-): AdviceCard[] {
+function streakAtRisk(input: AdviceInput, byMonth: Map<string, Tx[]>, streak: number): Advice[] {
   if (streak < 2) return []
   const month = monthOf(input.today)
   const have = (byMonth.get(month) ?? []).length
-  if (have >= TRACKED_MIN) return []
+  if (isTrackedMonth(have)) return []
   const [y, m] = input.today.split('-').map(Number)
   const daysLeft = new Date(Date.UTC(y, m, 0)).getUTCDate() - Number(input.today.slice(8, 10))
   if (daysLeft > LATE_IN_MONTH_DAYS) return []
-  const need = TRACKED_MIN - have
+  const need = TRACKED_MONTH_MIN_TRANSACTIONS - have
   return [
     {
       id: `streak-at-risk:${month}`,
       kind: 'streak-at-risk',
       tone: 'warn',
       title: `Your ${streak}-month streak needs this month`,
-      detail: `A month counts once it holds ${TRACKED_MIN} entries, and this one is nearly over.`,
+      detail: `A month counts once it holds ${TRACKED_MONTH_MIN_TRANSACTIONS} entries, and this one is nearly over.`,
       figure: plural(need, 'entry to go', 'entries to go'),
       link: { page: 'transactions', label: 'Transactions' },
       weight: streak,
@@ -262,7 +272,7 @@ export function buildAdvice(input: AdviceInput, streak = 0): AdviceCard[] {
     ...inTheRed(input, byMonth),
     ...streakAtRisk(input, byMonth, streak),
     ...uncategorised(input, byMonth),
-    ...unbudgetedSubscriptions(input, byMonth),
+    ...unbudgetedCategory(input, byMonth),
   ]
     .sort(
       (a, b) =>
@@ -276,4 +286,5 @@ export function buildAdvice(input: AdviceInput, streak = 0): AdviceCard[] {
       return true
     })
     .filter((c) => !dismissed.has(c.id))
+    .map((c) => ({ ...c, circle: ADVICE_CIRCLES[c.kind] }))
 }

@@ -24,11 +24,11 @@ import { comingUp, type ScheduledBill } from '../../shared/billSchedule';
 // the app origin lands on the static-asset fallback and never unsubscribes anyone.
 // The app origin of THIS deployment — mail assets (logo, engraved art) load from
 // here so a dev-sent mail never depends on a prod release shipping the asset.
-function appOrigin(env: Env): string {
+export function appOrigin(env: Env): string {
   return env.CORS_ORIGIN || env.APP_ORIGINS?.split(',')[0] || 'https://tokencircles.com';
 }
 
-function unsubscribeUrl(unsubToken: string | null, env: Env): string | null {
+export function unsubscribeUrl(unsubToken: string | null, env: Env): string | null {
   const apiBase = env.API_PUBLIC_ORIGIN || env.CORS_ORIGIN || env.APP_ORIGINS?.split(',')[0] || '';
   return unsubToken && apiBase
     ? `${apiBase}/api/notifications/unsubscribe?token=${unsubToken}`

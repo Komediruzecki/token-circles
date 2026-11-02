@@ -1,0 +1,266 @@
+/* Your seven circles: the status, the ledger and the guidance line. A row is one link, at least
+   48 px tall; no text is under 12 px. On a phone each row stacks; above 768 px it is a table. */
+.section {
+  margin-bottom: 26px;
+}
+
+.status {
+  margin: 0 0 12px;
+}
+
+.status-line {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.status-sub {
+  margin: 3px 0 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.ledger {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--card-bg);
+  box-shadow: var(--shadow);
+}
+
+.head {
+  display: none;
+}
+
+.row + .row {
+  border-top: 1px solid var(--border);
+}
+
+.row[data-state='current'] {
+  background: color-mix(in oklab, var(--primary) 7%, var(--card-bg));
+}
+
+.link {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  grid-template-areas:
+    'glyph name pill'
+    'glyph line line'
+    'glyph key key'
+    'glyph detail detail'
+    'glyph bar bar';
+  align-items: start;
+  column-gap: 12px;
+  min-height: 48px;
+  padding: 13px 14px;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.link:hover {
+  background: color-mix(in oklab, var(--primary) 5%, transparent);
+}
+
+.link:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+
+.glyph {
+  grid-area: glyph;
+  width: 36px;
+  height: 36px;
+}
+
+.name {
+  grid-area: name;
+  align-self: center;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.row[data-state='later'] .name,
+.row[data-state='pending'] .name {
+  font-weight: 500;
+}
+
+/* The pill's look, with no grid placement: the circle's own view puts it in its head's grid. */
+.pill {
+  padding: 3px 9px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Where a ledger row puts its pill. */
+.pill-place {
+  grid-area: pill;
+  align-self: center;
+  justify-self: end;
+}
+
+/* --primary-hover on --primary-bg: --primary on it is 4.08:1 in light (circles mocks, finding i). */
+.pill[data-state='reached'] {
+  background: var(--primary-bg);
+  color: var(--primary-hover);
+}
+
+.pill[data-state='current'] {
+  border-color: var(--circle-now-line);
+  background: var(--circle-now-bg);
+  color: var(--text);
+}
+
+.pill[data-state='later'] {
+  border-color: var(--border);
+  color: var(--text-secondary);
+}
+
+.line {
+  grid-area: line;
+  margin-top: 2px;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--text-secondary);
+}
+
+.key {
+  grid-area: key;
+  margin-top: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.row[data-state='later'] .key {
+  font-weight: 500;
+}
+
+.detail {
+  grid-area: detail;
+  margin-top: 2px;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--text-secondary);
+}
+
+.bar {
+  grid-area: bar;
+  margin-top: 8px;
+}
+
+.track {
+  position: relative;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--budget-bar-bg);
+}
+
+.track i {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--ring-a), var(--ring-b));
+}
+
+.cells {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 3px;
+}
+
+.cells i {
+  height: 8px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+}
+
+.cells i.on {
+  border-color: transparent;
+  background: linear-gradient(180deg, var(--ring-a), var(--ring-b));
+}
+
+/* A reached row on a phone folds to its name, its pill and its figure. */
+@media (max-width: 768px) {
+  .row[data-state='reached'] .line,
+  .row[data-state='reached'] .detail {
+    display: none;
+  }
+
+  .row[data-state='reached'] .link {
+    align-items: center;
+  }
+
+  .row[data-state='reached'] .key {
+    margin-top: 2px;
+    font-weight: 500;
+    color: var(--text-secondary);
+  }
+}
+
+/* Above 768 px: a table, "Circle / Your numbers / Where you are". */
+@media (min-width: 769px) {
+  .head {
+    display: grid;
+    grid-template-columns: 40px minmax(0, 1fr) minmax(0, 1.15fr) 120px;
+    gap: 16px;
+    padding: 10px 18px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-secondary);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+  }
+
+  .link {
+    grid-template-columns: 40px minmax(0, 1fr) minmax(0, 1.15fr) 120px;
+    grid-template-areas:
+      'glyph name key pill'
+      'glyph line detail pill'
+      'glyph line bar pill';
+    align-items: center;
+    column-gap: 16px;
+    padding: 14px 18px;
+  }
+
+  .glyph {
+    width: 40px;
+    height: 40px;
+  }
+
+  .pill-place {
+    justify-self: start;
+  }
+
+  .line {
+    align-self: start;
+  }
+
+  .key {
+    margin-top: 0;
+  }
+}
+
+.waiting {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.guide {
+  margin: 14px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}

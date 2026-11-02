@@ -113,7 +113,9 @@
 .plan {
   font-size: 11px;
   font-weight: 600;
-  color: var(--primary);
+  /* Primary drawn toward the text colour: on its own tint, --primary was 4.0:1 in the light theme.
+     Darker on a light theme and lighter on a dark one, so it gains in each. */
+  color: color-mix(in oklab, var(--primary) 70%, var(--text));
   background: var(--primary-bg);
   border-radius: 999px;
   padding: 1px 8px;
@@ -359,4 +361,52 @@
   line-height: 1.4;
   color: var(--danger-text);
   overflow-wrap: anywhere;
+}
+
+/* A finger and iOS Safari: a field under 16 px zooms the page when it takes focus, and the price
+   field was a 64 x 20 px target inside its border. On a coarse pointer the price field, the
+   period and the row's tick and name are each at least 44 px tall, their text 16 px, and the
+   small print stays 12 px or more. */
+@media (pointer: coarse) {
+  .row-main {
+    min-height: 44px;
+  }
+
+  .check {
+    width: 20px;
+    height: 20px;
+  }
+
+  .plan {
+    font-size: 12px;
+  }
+
+  /* Wrapped, not cut short: at 13 px "how sure" at the end of the line no longer fit a phone's
+     row, and the ellipsis took it. */
+  .meta {
+    font-size: 13px;
+    white-space: normal;
+  }
+
+  .price-wrap {
+    min-height: 46px;
+    padding-block: 0;
+    border-color: color-mix(in oklab, var(--text-secondary) 55%, var(--border));
+  }
+
+  .price {
+    min-height: 44px;
+    width: 72px;
+    font-size: 16px;
+  }
+
+  .cur {
+    font-size: 13px;
+  }
+
+  .freq {
+    min-height: 44px;
+    font-size: 16px;
+    border-color: color-mix(in oklab, var(--text-secondary) 55%, var(--border));
+  }
 }

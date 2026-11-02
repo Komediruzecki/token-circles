@@ -309,19 +309,19 @@ describe('an account of a type this build does not know', () => {
   // a plain account, and an edit sends the type back as it is, so a rollback changes nothing.
   it('shows as a plain account, and an edit keeps its type', async () => {
     const db = await getDB()
-    await db.put('accounts', { ...(await db.get('accounts', EVERYDAY)), type: 'credit' })
+    await db.put('accounts', { ...(await db.get('accounts', EVERYDAY)), type: 'sock_drawer' })
     await mountPage()
     const card = host.querySelector<HTMLElement>('[data-test-id="account-card"]')!
     expect(card.querySelector('[data-test-id="account-type"]')?.textContent).toBe('account')
 
     await openEdit('Everyday')
-    type(field('Account Name'), 'Visa')
+    type(field('Account Name'), 'Sock drawer')
     submit()
 
     await vi.waitFor(async () => {
       expect((await db.get('accounts', EVERYDAY)) as Row).toMatchObject({
-        name: 'Visa',
-        type: 'credit',
+        name: 'Sock drawer',
+        type: 'sock_drawer',
       })
     })
     expect(failureToasts()).toEqual([])
@@ -329,13 +329,13 @@ describe('an account of a type this build does not know', () => {
 
   it('opens the edit with its type shown as a plain account, not a blank select', async () => {
     const db = await getDB()
-    await db.put('accounts', { ...(await db.get('accounts', EVERYDAY)), type: 'credit' })
+    await db.put('accounts', { ...(await db.get('accounts', EVERYDAY)), type: 'sock_drawer' })
     await mountPage()
 
     await openEdit('Everyday')
 
     const select = field('Account Type') as unknown as HTMLSelectElement
-    expect(select.value).toBe('credit')
+    expect(select.value).toBe('sock_drawer')
     expect(select.selectedIndex).toBeGreaterThanOrEqual(0)
     const chosen = select.selectedOptions[0]
     expect(chosen.textContent).toBe('Other account')
@@ -354,7 +354,146 @@ describe('an account of a type this build does not know', () => {
       'savings',
       'ib',
       'cash',
+      'credit',
     ])
+  })
+})
+
+describe('a credit card and an overdraft', () => {
+  it('shows a credit card with its badge and an icon of its own, apart from cash', async () => {
+    const db = await getDB()
+    const everyday = (await db.get('accounts', EVERYDAY)) as Row
+    await db.put('accounts', { ...everyday, id: 2, name: 'Visa', type: 'credit', balance: -350 })
+    await db.put('accounts', { ...everyday, id: 3, name: 'Wallet', type: 'cash', balance: 40 })
+    await mountPage()
+    await vi.waitFor(() => {
+      expect(host.querySelectorAll('[data-test-id="account-card"]')).toHaveLength(3)
+    })
+    const card = (name: string) =>
+      Array.from(host.querySelectorAll<HTMLElement>('[data-test-id="account-card"]')).find(
+        (c) => c.querySelector('[data-test-id="account-name"]')?.textContent === name
+      )!
+    const icon = (name: string) =>
+      card(name).querySelector('[data-test-id="account-icon"] path')?.getAttribute('d')
+    expect(card('Visa').querySelector('[data-test-id="account-type"]')?.textContent).toBe('credit')
+    expect(new Set([icon('Visa'), icon('Wallet'), icon('Everyday')]).size).toBe(3)
+  })
+
+  it("opens a credit card's edit on Credit Card, not as a plain account", async () => {
+    const db = await getDB()
+    await db.put('accounts', { ...(await db.get('accounts', EVERYDAY)), type: 'credit' })
+    await mountPage()
+
+    await openEdit('Everyday')
+
+    const select = field('Account Type') as unknown as HTMLSelectElement
+    expect(select.value).toBe('credit')
+    const chosen = select.selectedOptions[0]
+    expect(chosen.textContent).toBe('Credit Card')
+    expect(chosen.disabled).toBe(false)
+    expect(Array.from(select.options).map((o) => o.textContent)).not.toContain('Other account')
+  })
+
+  it('shows a limit and a rate for a credit card, and stores them with what is owed', async () => {
+    await mountPage()
+    await openAdd()
+    type(field('Account Name'), 'Visa')
+    type(field('Account Type'), 'credit')
+    await vi.waitFor(() => {
+      expect(field('Credit Limit')).toBeTruthy()
+    })
+    expect(describedBy(field('Credit Limit'))).toBe('The most the card lets you owe.')
+    expect(describedBy(field('Interest Rate'))).toBe(
+      'The yearly rate the card charges on money you owe.'
+    )
+    expect(describedBy(field('Current Balance'))).toBe(
+      'Money you owe on the card is a balance below zero, like -350.'
+    )
+
+    type(field('Credit Limit'), '2000')
+    type(field('Interest Rate'), '15,9')
+    type(field('Current Balance'), '-350')
+    submit()
+
+    await vi.waitFor(async () => {
+      expect((await accounts()).find((row) => row.name === 'Visa')).toMatchObject({
+        type: 'credit',
+        credit_limit: 2000,
+        credit_rate: 15.9,
+        balance: -350,
+      })
+    })
+    expect(failureToasts()).toEqual([])
+  })
+
+  it("calls a Giro account's limit its overdraft, and sends neither for a savings account", async () => {
+    await mountPage()
+    await openAdd()
+    type(field('Account Name'), 'Pot')
+    expect(field('Overdraft Limit')).toBeTruthy()
+    expect(describedBy(field('Interest Rate'))).toBe(
+      'The yearly rate the bank charges while the account is below zero.'
+    )
+    type(field('Overdraft Limit'), '500')
+
+    type(field('Account Type'), 'savings')
+    await vi.waitFor(() => {
+      expect(() => field('Overdraft Limit')).toThrow()
+    })
+    expect(() => field('Interest Rate')).toThrow()
+    submit()
+
+    await vi.waitFor(async () => {
+      expect((await accounts()).find((row) => row.name === 'Pot')).toMatchObject({
+        type: 'savings',
+        credit_limit: null,
+        credit_rate: null,
+      })
+    })
+    expect(failureToasts()).toEqual([])
+  })
+
+  it('opens an overdraft with its limit and rate, and making it savings takes both away', async () => {
+    const db = await getDB()
+    await db.put('accounts', {
+      ...(await db.get('accounts', EVERYDAY)),
+      credit_limit: 500,
+      credit_rate: 9.5,
+    })
+    await mountPage()
+    await openEdit('Everyday')
+    expect(field('Overdraft Limit').value).toBe('500')
+    expect(field('Interest Rate').value).toBe('9.5')
+
+    type(field('Account Type'), 'savings')
+    submit()
+
+    await vi.waitFor(async () => {
+      expect((await db.get('accounts', EVERYDAY)) as Row).toMatchObject({
+        type: 'savings',
+        credit_limit: null,
+        credit_rate: null,
+      })
+    })
+    expect(failureToasts()).toEqual([])
+  })
+
+  it('marks a rate it cannot read, under the rate, and sends nothing', async () => {
+    await mountPage()
+    await openAdd()
+    type(field('Account Name'), 'Visa')
+    type(field('Account Type'), 'credit')
+    await vi.waitFor(() => {
+      expect(field('Interest Rate')).toBeTruthy()
+    })
+    type(field('Interest Rate'), 'high')
+    submit()
+    await settle()
+
+    expect(field('Interest Rate').getAttribute('aria-invalid')).toBe('true')
+    expect(describedBy(field('Interest Rate'))).toContain(M.creditRate)
+    expect(await accounts()).toHaveLength(1)
+    expect(failureToasts()).toEqual([])
   })
 })
 
@@ -376,7 +515,7 @@ describe('an account a type v4 renamed', () => {
     expect(opened('checking')).toBe('giro')
     expect(opened('retirement')).toBe('ib')
     expect(opened('investment')).toBe('ib')
-    expect(opened('credit')).toBe('credit')
+    expect(opened('sock_drawer')).toBe('sock_drawer')
     expect(opened('savings')).toBe('savings')
   })
 })

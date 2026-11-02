@@ -10,6 +10,7 @@ import { loanForm } from './loans';
 import { holdingForm } from './portfolio';
 import { ruleForm } from './recurring';
 import { retirementForm } from './retirement';
+import { ANSWERS, answersKeyOf } from './settings';
 
 export async function profileList(api: ContractApi, expect: Expect): Promise<Json[]> {
   const reply = await api.get('/api/profiles');
@@ -121,6 +122,11 @@ export async function fillProfile(api: ContractApi, expect: Expect): Promise<Own
     await api.put('/api/retirement/settings', { ...plan.body.settings, birthMonth: '1986-04' }),
     'PUT the retirement plan'
   );
+  expectOk(
+    expect,
+    await api.put('/api/settings', { [answersKeyOf(api)]: ANSWERS }),
+    'PUT the guidance answers'
+  );
   return { loans: [car], accounts: [everyday], transactions: [groceries] };
 }
 
@@ -187,9 +193,13 @@ export const profiles = [
     expectOk(expect, cleared, 'DELETE /api/profile/data');
     expect(cleared.body).toMatchObject({ ok: true, message: 'Profile data reset successfully' });
 
-    // Both keep the profile's retirement plan, and delete its import sources with the rest: a
-    // source on the daily schedule would fill the cleared profile again.
-    expect(await api.stored(api.profile, mine)).toEqual({ ...NONE, 'retirement settings': 1 });
+    // Both keep the profile's retirement plan and its guidance answers, and delete its import
+    // sources with the rest: a source on the daily schedule would fill the cleared profile again.
+    expect(await api.stored(api.profile, mine)).toEqual({
+      ...NONE,
+      'retirement settings': 1,
+      'guidance answers': 1,
+    });
     expect((await profileList(api, expect)).map((p) => p.name)).toEqual(['Me', 'Partner']);
     expect(await api.stored(api.other.profile, theirs)).toEqual(theirsBefore);
   }),

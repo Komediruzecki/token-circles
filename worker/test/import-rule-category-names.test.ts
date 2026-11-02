@@ -48,6 +48,9 @@ const PARKING_LINES: Array<[string, number]> = [
   ['ZET TEST TICKET 0000', -2],
 ];
 
+/** A line only the restaurant rule matches. */
+const RESTAURANT_LINES: Array<[string, number]> = [['RESTORAN TEST 0000', -24]];
+
 function statement(lines: Array<[string, number]>): string {
   const rows = lines.map(([description, amount], i) => {
     const day = `2026-01-${String(i + 1).padStart(2, '0')}`;
@@ -237,8 +240,8 @@ describe('worker import from the Bank Imports tab: a fresh profile', () => {
   it('files the rows under the default categories and offers no second name', async () => {
     await seedDefaults();
 
-    // Groceries sits beside main's default Food; folding it is the defaults' change, not this one.
-    expect((await appImport(LINES, true)).new_categories).toEqual(['Groceries']);
+    // Every name these rules give is a default, Groceries included, so nothing is new.
+    expect((await appImport(LINES, true)).new_categories).toEqual([]);
     const done = await appImport(LINES, false);
     expect(done.imported).toBe(6);
     expect(await filedUnder()).toEqual(FRESH);
@@ -259,11 +262,11 @@ describe('worker import from the Bank Imports tab: a profile made from the old r
     await addOldNames();
     const before = (await categoryNames()).length;
 
-    expect((await appImport(LINES, true)).new_categories).toEqual(['Groceries']);
+    expect((await appImport(LINES, true)).new_categories).toEqual([]);
     await appImport(LINES, false);
 
     expect(await filedUnder()).toEqual(OLD);
-    expect((await categoryNames()).length).toBe(before + 1);
+    expect((await categoryNames()).length).toBe(before);
   });
 
   it('creates no new name beside an old one when the profile has no defaults', async () => {
@@ -289,7 +292,7 @@ describe('worker import from the Bank Imports tab: a profile made from the old r
     await seedDefaults();
     await addCategory('Transport', 'expense');
 
-    expect((await appImport(LINES, true)).new_categories).toEqual(['Groceries']);
+    expect((await appImport(LINES, true)).new_categories).toEqual([]);
     await appImport(LINES, false);
 
     const filed = await filedUnder();
@@ -329,7 +332,7 @@ describe('worker statement import (POST /api/v1/import)', () => {
   it('files a fresh profile’s rows under the default categories', async () => {
     await seedDefaults();
 
-    expect((await apiImport(LINES, 'preview')).newCategories).toEqual(['Groceries']);
+    expect((await apiImport(LINES, 'preview')).newCategories).toEqual([]);
     expect((await apiImport(LINES, 'commit')).imported).toBe(6);
 
     expect(await filedUnder()).toEqual(FRESH);
@@ -339,7 +342,7 @@ describe('worker statement import (POST /api/v1/import)', () => {
     await seedDefaults();
     await addOldNames();
 
-    expect((await apiImport(LINES, 'preview')).newCategories).toEqual(['Groceries']);
+    expect((await apiImport(LINES, 'preview')).newCategories).toEqual([]);
     await apiImport(LINES, 'commit');
 
     expect(await filedUnder()).toEqual(OLD);
@@ -362,9 +365,43 @@ describe('worker statement import (POST /api/v1/import)', () => {
     await seedDefaults();
     await addOldNames(OTHER_PROFILE);
 
-    expect((await apiImport(LINES, 'preview')).newCategories).toEqual(['Groceries']);
+    expect((await apiImport(LINES, 'preview')).newCategories).toEqual([]);
     await apiImport(LINES, 'commit');
 
     expect(await filedUnder()).toEqual(FRESH);
+  });
+});
+
+describe('worker import: a restaurant', () => {
+  it('goes under the default Eating out from the Bank Imports tab, and no Restaurant is offered', async () => {
+    await seedDefaults();
+
+    expect((await appImport(RESTAURANT_LINES, true)).new_categories).toEqual([]);
+    await appImport(RESTAURANT_LINES, false);
+
+    expect(await filedUnder()).toEqual({ 'RESTORAN TEST 0000': 'Eating out' });
+  });
+
+  it('goes under the default Eating out from POST /api/v1/import', async () => {
+    await seedDefaults();
+
+    expect((await apiImport(RESTAURANT_LINES, 'preview')).newCategories).toEqual([]);
+    await apiImport(RESTAURANT_LINES, 'commit');
+
+    expect(await filedUnder()).toEqual({ 'RESTORAN TEST 0000': 'Eating out' });
+  });
+
+  it('keeps going to Restaurant in a profile made from the old rules, on both paths', async () => {
+    await seedDefaults();
+    await addCategory('Restaurant', 'expense');
+
+    expect((await appImport(RESTAURANT_LINES, true)).new_categories).toEqual([]);
+    await appImport(RESTAURANT_LINES, false);
+    expect(await filedUnder()).toEqual({ 'RESTORAN TEST 0000': 'Restaurant' });
+
+    await env.DB.prepare('DELETE FROM transactions').run();
+    expect((await apiImport(RESTAURANT_LINES, 'preview')).newCategories).toEqual([]);
+    await apiImport(RESTAURANT_LINES, 'commit');
+    expect(await filedUnder()).toEqual({ 'RESTORAN TEST 0000': 'Restaurant' });
   });
 });

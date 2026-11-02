@@ -30,7 +30,8 @@ import type { Page, TestInfo } from '@playwright/test'
 import type { Mode, Profile } from './release-fixtures'
 
 const FIRST_BUDGET = /Badge unlocked: First budget\./
-const SUMMARY = /(\d+) badges earned from your history so far\./
+const SUMMARY =
+  /(\d+) badges (?:earned|and your first print|and \d+ prints) from your history so far\./
 
 function firstOfMonth(): string {
   const now = new Date()

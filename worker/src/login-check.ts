@@ -41,6 +41,7 @@ import type { Context } from 'hono';
 import type { AppEnv, Env } from './index';
 import { b64urlDecode, b64urlEncode, readCookies } from './auth';
 import * as db from './db';
+import { derivedHmacKey } from './derived-key';
 import { turnstileConfigured, verifyTurnstileDetailed, type TurnstileResult } from './turnstile';
 import { CAPTCHA_ACTIONS } from '../../shared/captchaActions';
 
@@ -94,25 +95,13 @@ export function loginCheckBytes(exp: number, id: string, ip: string) {
   return encoder.encode(`login-check.${FORMAT}.${exp}.${id}.${ip}`);
 }
 
-/** The key that signs this deployment's login checks. Callers check that JWT_SECRET is set. */
-async function loginCheckKey(secret: string, appEnv: string | undefined): Promise<CryptoKey> {
-  const material = await crypto.subtle.importKey('raw', encoder.encode(secret), 'HKDF', false, [
-    'deriveKey',
-  ]);
-  return crypto.subtle.deriveKey(
-    {
-      name: 'HKDF',
-      hash: 'SHA-256',
-      salt: new Uint8Array(0),
-      // The deployment is part of the label: a check left on dev never verifies on prod, even if
-      // the two were ever given the same JWT_SECRET.
-      info: encoder.encode(`${KEY_LABEL} env=${appEnv ?? ''}`),
-    },
-    material,
-    { name: 'HMAC', hash: 'SHA-256', length: 256 },
-    false,
-    ['sign', 'verify']
-  );
+/**
+ * The key that signs this deployment's login checks (derived-key.ts): a check left on dev never
+ * verifies on prod, even if the two were ever given the same JWT_SECRET. Callers check that
+ * JWT_SECRET is set.
+ */
+function loginCheckKey(secret: string, appEnv: string | undefined): Promise<CryptoKey> {
+  return derivedHmacKey(secret, KEY_LABEL, appEnv);
 }
 
 function loginCheckCookie(value: string, maxAgeSeconds: number, env: Env): string {
