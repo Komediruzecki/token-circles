@@ -320,8 +320,10 @@ All notable changes to Token Circles are documented here. The format is based on
   `applyDemoModeFromUrl` and in the `isServerAccount` branch of `whereToOfferOnboarding`, so a
   return to the account by `?plan=`, a confirm link, Sign in or Settings no longer leaves it to
   open setup over a later demo. `readLocalWorkspace`'s `own` result carries the profiles' `ids`,
-  and `chooseLocalOnly` selects the oldest (`currentProfileId`, `selectedProfileIds`) instead of
-  removing both keys, which let App open the lowest id, Example Low Income. Over an example
+  and `chooseLocalOnly` selects the oldest before its reload (`leaveSelectionForLocalWorkspace`,
+  localOnly.ts, so the wizard itself still writes neither key) instead of removing
+  `currentProfileId` and `selectedProfileIds`, which let App open the lowest id, Example Low
+  Income. Over an example
   (`overExample()`), the space step starts with no stored guidance answers, so About this space no
   longer shows the example's region and saves `skipped` on the new space. Tests: `demoMode.test.ts`,
   `loginScreen.tryDemo.test.tsx`, `onboardingAfterLocalOnly.test.ts` (a real `account-1` boot that
