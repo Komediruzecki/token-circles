@@ -67,6 +67,7 @@ import {
   EXAMPLES_CHOICE_LEGEND,
   EXAMPLES_NOT_REMOVED,
   examplesChoiceNote,
+  leaveSelectionForLocalWorkspace,
   localOnlyQuestion,
   readLocalWorkspace,
 } from './localOnly'
@@ -677,18 +678,9 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
       // offer setup again. (Harmless when local data exists: a workspace of the person's own that
       // is not pristine never auto-opens the wizard.)
       forgetOnboardingStatus('local')
-      // Server-mode profile selection is meaningless against the local DB; stale ids would make
-      // the profile picker read empty or heal onto the wrong profile (mirrors handleLogout's
-      // cleanup). Over profiles of the person's own, the oldest is selected instead: the confirm
-      // says they carry on with them, and App, left to pick, would open the lowest id, an example
-      // where the examples are here too.
-      if (found.kind === 'own') {
-        localStorage.setItem('currentProfileId', String(found.ids[0]))
-        localStorage.setItem('selectedProfileIds', JSON.stringify([found.ids[0]]))
-      } else {
-        localStorage.removeItem('currentProfileId')
-        localStorage.removeItem('selectedProfileIds')
-      }
+      // The account's selection means nothing against the local DB: the oldest profile of the
+      // person's own where there is one, else none, for App to pick (localOnly.ts).
+      leaveSelectionForLocalWorkspace(found)
       // Setup opens on the space after the reload unless the workspace has a profile of the
       // person's own (onboardingStore.ts, whereToOfferOnboarding).
       markLocalSetupPending()
