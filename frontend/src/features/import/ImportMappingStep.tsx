@@ -7,7 +7,23 @@ import { For, Show } from 'solid-js'
 import { getLocalCurrency } from '../../core/api'
 import { FIELD_NAMES } from '../../core/importMapping'
 import styles from '../Import.module.css'
-import type { ImportFlow } from './importFlow'
+import type { ImportFlow, UploadResult } from './importFlow'
+
+/**
+ * What the rows being matched came from, as Map columns names it: the file, with its sheet when
+ * the workbook has more than one, or the count of bank statements read together. Null for pasted
+ * text, which is no file (importFlow's paste path names its sheet 'Pasted'), and for a Google
+ * Sheet, which leaves no upload result. Setup's Open in Import lands here with the file it could
+ * not read, and nothing on the page said which file that was.
+ */
+export function mappingSource(
+  upload: Pick<UploadResult, 'filename' | 'sheetName' | 'sheetNames'> | null
+): string | null {
+  if (!upload || upload.sheetName === 'Pasted') return null
+  return upload.sheetNames.length > 1
+    ? `${upload.filename}, sheet ${upload.sheetName}`
+    : upload.filename
+}
 
 /**
  * `embedded`: rendered inside the onboarding wizard, whose footer carries the
@@ -21,6 +37,13 @@ export function ImportMappingStep(props: { flow: ImportFlow; embedded?: boolean 
     <>
       <div class={styles.mappingSection}>
         <h2 class={styles.mappingTitle}>Map columns</h2>
+        <Show when={mappingSource(flow.uploadResult())}>
+          {(source) => (
+            <p class={styles.mappingSource} data-test-id="import-map-source">
+              From <strong>{source()}</strong>
+            </p>
+          )}
+        </Show>
         <p class={styles.mappingSubtitle}>
           Map your data columns to the 12 required fields. Fields in bold are required.
         </p>

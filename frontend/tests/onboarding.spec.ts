@@ -238,6 +238,8 @@ test.describe('onboarding wizard', () => {
     await expect(page.getByTestId('onboarding-wizard')).toHaveCount(0)
     await expect(page.getByTestId('import-header')).toBeVisible({ timeout: 30000 })
     await expect(page.getByTestId('import-map-date')).toBeVisible({ timeout: 20000 })
+    // Map columns names the file it is reading.
+    await expect(page.getByTestId('import-map-source')).toHaveText('From export.csv')
     for (const column of ['When', 'What', 'How much']) {
       await expect(
         page.getByTestId('import-map-date').locator('option', { hasText: column })

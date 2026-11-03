@@ -302,6 +302,20 @@
   margin: 0 0 16px 0;
 }
 
+/* The file the columns are from (mappingSource). A long name breaks anywhere rather than run off
+   a phone's screen. */
+.mappingSource {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 0 0 6px 0;
+  overflow-wrap: anywhere;
+}
+
+.mappingSource strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
 .mappingGrid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));

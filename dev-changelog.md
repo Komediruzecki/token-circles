@@ -2663,6 +2663,16 @@ true, or is too small for one.
   `tests/check-inbox-layout.spec.ts` (at 1280 and 390; fails on the address with the old markup
   and on Contact support with the old footer). The footer has `data-test-id="sign-in-footer"`.
 
+- **Map columns names the file it is reading.** Setup's Open in Import lands on Map columns with
+  the file setup could not read, and nothing on the page said which one. Under the heading a line
+  now says "From october-statement.csv" (`mappingSource`, `features/import/ImportMappingStep.tsx`):
+  the file, with its sheet for a workbook of more than one ("From budget.xlsx, sheet April"), or
+  "From 3 statements" for bank files read together; nothing for pasted text or a Google Sheet. It
+  shows on Map columns however the file came. Measured after Open in Import at 1280 and 390, both
+  themes: the file's name nowhere on the page before; one 19.5px line after. Tests:
+  `features/import/__tests__/mappingSource.test.tsx` (a handed-over file, a workbook's sheet,
+  pasted text) and the Open in Import case of `tests/onboarding.spec.ts`; both fail without it.
+
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
 The production build holds back the benchmarks and the questions that choose their figures
