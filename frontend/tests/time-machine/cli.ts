@@ -47,6 +47,22 @@ function fail(message: string): never {
   process.exit(1)
 }
 
+/**
+ * A field from a mail, safe to print on one line: every C0 and C1 control character and DEL is
+ * removed, so nothing in a mail can move the cursor, retitle the terminal or write the clipboard.
+ */
+const oneLine = (value: unknown): string =>
+  // eslint-disable-next-line no-control-regex -- matching control characters is the point
+  String(value).replace(/[\u0000-\u001f\u007f-\u009f]/g, '')
+
+/** A mail's text or HTML, safe to print: the same, keeping its line breaks and tabs. */
+const block = (value: string): string =>
+  // eslint-disable-next-line no-control-regex -- matching control characters is the point
+  value.replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/g, '')
+
+/** A mail's addresses, safe to print. */
+const addresses = (to: string | string[]): string => oneLine([to].flat().join(', '))
+
 /** The value after `--name`, and the arguments without the two. */
 function option(args: string[], name: string): { value?: string; rest: string[] } {
   const at = args.indexOf(`--${name}`)
@@ -223,7 +239,9 @@ async function main(argv: string[]): Promise<void> {
       console.info(
         sent.length ? `The daily job sent ${String(sent.length)}:` : 'The daily job sent nothing.'
       )
-      for (const m of sent) console.info(`  ${m.id}  ${[m.to].flat().join(', ')}  ${m.subject}`)
+      for (const m of sent) {
+        console.info(`  ${oneLine(m.id)}  ${addresses(m.to)}  ${oneLine(m.subject)}`)
+      }
       return
     }
     case 'state': {
@@ -236,7 +254,7 @@ async function main(argv: string[]): Promise<void> {
     }
     case 'mails': {
       for (const m of await machine.mails(args[0])) {
-        console.info(`${m.id}  ${[m.to].flat().join(', ')}  ${m.subject}`)
+        console.info(`${oneLine(m.id)}  ${addresses(m.to)}  ${oneLine(m.subject)}`)
       }
       return
     }
@@ -245,13 +263,15 @@ async function main(argv: string[]): Promise<void> {
       if (!id) fail(USAGE)
       const mail = await machine.mail(id)
       if (args.includes('--html')) {
-        console.info(mail.html)
+        console.info(block(mail.html))
         return
       }
-      console.info(`${mail.subject}\n  to ${[mail.to].flat().join(', ')}, ${mail.received_at}`)
+      console.info(
+        `${oneLine(mail.subject)}\n  to ${addresses(mail.to)}, ${oneLine(mail.received_at)}`
+      )
       console.info('Links:')
-      for (const link of machine.links(mail)) console.info(`  ${link}`)
-      console.info(`\n${mail.text ?? '(no plain text)'}`)
+      for (const link of machine.links(mail)) console.info(`  ${oneLine(link)}`)
+      console.info(`\n${mail.text === undefined ? '(no plain text)' : block(mail.text)}`)
       return
     }
     default:

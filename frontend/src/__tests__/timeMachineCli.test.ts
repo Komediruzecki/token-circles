@@ -7,6 +7,7 @@
  * node:http and node:net rather than fetch, as in mailbox.test.ts: this suite runs under jsdom.
  */
 import { spawn } from 'node:child_process'
+import { createServer as createHttpServer } from 'node:http'
 import { createServer } from 'node:net'
 import { resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -70,6 +71,53 @@ describe('the time machine command', () => {
     expect(result.code).toBe(1)
     expect(result.out).toContain(`:${String(app)} is taken`)
     expect(result.out).not.toContain('wrangler')
+  })
+
+  it("prints a mail's fields with every control character taken out", async () => {
+    // A mailbox of this test's own whose one mail carries terminal control sequences: a clipboard
+    // write (OSC 52), a title change, a line erase and a C1 CSI, in every field the command prints.
+    const esc = '\u001b]52;c;cHduZWQ=\u0007\u001b]0;TITLE\u0007\u001b[2K\r\u009b2J'
+    const id = '2026-11-03T08-30-00-000Z-0123abcd'
+    const kept = {
+      id,
+      received_at: `2026-11-03T08:30:00.000Z${esc}`,
+      from: 'Token Circles <hello@tokencircles.com>',
+      to: [`reader${esc}@example.test`],
+      subject: `Reset${esc} your password`,
+      html: `<p>Hi${esc}</p>\n<a href="http://127.0.0.1:3840/reset${esc}">Reset</a>`,
+      text: `Line one${esc}\n\tLine two`,
+    }
+    const mailbox = createHttpServer((req, res) => {
+      res.setHeader('Content-Type', 'application/json')
+      if (req.url === '/mails') res.end(JSON.stringify([{ ...kept, id: `${id}${esc}` }]))
+      else if (req.url === `/mails/${id}`) res.end(JSON.stringify(kept))
+      else res.writeHead(404).end('{}')
+    })
+    await new Promise<void>((done) => mailbox.listen(0, '127.0.0.1', done))
+    const mail = (mailbox.address() as { port: number }).port
+    try {
+      const ports = { app: 1, api: 2, mail }
+      // eslint-disable-next-line no-control-regex -- the characters this test looks for
+      const control = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/
+      const listed = await run(['mails'], ports)
+      expect(listed.code).toBe(0)
+      expect(listed.out).toContain('Reset]52;c;cHduZWQ=]0;TITLE[2K2J your password')
+      expect(listed.out).toContain(id)
+      const one = await run(['mail', id], ports)
+      expect(one.code).toBe(0)
+      expect(one.out).toContain('Line one')
+      expect(one.out).toContain('\n\tLine two')
+      expect(one.out).toContain('http://127.0.0.1:3840/reset')
+      const html = await run(['mail', id, '--html'], ports)
+      expect(html.out).toContain('<p>Hi]52;')
+      for (const { out } of [listed, one, html]) expect(out).not.toMatch(control)
+    } finally {
+      await new Promise<void>((done) => {
+        mailbox.close(() => {
+          done()
+        })
+      })
+    }
   })
 
   it('says how it is used when the command is not one of its own', async () => {
