@@ -42,7 +42,10 @@ const MAX_BODY_BYTES = 2 * 1024 * 1024
 export const MAX_MAILS = 1000
 /** The most bytes of mail kept (each mail's record as JSON); past it the oldest goes. */
 export const MAX_TOTAL_BYTES = 64 * 1024 * 1024
-/** A mail's id: when it came (UTC, to the millisecond) and 8 random hex digits. */
+/**
+ * A mail's id: when it came (UTC, to the millisecond) and 8 hex digits, random for the first mail
+ * of a millisecond and counting up after it (newId).
+ */
 export const MAIL_ID = /^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z-[0-9a-f]{8}$/
 
 /** What a mail's HTML may load: its images and its own styles, nothing that runs or posts. */
@@ -67,8 +70,30 @@ function htmlFile(html) {
   return doctype ? `${doctype[0]}${meta}${html.slice(doctype[0].length)}` : `${meta}${html}`
 }
 
-const newId = () =>
-  `${new Date().toISOString().replace(/[:.]/g, '-')}-${randomBytes(4).toString('hex')}`
+/** The millisecond and the 8-hex-digit part of the last id this process made. */
+let lastMs = 0
+let lastPart = 0
+
+/**
+ * A new mail id, after every id this process has made, so ids sort in the order the mails came
+ * and a reader asking for the mails after one cannot miss a mail from the same millisecond. A new
+ * millisecond starts its part at random below 0x80000000; within one millisecond the part counts
+ * up from there. A clock set back keeps the last millisecond, so ids never go back either.
+ */
+export function newId() {
+  const now = Date.now()
+  if (now > lastMs) {
+    lastMs = now
+    lastPart = randomBytes(4).readUInt32BE(0) >>> 1
+  } else if (lastPart < 0xffffffff) {
+    lastPart += 1
+  } else {
+    lastMs += 1
+    lastPart = 0
+  }
+  const at = new Date(lastMs).toISOString().replace(/[:.]/g, '-')
+  return `${at}-${lastPart.toString(16).padStart(8, '0')}`
+}
 
 const escapeHtml = (s) =>
   String(s).replace(

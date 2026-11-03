@@ -290,8 +290,9 @@ All notable changes to Token Circles are documented here. The format is based on
   is kept in memory and as `<id>.json`, `.html` and `.txt` in its folder under an id it makes; it
   logs only `[mailbox] took <id>`. It takes only the Worker's JSON posts (no `Origin` or
   `Sec-Fetch-Site`), keeps the known fields with its own id and time, and keeps the newest 1,000
-  mails or 64 MiB. `playwright.config.ts` starts it first on `E2E_MAIL_PORT` (8797)
-  with its folder in `E2E_MAILBOX_DIR`, and gives the Worker `WORKER_VARS` (`CORS_ORIGIN` and
+  mails or 64 MiB. Its ids only increase, so mails from one millisecond sort in the order they
+  came. `playwright.config.ts` starts it first on `E2E_MAIL_PORT` (8797) with its folder in
+  `E2E_MAILBOX_DIR`, and gives the Worker `WORKER_VARS` (`CORS_ORIGIN` and
   `API_PUBLIC_ORIGIN` on localhost at the run's ports, and `DEV_MAIL_SINK`), which
   `serve-worker.mjs` passes to `wrangler dev` as `--var` on every start (`WorkerSupervisor` option
   `vars`).

@@ -74,7 +74,8 @@ So a web page open in your browser cannot post one.
 The same mails are files in `E2E_MAILBOX_DIR`: `<id>.json` (the Worker's fields, `from`, `to`,
 `subject`, `html`, `text`, `reply_to` and `headers`, with the mailbox's `id` and `received_at`),
 `<id>.html` (the HTML with the same policy as a meta tag at the top) and `<id>.txt`. A mail's id is
-when it came, to the millisecond, plus 8 random hex digits. The mailbox makes it, and nothing in a
+when it came, to the millisecond, plus 8 hex digits, random for a millisecond's first mail and
+counting up after it, so ids sort in the order mails came. The mailbox makes it, and nothing in a
 file name comes from the mail. The mailbox loads the folder again when it starts, so mails survive
 a restart. It keeps the newest 1,000 mails and at most 64 MiB of them, and drops the oldest mail's
 three files past that; nothing else in the folder is touched. `time-machine mails` and `mail` print

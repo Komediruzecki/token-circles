@@ -18,8 +18,8 @@ import { request } from 'node:http'
 import { connect, createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
-import { indexPage } from '../../scripts/lib/mailbox.mjs'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { indexPage, newId } from '../../scripts/lib/mailbox.mjs'
 import type { ChildProcess } from 'node:child_process'
 import type { Dirent } from 'node:fs'
 import type { AddressInfo } from 'node:net'
@@ -327,10 +327,9 @@ describe('the mailbox', () => {
     }
     await stop(first)
     const second = await start(dir, ['--max-mails', '1'])
-    // A folder is read back in id order; two mails in one millisecond order by their random part.
     expect(
       (JSON.parse((await call(second, 'GET', '/mails')).body) as { id: string }[]).map((m) => m.id)
-    ).toEqual([ids.sort().at(-1)])
+    ).toEqual([ids[2]])
     expect(readdirSync(dir)).toHaveLength(3)
   })
 
@@ -407,6 +406,23 @@ describe('the mailbox', () => {
     expect(fullFile.endsWith('<html><body><p>Hi</p></body></html>')).toBe(true)
     // The page serves the mail as it came; its own header carries the policy.
     expect((await call(box, 'GET', `/mails/${full.id}.html`)).body).toBe(html)
+  })
+
+  it('makes ids that sort in the order they were made, within a millisecond too', () => {
+    vi.useFakeTimers({ now: Date.parse('2026-11-03T08:30:00.000Z'), toFake: ['Date'] })
+    try {
+      // The clock stands still: every one of these ids is made in the same millisecond.
+      const sameMs = Array.from({ length: 200 }, () => newId())
+      expect(sameMs.every((id) => id.startsWith('2026-11-03T08-30-00-000Z-'))).toBe(true)
+      // And a clock set back must not make an id that sorts before the ones already made.
+      vi.setSystemTime(Date.parse('2026-11-03T08:29:59.000Z'))
+      const ids = [...sameMs, newId(), newId()]
+      for (const id of ids) expect(id).toMatch(MAIL_ID)
+      expect(new Set(ids).size).toBe(ids.length)
+      expect([...ids].sort()).toEqual(ids)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('escapes the id in the index page as it escapes everything else', () => {

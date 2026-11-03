@@ -17,6 +17,9 @@ export const MAIL_ID: RegExp
 export const MAX_MAILS: number
 export const MAX_TOTAL_BYTES: number
 
+/** A new mail id, after every id this process has made: ids sort in the order they were made. */
+export function newId(): string
+
 /** The index page for these mails, newest first; `to` is the filter it shows, or null. */
 export function indexPage(mails: KeptMail[], to: string | null): string
 
