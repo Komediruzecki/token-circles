@@ -263,6 +263,52 @@ All notable changes to Token Circles are documented here. The format is based on
   `weekOneAhead`, and saves by itself when flipped. After a general unsubscribe it shows off and
   disabled. `ToggleField` takes `disabled`.
 
+### The first week, lived locally
+
+- **The week-one run counts from its scheduled time** (`worker/src/index.ts`, scheduled): the
+  handler passes `new Date(event.scheduledTime)` to `runWeekOneMails` instead of letting it read
+  the time it starts. A late invocation now sends what the 08:30 run would have, and a run fired
+  locally for a chosen instant sees that instant. In production the two differ by the invocation's
+  delay, so no window moves by more than that; there is no CHANGELOG.md entry, as nothing a person
+  sees changes. `worker/test/week-one-cron.test.ts` fails without it.
+- **A development mail sink** (`worker/src/email.ts`, `devMailSink`, var `DEV_MAIL_SINK`): a Worker
+  with no `RESEND_API_KEY`, `APP_ENV` exactly `development` and `DEV_MAIL_SINK` a plain `http:` URL
+  on `127.0.0.1`, `localhost` or `[::1]` (no user or password) posts each mail there instead of
+  skipping it. Any other value is refused with a `[email] DEV_MAIL_SINK is not used: <reason>`
+  warning. `sendMail` builds the Resend body once, and the sink gets that same body; a 2xx with an
+  id reads as Resend's acceptance (`{ sent: true, id }`), a refusal as
+  `{ sent: false, error, status }`, and a mailbox that is down throws, so each caller behaves as in
+  production: a week-one claim stays. Neither the body nor the links are logged. Deployed Workers
+  are unaffected: dev and prod have `APP_ENV` `dev` and `production` and a Resend key.
+  `worker/test/dev-mail-sink.test.ts` covers each condition, the refused hosts (`example.com`,
+  `10.0.0.1`, `127.0.0.1.evil.test`, `localhost.evil.test`, `127.0.0.1@evil.test`, https, garbage
+  and more) and the kept claim.
+- **A local mailbox** (`frontend/scripts/mailbox.mjs`): listens on 127.0.0.1 only, answers only
+  requests addressed to this machine by their Host header, takes `POST /emails` as Resend does and
+  serves `GET /mails?to=`, `/mails/<id>`, `.html` (strict CSP), `.txt` and an index page. Each mail
+  is kept in memory and as `<id>.json`, `.html` and `.txt` in its folder under an id it makes; it
+  logs only `[mailbox] took <id>`. `playwright.config.ts` starts it first on `E2E_MAIL_PORT` (8797)
+  with its folder in `E2E_MAILBOX_DIR`, and gives the Worker `WORKER_VARS` (`CORS_ORIGIN` and
+  `API_PUBLIC_ORIGIN` on localhost at the run's ports, and `DEV_MAIL_SINK`), which
+  `serve-worker.mjs` passes to `wrangler dev` as `--var` on every start (`WorkerSupervisor` option
+  `vars`).
+- **The time machine** (`worker/scripts/time-machine.ts`, `frontend/tests/time-machine/`): puts an
+  account on day N of its first week by moving the instants of its own use back (data back), with
+  every clock left real; sessions, links, limits, logs and chosen dates stay. One D1 batch, worked
+  out from day 0 and checked against it in every statement, so the same move twice lands once.
+  `worker/test/time-machine.test.ts` fails when a migration adds a time column that none of its
+  lists names. The daily job is fired through `wrangler dev`'s own
+  `/cdn-cgi/handler/scheduled?cron=30+8+*+*+*&time=<ms>`, always at the real now.
+  `pnpm -C frontend run time-machine` (`up`, `day`, `fire`, `state`, `mails`, `mail`) drives it by
+  hand.
+- **A first-week spec** (`frontend/tests/first-week-journey.spec.ts`, not `@smoke`): sign-up
+  confirmed through the mail, setup and Progress on day 0, nothing on day 1, the day-2 mail once
+  with this run's links, an import, the day-7 mail and the Settings switch gone, a stop link that
+  keeps the day-7 mail away, and local-first on `page.clock` across the end of October. About 50
+  seconds.
+- Docs: [docs/time-machine.md](docs/time-machine.md), with the clock map, the frame and what it
+  cannot simulate.
+
 ### Onboarding
 
 - **Each wizard step opens at its top, with focus on its heading.** The body (`.body`,
