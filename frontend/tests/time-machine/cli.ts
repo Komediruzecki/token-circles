@@ -42,23 +42,25 @@ const USAGE = `Usage, from frontend/:
 
 Ports: E2E_PORT ${String(APP_PORT)} (app), E2E_API_PORT ${String(API_PORT)} (Worker), E2E_MAIL_PORT ${String(MAIL_PORT)} (mailbox).`
 
-function fail(message: string): never {
-  console.error(message)
-  process.exit(1)
-}
-
 /**
- * A field from a mail, safe to print on one line: every C0 and C1 control character and DEL is
- * removed, so nothing in a mail can move the cursor, retitle the terminal or write the clipboard.
+ * A field from a mail, safe to print on one line: every C0 and C1 control character, DEL and
+ * Unicode format character (\p{Cf}: bidi overrides, zero-width marks) is removed, so nothing in a
+ * mail can move the cursor, retitle the terminal, write the clipboard or reorder what is shown.
  */
 const oneLine = (value: unknown): string =>
   // eslint-disable-next-line no-control-regex -- matching control characters is the point
-  String(value).replace(/[\u0000-\u001f\u007f-\u009f]/g, '')
+  String(value).replace(/[\u0000-\u001f\u007f-\u009f\p{Cf}]/gu, '')
 
 /** A mail's text or HTML, safe to print: the same, keeping its line breaks and tabs. */
 const block = (value: string): string =>
   // eslint-disable-next-line no-control-regex -- matching control characters is the point
-  value.replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/g, '')
+  value.replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f\p{Cf}]/gu, '')
+
+/** Stop with `message`, which can quote what a server answered, run through block(). */
+function fail(message: string): never {
+  console.error(block(message))
+  process.exit(1)
+}
 
 /** A mail's addresses, safe to print. */
 const addresses = (to: string | string[]): string => oneLine([to].flat().join(', '))

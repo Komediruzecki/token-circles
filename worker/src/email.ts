@@ -112,10 +112,12 @@ export async function sendMail(
 
 /**
  * Hand `body`, the request Resend would have had, to the development mailbox at `url`. Its answer
- * reads as Resend's: a 2xx with the mail's id is taken, anything else is refused with its status,
- * and a mailbox that is down throws as a network failure does. A redirect is not followed: the
- * mail goes to the URL DEV_MAIL_SINK names or nowhere, and a 3xx is a refusal like any other
- * non-2xx. Neither the body nor anything the mailbox answers is logged: a mail holds sign-in links.
+ * reads as Resend's: any 2xx is taken, with the id from its JSON when there is one, anything else
+ * is refused with its status, and a mailbox that is down throws as a network failure does. A
+ * redirect is not followed: the mail goes to the URL DEV_MAIL_SINK names or nowhere, and a 3xx is
+ * a refusal like any other non-2xx. The log line carries the id from the mailbox's answer, the
+ * address and the subject; the body and the rest of the answer are never logged, as a mail holds
+ * sign-in links.
  */
 async function sendToSink(
   url: string,

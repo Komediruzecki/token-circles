@@ -65,7 +65,7 @@ again. Asking for the same day twice moves nothing the second time.
 Open the mailbox's own page, [the local mailbox](http://127.0.0.1:8837/) at the port you chose. It
 lists every mail, newest first, with its HTML and text a click away; the To box filters by address.
 The HTML opens with a strict, sandboxed Content-Security-Policy, so nothing in a mail runs or
-moves the page elsewhere.
+moves the page elsewhere. Read mails there rather than from the files below.
 
 The mailbox takes a mail only as the Worker posts it: `Content-Type: application/json` exactly, and
 neither an `Origin` nor a `Sec-Fetch-Site` header, one of which a browser adds whenever a page posts.
@@ -73,13 +73,22 @@ So a web page open in your browser cannot post one.
 
 The same mails are files in `E2E_MAILBOX_DIR`: `<id>.json` (the Worker's fields, `from`, `to`,
 `subject`, `html`, `text`, `reply_to` and `headers`, with the mailbox's `id` and `received_at`),
-`<id>.html` (the HTML with the same policy as a meta tag at the top) and `<id>.txt`. A mail's id is
-when it came, to the millisecond, plus 8 hex digits, random for a millisecond's first mail and
-counting up after it, so ids sort in the order mails came. The mailbox makes it, and nothing in a
-file name comes from the mail. The mailbox loads the folder again when it starts, so mails survive
-a restart. It keeps the newest 1,000 mails and at most 64 MiB of them, and drops the oldest mail's
-three files past that; nothing else in the folder is touched. `time-machine mails` and `mail` print
-a mail's fields with control characters taken out.
+`<id>.html` and `<id>.txt`. `<id>.html` starts with the same policy as a meta tag, which stops
+script, but a meta tag cannot sandbox the page: opened from disk, a mail's meta refresh still moves
+it elsewhere and its remote images still load.
+
+A mail's id is when it came, to the millisecond, plus 8 hex digits, random for a millisecond's
+first mail and counting up after it, so ids sort in the order mails came. The mailbox makes it, and
+nothing in a file name comes from the mail. The mailbox loads the folder again when it starts, so
+mails survive a restart.
+
+The mailbox keeps the newest 1,000 mails and at most 64 MiB of them, counted as each mail's JSON
+record; the folder holds about twice that on disk, as the HTML and text are also in their own
+files. Past either cap it drops the oldest mail's three files; nothing else in the folder is
+touched. A starting mailbox trims the folder it is given, so give each mailbox a folder of its own.
+
+`time-machine mails` and `mail` print a mail's fields, and the command its errors, with control and
+Unicode format characters taken out.
 
 Without `E2E_MAILBOX_DIR`, `up` keeps them in `frontend/test-results/time-machine-mailbox` and the
 E2E suite in `frontend/test-results/mailbox`.

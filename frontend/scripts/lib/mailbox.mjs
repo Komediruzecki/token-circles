@@ -15,7 +15,8 @@
 // The stored record holds only the fields above, and its id and arrival time are this server's,
 // set after them: an id or anything else the body carries is not kept. Each mail is kept under that
 // id, in memory for the API and on disk for people: <dir>/<id>.json (the fields, with the id and
-// when it came), <id>.html (the mail's HTML behind a meta Content-Security-Policy) and <id>.txt.
+// when it came), <id>.html (the mail's HTML behind a meta Content-Security-Policy, which stops
+// script but not a meta refresh) and <id>.txt.
 // Past a number of mails or of bytes (MAX_MAILS, MAX_TOTAL_BYTES) the oldest is dropped, from
 // memory and its three files; nothing else in the folder is touched.
 //
@@ -61,8 +62,10 @@ const MAIL_CSP = `${MAIL_POLICY}; frame-ancestors 'none'; sandbox`
 
 /**
  * The mail's HTML as its file: the same policy as a meta tag ahead of the mail, so the file opened
- * from a file manager runs nothing either. A meta policy cannot carry `sandbox` or
- * `frame-ancestors`; it goes after a doctype, which keeps the page out of quirks mode.
+ * from a file manager runs no script either. A meta policy cannot carry `sandbox` or
+ * `frame-ancestors`, so that file can still follow a meta refresh and loads remote images; the
+ * mailbox page is the place to read a mail. It goes after a doctype, which keeps the page out of
+ * quirks mode.
  */
 function htmlFile(html) {
   const meta = `<meta http-equiv="Content-Security-Policy" content="${MAIL_POLICY}">\n`

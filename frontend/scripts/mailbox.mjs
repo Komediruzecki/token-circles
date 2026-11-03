@@ -20,9 +20,9 @@ const port = Number(arg('--port', process.env.E2E_MAIL_PORT || 8797))
 const dir = resolve(arg('--dir', process.env.E2E_MAILBOX_DIR || 'test-results/mailbox'))
 /** A cap given on the command line, or the mailbox's own (MAX_MAILS, MAX_TOTAL_BYTES). */
 const cap = (name) => {
-  const value = arg(name, undefined)
-  if (value === undefined) return undefined
-  const n = Number(value)
+  if (!process.argv.includes(name)) return undefined
+  const value = arg(name, '')
+  const n = value.trim() === '' ? NaN : Number(value)
   if (!Number.isInteger(n) || n < 1) {
     console.error(`[mailbox] ${name} takes a whole number above 0, not ${value}`)
     process.exit(1)

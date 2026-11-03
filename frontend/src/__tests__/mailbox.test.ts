@@ -445,12 +445,60 @@ describe('the mailbox', () => {
 
   it('lists mails on a page a person can read, with everything in them escaped', async () => {
     const box = await start()
-    await call(box, 'POST', '/emails', mail({ subject: '<img src=x onerror=alert(1)>' }))
+    await call(
+      box,
+      'POST',
+      '/emails',
+      mail({
+        subject: '<img src=x onerror=alert(1)>',
+        to: ['<b id="to-1">one</b>@example.test', 'two"><i>@example.test'],
+      })
+    )
     const page = await call(box, 'GET', '/')
     expect(page.status).toBe(200)
     expect(page.body).toContain('&lt;img src=x onerror=alert(1)&gt;')
     expect(page.body).not.toContain('<img src=x')
+    expect(page.body).toContain(
+      '&lt;b id=&quot;to-1&quot;&gt;one&lt;/b&gt;@example.test, two&quot;&gt;&lt;i&gt;@example.test'
+    )
+    expect(page.body).not.toContain('<b id="to-1">')
+    expect(page.body).not.toContain('<i>')
     expect(page.headers['content-security-policy']).toContain("default-src 'none'")
+  })
+
+  it('refuses a cap that is not a whole number above 0, and starts nothing', async () => {
+    for (const args of [
+      ['--max-mails', '0'],
+      ['--max-mails', '-3'],
+      ['--max-mails', 'many'],
+      ['--max-mails', ''],
+      ['--max-mails'],
+      ['--max-bytes', '1.5'],
+      ['--max-bytes', '0x'],
+    ]) {
+      const port = await freePort()
+      const child = spawn(
+        process.execPath,
+        [SCRIPT, '--port', String(port), '--dir', newDir(), ...args],
+        { stdio: ['ignore', 'pipe', 'pipe'] }
+      )
+      let out = ''
+      child.stdout.on('data', (b: Buffer) => (out += String(b)))
+      child.stderr.on('data', (b: Buffer) => (out += String(b)))
+      // It exits at once; a mailbox that took the cap would listen instead, and is stopped here.
+      const code = await new Promise<number | null>((done) => {
+        const timer = setTimeout(() => {
+          child.kill('SIGTERM')
+        }, 3000)
+        child.once('exit', (c) => {
+          clearTimeout(timer)
+          done(c)
+        })
+      })
+      expect(code, args.join(' ')).toBe(1)
+      expect(out, args.join(' ')).toContain(`[mailbox] ${args[0]} takes a whole number above 0`)
+      expect(out, args.join(' ')).not.toContain('listening on')
+    }
   })
 
   it('keeps the mails in its folder from one run to the next', async () => {

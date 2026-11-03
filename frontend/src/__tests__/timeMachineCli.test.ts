@@ -73,10 +73,12 @@ describe('the time machine command', () => {
     expect(result.out).not.toContain('wrangler')
   })
 
-  it("prints a mail's fields with every control character taken out", async () => {
+  it("prints a mail's fields with every control and format character taken out", async () => {
     // A mailbox of this test's own whose one mail carries terminal control sequences: a clipboard
-    // write (OSC 52), a title change, a line erase and a C1 CSI, in every field the command prints.
-    const esc = '\u001b]52;c;cHduZWQ=\u0007\u001b]0;TITLE\u0007\u001b[2K\r\u009b2J'
+    // write (OSC 52), a title change, a line erase and a C1 CSI, then Unicode format characters
+    // (a right-to-left override, a zero-width space, an isolate), in every field the command prints.
+    const esc =
+      '\u001b]52;c;cHduZWQ=\u0007\u001b]0;TITLE\u0007\u001b[2K\r\u009b2J\u202e\u200b\u2066'
     const id = '2026-11-03T08-30-00-000Z-0123abcd'
     const kept = {
       id,
@@ -98,7 +100,7 @@ describe('the time machine command', () => {
     try {
       const ports = { app: 1, api: 2, mail }
       // eslint-disable-next-line no-control-regex -- the characters this test looks for
-      const control = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/
+      const control = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f\p{Cf}]/u
       const listed = await run(['mails'], ports)
       expect(listed.code).toBe(0)
       expect(listed.out).toContain('Reset]52;c;cHduZWQ=]0;TITLE[2K2J your password')
@@ -111,6 +113,30 @@ describe('the time machine command', () => {
       const html = await run(['mail', id, '--html'], ports)
       expect(html.out).toContain('<p>Hi]52;')
       for (const { out } of [listed, one, html]) expect(out).not.toMatch(control)
+    } finally {
+      await new Promise<void>((done) => {
+        mailbox.close(() => {
+          done()
+        })
+      })
+    }
+  })
+
+  it('stops with what a server answered, its control and format characters taken out', async () => {
+    // A mailbox whose answer is not JSON: the error quotes it.
+    const mailbox = createHttpServer((_req, res) => {
+      res.setHeader('Content-Type', 'application/json')
+      res.end('\u001b]0;TITLE\u0007\u001b[2K\r\u202enot json')
+    })
+    await new Promise<void>((done) => mailbox.listen(0, '127.0.0.1', done))
+    const mail = (mailbox.address() as { port: number }).port
+    try {
+      const result = await run(['mails'], { app: 1, api: 2, mail })
+      expect(result.code).toBe(1)
+      expect(result.out).toContain('is not valid JSON')
+      expect(result.out).toContain('"]0;TITLE')
+      // eslint-disable-next-line no-control-regex -- the characters this test looks for
+      expect(result.out).not.toMatch(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f\p{Cf}]/u)
     } finally {
       await new Promise<void>((done) => {
         mailbox.close(() => {
