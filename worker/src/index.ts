@@ -74,6 +74,7 @@ export interface Env {
   STRIPE_PRICE_ULTIMATE_ANNUAL?: string;
   RESEND_API_KEY?: string; // secret — Resend API key for reminder emails (unset → emails skip)
   EMAIL_FROM?: string; // var — From address, e.g. "Token Circles <hello@tokencircles.com>" (repliable, not no-reply)
+  DEV_MAIL_SINK?: string; // var — development only: a loopback mailbox URL mails go to without a Resend key (email.ts devMailSink)
   SUPPORT_EMAIL?: string; // secret — private inbox the contact form relays to (unset → disabled)
   TURNSTILE_SECRET?: string; // secret — Cloudflare Turnstile secret; unset → captcha gate disabled
   EMAIL_INGEST_SECRET?: string; // secret — token in the ingest address +tag (ingest+<secret>@…); unset → email-in disabled
