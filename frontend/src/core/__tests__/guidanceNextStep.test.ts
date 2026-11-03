@@ -393,7 +393,7 @@ describe('once a year is on file', () => {
         why: '2 yearly bills on Bills come to €770 a year: about €65 a month.',
         action: { kind: 'question', question: 'yearly-bills' },
         fine: ASKED_ONCE,
-        then: 'Then: grow your cushion to three months, and grow your cushion to six months.',
+        then: 'Then: grow your cushion to three months, then to six months.',
       })
       expect(step(facts({ yearlyBills: { count: 1, perYear: 600, perMonth: 50 } })).why).toBe(
         'One yearly bill on Bills comes to €600 a year: about €50 a month.'
@@ -502,5 +502,32 @@ describe('the Then line', () => {
     expect(thenLine([])).toBeNull()
     expect(thenLine(['grow your cushion'])).toBe('Then: grow your cushion.')
     expect(thenLine(['a', 'b'])).toBe('Then: a, and b.')
+  })
+
+  it('says a head two steps share once', () => {
+    expect(thenLine(['grow your cushion to three months', 'grow your cushion to six months'])).toBe(
+      'Then: grow your cushion to three months, then to six months.'
+    )
+    expect(thenLine(['set a budget for Groceries', 'set a budget for Eating out'])).toBe(
+      'Then: set a budget for Groceries, then for Eating out.'
+    )
+    expect(thenLine(['look at the 19% Visa costs', 'look at the 12% Car loan costs'])).toBe(
+      'Then: look at the 19% Visa costs, then at the 12% Car loan costs.'
+    )
+  })
+
+  it('keeps both steps whole when their heads differ', () => {
+    expect(
+      thenLine(['grow your cushion to six months', 'raise your savings rate by one point'])
+    ).toBe('Then: grow your cushion to six months, and raise your savings rate by one point.')
+    // The same first words are not a head: a head ends where a linking word starts the rest.
+    expect(
+      thenLine(['say whether you carry a card balance', 'say whether you set yearly bills aside'])
+    ).toBe(
+      'Then: say whether you carry a card balance, and say whether you set yearly bills aside.'
+    )
+    expect(thenLine(['import a year of statements', 'import the rest of your year'])).toBe(
+      'Then: import a year of statements, and import the rest of your year.'
+    )
   })
 })

@@ -108,10 +108,31 @@ const monthsToGo = (n: number): string => `${12 - n} ${12 - n === 1 ? 'month' : 
 /** "Set a budget" as "Then:" lists it. */
 const lowerFirst = (text: string): string => text.charAt(0).toLowerCase() + text.slice(1);
 
-/** "Then: a, and b." */
+/** The words that start what a step is about, after its head: "grow your cushion | to six months". */
+const LINKS = new Set('to by for at on in into from with without of'.split(' '));
+
+/** A step's head, the words before its first linking word, and the rest from that word on. */
+function headOf(item: string): { head: string; rest: string } | null {
+  const words = item.split(' ');
+  const at = words.findIndex((word, i) => i > 0 && LINKS.has(word));
+  if (at < 0) return null;
+  return { head: words.slice(0, at).join(' '), rest: words.slice(at).join(' ') };
+}
+
+/**
+ * "Then: a, and b." A step that shares its head with the one before it says only the rest: "Then:
+ * grow your cushion to three months, then to six months."
+ */
 export function thenLine(items: readonly string[]): string | null {
   if (items.length === 0) return null;
-  return `Then: ${items.join(', and ')}.`;
+  let line = items[0];
+  for (let i = 1; i < items.length; i++) {
+    const before = headOf(items[i - 1]);
+    const here = headOf(items[i]);
+    line +=
+      before && here && before.head === here.head ? `, then ${here.rest}` : `, and ${items[i]}`;
+  }
+  return `Then: ${line}.`;
 }
 
 /** A bar's share: below 1 while the check is not met, whatever the rounding. */

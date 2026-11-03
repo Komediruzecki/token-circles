@@ -2581,6 +2581,15 @@ true, or is too small for one.
   390 it wrapped before and after. Tests: `components/__tests__/SubscriptionScan.test.tsx` (the
   cents, the date, and the rule that wraps the line); all three fail without the change.
 
+- **"Then:" says a head two steps share once.** Over a yearly-bills question the line read "Then:
+  grow your cushion to three months, and grow your cushion to six months." `thenLine`
+  (`shared/guidance/nextStep.ts`) now splits each step at its first linking word (to, by, for, at,
+  on, in, into, from, with, without, of) and, where a step's head matches the one before it, says
+  only the rest: "Then: grow your cushion to three months, then to six months." Steps with
+  different heads, or the same first words with no linking word after them ("say whether you
+  ..."), keep ", and". Tests: `core/__tests__/guidanceNextStep.test.ts` (the yearly-bills step's
+  line, shared heads, different heads); the first two fail without the change.
+
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
 The production build holds back the benchmarks and the questions that choose their figures
