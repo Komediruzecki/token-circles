@@ -2611,6 +2611,30 @@ true, or is too small for one.
   `core/__tests__/orientationFacts.test.ts` (Getting started and the advice agree); each fails
   without its change.
 
+- **A tour's tip sits narrower beside a wide target instead of over it.** At 1280x800 the
+  Progress tour's third step, Your seven circles, spotlights a list 976px wide and 752 tall,
+  272px in from the left: no side had room for the 320px tip, so it went against the left edge
+  and covered the circle numbers of rows 3 and 4. `placeTip` (`components/spotlightPlacement.ts`)
+  now tries, before covering a target, the left and right sides with the tip as wide as their
+  room allows, down to `MIN_NARROW_TIP_WIDTH` (240px), when the caller can measure it there
+  (`heightAt`): only a width the tip's content fits and a height the screen holds. `Spotlight.tsx`
+  measures the tip at its own width and at the narrower one, and sets that width only for such a
+  placement. A phone's tip is pinned across the screen and never narrows. Measured in the demo at
+  1280x800, both themes: before, the tip at 12,296 (320x207) covered 1.7% of the list, over rows
+  2 to 5; after, 252x227 at 12,286, none of it, its buttons on one line. At 390x844 the list is
+  1085px tall, taller than the screen, and the tip still covers its rows 5 and 6 (16.5%), as
+  before. The tour walk at 1280, all 57 steps: before, seven covered their target with no room
+  beside it (Charts, Your seven circles, Category allocations, Your categories, Category trends,
+  Budget flow diagram, Your assumptions, each by 1 to 3%); after, none, their tips 252 to 297px
+  wide. At 390 the walk passes as before, nine steps covering a target taller than the room left
+  (the pinned tip has no side to go to). Tests:
+  `components/__tests__/spotlightPlacement.test.ts` (beside the list as wide as the strip; as
+  before without a measure; the minimum width; overflowing or too-tall content; right before
+  left; never on a phone; a tip that fits as it is) and `spotlightTipWiring.test.tsx` (the width
+  set, kept off where the content would overflow, dropped on the next step). Each fails without
+  its change, and each guard (the minimum width, the height, the overflow) fails a test when
+  removed.
+
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
 The production build holds back the benchmarks and the questions that choose their figures

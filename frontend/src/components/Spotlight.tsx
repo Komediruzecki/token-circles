@@ -50,12 +50,38 @@ export default function Spotlight() {
     rx: 8,
     visible: false,
   })
-  const [tooltip, setTooltip] = createSignal({ top: 0, left: 0, placement: 'bottom' })
+  const [tooltip, setTooltip] = createSignal<{
+    top: number
+    left: number
+    placement: string
+    /** Set only when the tip sits beside its target narrower than its own width. */
+    width?: number
+  }>({ top: 0, left: 0, placement: 'bottom' })
   const [tooltipReady, setTooltipReady] = createSignal(false)
   const [targetMissing, setTargetMissing] = createSignal(false)
   const [viewport, setViewport] = createSignal({ w: window.innerWidth, h: window.innerHeight })
 
   let tooltipRef: HTMLDivElement | undefined
+
+  /**
+   * The tip's size at its own width (`width` left out) or at `width`, and whether its content
+   * overflows there. The width set for the last placement is put back as it was, so this reads
+   * the same whatever that placement was.
+   */
+  const measureTip = (width?: number) => {
+    const el = tooltipRef
+    if (!el) return null
+    const kept = el.style.width
+    const wanted = width === undefined ? '' : `${width}px`
+    if (kept !== wanted) el.style.width = wanted
+    const size = {
+      width: el.offsetWidth,
+      height: el.offsetHeight,
+      overflows: el.scrollWidth > el.clientWidth,
+    }
+    if (kept !== wanted) el.style.width = kept
+    return size
+  }
 
   const steps = createMemo(() => tourSteps())
   const stepIdx = createMemo(() => spotlightStep())
@@ -144,10 +170,12 @@ export default function Spotlight() {
     })
 
     // Measured every time: the tip's height follows its copy, from 167px to 247px on the tours
-    // as they are. offsetWidth/Height ignore the entry transform, so mid-animation is fine.
+    // as they are. offsetWidth/Height ignore the entry transform, so mid-animation is fine. At its
+    // own width: a narrower one set for the last placement is not what this one starts from.
+    const own = measureTip()
     const tip = {
-      width: tooltipRef?.offsetWidth || TOOLTIP_WIDTH,
-      height: tooltipRef?.offsetHeight || TOOLTIP_FALLBACK_HEIGHT,
+      width: own?.width || TOOLTIP_WIDTH,
+      height: own?.height || TOOLTIP_FALLBACK_HEIGHT,
     }
     const vw = window.innerWidth
     setTooltip(
@@ -158,6 +186,11 @@ export default function Spotlight() {
         preferred: step.placement,
         pinnedLeft: vw <= PHONE_MAX_WIDTH ? PHONE_TIP_INSET : undefined,
         fromStart: revealBlock(rect.height) === 'start',
+        heightAt: (width) => {
+          const size = measureTip(width)
+          // A tip not laid out (no height) or whose content overflows that width stays as it is.
+          return size && size.height > 0 && !size.overflows ? size.height : null
+        },
       })
     )
     setTooltipReady(true)
@@ -273,6 +306,7 @@ export default function Spotlight() {
     return {
       top: `${t.top}px`,
       left: `${t.left}px`,
+      ...(t.width === undefined ? {} : { width: `${t.width}px` }),
     }
   }
 

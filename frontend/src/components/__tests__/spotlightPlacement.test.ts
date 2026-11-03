@@ -8,7 +8,7 @@
  * covers its target when the screen has room for both.
  */
 import { describe, expect, it } from 'vitest'
-import { placeTip } from '../spotlightPlacement'
+import { MIN_NARROW_TIP_WIDTH, placeTip } from '../spotlightPlacement'
 import type { TipRect } from '../spotlightPlacement'
 
 const PHONE = { width: 390, height: 844 }
@@ -289,5 +289,86 @@ describe('placeTip over a target scrolled to its start', () => {
     const target = rect(100, 0, 390, 740)
     const p = placeTip({ viewport: PHONE, target, tip: TIP, preferred: 'bottom', fromStart: false })
     expect(p.top).toBe(12)
+  })
+})
+
+/*
+ * A target too wide for a 320px tip beside it and too tall for one above or below. The Progress
+ * tour's circle list at 1280x800 (the demo, measured 2026-11-03): 976x752 at x 272, and the tip
+ * against the left edge sat over the circle numbers of rows 3 and 4. The strip beside it is 252px.
+ */
+describe('placeTip narrows a tip to sit beside a wide target', () => {
+  const circles = rect(24, 272, 976, 752)
+  // The Progress tip measured in the demo: 227px tall from 246 to 280px wide, 245 at 240.
+  const heightAt = (width: number) => (width >= 246 ? 227 : 245)
+
+  it('puts it beside the target as wide as the strip, covering none of it', () => {
+    const p = placeTip({ viewport: DESKTOP, target: circles, tip: TIP, preferred: 'top', heightAt })
+    expect(p).toEqual({ placement: 'left', top: 24 + 752 / 2 - 227 / 2, left: 12, width: 252 })
+    expect(overlap(p, { width: 252, height: 227 }, circles)).toBe(0)
+    expect(onScreen(p, { width: 252, height: 227 }, DESKTOP)).toBe(true)
+  })
+
+  it('covers the target as before when it cannot measure the tip narrower', () => {
+    const p = placeTip({ viewport: DESKTOP, target: circles, tip: TIP, preferred: 'top' })
+    expect(p.placement).toBe('over')
+    expect(p.width).toBeUndefined()
+  })
+
+  it('does not go under the narrowest width', () => {
+    // 250px in: a strip of 230px.
+    const wide = rect(24, 250, 1000, 752)
+    const p = placeTip({ viewport: DESKTOP, target: wide, tip: TIP, preferred: 'top', heightAt })
+    expect(250 - 8 - 12).toBeLessThan(MIN_NARROW_TIP_WIDTH)
+    expect(p.placement).toBe('over')
+  })
+
+  it('keeps a tip whose content would overflow the strip, or that would be too tall', () => {
+    const overflows = placeTip({
+      viewport: DESKTOP,
+      target: circles,
+      tip: TIP,
+      preferred: 'top',
+      heightAt: () => null,
+    })
+    expect(overflows.placement).toBe('over')
+    const tooTall = placeTip({
+      viewport: DESKTOP,
+      target: circles,
+      tip: TIP,
+      preferred: 'top',
+      heightAt: () => 800,
+    })
+    expect(tooTall.placement).toBe('over')
+  })
+
+  it('takes the sides in their order, right before left', () => {
+    // Centred, with 260px either side of it: right comes first after top and bottom.
+    const centred = rect(24, 280, 720, 752)
+    const p = placeTip({ viewport: DESKTOP, target: centred, tip: TIP, preferred: 'top', heightAt })
+    expect(p.placement).toBe('right')
+    expect(p.left).toBe(280 + 720 + 8)
+    expect(p.width).toBe(1280 - 12 - (280 + 720 + 8))
+  })
+
+  it('never narrows a tip pinned across a phone', () => {
+    const tall = rect(48, 4, 382, 871)
+    const p = placeTip({
+      viewport: PHONE,
+      target: tall,
+      tip: TIP,
+      preferred: 'top',
+      pinnedLeft: 16,
+      fromStart: true,
+      heightAt,
+    })
+    expect(p.width).toBeUndefined()
+    expect(p.left).toBe(16)
+  })
+
+  it('leaves a tip that fits at its own width as it is', () => {
+    const target = rect(20, 20, 200, 760)
+    const p = placeTip({ viewport: DESKTOP, target, tip: TIP, preferred: 'right', heightAt })
+    expect(p).toEqual({ placement: 'right', top: 20 + 380 - 207 / 2, left: 228 })
   })
 })
