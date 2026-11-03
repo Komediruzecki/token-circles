@@ -11,6 +11,7 @@
  * LOCAL_SETUP_PENDING_KEY), where the person names a space of their own and chooses whether the
  * examples stay (examplesChoiceNote).
  */
+import { apiFetch } from '../../core/apiFetch'
 import { isExampleProfileName } from '../../core/demoMode'
 
 /** The local database, as core/storage/idb.ts names it. */
@@ -137,17 +138,63 @@ function ownProfiles(names: readonly string[]): string {
   return `your profiles ${names.slice(0, 3).map(quoted).join(', ')} and ${String(more)} more`
 }
 
-/** What the switch asks, for what this browser's local workspace holds. */
-export function localOnlyQuestion(found: LocalWorkspace): string {
+/**
+ * What the switch asks, for what this browser's local workspace holds. Only a signed-in account is
+ * asked, and the account stays: the switch turns its first-week mails off (stopFirstWeekMails), so
+ * the question says both (3 Nov review A3). `accountEmpty` is whether the account holds nothing
+ * of the person's yet, as on its first setup; run again over an account with data, it stays as it
+ * is.
+ */
+export function localOnlyQuestion(found: LocalWorkspace, accountEmpty: boolean): string {
+  const account = accountEmpty
+    ? 'Your account stays, empty, and sends no first-week mails.'
+    : 'Your account stays as it is and sends no first-week mails.'
+  const ask = 'Keep your data in this browser only?'
+  const back = 'Settings can switch back.'
   switch (found.kind) {
     case 'none':
-      return 'Keep your data in this browser only? It never leaves this device and no account is needed. Settings can switch back.'
+      return `${ask} It stays on this device and nothing syncs to the cloud. ${account} ${back}`
     case 'examples':
-      return 'Keep your data in this browser only? This browser has the example profiles from the demo. Next you name a space of your own and choose whether the examples stay. Nothing syncs to the cloud, and Settings can switch back.'
+      return `${ask} This browser has the example profiles from the demo. Next you name a space of your own and choose whether the examples stay. Nothing syncs to the cloud. ${account} ${back}`
     case 'own':
-      return `Keep your data in this browser only? This browser already has a local workspace with ${ownProfiles(found.names)}. You carry on with it, and nothing syncs to the cloud. Settings can switch back.`
+      return `${ask} This browser already has a local workspace with ${ownProfiles(found.names)}. You carry on with it, and nothing syncs to the cloud. ${account} ${back}`
     default:
-      return 'Keep your data in this browser only? It stays on this device and nothing syncs to the cloud. If this browser already has a local workspace, you carry on with that one. Settings can switch back.'
+      return `${ask} It stays on this device and nothing syncs to the cloud. If this browser already has a local workspace, you carry on with that one. ${account} ${back}`
+  }
+}
+
+/** How long the switch waits for the Worker to turn the first-week mails off. */
+export const FIRST_WEEK_OFF_WAIT_MS = 5000
+
+/**
+ * Turn the signed-in account's first-week mails off, before the switch leaves it: the account
+ * stays, and without this its day-2 and day-7 mails still came (3 Nov review A3). Through the
+ * Settings switch's own request, which no plan gates. Best effort: true when the Worker took it,
+ * false when it refused, could not be reached or took longer than `waitMs`; it never throws, and
+ * the switch goes ahead either way. Sent while the app still talks to the Worker: after
+ * setStorageMode('serverless') the same request would go to the browser's own router.
+ */
+export async function stopFirstWeekMails(
+  send: (url: string, init?: RequestInit) => Promise<Response> = apiFetch,
+  waitMs: number = FIRST_WEEK_OFF_WAIT_MS
+): Promise<boolean> {
+  const stop = new AbortController()
+  const timer = setTimeout(() => {
+    stop.abort()
+  }, waitMs)
+  try {
+    const answer = await send('/api/notifications/settings', {
+      method: 'PUT',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ weekOneMails: false }),
+      signal: stop.signal,
+    })
+    return answer.ok
+  } catch {
+    return false
+  } finally {
+    clearTimeout(timer)
   }
 }
 

@@ -18,6 +18,7 @@ import {
   LOCAL_DATABASE,
   localOnlyQuestion,
   readLocalWorkspace,
+  stopFirstWeekMails,
 } from '../localOnly'
 import type { LocalWorkspace } from '../localOnly'
 
@@ -114,40 +115,66 @@ describe('reading the local workspace before the switch', () => {
 })
 
 describe('what the switch asks', () => {
-  it('promises a fresh start only where there is nothing', () => {
-    const fresh = localOnlyQuestion({ kind: 'none' })
-    expect(fresh).toBe(
-      'Keep your data in this browser only? It never leaves this device and no account is needed. Settings can switch back.'
+  // Asked of a signed-in account (3 Nov review A3): the account stays, and the switch turns its
+  // first-week mails off first, so the question says so. It used to say "no account is needed".
+  it('says the data stays here and what happens to the account, over nothing', () => {
+    expect(localOnlyQuestion({ kind: 'none' }, true)).toBe(
+      'Keep your data in this browser only? It stays on this device and nothing syncs to the cloud. Your account stays, empty, and sends no first-week mails. Settings can switch back.'
     )
   })
 
+  it('calls the account empty only when it is, and says it stays as it is otherwise', () => {
+    const cases: LocalWorkspace[] = [
+      { kind: 'none' },
+      { kind: 'examples' },
+      { kind: 'own', names: ['A'], ids: [4] },
+      { kind: 'unknown' },
+    ]
+    for (const found of cases) {
+      const fresh = localOnlyQuestion(found, true)
+      expect(fresh, found.kind).toContain(
+        ' Your account stays, empty, and sends no first-week mails. Settings can switch back.'
+      )
+      const kept = localOnlyQuestion(found, false)
+      expect(kept, found.kind).toContain(
+        ' Your account stays as it is and sends no first-week mails. Settings can switch back.'
+      )
+      expect(kept, found.kind).not.toContain('empty')
+      for (const text of [fresh, kept]) {
+        expect(text, found.kind).not.toContain('no account is needed')
+        expect(text, found.kind).not.toContain('never leaves')
+      }
+    }
+  })
+
   it('over the examples, says setup comes next and the examples can go', () => {
-    const text = localOnlyQuestion({ kind: 'examples' })
-    expect(text).toContain('This browser has the example profiles from the demo.')
-    expect(text).toContain(
-      'Next you name a space of your own and choose whether the examples stay.'
+    const text = localOnlyQuestion({ kind: 'examples' }, true)
+    expect(text).toBe(
+      'Keep your data in this browser only? This browser has the example profiles from the demo. Next you name a space of your own and choose whether the examples stay. Nothing syncs to the cloud. Your account stays, empty, and sends no first-week mails. Settings can switch back.'
     )
     expect(text).not.toContain('carry on')
   })
 
   it("over a workspace of the person's own, names what is carried on with", () => {
-    expect(localOnlyQuestion({ kind: 'own', names: ['Our flat'], ids: [4] })).toBe(
-      'Keep your data in this browser only? This browser already has a local workspace with your profile "Our flat". You carry on with it, and nothing syncs to the cloud. Settings can switch back.'
+    expect(localOnlyQuestion({ kind: 'own', names: ['Our flat'], ids: [4] }, true)).toBe(
+      'Keep your data in this browser only? This browser already has a local workspace with your profile "Our flat". You carry on with it, and nothing syncs to the cloud. Your account stays, empty, and sends no first-week mails. Settings can switch back.'
     )
-    expect(localOnlyQuestion({ kind: 'own', names: ['A', 'B'], ids: [4, 5] })).toContain(
+    expect(localOnlyQuestion({ kind: 'own', names: ['A', 'B'], ids: [4, 5] }, true)).toContain(
       'with your profiles "A" and "B".'
     )
     expect(
-      localOnlyQuestion({ kind: 'own', names: ['A', 'B', 'C', 'D', 'E'], ids: [4, 5, 6, 7, 8] })
+      localOnlyQuestion(
+        { kind: 'own', names: ['A', 'B', 'C', 'D', 'E'], ids: [4, 5, 6, 7, 8] },
+        true
+      )
     ).toContain('with your profiles "A", "B", "C" and 2 more.')
   })
 
   it('where it could not tell, says only what is true either way', () => {
-    const text = localOnlyQuestion({ kind: 'unknown' })
+    const text = localOnlyQuestion({ kind: 'unknown' }, true)
     expect(text).toContain(
       'If this browser already has a local workspace, you carry on with that one.'
     )
-    expect(text).not.toContain('never leaves')
   })
 
   it('no question uses an em dash', () => {
@@ -158,7 +185,9 @@ describe('what the switch asks', () => {
       { kind: 'unknown' },
     ]
     for (const found of cases) {
-      expect(localOnlyQuestion(found)).not.toMatch(/—/)
+      for (const empty of [true, false]) {
+        expect(localOnlyQuestion(found, empty)).not.toMatch(/—/)
+      }
     }
   })
 })
@@ -172,5 +201,46 @@ describe('the choice over the examples', () => {
       'They stay in the profile switcher, beside your new space.'
     )
     expect(examplesChoiceNote('remove', ['Example Mid Income'])).toContain('everything in it:')
+  })
+})
+
+describe('turning the first-week mails off before the switch', () => {
+  const ok = () => Promise.resolve(new Response('{"ok":true}', { status: 200 }))
+
+  it("sends the account's switch off, and says whether the Worker took it", async () => {
+    const sent: Array<{ url: string; init?: RequestInit }> = []
+    const answered = await stopFirstWeekMails((url, init) => {
+      sent.push({ url, init })
+      return ok()
+    })
+    expect(answered).toBe(true)
+    expect(sent).toHaveLength(1)
+    expect(sent[0].url).toBe('/api/notifications/settings')
+    expect(sent[0].init?.method).toBe('PUT')
+    expect(JSON.parse(sent[0].init?.body as string)).toEqual({ weekOneMails: false })
+  })
+
+  it('answers false, and never throws, when the request fails or is refused', async () => {
+    expect(await stopFirstWeekMails(() => Promise.reject(new TypeError('Failed to fetch')))).toBe(
+      false
+    )
+    expect(
+      await stopFirstWeekMails(() => Promise.resolve(new Response('{}', { status: 500 })))
+    ).toBe(false)
+  })
+
+  it('stops waiting for an answer that does not come', async () => {
+    let aborted = false
+    const hanging = (_url: string, init?: RequestInit) =>
+      new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => {
+          aborted = true
+          reject(new DOMException('Aborted', 'AbortError'))
+        })
+      })
+    const started = Date.now()
+    expect(await stopFirstWeekMails(hanging, 30)).toBe(false)
+    expect(Date.now() - started).toBeLessThan(2000)
+    expect(aborted).toBe(true)
   })
 })

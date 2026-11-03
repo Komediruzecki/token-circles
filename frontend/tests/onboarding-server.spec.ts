@@ -12,6 +12,7 @@
  * the account's setup.
  */
 import { expect, test } from '@playwright/test'
+import { sqlRows } from './db'
 import { bootSignedIn, deleteAccount, signIn, signUpAndIn } from './own-account'
 import { paintedContrast } from './painted-contrast'
 import { E2E_BASE } from './test-helpers'
@@ -562,6 +563,14 @@ async function localWorkspace(
   }, gone)
 }
 
+/** The account's first-week mails switch, as the Worker stores it: 1 on, 0 off. */
+function mailsOn(email: string): number | null {
+  const rows = sqlRows<{ on: number }>(
+    `SELECT week_one_mails AS "on" FROM users WHERE email = '${email.replace(/'/g, "''")}'`
+  )
+  return rows[0]?.on ?? null
+}
+
 test.describe('keeping the data in this browser, over the demo @smoke', () => {
   test('setup opens on a space of your own over the examples, and the dashboard is that space alone', async ({
     page,
@@ -598,7 +607,13 @@ test.describe('keeping the data in this browser, over the demo @smoke', () => {
       await expect(page.getByRole('alertdialog')).toContainText(
         'This browser has the example profiles from the demo.'
       )
+      await expect(page.getByRole('alertdialog')).toContainText(
+        'Your account stays, empty, and sends no first-week mails.'
+      )
+      expect(mailsOn(email), 'first-week mails before the switch').toBe(1)
       await page.getByTestId('confirm-accept').click()
+      // The account stays, and the switch turned its first-week mails off on the way out.
+      await expect.poll(() => mailsOn(email), { timeout: 30_000 }).toBe(0)
 
       // The reload lands on the local workspace, and setup opens on its space over the examples.
       await expect(page.getByTestId('onboarding-examples-choice')).toBeVisible({ timeout: 60_000 })

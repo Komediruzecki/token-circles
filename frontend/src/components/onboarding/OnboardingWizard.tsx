@@ -46,6 +46,7 @@ import {
   clearLocalSetupPending,
   completeOnboarding,
   countProfileMadeAsDecided,
+  firstSetupOfTheAccount,
   forgetOnboardingStatus,
   goToOnboardingStep,
   markLocalSetupPending,
@@ -72,6 +73,7 @@ import {
   leaveSelectionForLocalWorkspace,
   localOnlyQuestion,
   readLocalWorkspace,
+  stopFirstWeekMails,
 } from './localOnly'
 import styles from './Onboarding.module.css'
 import {
@@ -666,13 +668,21 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
   // workspace, which opens this wizard as the E2E zero-state helper's does), only the demo's
   // example profiles (setup opens on the space over them, and asks whether they stay), or
   // profiles of the person's own (carried on with).
+  //
+  // The account stays, so its first-week mails are turned off before the switch, while the app
+  // still talks to the Worker (3 Nov review A3); the switch goes ahead whatever the answer. The
+  // question calls the account empty on its first setup before setup made or found an account on
+  // it, and says it stays as it is otherwise ("Run setup again" over one with data).
   const chooseLocalOnly = async () => {
     const found = await readLocalWorkspace().catch((): LocalWorkspace => ({ kind: 'unknown' }))
-    const sure = await showConfirm(localOnlyQuestion(found), {
+    const accountEmpty =
+      firstSetupOfTheAccount() && createdAccounts().length === 0 && profileAccounts().length === 0
+    const sure = await showConfirm(localOnlyQuestion(found, accountEmpty), {
       confirmText: 'Keep it here',
       cancelText: 'Cancel',
     })
     if (!sure) return
+    await stopFirstWeekMails()
     try {
       // The example seed never runs into a workspace the person chose: an empty one stays empty.
       localStorage.setItem('finance_had_profiles', '1')

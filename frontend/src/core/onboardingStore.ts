@@ -218,6 +218,17 @@ function recordStep(step: OnboardingStep): void {
   })
 }
 
+/**
+ * Whether the wizard is on a signed-in account's first setup: its record is read and not finished.
+ * Run again over a finished record ("Run setup again"), or with the record unknown, it is not.
+ */
+export function firstSetupOfTheAccount(): boolean {
+  if (!isServerAccount(owner)) return false
+  const state = accountState()
+  if (state === null || state.onboarding === UNREADABLE) return false
+  return !onboardingFinished(state.onboarding)
+}
+
 const store = createRoot(() => {
   const [onboardingOpen, setOnboardingOpen] = createSignal(false)
   const [onboardingStep, setOnboardingStep] = createSignal<OnboardingStep>('space')

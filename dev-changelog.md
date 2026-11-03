@@ -2701,6 +2701,32 @@ true, or is too small for one.
   case through `cushionOf`, a move then part of it spent, and a standing order out to savings);
   the first two fail without the change, and the last fails with moves out left out as well.
 
+- **"Keep my data in this browser only" turns the account's first-week mails off, and says so.**
+  Offered to a signed-in account on setup's first screen, the switch only reloaded into the local
+  workspace: the account, empty, still got the day-2 and day-7 mails, and the confirm had said
+  "no account is needed". `chooseLocalOnly` (`components/onboarding/OnboardingWizard.tsx`) now
+  sends `PUT /api/notifications/settings` with `{ weekOneMails: false }` first, through
+  `stopFirstWeekMails` (`components/onboarding/localOnly.ts`), while the app still talks to the
+  Worker, and waits at most 5 seconds for it. The switch goes ahead whatever the answer: if the
+  request fails, the person sees the same reload into the browser's workspace and nothing else,
+  and the account keeps its mails until they are stopped from a mail's footer or from Settings
+  when signed in. The confirm now reads "Keep your data in this browser only? It stays on this
+  device and nothing syncs to the cloud. Your account stays, empty, and sends no first-week mails.
+  Settings can switch back.", with the same account sentence over the examples, a workspace of
+  the person's own and one it could not read. "Empty" only on the account's first setup before an
+  account was made or found on it (`firstSetupOfTheAccount`, `core/onboardingStore.ts`); "Run
+  setup again" over an account with data says "Your account stays as it is and sends no
+  first-week mails." Measured at 1280 and 390, both themes: 3 lines before, 4 at 1280 and 5 at
+  390 after; the buttons stay 112x39 and 80x39 (D5 is the phone layout). Tests:
+  `components/onboarding/__tests__/localOnly.test.ts` (each question, the request, a refusal and
+  an answer that never comes), `components/onboarding/__tests__/localOnlyAccount.test.tsx` (the
+  wizard against a stand-in Worker: sent before the mode changes, the switch when it is refused
+  or unreachable, run again over a finished setup, after setup made an account, and nothing sent
+  on Cancel), and the switch case of `tests/onboarding-server.spec.ts`, which reads the account's
+  switch on the local Worker go from 1 to 0. Without the request four wizard cases and the e2e
+  fail; sent after the mode change, the same four; without the first-setup check or the accounts
+  check, the case for each.
+
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
 The production build holds back the benchmarks and the questions that choose their figures
