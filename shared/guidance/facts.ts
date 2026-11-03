@@ -566,9 +566,16 @@ function accountsToday(
  * today (`accountsToday`) through the entries since. Each account counts from zero up on each
  * day, so one account's overdraft takes nothing from another, and a move between two of them
  * changes neither the total nor its low point.
+ *
+ * A move in from savings or cash (`reserves`) is left out of the walk back. Those count at their
+ * balance today, which no longer holds the money, so walking the move back would count it
+ * nowhere until the 30 days passed it (3 Nov review A2): topping up the current account from
+ * savings shrank the cushion for a month. A move out to savings is walked back as it happened: the
+ * money counts in savings, and the days before it are what the current account held then.
  */
 function currentAccountsLow(
   giros: readonly FactsAccount[],
+  reserves: ReadonlySet<number>,
   transactions: readonly FactsEntry[],
   today: string
 ): number {
@@ -579,6 +586,7 @@ function currentAccountsLow(
   for (const entry of transactions) {
     const day = entry.date.slice(0, 10);
     if (day <= first || day > today) continue;
+    if (movedInFrom(entry, reserves, ids)) continue;
     for (const move of balanceMoves(entry)) {
       if (!ids.has(move.account)) continue;
       const moves = byDay.get(day);
@@ -601,6 +609,21 @@ function currentAccountsLow(
     low = Math.min(low, pooled());
   }
   return low;
+}
+
+/** Whether the entry moves money from one of `from` into one of `into`, both accounts named. */
+function movedInFrom(
+  entry: FactsEntry,
+  from: ReadonlySet<number>,
+  into: ReadonlySet<number>
+): boolean {
+  return (
+    entry.type === 'transfer' &&
+    isId(entry.account_id) &&
+    isId(entry.transfer_account_id) &&
+    from.has(entry.account_id) &&
+    into.has(entry.transfer_account_id)
+  );
 }
 
 /** The account types money can be reached in: savings, cash and current accounts. */
@@ -633,9 +656,12 @@ export function liquidPartsOf(
     finite(account.balance)
   );
   const giros = counted.filter((account) => storedAccountType(account.type) === 'giro');
+  const reserves = new Set(
+    counted.filter((account) => storedAccountType(account.type) !== 'giro').map(({ id }) => id)
+  );
   const parts: LiquidParts = {
     savings: 0,
-    current: giros.length > 0 ? currentAccountsLow(giros, transactions, today) : 0,
+    current: giros.length > 0 ? currentAccountsLow(giros, reserves, transactions, today) : 0,
     cash: 0,
   };
   for (const account of counted) {

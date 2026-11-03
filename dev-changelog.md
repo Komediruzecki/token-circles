@@ -2687,6 +2687,20 @@ true, or is too small for one.
   month spending more than came in); the first fails for both without the shape, the second
   with quiet months at 35%.
 
+- **Topping up the current account from savings no longer shrinks the cushion.** Savings count at
+  their balance today and the current accounts at their lowest in the last 30 days, read back
+  through the entries since. A move from savings walked back off the current account's earlier
+  days, and savings no longer held it, so for 30 days the money counted nowhere: 1,000 on the
+  current account and 3,000 in savings read 4,000, and the same after moving 2,000 across read
+  2,000 (2.67 months of 1,500 to 1.33). The walk back (`currentAccountsLow`,
+  `shared/guidance/facts.ts`) now leaves out a move in from a savings or cash account, so it reads
+  4,000 and 2.67 months. A move the other way is walked back as before: the review's own check
+  had it changing nothing, and leaving it out too would take a standing order's 500 off the days
+  before it and read a salary account's 300 low point as 0 (5,800 read 5,500). Tests:
+  `src/core/__tests__/guidanceFacts.test.ts` (a move in from savings and from cash, the review's
+  case through `cushionOf`, a move then part of it spent, and a standing order out to savings);
+  the first two fail without the change, and the last fails with moves out left out as well.
+
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
 The production build holds back the benchmarks and the questions that choose their figures

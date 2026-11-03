@@ -560,10 +560,10 @@ describe('the money a person can reach', () => {
     expect(liquidOf(accounts, dipped, TODAY)).toBe(400)
   })
 
-  it('reads money moved in from savings at the current account’s low point before it came', () => {
-    // 2,000 moved from savings to the current account on the 6th. Savings count at their balance and
-    // the current accounts at their low point, so the 2,000 counts from the day the low point
-    // passes it: until then 3,500 reads, held or spent. An under-count, towards a larger cushion.
+  it('counts money moved in from savings or cash once, on the current account, from the day it came', () => {
+    // 2,000 moved from savings to the current account on the 6th. Savings count at their balance
+    // today, which no longer holds it, so the walk back through the current account's days leaves
+    // the move out: the 2,000 counts there. It had counted nowhere for 30 days (3 Nov review A2).
     const moved = [
       entry('2026-10-06', {
         type: 'transfer',
@@ -576,14 +576,73 @@ describe('the money a person can reach', () => {
       { id: 1, type: 'giro', balance: 2500 },
       { id: 2, type: 'savings', balance: 3000 },
     ]
-    expect(liquidOf(held, moved, TODAY)).toBe(3500)
-    // Spent on a 2,000 bill on the 7th.
-    const spent = [...moved, entry('2026-10-07', { amount: 2000, account_id: 1 })]
+    expect(liquidOf(held, moved, TODAY)).toBe(5500)
+    expect(liquidPartsOf(held, moved, TODAY)).toEqual({ savings: 3000, current: 2500, cash: 0 })
+    // The same from a cash account: 300 paid in on the 9th.
+    const paidIn = [
+      entry('2026-10-09', { type: 'transfer', amount: 300, account_id: 3, transfer_account_id: 1 }),
+    ]
+    const fromCash = [
+      { id: 1, type: 'giro', balance: 800 },
+      { id: 3, type: 'cash', balance: 50 },
+    ]
+    expect(liquidOf(fromCash, paidIn, TODAY)).toBe(850)
+    // The review's case through the cushion: 1,000 on the current account and 3,000 in savings,
+    // then 2,000 moved across today. Still 4,000, and still 2.67 months of 1,500.
+    const months = [ago(3), ago(2), ago(1)].flatMap((ym) => month(ym, 2000, 1500))
+    const today = [
+      entry(TODAY, { type: 'transfer', amount: 2000, account_id: 2, transfer_account_id: 1 }),
+    ]
+    const across = [
+      { id: 1, type: 'giro', balance: 3000 },
+      { id: 2, type: 'savings', balance: 1000 },
+    ]
+    const cushion = cushionOf({
+      today: TODAY,
+      transactions: [...months, ...today],
+      categories: [],
+      accounts: across,
+    })
+    expect(cushion.liquid).toBe(4000)
+    expect(cushion.months).toBeCloseTo(4000 / 1500)
+  })
+
+  it('takes what is spent of money moved in from savings, and keeps the rest', () => {
+    const moved = entry('2026-10-06', {
+      type: 'transfer',
+      amount: 2000,
+      account_id: 2,
+      transfer_account_id: 1,
+    })
+    // 800 of it spent on the 7th: 1,200 of the 2,000 left, beside the 500 the account held.
+    const part = [moved, entry('2026-10-07', { amount: 800, account_id: 1 })]
     const after = [
+      { id: 1, type: 'giro', balance: 1700 },
+      { id: 2, type: 'savings', balance: 3000 },
+    ]
+    expect(liquidOf(after, part, TODAY)).toBe(4700)
+    // All of it spent on a 2,000 bill: the 500 and the savings.
+    const all = [moved, entry('2026-10-07', { amount: 2000, account_id: 1 })]
+    const spent = [
       { id: 1, type: 'giro', balance: 500 },
       { id: 2, type: 'savings', balance: 3000 },
     ]
-    expect(liquidOf(after, spent, TODAY)).toBe(3500)
+    expect(liquidOf(spent, all, TODAY)).toBe(3500)
+  })
+
+  it('keeps reading a move out to savings at the current account’s days as they were', () => {
+    // Salary on the 1st, and 500 of it put by the same day, as a standing order does. The current
+    // account held 300 the day before: that 300 never left, and the 500 is in savings. Leaving
+    // this move out too would take the 300 back off the days before it, and read 5,500.
+    const putBy = [
+      entry('2026-10-01', { type: 'income', amount: 2000, account_id: 1, category_id: 9 }),
+      entry('2026-10-01', { type: 'transfer', amount: 500, account_id: 1, transfer_account_id: 2 }),
+    ]
+    const accounts = [
+      { id: 1, type: 'giro', balance: 1800 },
+      { id: 2, type: 'savings', balance: 5500 },
+    ]
+    expect(liquidOf(accounts, putBy, TODAY)).toBe(5800)
   })
 
   it('reads back exactly 30 days: today and the 29 before it', () => {
