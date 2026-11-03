@@ -2635,6 +2635,20 @@ true, or is too small for one.
   its change, and each guard (the minimum width, the height, the overflow) fails a test when
   removed.
 
+- **On Every print, a print focused from the keyboard no longer looks like the one shown.** The
+  focus ring was a second blue outline (`--primary-hover`, 3 px out) beside the pressed print's
+  (`--primary`, 2 px out): 1.32:1 apart in the light theme and 1.31:1 in the dark, and on the
+  pressed print it replaced the pressed ring. In `PrintsShelf.module.css` the pressed ring is now a
+  shadow, the same blue ring 2 px clear, so the outline is free for focus: 2 px in `--text`, 3 px
+  out, and 5 px out on the pressed print, outside its ring, so a pressed print focused from the
+  keyboard shows both. Forced colours draw no shadows, so there the pressed print keeps a 3 px
+  `Highlight` border. The phone strip keeps 7 px clear (was 5) for the ring that now reaches 7 px
+  out. Measured on the demo's strip at 390 and 1280: focus against the pressed ring 3.79:1 light
+  and 2.36:1 dark (was 1.32 and 1.31), the focus ring on the card 17.57:1 and 14.69:1 (was 6.09 and
+  8.15), the pressed ring unchanged at 4.63:1 and 6.22:1. Tests: `tests/prints-layout.spec.ts`
+  (focused beside the pressed print and on it, in both themes, and forced colours; fails on the
+  old rules), and the existing whole-ring test fails with the strip's padding left at 5 px.
+
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
 The production build holds back the benchmarks and the questions that choose their figures
