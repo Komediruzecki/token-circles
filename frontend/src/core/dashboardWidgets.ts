@@ -52,21 +52,61 @@ export interface WidgetPrefs {
   order: string[]
 }
 
+/** The card the savings gauge replaced, still in layouts saved before it. */
+const OLD_SAVINGS_RATE = 'savings-rate'
+const GAUGE = 'savings-gauge'
+
+/** Drawn by the page in the saved order, under Show more; the rest have a spot of their own. */
+export const isTailWidget = (id: string): boolean =>
+  id !== 'badges' && id !== 'metrics' && id !== GAUGE && !id.startsWith('deck-')
+
+/**
+ * The savings gauge sits under the metrics, unless the order puts it after one of the widgets
+ * under Show more: then it is drawn there, at its place. A layout saved with the old Savings rate
+ * card has the gauge where that card was, which by default was there; so does one rearranged in
+ * Views.
+ */
+export function gaugeInTail(order: readonly string[]): boolean {
+  const at = order.indexOf(GAUGE)
+  return at > 0 && order.slice(0, at).some(isTailWidget)
+}
+
+/**
+ * A layout saved with the old Savings rate card hands its place in the order and its switch to the
+ * gauge that replaced it, so a card someone had switched off does not come back as the gauge.
+ */
+function carrySavingsRate(parsed: { visibleWidgets?: unknown; widgetOrder?: unknown }): {
+  visible: unknown[] | null
+  order: unknown[] | null
+} {
+  const visible = Array.isArray(parsed.visibleWidgets) ? [...parsed.visibleWidgets] : null
+  const order = Array.isArray(parsed.widgetOrder) ? [...parsed.widgetOrder] : null
+  const known =
+    (order ?? []).includes(OLD_SAVINGS_RATE) || (visible ?? []).includes(OLD_SAVINGS_RATE)
+  if (!known || (order ?? []).includes(GAUGE)) return { visible, order }
+  if (order) {
+    const at = order.indexOf(OLD_SAVINGS_RATE)
+    if (at >= 0) order.splice(at, 1, GAUGE)
+  }
+  // No switches saved: the defaults then, under which the old card was off.
+  if (!visible) return { visible: DEFAULT_VISIBLE.filter((id) => id !== GAUGE), order }
+  const on = visible.includes(OLD_SAVINGS_RATE)
+  const rest = visible.filter((id) => id !== OLD_SAVINGS_RATE && id !== GAUGE)
+  return { visible: on ? [...rest, GAUGE] : rest, order }
+}
+
 export function loadWidgetPrefs(): WidgetPrefs {
   const saved = localStorage.getItem(WIDGET_STORAGE_KEY)
   if (saved) {
     try {
       const parsed = JSON.parse(saved)
-      // Ids this build no longer has are dropped: `savings-rate`, which the savings gauge
-      // replaced, would otherwise stay in the Views list switching nothing on or off.
+      const carried = carrySavingsRate(parsed ?? {})
+      // Ids this build no longer has are dropped: one would otherwise stay in the Views list
+      // switching nothing on or off.
       const known = (ids: unknown[]): string[] =>
         ids.filter((id): id is string => typeof id === 'string' && ALL_WIDGET_IDS.includes(id))
-      const visible: string[] =
-        parsed.visibleWidgets && Array.isArray(parsed.visibleWidgets)
-          ? known(parsed.visibleWidgets)
-          : [...DEFAULT_VISIBLE]
-      const savedOrder =
-        parsed.widgetOrder && Array.isArray(parsed.widgetOrder) ? known(parsed.widgetOrder) : []
+      const visible: string[] = carried.visible ? known(carried.visible) : [...DEFAULT_VISIBLE]
+      const savedOrder = carried.order ? known(carried.order) : []
       const order: string[] = savedOrder.length > 0 ? savedOrder : [...DEFAULT_WIDGET_ORDER]
       // Widgets added after the user saved their layout: splice them in (a saved
       // order that predates a widget would otherwise hide it forever). An id

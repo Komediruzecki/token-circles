@@ -30,7 +30,7 @@ import {
 import { householdProfileIds } from '../core/apiProfileScope'
 import { getProfileVersion, useAppState } from '../core/appStore'
 import { circlesProfileName } from '../core/circlesProfile'
-import { loadWidgetPrefs } from '../core/dashboardWidgets'
+import { gaugeInTail, loadWidgetPrefs } from '../core/dashboardWidgets'
 import { entityVersion } from '../core/dataVersions'
 import { useGuidance } from '../core/guidance'
 import { refetchOnActive } from '../core/pageVisibility'
@@ -267,6 +267,11 @@ export default function Dashboard() {
 
   const renderWidget = (id: string) => {
     switch (id) {
+      // Here only where the order puts it among these widgets; otherwise under the metrics.
+      case 'savings-gauge':
+        return gaugeInTail(widgetOrder()) ? (
+          <SavingsGauge view={guidance()} profile={circlesProfile()} />
+        ) : null
       case 'budget-alerts':
         return (
           <div class={styles.widgetCard}>
@@ -736,8 +741,9 @@ export default function Dashboard() {
           </Show>
 
           {/* The savings rate over the last 12 months, at its own spot like the metrics: it reads
-              the circles' facts, not the period above. */}
-          <Show when={isWidgetVisible('savings-gauge')}>
+              the circles' facts, not the period above. Placed among the widgets under Show more,
+              as a layout saved with the old Savings rate card has it, it is drawn there. */}
+          <Show when={isWidgetVisible('savings-gauge') && !gaugeInTail(widgetOrder())}>
             <SavingsGauge view={guidance()} profile={circlesProfile()} />
           </Show>
 

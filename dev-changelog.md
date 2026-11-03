@@ -2780,9 +2780,27 @@ true, or is too small for one.
   head; Your next step grows 22 px (337 to 359 at 1280, 375 to 398 at 390); the line reads 5.35:1
   (gauge) and 5.63:1 (step) in light, 8.84:1 and 7.71:1 in dark. Tests:
   `src/core/__tests__/circlesProfile.test.ts`, the two cards' own tests and
-  `src/features/__tests__/dashboardCirclesProfile.test.tsx` (named with two, not with one, follows
+  `src/features/__tests__/dashboardCircles.test.tsx` (named with two, not with one, follows
   a change of selection). Without the one-profile check three fail, without following the
   selection one, counting a profile listed twice twice one.
+- **A Dashboard layout saved with the old Savings rate card keeps it as it was** (A18). The gauge
+  that replaced the card was spliced into every saved layout switched on, under the metrics, so
+  someone who had switched the card off met the gauge anyway. A layout that holds the card now
+  hands its switch and its place in the order to the gauge (`frontend/src/core/dashboardWidgets.ts`):
+  off stays off, and on stays where the card was, which by default is among the widgets under
+  Show more; the page draws the gauge there while the order puts it after one of those widgets,
+  and under the metrics otherwise, so dragging Savings Rate in Views now moves it on the page too.
+  A layout with no switches saved keeps the gauge off, as the card was by default. Layouts saved
+  before the card existed, and new accounts, get the gauge on under the metrics as before. Since
+  the card was off by default, a layout saved in Views without ever switching it on keeps the
+  gauge off too; Views switches it on. On the demo with an old layout: card off, 1 gauge before
+  and 0 after; card on, the gauge under the metrics before and under Show more after, at 1280
+  and 390 in both themes. Tests: `src/core/__tests__/dashboardWidgets.test.ts` (off, on at a
+  moved place, on with no order, no switches, a layout older than the card, where the gauge is
+  drawn) and `src/features/__tests__/dashboardCircles.test.tsx` (under the metrics by default,
+  under Show more in an old layout, off in one). Without the carry six fail; with the gauge never
+  in the tail, without drawing it there, or drawing it at the top whatever the order, one or two
+  each; without the no-switches rule one.
 
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 

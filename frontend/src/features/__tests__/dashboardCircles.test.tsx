@@ -1,7 +1,12 @@
 /**
- * The savings gauge and Your next step are worked out for the active profile, while the cards
- * around them add up every profile selected (review A6). With more than one selected, both name
- * the profile they are about; with one, the whole page is that profile and neither does.
+ * The circles on the Dashboard: the savings gauge and Your next step.
+ *
+ * Both are worked out for the active profile, while the cards around them add up every profile
+ * selected (review A6). With more than one selected, both name the profile they are about; with
+ * one, the whole page is that profile and neither does.
+ *
+ * The gauge sits under the metrics, unless the saved order puts it among the widgets under Show
+ * more, where a layout saved with the old Savings rate card had that card (review A7).
  */
 import { render } from 'solid-js/web'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -120,6 +125,7 @@ afterEach(() => {
   dispose = undefined
   host?.remove()
   localStorage.removeItem(WIDGET_STORAGE_KEY)
+  localStorage.removeItem('dashboard_showMore')
   localStorage.removeItem('currentProfileId')
   localStorage.removeItem('selectedProfileIds')
   setProfiles([])
@@ -164,5 +170,49 @@ describe('the profile the circles are about, on a Dashboard that adds up a house
       gauge: 'For Holiday house only',
       step: 'For Holiday house only',
     })
+  })
+})
+
+describe('where the savings gauge sits', () => {
+  /** Whether the gauge comes after the Show more button, in the widgets under it. */
+  const gaugeUnderShowMore = () => {
+    const gauge = host.querySelector('[data-test-id="savings-gauge"]')!
+    const toggle = host.querySelector('[data-test-id="dashboard-show-more"]')!
+    return Boolean(toggle.compareDocumentPosition(gauge) & Node.DOCUMENT_POSITION_FOLLOWING)
+  }
+
+  it('is under the metrics by default', async () => {
+    localStorage.setItem('dashboard_showMore', '1')
+    await mountDashboard()
+    expect(host.querySelectorAll('[data-test-id="savings-gauge"]')).toHaveLength(1)
+    expect(gaugeUnderShowMore()).toBe(false)
+  })
+
+  it('keeps the place the Savings rate card had in a layout saved with it', async () => {
+    const order = ALL_WIDGET_IDS.filter((id) => id !== 'savings-gauge')
+    order.splice(order.indexOf('upcoming-bills') + 1, 0, 'savings-rate')
+    localStorage.setItem(
+      WIDGET_STORAGE_KEY,
+      JSON.stringify({
+        visibleWidgets: ['metrics', 'upcoming-bills', 'savings-rate'],
+        widgetOrder: order,
+      })
+    )
+    localStorage.setItem('dashboard_showMore', '1')
+    await mountDashboard()
+    expect(host.querySelectorAll('[data-test-id="savings-gauge"]')).toHaveLength(1)
+    expect(gaugeUnderShowMore()).toBe(true)
+  })
+
+  it('stays off in a layout that had the Savings rate card off', async () => {
+    const order = ALL_WIDGET_IDS.filter((id) => id !== 'savings-gauge')
+    order.splice(order.indexOf('upcoming-bills') + 1, 0, 'savings-rate')
+    localStorage.setItem(
+      WIDGET_STORAGE_KEY,
+      JSON.stringify({ visibleWidgets: ['metrics', 'upcoming-bills'], widgetOrder: order })
+    )
+    localStorage.setItem('dashboard_showMore', '1')
+    await mountDashboard()
+    expect(host.querySelector('[data-test-id="savings-gauge"]')).toBeNull()
   })
 })
