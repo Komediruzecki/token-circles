@@ -2590,6 +2590,27 @@ true, or is too small for one.
   ..."), keep ", and". Tests: `core/__tests__/guidanceNextStep.test.ts` (the yearly-bills step's
   line, shared heads, different heads); the first two fail without the change.
 
+- **Getting started and Progress no longer ask for a budget for Other.** After an import, "Set a
+  budget for Other" led the steps: Other is where the import files an entry no rule matches
+  (`categorize`'s fallback, `shared/bankImport/categoryRules.ts`), so its total says nothing about
+  where the money goes. `biggestUnbudgeted` (`core/achievements/monthFacts.ts`) now takes the
+  profile's categories and passes over a catch-all, known by its name: `isCatchAll`
+  (`shared/guidance/kinds.ts`) is `kindForName(name) === 'other'`, which holds for "Other" (the
+  import creates it with that kind, `routes/imports.ts` and `importFlow.ts`), "Misc" and
+  "Miscellaneous", and not for "Other shopping". Not by the stored kind: a person can give their
+  own Pets the kind Other, the statistics' group for what has none of its own, and Pets is worth a
+  budget. When the catch-all spent more, the words say so, since "more than on any other category"
+  would be wrong: "Not counting Other, you spent more on it in September than on any other
+  category with no budget or bill." on Getting started, and "Not counting Other, it is the biggest
+  thing you spend on with nothing set aside for it." on Progress's card. A month spent only under
+  catch-alls offers no budget step. CHANGELOG.md's Getting started line says a catch-all doesn't
+  count. Tests: `achievements/__tests__/monthFacts.test.ts` (passed over and named, not named
+  when it spent less, nothing when it is all there is, Pets counted),
+  `core/__tests__/guidanceKinds.test.ts` (the import's fallback in both rule sets is a
+  catch-all), `core/__tests__/orientation.test.ts` (the words) and
+  `core/__tests__/orientationFacts.test.ts` (Getting started and the advice agree); each fails
+  without its change.
+
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
 The production build holds back the benchmarks and the questions that choose their figures

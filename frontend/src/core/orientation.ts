@@ -57,9 +57,17 @@ export function orientationFacts(source: OrientationSource, nowMs: number): Orie
   const last = lastFullMonth(today)
   const lastMonth = bucketByMonth(transactions).get(last) ?? []
   // Spent in the last full month, budgeted this month: the step goes once the budget is set.
-  const top = biggestUnbudgeted(lastMonth, monthOf(today), source.budgets, source.bills)
-  const name =
-    top === null ? undefined : source.categories.find((c) => c.id === top.categoryId)?.name
+  const top = biggestUnbudgeted(
+    lastMonth,
+    monthOf(today),
+    source.budgets,
+    source.bills,
+    source.categories
+  )
+  const nameOf = (id: number | undefined) =>
+    id === undefined ? undefined : source.categories.find((c) => c.id === id)?.name
+  const name = nameOf(top?.categoryId)
+  const notCounting = nameOf(top?.notCounting)
   const spotted = detectSubscriptions(recentForScan(transactions, nowMs), source.bills, {
     today,
     categories: source.categories,
@@ -77,7 +85,14 @@ export function orientationFacts(source: OrientationSource, nowMs: number): Orie
     billsSpotted: spotted.filter((found) => found.billType === 'bill').length,
     entries: transactions.filter((t) => t.type !== 'transfer').length,
     uncategorised: uncategorisedIn(transactions),
-    topUnbudgeted: top !== null && name !== undefined ? { categoryId: top.categoryId, name } : null,
+    topUnbudgeted:
+      top !== null && name !== undefined
+        ? {
+            categoryId: top.categoryId,
+            name,
+            ...(notCounting === undefined ? {} : { notCounting }),
+          }
+        : null,
     heavyMonth: monthInTheRed(lastMonth) === null ? null : last,
     loans: source.loans.length,
     cushionMonths: cushion.months,

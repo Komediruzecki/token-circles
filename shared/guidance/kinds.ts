@@ -186,6 +186,17 @@ export function kindForName(name: unknown): Kind | null {
   return null;
 }
 
+/**
+ * Whether a category's name says only that it holds what the others don't: "Other", where the bank
+ * import files an entry no rule matches (`categorize`, shared/bankImport/categoryRules.ts), and
+ * "Misc" or "Miscellaneous". Known by the name, as `kindForName` reads it, not by the stored kind:
+ * the kind Other is the statistics' group for what has no group of its own, and a person can give
+ * it to a category of their own, such as Pets, that is worth a budget.
+ */
+export function isCatchAll(name: unknown): boolean {
+  return kindForName(name) === 'other';
+}
+
 /** A category as far as its kind goes: what both runtimes store, and what the app reads. */
 export interface KindedCategory {
   id?: unknown;

@@ -3,7 +3,12 @@
  * a name gives, the kind a category goes by, and whether it is needed every month.
  */
 import { describe, expect, it } from 'vitest'
-import { RULE_GROUPS } from '../../../../shared/bankImport/categoryRules'
+import {
+  categorize,
+  DEFAULT_CATEGORY_RULES,
+  DEFAULT_CATEGORY_RULES_WORLDWIDE,
+  RULE_GROUPS,
+} from '../../../../shared/bankImport/categoryRules'
 import { resetKeepsIcon, resetName } from '../../../../shared/defaultCategories'
 import {
   categoryLookup,
@@ -11,6 +16,7 @@ import {
   ESSENTIAL_KINDS,
   essentialOf,
   holdsTransfers,
+  isCatchAll,
   isEssential,
   KIND_LABELS,
   kindForName,
@@ -123,6 +129,29 @@ describe('kindForName', () => {
     expect(kindForName(undefined)).toBeNull()
     expect(kindForName(42)).toBeNull()
   })
+})
+
+describe('a catch-all', () => {
+  it('is where the import files what no rule matches, in either rule set', () => {
+    for (const rules of [DEFAULT_CATEGORY_RULES, DEFAULT_CATEGORY_RULES_WORLDWIDE]) {
+      expect(isCatchAll(categorize(['NOTHING ANY RULE KNOWS'], rules))).toBe(true)
+    }
+  })
+
+  it.each([['Other'], ['OTHER'], ['other '], ['Misc'], ['Miscellaneous'], ['Other expenses']])(
+    'is %j',
+    (name) => {
+      expect(isCatchAll(name)).toBe(true)
+    }
+  )
+
+  it.each([['Pets'], ['Groceries'], ['Mother'], ['Other shopping'], [''], [undefined]])(
+    'is not %j',
+    (name) => {
+      // "Other shopping" is shopping: a name with a kind of its own says what it holds.
+      expect(isCatchAll(name)).toBe(false)
+    }
+  )
 })
 
 describe('the kind a category goes by', () => {

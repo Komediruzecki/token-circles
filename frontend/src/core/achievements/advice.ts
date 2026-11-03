@@ -211,7 +211,13 @@ function uncategorised(input: AdviceInput, byMonth: Map<string, Tx[]>): Advice[]
  */
 function unbudgetedCategory(input: AdviceInput, byMonth: Map<string, Tx[]>): Advice[] {
   const month = monthOf(input.today)
-  const top = biggestUnbudgeted(byMonth.get(month) ?? [], month, input.budgets, input.bills)
+  const top = biggestUnbudgeted(
+    byMonth.get(month) ?? [],
+    month,
+    input.budgets,
+    input.bills,
+    input.categories
+  )
   if (!top) return []
   const money = input.money ?? round
   return [
@@ -220,7 +226,11 @@ function unbudgetedCategory(input: AdviceInput, byMonth: Map<string, Tx[]>): Adv
       kind: 'unbudgeted-category',
       tone: 'info',
       title: `${categoryName(input, top.categoryId)} has no budget`,
-      detail: 'It is the biggest thing you spend on with nothing set aside for it.',
+      detail: `${
+        top.notCounting === undefined
+          ? 'It'
+          : `Not counting ${categoryName(input, top.notCounting)}, it`
+      } is the biggest thing you spend on with nothing set aside for it.`,
       figure: money(top.spent),
       link: { page: 'budgets', label: 'Budgets' },
       weight: top.spent,

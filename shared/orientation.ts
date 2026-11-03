@@ -43,8 +43,11 @@ export interface OrientationFacts {
   entries: number;
   /** Of those, how many have none. */
   uncategorised: number;
-  /** The category spent on most in the last full month with no budget and no bill behind it. */
-  topUnbudgeted: { categoryId: number; name: string } | null;
+  /**
+   * The category spent on most in the last full month with no budget and no bill behind it, a
+   * catch-all such as Other left out; `notCounting` names the catch-all when it spent more.
+   */
+  topUnbudgeted: { categoryId: number; name: string; notCounting?: string } | null;
   /** The last full month, when it spent more than it earned. */
   heavyMonth: string | null;
   /** Loans on file. */
@@ -183,7 +186,11 @@ const RULES: Rule[] = [
       const month = monthName(lastFullMonth(today));
       return {
         title: `Set a budget for ${topUnbudgeted.name}`,
-        reason: `You spent more on it in ${month} than on any other category with no budget or bill.`,
+        reason: `${
+          topUnbudgeted.notCounting === undefined
+            ? 'You'
+            : `Not counting ${topUnbudgeted.notCounting}, you`
+        } spent more on it in ${month} than on any other category with no budget or bill.`,
         link: { hash: '#budgets', label: 'Budgets' },
       };
     },

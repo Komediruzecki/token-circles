@@ -241,6 +241,39 @@ describe('agreeing with the advice', () => {
     })
   })
 
+  it('neither offers the catch-all the import filed the rest under, and both say so', () => {
+    const withOther = [...categories, { id: 11, name: 'Other' }]
+    const list = [
+      row('2026-09-02', { amount: -300, category_id: 7 }),
+      row('2026-09-03', { amount: -700, category_id: 11 }),
+      row('2026-10-02', { amount: -40, category_id: 7 }),
+      row('2026-10-03', { amount: -90, category_id: 11 }),
+    ]
+    const facts = orientationFacts(source(list, { categories: withOther }), NOW)
+    expect(facts.topUnbudgeted).toEqual({ categoryId: 7, name: 'Groceries', notCounting: 'Other' })
+    expect(nextSteps(facts).find((s) => s.id === 'budget-top-category')?.title).toBe(
+      'Set a budget for Groceries'
+    )
+    const card = buildAdvice({
+      transactions: list,
+      budgets: [],
+      goals: [],
+      importLogs: [],
+      loans: [],
+      selfHosted: false,
+      today: TODAY,
+      categories: withOther,
+      bills: [],
+      dismissed: [],
+    }).find((one) => one.kind === 'unbudgeted-category')
+    expect(card).toMatchObject({
+      id: 'unbudgeted-category:7:2026-10',
+      title: 'Groceries has no budget',
+      detail:
+        'Not counting Other, it is the biggest thing you spend on with nothing set aside for it.',
+    })
+  })
+
   it('a category the profile has no name for is not offered', () => {
     const facts = orientationFacts(
       source([row('2026-09-02', { amount: -300, category_id: 99 })]),

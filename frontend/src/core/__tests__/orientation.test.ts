@@ -147,6 +147,14 @@ describe('budget-top-category', () => {
       link: { hash: '#budgets', label: 'Budgets' },
     })
   })
+
+  it('says it is not counting a catch-all that spent more', () => {
+    expect(
+      only({ topUnbudgeted: { categoryId: 7, name: 'Groceries', notCounting: 'Other' } }).reason
+    ).toBe(
+      'Not counting Other, you spent more on it in September than on any other category with no budget or bill.'
+    )
+  })
 })
 
 describe('heavy-month', () => {

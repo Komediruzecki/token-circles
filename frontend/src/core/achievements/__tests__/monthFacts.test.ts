@@ -65,7 +65,7 @@ describe('biggestUnbudgeted', () => {
       tx('2026-09-06', { category_id: null, amount: 999 }),
     ]
     // 1 has a budget and 2 a bill; 4 is income, and the last has no category.
-    expect(biggestUnbudgeted(list, '2026-09', [budget(1)], [{ category_id: 2 }])).toEqual({
+    expect(biggestUnbudgeted(list, '2026-09', [budget(1)], [{ category_id: 2 }], [])).toEqual({
       categoryId: 3,
       spent: 220,
     })
@@ -73,14 +73,67 @@ describe('biggestUnbudgeted', () => {
 
   it('names nothing when every category spent on has a budget or a bill', () => {
     const list = [tx('2026-09-01', { category_id: 1 }), tx('2026-09-02', { category_id: 2 })]
-    expect(biggestUnbudgeted(list, '2026-09', [budget(1)], [{ category_id: 2 }])).toBeNull()
-    expect(biggestUnbudgeted([], '2026-09', [], [])).toBeNull()
+    expect(biggestUnbudgeted(list, '2026-09', [budget(1)], [{ category_id: 2 }], [])).toBeNull()
+    expect(biggestUnbudgeted([], '2026-09', [], [], [])).toBeNull()
   })
 
   it("counts only the budgets of the month it is given: an earlier month's has lapsed", () => {
     const list = [tx('2026-09-01', { category_id: 1, amount: 500 })]
     const june = { ...budget(1), start_date: '2026-06-01', created_at: '2026-06-01T00:00:00Z' }
-    expect(biggestUnbudgeted(list, '2026-09', [june], [])).toEqual({ categoryId: 1, spent: 500 })
-    expect(biggestUnbudgeted(list, '2026-06', [june], [])).toBeNull()
+    expect(biggestUnbudgeted(list, '2026-09', [june], [], [])).toEqual({
+      categoryId: 1,
+      spent: 500,
+    })
+    expect(biggestUnbudgeted(list, '2026-06', [june], [], [])).toBeNull()
+  })
+
+  describe('a catch-all', () => {
+    const categories = [
+      { id: 1, name: 'Other' },
+      { id: 2, name: 'Groceries' },
+      { id: 3, name: 'Misc' },
+      { id: 4, name: 'Pets' },
+    ]
+
+    it('is never the one, and is named when it spent more', () => {
+      // Other is where an import files what no rule matched: 900 of it, then Misc at 600.
+      const list = [
+        tx('2026-09-01', { category_id: 1, amount: 900 }),
+        tx('2026-09-02', { category_id: 3, amount: 600 }),
+        tx('2026-09-03', { category_id: 2, amount: 300 }),
+      ]
+      expect(biggestUnbudgeted(list, '2026-09', [], [], categories)).toEqual({
+        categoryId: 2,
+        spent: 300,
+        notCounting: 1,
+      })
+    })
+
+    it('is not named when it spent less', () => {
+      const list = [
+        tx('2026-09-01', { category_id: 1, amount: 100 }),
+        tx('2026-09-02', { category_id: 2, amount: 300 }),
+      ]
+      expect(biggestUnbudgeted(list, '2026-09', [], [], categories)).toEqual({
+        categoryId: 2,
+        spent: 300,
+      })
+    })
+
+    it('leaves nothing to name when only catch-alls were spent on', () => {
+      const list = [
+        tx('2026-09-01', { category_id: 1, amount: 900 }),
+        tx('2026-09-02', { category_id: 3, amount: 50 }),
+      ]
+      expect(biggestUnbudgeted(list, '2026-09', [], [], categories)).toBeNull()
+    })
+
+    it('is known by its name: a category of its own name is counted', () => {
+      const list = [tx('2026-09-01', { category_id: 4, amount: 80 })]
+      expect(biggestUnbudgeted(list, '2026-09', [], [], categories)).toEqual({
+        categoryId: 4,
+        spent: 80,
+      })
+    })
   })
 })
