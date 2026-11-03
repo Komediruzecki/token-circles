@@ -247,6 +247,25 @@ describe('the cash cushion', () => {
     ).toContain('Next milestone: 6 months, €4,000 away.')
   })
 
+  it('says it counts Other as needed until it is sorted (review M1)', () => {
+    const other = facts({ catchAlls: [{ name: 'Other', share: 40, unsure: 650 }] })
+    expect(cushionCard(other, words, at('US'))!.body[0]).toBe(
+      'That counts Other (€650 a month) as needed until you sort it. Most guides aim for three to six months. That range is a convention, not a tested line; if your income moves around, the top of it fits better. Next milestone: 3 months, €2,000 away.'
+    )
+    const two = facts({
+      catchAlls: [
+        { name: 'Other', share: 30, unsure: 400 },
+        { name: 'Misc', share: 10, unsure: 250.4 },
+      ],
+    })
+    expect(cushionCard(two, words, at('US'))!.body[0]).toMatch(
+      /^That counts Other and Misc \(€650 a month\) as needed until you sort them\. Most guides/
+    )
+    // Marked as not needed, a catch-all is not counted, and there is nothing to say.
+    const marked = facts({ catchAlls: [{ name: 'Other', share: 40, unsure: 0 }] })
+    expect(cushionCard(marked, words, at('US'))!.body[0]).toMatch(/^Most guides aim/)
+  })
+
   it('leaves the gap out in the circle the person is in, where the step and the check say it', () => {
     const current = { current: true }
     expect(cushionCard(facts(), words, at('US', current))!.body[0]).toBe(

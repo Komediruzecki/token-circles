@@ -371,6 +371,18 @@ describe("the person's numbers", () => {
     ])
   })
 
+  it('says how much of what is sorted Other holds (review M1)', () => {
+    const rows = numbers(
+      facts({ catchAlls: [{ name: 'Other', share: 41.4, unsure: 600 }] }),
+      1
+    ).rows
+    expect(rows[1]).toEqual({
+      label: 'Spending sorted',
+      value: '96%',
+      note: 'Other holds 41% of spending.',
+    })
+  })
+
   it('says the entries without a category it counts are the spending of its months', () => {
     // Getting started, the day-7 mail and the Transactions filter count every entry, income and
     // older months too (review A10): this count says it is less.

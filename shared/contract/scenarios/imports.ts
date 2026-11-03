@@ -143,17 +143,21 @@ export const imports = [
           ['2026-03-02', 'Pizza', '-18', 'Restaurant', 'Everyday', 'expense'],
           ['2026-03-03', 'Card fee', '-2', 'Bank Fees', 'Everyday', 'expense'],
           ['2026-03-04', 'Vet', '-60', 'Pets', 'Everyday', 'expense'],
+          // Where the bank import files what no rule knows: no kind, so needed until the person
+          // says otherwise (review M1).
+          ['2026-03-05', 'Landlord', '-650', 'Other', 'Everyday', 'expense'],
         ],
         categoryTypes: {
           Salary: 'income',
           Restaurant: 'expense',
           'Bank Fees': 'expense',
           Pets: 'expense',
+          Other: 'expense',
         },
         accountTypes: {},
         accountBalances: {},
         accountBalanceDates: {},
-        approvedCategories: ['Salary', 'Restaurant', 'Bank Fees', 'Pets'],
+        approvedCategories: ['Salary', 'Restaurant', 'Bank Fees', 'Pets', 'Other'],
       });
       const reply = await api.get('/api/categories');
       expectOk(expect, reply, 'GET /api/categories');
@@ -165,6 +169,7 @@ export const imports = [
         Restaurant: ['eating_out', null],
         'Bank Fees': ['taxes', null],
         Pets: [null, null],
+        Other: [null, null],
       });
     }
   ),

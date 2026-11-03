@@ -52,6 +52,7 @@ import {
   effectiveKind,
   essentialOf,
   holdsTransfers,
+  isCatchAll,
   takesEssential,
 } from './kinds';
 import type { LoanInput } from '../loanSchedule';
@@ -254,6 +255,13 @@ export interface Cushion {
   against: 'needs' | 'spending';
 }
 
+/** A catch-all the window spent in (`GuidanceFacts.catchAlls`). */
+export interface CatchAll {
+  name: string;
+  share: number;
+  unsure: number | null;
+}
+
 export interface GuidanceFacts {
   today: string;
   region: Region;
@@ -285,6 +293,15 @@ export interface GuidanceFacts {
    * and with too few months.
    */
   unsure: { categories: number; uncategorised: number | null; all: boolean };
+  /**
+   * The catch-alls the window spent in, the most spent first: categories named only for holding
+   * what the others don't, Other and Misc (`isCatchAll`), that nothing else gives a kind. Each
+   * one's name, its share of the spending in percent, and what of it counted as needed only
+   * because nothing said otherwise, a month on average (null with too few months). The bank
+   * import files there whatever no rule knows, rent and groceries included (review M1), so the
+   * lines that would call it sorted, or count it as needed, say so.
+   */
+  catchAlls: CatchAll[];
   liquid: number | null;
   /** Liquid money in months of essential spending. */
   cushionMonths: number | null;
@@ -436,6 +453,8 @@ interface WindowSums {
   byMonth: Map<string, { spent: number; byCategory: Map<number, number> }>;
   /** What was spent under each kind, by the kind its category goes by. */
   byKind: Map<Kind, number>;
+  /** What each catch-all spent, and of it what counted as needed only because nothing said. */
+  catchAll: Map<number, { name: string; spent: number; unsure: number }>;
   /** Each month's expenses not filed under the Debt payments kind, one amount each. */
   otherExpenses: Map<string, number[]>;
 }
@@ -467,6 +486,9 @@ function sumWindow(
   // 'outside': a category that can be marked needed never (kinds.ts `takesEssential`).
   const verdicts = new Map<number, ReturnType<typeof essentialOf> | 'outside'>();
   const kinds = new Map<number, Kind | null>();
+  // A catch-all by its name that nothing else gives a kind: under a parent with one, Other is
+  // that kind's.
+  const catchAll = new Map<number, boolean>();
   const sums: WindowSums = {
     months: months.length,
     income: flows.income,
@@ -482,6 +504,7 @@ function sumWindow(
     uncategorisedEntries: 0,
     byMonth: new Map(),
     byKind: new Map(),
+    catchAll: new Map(),
     otherExpenses: new Map(),
   };
   const add = (totals: Map<number, number>, id: number, value: number) => {
@@ -528,7 +551,9 @@ function sumWindow(
         id,
         takesEssential(category, lookup) ? essentialOf(category, lookup) : 'outside'
       );
-      kinds.set(id, effectiveKind(category, lookup));
+      const kind = effectiveKind(category, lookup);
+      kinds.set(id, kind);
+      catchAll.set(id, isCatchAll(category.name) && (kind === null || kind === 'other'));
     }
     const kind = kinds.get(id);
     if (kind) sums.byKind.set(kind, (sums.byKind.get(kind) ?? 0) + spent);
@@ -542,6 +567,16 @@ function sumWindow(
     if (verdict.via === 'no-kind') {
       sums.noKind.add(id);
       sums.unsureSpent += spent;
+    }
+    if (catchAll.get(id)) {
+      const held = sums.catchAll.get(id) ?? {
+        name: String(lookup(id)!.name ?? '').trim(),
+        spent: 0,
+        unsure: 0,
+      };
+      held.spent += spent;
+      if (verdict.via === 'no-kind') held.unsure += spent;
+      sums.catchAll.set(id, held);
     }
   }
   return sums;
@@ -988,6 +1023,16 @@ export function guidanceFacts(input: GuidanceInput): GuidanceFacts {
       uncategorised: perMonth(sums.uncategorised),
       all: averaged && neededIsUnsure(sums),
     },
+    catchAlls:
+      sums.spending > 0
+        ? [...sums.catchAll.values()]
+            .sort((a, b) => b.spent - a.spent)
+            .map((held) => ({
+              name: held.name,
+              share: (held.spent / sums.spending) * 100,
+              unsure: perMonth(held.unsure),
+            }))
+        : [],
     liquid,
     cushionMonths: cushionMonthsOf(liquid, essentials),
     invested: investedOf(accountsNow, input.holdings, input.answers?.savedElsewhere),

@@ -112,7 +112,6 @@ describe('kindForName', () => {
     ['Kids', 'childcare'],
     ['Gym', 'leisure'],
     ['Christmas presents', 'gifts'],
-    ['Misc', 'other'],
   ])('reads %s as %s', (name, kind) => {
     expect(kindForName(name)).toBe(kind)
   })
@@ -129,6 +128,15 @@ describe('kindForName', () => {
     expect(kindForName(undefined)).toBeNull()
     expect(kindForName(42)).toBeNull()
   })
+
+  it.each([['Other'], ['Misc'], ['Miscellaneous'], ['Other expenses']])(
+    'has no kind for the catch-all %j, which says nothing about what it holds',
+    (name) => {
+      // The import files rent and groceries under Other when no rule knows the payee (review M1):
+      // guessing the kind Other from the name counted all of it as not needed.
+      expect(kindForName(name)).toBeNull()
+    }
+  )
 })
 
 describe('a catch-all', () => {
@@ -205,6 +213,31 @@ describe('whether a category is needed every month', () => {
     expect(essentialOf({ name: 'Restaurant', type: 'expense', essential: null })).toEqual({
       essential: false,
       kind: 'eating_out',
+      via: 'kind',
+    })
+  })
+
+  it('is yes for a catch-all until the person says, and what they chose once they have', () => {
+    expect(essentialOf({ name: 'Other', type: 'expense' })).toEqual({
+      essential: true,
+      kind: null,
+      via: 'no-kind',
+    })
+    expect(essentialOf({ name: 'Misc', type: 'expense', essential: 0 })).toEqual({
+      essential: false,
+      kind: null,
+      via: 'chosen',
+    })
+    // A kind the person gives a catch-all, or the kind Other given to a category of their own,
+    // stays theirs.
+    expect(essentialOf({ name: 'Other', type: 'expense', kind: 'groceries' })).toEqual({
+      essential: true,
+      kind: 'groceries',
+      via: 'kind',
+    })
+    expect(essentialOf({ name: 'Pets', type: 'expense', kind: 'other' })).toEqual({
+      essential: false,
+      kind: 'other',
       via: 'kind',
     })
   })

@@ -32,6 +32,7 @@ const outer: GuidanceFacts = {
   annualSpending: 36000,
   essentials: 2000,
   unsure: { categories: 0, uncategorised: 0, all: false },
+  catchAlls: [],
   liquid: 13000,
   cushionMonths: 6.5,
   invested: 900000,

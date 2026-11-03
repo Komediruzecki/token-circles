@@ -2849,6 +2849,30 @@ true, or is too small for one.
   value 1; with the app ignoring `VITE_ABOUT_ORIGIN` 3, Privacy and Terms on the fixed address 1,
   the article link on it 1, and without `.env.dev`'s value 1.
 
+- **Other counts as needed until it is sorted, so the cushion stops reading in years** (M1). The
+  bank import files whatever no rule knows under Other, rent and groceries included, and the name
+  Other gave the category the kind Other, which is not needed every month. On the review's made-up
+  Revolut statement (August to October, with 1,240.50 typed as the balance) Progress read "224.1
+  months of essentials" against "€17 needed a month", and circle 1 said "100% of spending sorted"
+  while Other held 95% of it. A catch-all's name (Other, Misc, Miscellaneous: `isCatchAll`) now
+  suggests no kind (`shared/guidance/kinds.ts`), so it counts as needed until the person says
+  otherwise, as any category with no kind does, and both imports create Other with no kind. A
+  kind or a choice the person stored stays theirs. The same statement now reads "2.6 months of
+  essentials" and "€3,778 you can reach, against €1,439 needed a month"; the cushion card opens
+  with "That counts Other (€1,422 a month) as needed until you sort it."; circle 1 says "Every
+  entry has a category; Other holds 95% of spending.", and Your numbers' "Spending sorted 100%"
+  notes "Other holds 95% of spending." (`catchAlls` in `shared/guidance/facts.ts`; an Other filed
+  under a category with a kind goes by that kind and is no catch-all). The circle-1 check still
+  counts Other as sorted. Categories an import created on dev before this fix keep the kind Other
+  stored, so they still count as not needed; production never stored one, as migration 0036 has
+  not shipped. Captures at 1280 and 390, light and dark: `m01-circle1-*` and `m01-cushion-*`, with
+  the numbers in `m01-other-before.json` and `m01-other-after.json`. Tests:
+  `src/core/__tests__/guidanceKinds.test.ts`, `guidanceFacts.test.ts`, `guidanceCards.test.ts`,
+  `guidanceLedger.test.ts`, `guidanceCircleView.test.ts` and the CRUD contract's import scenario,
+  run in both runtimes. With the name guessing Other again seven fail, and the contract scenario on
+  the Worker; without the catch-all's needed share, the parent rule, the card's sentence, circle 1's
+  line or the row's note, one each.
+
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
 The production build holds back the benchmarks and the questions that choose their figures

@@ -27,7 +27,7 @@ import {
   FULL_CUSHION_MONTHS,
   SORTED_SHARE,
 } from './circles';
-import { gapOf, monthsText, shareOf } from './ledger';
+import { andList, gapOf, monthsText, shareOf } from './ledger';
 import { percentText, principalLine, savingsTitle, shownRate } from './savingsWords';
 import { DAYS_IN_A_MONTH, monthName } from '../orientation';
 import type { Band, BandEntry, MetricId, Reference, RegionId, Strength } from './benchmarks';
@@ -455,6 +455,13 @@ export function cushionCard(
       body += ` Next milestone: ${milestone} months, ${money(gapOf(milestone * essentials, liquid))} away.`;
     }
     step = { label: 'Open the emergency fund calculator', hash: '#emergency' };
+  }
+  // Other holds what no import rule knew, rent and groceries among it, and counts as needed until
+  // the person says otherwise (review M1): the card says so, as its months depend on it.
+  const counted = facts.catchAlls.filter((one) => (one.unsure ?? 0) > 0);
+  if (counted.length > 0) {
+    const perMonth = counted.reduce((sum, one) => sum + (one.unsure ?? 0), 0);
+    body = `That counts ${andList(counted.map((one) => one.name))} (${money(perMonth)} a month) as needed until you sort ${counted.length === 1 ? 'it' : 'them'}. ${body}`;
   }
   const context = CUSHION_CONTEXT[region];
   const quoted = referencesFor('cushion.months', region);

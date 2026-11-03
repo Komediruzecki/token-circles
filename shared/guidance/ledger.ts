@@ -87,6 +87,25 @@ export function shareOf(value: number, target: number, met: boolean): number {
   return met ? Math.round(share) : Math.max(0, Math.min(99, Math.floor(share)));
 }
 
+/** Names as a sentence lists them: "Other", "Other and Misc", "Other, Misc and Extras". */
+export function andList(names: readonly string[]): string {
+  if (names.length <= 1) return names[0] ?? '';
+  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+}
+
+/**
+ * What the catch-alls hold of the spending (`catchAlls`, facts.ts), for a line that would call it
+ * sorted: "Other holds 41% of spending", in whole percent and never 0% while they hold any. Null
+ * while none holds any.
+ */
+export function catchAllShareLine(facts: GuidanceFacts): string | null {
+  const held = facts.catchAlls.filter((one) => one.share > 0);
+  if (held.length === 0) return null;
+  const share = held.reduce((sum, one) => sum + one.share, 0);
+  const percent = Math.min(100, Math.max(1, Math.round(share)));
+  return `${andList(held.map((one) => one.name))} ${held.length === 1 ? 'holds' : 'hold'} ${percent}% of spending`;
+}
+
 /** A gap in whole units, rounded up, never below 1 while there is one. */
 export function gapOf(target: number, value: number): number {
   return Math.max(1, Math.ceil(target - value));
@@ -133,14 +152,19 @@ function clearPicture(facts: GuidanceFacts, place: CirclePlace, state: RowState)
   const share = facts.sortedShare;
   const shareWords =
     share === null ? null : `${shareOf(share, 100, sorted?.met === true && share >= 100)}%`;
+  // Spending under Other has a category but says nothing about what it is (review M1): the line
+  // says how much Other holds instead of calling it sorted, and what the circle asks is its check's.
+  const held = catchAllShareLine(facts);
   return {
     key: `${Math.min(months, 12)} of 12 months on file`,
     detail:
       shareWords === null
         ? null
-        : state === 'current'
-          ? `${shareWords} of spending sorted; ${SORTED_SHARE}% is needed.`
-          : `${shareWords} of spending sorted.`,
+        : held !== null
+          ? `${share !== null && share >= 100 ? 'Every entry has a category' : `${shareWords} of spending has a category`}; ${held}.`
+          : state === 'current'
+            ? `${shareWords} of spending sorted; ${SORTED_SHARE}% is needed.`
+            : `${shareWords} of spending sorted.`,
     measure: months < 12 ? months / 12 : share === null ? null : Math.min(1, share / SORTED_SHARE),
     months: months < 12 ? months : null,
   };

@@ -238,6 +238,34 @@ describe('the rows', () => {
     expect(row(base, 1).detail).toBe('96% of spending sorted.')
   })
 
+  it("doesn't call what Other holds sorted (review M1)", () => {
+    const other = [{ name: 'Other', share: 41.4, unsure: 600 }]
+    expect(row(facts({ sortedShare: 100, catchAlls: other }), 1).detail).toBe(
+      'Every entry has a category; Other holds 41% of spending.'
+    )
+    expect(row(facts({ catchAlls: other }), 1).detail).toBe(
+      '96% of spending has a category; Other holds 41% of spending.'
+    )
+    // While Clear picture is the circle too: what it asks is its check's.
+    expect(row(facts({ sortedShare: 100, catchAlls: other, monthsInYear: 5 }), 1)).toMatchObject({
+      state: 'current',
+      detail: 'Every entry has a category; Other holds 41% of spending.',
+    })
+    // Two of them, and a sliver: named together, and never 0%.
+    expect(
+      row(
+        facts({
+          sortedShare: 100,
+          catchAlls: [
+            { name: 'Other', share: 0.2, unsure: 2 },
+            { name: 'Misc', share: 0.1, unsure: 1 },
+          ],
+        }),
+        1
+      ).detail
+    ).toBe('Every entry has a category; Other and Misc hold 1% of spending.')
+  })
+
   it('gives rows 2 to 7 no figures before three months, and says so once', () => {
     const f = facts({ months: ['2026-09'], monthsInYear: 1, firm: false, averaged: false })
     for (const r of rows(f).slice(1)) {

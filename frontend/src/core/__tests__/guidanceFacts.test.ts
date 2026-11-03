@@ -425,15 +425,59 @@ describe('money moved between accounts', () => {
     }
   })
 
-  it('leaves Other as spending, which its kind does not count as needed', () => {
+  it('counts Other as spending, and as needed until the person says otherwise (review M1)', () => {
+    // The import files what no rule knows under Other, rent and groceries among it: its name says
+    // nothing about what it holds, so it counts as needed, as any category with no kind does.
     const other = [...moving, { id: 8, name: 'Other', type: 'expense' }]
-    expect(kindForName('Other')).toBe('other')
+    expect(kindForName('Other')).toBeNull()
     const facts = guidanceFacts(
       input({ transactions: putBy(8), categories: other, accounts: savings })
     )
     expect(facts.spending).toBeCloseTo(1400, 6)
-    expect(facts.essentials).toBeCloseTo(400, 6)
-    expect(facts.unsure).toEqual({ categories: 0, uncategorised: 0, all: false })
+    expect(facts.essentials).toBeCloseTo(1400, 6)
+    expect(facts.unsure).toEqual({ categories: 1, uncategorised: 0, all: false })
+    // Every entry has a category; Other holds 1,000 of the 1,400 spent a month, all of it counted
+    // as needed only because nothing says otherwise.
+    expect(facts.sortedShare).toBeCloseTo(100, 6)
+    expect(facts.catchAlls).toEqual([
+      { name: 'Other', share: expect.closeTo((1000 / 1400) * 100, 6), unsure: 1000 },
+    ])
+    // Marked as not needed every month, it is not, and none of it is counted as needed.
+    const marked = guidanceFacts(
+      input({
+        transactions: putBy(8),
+        categories: [...moving, { id: 8, name: 'Other', type: 'expense', essential: 0 }],
+        accounts: savings,
+      })
+    )
+    expect(marked.essentials).toBeCloseTo(400, 6)
+    expect(marked.catchAlls).toEqual([
+      { name: 'Other', share: expect.closeTo((1000 / 1400) * 100, 6), unsure: 0 },
+    ])
+  })
+
+  it('names no catch-all while none is spent in, and one filed inside a kind is not one', () => {
+    const housing = { id: 5, name: 'Housing', type: 'expense', kind: 'housing' }
+    const facts = guidanceFacts(
+      input({
+        transactions: putBy(8),
+        categories: [...moving, housing, { id: 8, name: 'Other', type: 'expense', parent_id: 5 }],
+        accounts: savings,
+      })
+    )
+    // Housing's Other is housing: needed by its parent's kind, and no catch-all.
+    expect(facts.essentials).toBeCloseTo(1400, 6)
+    expect(facts.unsure.categories).toBe(0)
+    expect(facts.catchAlls).toEqual([])
+    expect(
+      guidanceFacts(
+        input({
+          transactions: putBy(1),
+          categories: [...moving, { id: 8, name: 'Other', type: 'expense' }],
+          accounts: savings,
+        })
+      ).catchAlls
+    ).toEqual([])
   })
 })
 

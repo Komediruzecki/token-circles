@@ -16,7 +16,7 @@ import {
   SOLID_CUSHION_MONTHS,
   SORTED_SHARE,
 } from './circles';
-import { debtName, gapOf, rateText, shareOf } from './ledger';
+import { catchAllShareLine, debtName, gapOf, rateText, shareOf } from './ledger';
 import { freeMoneyQuestion } from './questions';
 import type { FreeMoneyAnswer } from './answers';
 import type { Check, CheckId, CircleNumber, CirclePlace } from './circles';
@@ -416,7 +416,9 @@ export function circleNumbers(
         : undefined,
   };
   switch (circle) {
-    case 1:
+    case 1: {
+      // Other's share has a category and says nothing about what it is (review M1).
+      const held = catchAllShareLine(facts);
       return {
         lead,
         rows: [
@@ -431,10 +433,12 @@ export function circleNumbers(
               facts.sortedShare === null
                 ? unknown
                 : `${shareOf(facts.sortedShare, 100, facts.sortedShare >= 100)}%`,
+            ...(held === null ? {} : { note: `${held}.` }),
           },
           uncategorisedRow(facts),
         ],
       };
+    }
     case 2: {
       const support =
         facts.income !== null && facts.ownIncome !== null ? facts.income - facts.ownIncome : 0;
