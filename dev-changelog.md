@@ -2673,6 +2673,20 @@ true, or is too small for one.
   `features/import/__tests__/mappingSource.test.tsx` (a handed-over file, a workbook's sheet,
   pasted text) and the Open in Import case of `tests/onboarding.spec.ts`; both fail without it.
 
+- **The demo's prints differ from year to year.** Every example year spent the same twelve months,
+  give or take 15% per category, so Every print showed 26 seals that looked alike. Example Mid and
+  High Income now spend each year to a shape of its own (`demoYearShape`, `core/storage/idb.ts`):
+  two or three quiet months at 55 to 70% of the usual, in different places each year, the rest at
+  100 to 103%, and the year's total as before. Deeper quiet months push Mid's other months past
+  what it earns; Example Low Income, which spends 95% of its pay, keeps its flat year for the same
+  reason. Measured over the 26 years: petals 4.4 share points apart from one year to the next
+  before, 14.4 after (the closest two years 2.5 and 6.8); the shortest petal 85% of the heaviest
+  before, 46% after; neighbouring thumbnails on Every print at 1280 differ by 9.01 grey levels on
+  average before, 13.83 after. The examples earn the same 18 badges either way. Demo data only.
+  Test: `core/storage/__tests__/demoPrintsDiffer.test.ts` (both profiles' petals apart, and no
+  month spending more than came in); the first fails for both without the shape, the second
+  with quiet months at 35%.
+
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
 The production build holds back the benchmarks and the questions that choose their figures

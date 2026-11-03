@@ -2008,11 +2008,39 @@ export function emergencyFundConfigKey(profileId: number): string {
   return `emergency_fund_config_${String(profileId)}`
 }
 
+// `shaped`: whether the profile's years spend to a shape of their own (demoYearShape). Low spends
+// 95% of what it earns, so a month heavier than usual would spend more than came in; its months
+// already differ in what they keep, which its prints' bands show.
 const DEMO_PROFILES = [
-  { name: 'Example Low Income', income: 2500, spendFraction: 0.95 },
-  { name: 'Example Mid Income', income: 5500, spendFraction: 0.82 },
-  { name: 'Example High Income', income: 12000, spendFraction: 0.72 },
+  { name: 'Example Low Income', income: 2500, spendFraction: 0.95, shaped: false },
+  { name: 'Example Mid Income', income: 5500, spendFraction: 0.82, shaped: true },
+  { name: 'Example High Income', income: 12000, spendFraction: 0.72, shaped: true },
 ]
+
+/**
+ * How one of the example years spends through its months, as shares of the usual: two or three
+ * quiet months, in places of that year's own, at 55 to 70% of the usual, and the rest at 100 to
+ * 103%, scaled so the year averages 1 and spends what it did. Every year had been the same twelve
+ * months give or take 15% per category, so its print was too, and Every print showed 26 seals
+ * that looked alike (3 Nov test run): petals 85 to 100% long, 4.4 share points apart from one
+ * year to the next. Shaped, the short petals move from year to year, 14.4 points apart, and no
+ * month of Mid or High spends more than it earned. `rand` is the seed's own.
+ */
+export function demoYearShape(
+  year: number,
+  rand: (seed: number, min: number, max: number) => number
+): number[] {
+  const quiet = new Set<number>()
+  const count = 2 + rand(year * 31 + 5, 0, 1)
+  for (let i = 0; quiet.size < count && i < 40; i++) quiet.add(rand(year * 97 + i * 13 + 1, 0, 11))
+  const raw = Array.from({ length: 12 }, (_, m) =>
+    quiet.has(m)
+      ? 0.55 + rand(year * 53 + m * 7 + 3, 0, 15) / 100
+      : 1 + rand(year * 53 + m * 7 + 3, 0, 3) / 100
+  )
+  const mean = raw.reduce((sum, r) => sum + r, 0) / raw.length
+  return raw.map((r) => r / mean)
+}
 
 // Account types must match AccountSchema's enum (giro/savings/ib/cash — 'checking' was
 // renamed to 'giro' in v4; stale 'checking' rows broke /accounts validation in demo mode).
@@ -2166,6 +2194,7 @@ export async function seedDemoProfiles(): Promise<void> {
 
     for (let year = startYear; year <= endYear; year++) {
       const lastMonth = year === endYear ? endMonth : 11
+      const shape = profile.shaped ? demoYearShape(year, pseudoRand) : null
       for (let month = 0; month <= lastMonth; month++) {
         const monthStr = `${year}-${String(month + 1).padStart(2, '0')}`
         const daysInMonth = new Date(year, month + 1, 0).getDate()
@@ -2199,7 +2228,9 @@ export async function seedDemoProfiles(): Promise<void> {
         }
 
         // Monthly expense transactions
-        const totalMonthlySpend = Math.round(monthlyIncome * profile.spendFraction)
+        const totalMonthlySpend = Math.round(
+          monthlyIncome * profile.spendFraction * (shape ? shape[month] : 1)
+        )
         for (const ex of MONTHLY_EXPENSES) {
           const cat = catByName(ex.name)
           if (!cat) continue
