@@ -180,7 +180,10 @@ test.describe('onboarding wizard', () => {
     )
     const target = page.getByTestId('onboarding-import-target')
     await expect(target).toHaveValue('Main Checking')
-    await expect(page.getByTestId('onboarding-import-categories')).toHaveText(/^New categories: /)
+    // Its categories (Subscriptions, Groceries, Salary) are among the defaults a new profile
+    // starts with, so none is new and the step names none. release/s04-import.spec.ts reads the
+    // line with categories of its own.
+    await expect(page.getByTestId('onboarding-import-categories')).toHaveCount(0)
     expect(await footerButtons(page)).toEqual([
       ['onboarding-import-skip', 'Skip'],
       ['onboarding-import-selected', 'Import 7'],
