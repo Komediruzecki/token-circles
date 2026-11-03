@@ -278,7 +278,8 @@ All notable changes to Token Circles are documented here. The format is based on
   warning. `sendMail` builds the Resend body once, and the sink gets that same body; a 2xx with an
   id reads as Resend's acceptance (`{ sent: true, id }`), a refusal as
   `{ sent: false, error, status }`, and a mailbox that is down throws, so each caller behaves as in
-  production: a week-one claim stays. Neither the body nor the links are logged. Deployed Workers
+  production: a week-one claim stays. The sink does not follow redirects: a 3xx is a refusal.
+  Neither the body nor the links are logged. Deployed Workers
   are unaffected: dev and prod have `APP_ENV` `dev` and `production` and a Resend key.
   `worker/test/dev-mail-sink.test.ts` covers each condition, the refused hosts (`example.com`,
   `10.0.0.1`, `127.0.0.1.evil.test`, `localhost.evil.test`, `127.0.0.1@evil.test`, https, garbage
@@ -287,7 +288,9 @@ All notable changes to Token Circles are documented here. The format is based on
   requests addressed to this machine by their Host header, takes `POST /emails` as Resend does and
   serves `GET /mails?to=`, `/mails/<id>`, `.html` (strict CSP), `.txt` and an index page. Each mail
   is kept in memory and as `<id>.json`, `.html` and `.txt` in its folder under an id it makes; it
-  logs only `[mailbox] took <id>`. `playwright.config.ts` starts it first on `E2E_MAIL_PORT` (8797)
+  logs only `[mailbox] took <id>`. It takes only the Worker's JSON posts (no `Origin` or
+  `Sec-Fetch-Site`), keeps the known fields with its own id and time, and keeps the newest 1,000
+  mails or 64 MiB. `playwright.config.ts` starts it first on `E2E_MAIL_PORT` (8797)
   with its folder in `E2E_MAILBOX_DIR`, and gives the Worker `WORKER_VARS` (`CORS_ORIGIN` and
   `API_PUBLIC_ORIGIN` on localhost at the run's ports, and `DEV_MAIL_SINK`), which
   `serve-worker.mjs` passes to `wrangler dev` as `--var` on every start (`WorkerSupervisor` option

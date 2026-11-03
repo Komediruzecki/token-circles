@@ -29,7 +29,7 @@ Pick ports nobody else uses. These are examples; `up` refuses ports that are tak
 cd frontend
 export E2E_PORT=3840 E2E_API_PORT=8827 E2E_MAIL_PORT=8837
 # An agent keeps its mails in its own agent-out run:
-export E2E_MAILBOX_DIR=/run/media/maff/Game_Shared/agent-out-live/<project>/<date>/<run>/scratch/mailbox
+export E2E_MAILBOX_DIR=<run>/scratch/mailbox   # <run>: the absolute path `agent-out begin` printed
 
 # 1. The stack: the mailbox, the Worker (migrations applied first) and the app. In a terminal,
 #    Ctrl+C stops all three, each by its own process group.
@@ -64,12 +64,21 @@ again. Asking for the same day twice moves nothing the second time.
 
 Open the mailbox's own page, [the local mailbox](http://127.0.0.1:8837/) at the port you chose. It
 lists every mail, newest first, with its HTML and text a click away; the To box filters by address.
-The HTML opens with a strict Content-Security-Policy, so nothing in a mail runs.
+The HTML opens with a strict, sandboxed Content-Security-Policy, so nothing in a mail runs or
+moves the page elsewhere.
 
-The same mails are files in `E2E_MAILBOX_DIR`: `<id>.json` (all of it, as the Worker sent it),
-`<id>.html` and `<id>.txt`. A mail's id is when it came, to the millisecond, plus 8 random hex
-digits; nothing in a file name comes from the mail. The mailbox loads the folder again when it
-starts, so mails survive a restart.
+The mailbox takes a mail only as the Worker posts it: `Content-Type: application/json` exactly, and
+neither an `Origin` nor a `Sec-Fetch-Site` header, one of which a browser adds whenever a page posts.
+So a web page open in your browser cannot post one.
+
+The same mails are files in `E2E_MAILBOX_DIR`: `<id>.json` (the Worker's fields, `from`, `to`,
+`subject`, `html`, `text`, `reply_to` and `headers`, with the mailbox's `id` and `received_at`),
+`<id>.html` (the HTML with the same policy as a meta tag at the top) and `<id>.txt`. A mail's id is
+when it came, to the millisecond, plus 8 random hex digits. The mailbox makes it, and nothing in a
+file name comes from the mail. The mailbox loads the folder again when it starts, so mails survive
+a restart. It keeps the newest 1,000 mails and at most 64 MiB of them, and drops the oldest mail's
+three files past that; nothing else in the folder is touched. `time-machine mails` and `mail` print
+a mail's fields with control characters taken out.
 
 Without `E2E_MAILBOX_DIR`, `up` keeps them in `frontend/test-results/time-machine-mailbox` and the
 E2E suite in `frontend/test-results/mailbox`.
