@@ -4,9 +4,23 @@ import {
   E2E_API_BASE,
   E2E_API_PORT,
   E2E_BASE,
+  E2E_MAIL_BASE,
+  E2E_MAIL_PORT,
   E2E_PORT,
   STORAGE_STATE,
 } from './tests/e2e-constants'
+
+/**
+ * The Worker's vars for this run, over wrangler.jsonc's (serve-worker.mjs passes them as `--var`).
+ * The origins are the ones the mail links name: this run's app and Worker, under the name
+ * passkeys need (tests/passkeys.spec.ts), so at the default ports they are wrangler.jsonc's own.
+ * DEV_MAIL_SINK hands every mail to the run's mailbox instead of skipping it (worker/src/email.ts).
+ */
+const WORKER_VARS = {
+  CORS_ORIGIN: `http://localhost:${E2E_PORT}`,
+  API_PUBLIC_ORIGIN: `http://localhost:${E2E_API_PORT}`,
+  DEV_MAIL_SINK: `${E2E_MAIL_BASE}/emails`,
+}
 
 /**
  * See https://playwright.dev/docs/test-configuration.
@@ -16,8 +30,9 @@ import {
  * the last thing keeping that retired runtime in the tree, and which meant 35 spec files were
  * exercising an implementation nothing ships.
  *
- * Two servers, in order: wrangler on :8787, then vite on :3800 with its /api proxy pinned at it.
- * Then a setup project signs in once and saves the state every spec starts from.
+ * Three servers, in order: the mailbox on :8797 that the Worker's mails go to, wrangler on :8787,
+ * then vite on :3800 with its /api proxy pinned at it. Then a setup project signs in once and saves
+ * the state every spec starts from.
  */
 export default defineConfig({
   timeout: 60000,
@@ -84,6 +99,18 @@ export default defineConfig({
 
   webServer: [
     {
+      // Where the Worker's mails land: a mailbox on 127.0.0.1 that keeps each one, so a spec reads
+      // the mail a person would get (tests/time-machine/). First, so it listens before any mail.
+      // It keeps its copies in E2E_MAILBOX_DIR.
+      command: `node scripts/mailbox.mjs --port ${E2E_MAIL_PORT}`,
+      url: `${E2E_MAIL_BASE}/health`,
+      reuseExistingServer: !process.env.CI,
+      timeout: 30000,
+      stdout: 'pipe',
+      stderr: 'pipe',
+      gracefulShutdown: { signal: 'SIGTERM', timeout: 5000 },
+    },
+    {
       // Local D1 and R2 under worker/.wrangler — no network, no Cloudflare account. Migrations
       // are applied first because a fresh checkout has an empty database and every route 500s
       // against one. JWT_SECRET comes from worker/.dev.vars.
@@ -98,6 +125,7 @@ export default defineConfig({
       timeout: 120000,
       stdout: 'pipe',
       stderr: 'pipe',
+      env: { WORKER_VARS: JSON.stringify(WORKER_VARS) },
       // SIGTERM at the end of the run, where Playwright would otherwise SIGKILL this command's
       // process group. The supervisor stops wrangler from a SIGTERM handler, and a SIGKILL runs no
       // handler; wrangler lives in a group of its own, so nothing else reaches it. Without this,

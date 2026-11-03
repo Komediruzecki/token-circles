@@ -112,12 +112,14 @@ export class WorkerSupervisor {
    * @param {string} opts.workerDir     directory holding wrangler.toml and node_modules/.bin
    * @param {number} [opts.maxUptimeMs] recycle a worker older than this between units of work;
    *                                    0 disables recycling and leaves only crash recovery
+   * @param {Record<string, string>} [opts.vars] `--var` values for this run, over wrangler.jsonc's
    * @param {(msg: string) => void} [opts.log]
    */
-  constructor({ port, workerDir, maxUptimeMs = 0, log = console.log }) {
+  constructor({ port, workerDir, maxUptimeMs = 0, vars = {}, log = console.log }) {
     this.port = port
     this.workerDir = workerDir
     this.maxUptimeMs = maxUptimeMs
+    this.vars = vars
     this.base = `http://127.0.0.1:${port}`
     this.log = (msg) => log(`[worker] ${msg}`)
 
@@ -278,7 +280,16 @@ export class WorkerSupervisor {
     // month is empty and the transactions frame comes back blank. The migrate step has to be
     // given the same directory, or the two disagree about which database exists.
     const persist = process.env.WRANGLER_PERSIST_TO
-    const args = ['dev', '--port', String(this.port), ...(persist ? ['--persist-to', persist] : [])]
+    // Vars for this run only, such as the origins its mail links name and the mailbox its mails go
+    // to (serve-worker.mjs). Each restart passes them again, so a recovered Worker is the same one.
+    const vars = Object.entries(this.vars).flatMap(([key, value]) => ['--var', `${key}:${value}`])
+    const args = [
+      'dev',
+      '--port',
+      String(this.port),
+      ...(persist ? ['--persist-to', persist] : []),
+      ...vars,
+    ]
     const child = spawn(bin, args, {
       cwd: this.workerDir,
       stdio: ['ignore', 'pipe', 'pipe'],
