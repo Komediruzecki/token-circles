@@ -142,6 +142,14 @@ export async function run(db: D1Database, sql: string, ...params: unknown[]): Pr
   );
 }
 
+/** A batch of writes, all or none, retried as `run` retries one: only on the export lock. */
+export async function batch(
+  db: D1Database,
+  statements: D1PreparedStatement[]
+): Promise<D1Result[]> {
+  return withD1Retry(() => db.batch(statements), isRetriableWriteError);
+}
+
 /** INSERT helper — validates table + column identifiers, parameterizes values. */
 export async function insert(
   db: D1Database,

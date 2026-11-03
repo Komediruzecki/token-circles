@@ -5,8 +5,8 @@
  * Reported on dev (main 229e324b), 2026-10-07, following exactly this path on a phone:
  *
  * 1. "Continue with no account", create a profile from the sidebar, add a category on Budgets
- *    (it had none), then Transactions and the floating +: 50, Expense, Next. The orb said there
- *    were no expense categories.
+ *    (it had none then: a new profile has had the default categories since), then Transactions
+ *    and the floating +: 50, Expense, Next. The orb said there were no expense categories.
  * 2. Reload, switch to another profile and open the orb there, switch back, and Categories shows
  *    the one category. The orb offered the other profile's predefined categories instead.
  *
@@ -171,11 +171,11 @@ test('the orb offers the active profile’s categories after a create and after 
   await expect(page.getByTestId('profile-dropdown-btn')).toContainText('Test')
   await closeSidebar(page)
 
-  // Budgets: no categories yet, so one is made there.
+  // Budgets: a category of this profile's own, beside the defaults it starts with.
   await goTo(page, 'budgets')
   await page.getByRole('button', { name: 'Add Category' }).first().click()
   const modal = page.getByTestId('budgets-category-modal')
-  await modal.getByPlaceholder('e.g., Food, Rent').fill('Groceries')
+  await modal.getByPlaceholder('e.g., Food, Rent').fill('Pet food')
   await modal.getByPlaceholder('e.g., food, home, car').fill('food')
   await modal.locator('button[type="submit"]').click()
   await expect(modal).toBeHidden()
@@ -183,29 +183,29 @@ test('the orb offers the active profile’s categories after a create and after 
   // Transactions, then the floating +: 50, Expense, Next.
   await goTo(page, 'transactions')
   let orb = await orbAtCategories(page, '50')
-  await expect(chip(orb, 'Groceries')).toBeVisible()
+  await expect(chip(orb, 'Pet food')).toBeVisible()
   await closeOrb(orb)
 
-  // 2. Reload, open the orb on another profile, then come back to this one.
+  // 2. Reload, open the orb on another profile, then come back to this one. The demo profile has
+  // the default categories too, so its own list is told apart by what it lacks: "Pet food".
   await page.reload({ waitUntil: 'domcontentloaded' })
   await expect(page.getByTestId('profile-dropdown-btn')).toContainText('Test', { timeout: 60_000 })
   await switchProfile(page, 'Example Mid Income')
   orb = await orbAtCategories(page, '5')
   await expect(chip(orb, 'Housing')).toBeVisible()
+  await expect(chip(orb, 'Pet food')).toHaveCount(0)
   await closeOrb(orb)
 
   await switchProfile(page, 'Test')
   await goTo(page, 'categories')
-  await expect(page.getByTestId('category-name')).toHaveText(['Groceries'])
+  await expect(page.getByTestId('category-name').filter({ hasText: /^Pet food$/ })).toHaveCount(1)
 
-  // Only this profile's one category. The demo profile has a "Groceries" of its own, so the other
-  // profile's list would show "Groceries" too: its "Housing" is what tells them apart.
+  // This profile's categories, its own one among them.
   orb = await orbAtCategories(page, '50')
-  await expect(chip(orb, 'Groceries')).toBeVisible()
-  await expect(chip(orb, 'Housing')).toHaveCount(0)
+  await expect(chip(orb, 'Pet food')).toBeVisible()
 
   // And it lands: the category is this profile's, so the save takes it.
-  await chip(orb, 'Groceries').tap()
+  await chip(orb, 'Pet food').tap()
   await orb.getByRole('button', { name: /^Add / }).tap()
   await expect(
     page.getByRole('region', { name: 'Notifications' }).getByText('Entry added')

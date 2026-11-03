@@ -1,6 +1,7 @@
 import type { Context } from 'hono';
 import type { AppEnv } from './index';
 import { HttpError } from './http';
+import { defaultCategoryInserts } from './profileData';
 
 // Worker analog of backend/middleware/profile.js. Data is scoped by profile_id;
 // the active profile comes from the X-Profile-Id header and MUST belong to the
@@ -15,12 +16,18 @@ export async function ensureProfile(c: Context<AppEnv>): Promise<number> {
     .first<{ id: number }>();
   if (p) return p.id;
   // INSERT OR IGNORE + re-select avoids a UNIQUE(user_id,name) race when many profile-scoped
-  // requests fire at once on first load.
-  await c.env.DB.prepare(
-    "INSERT OR IGNORE INTO profiles (name, user_id) VALUES ('Personal Profile', ?)"
-  )
-    .bind(userId)
-    .run();
+  // requests fire at once on first load. The default categories go in with it (profileData.ts);
+  // each one is skipped when the profile has it already, so the losing request of a race adds none.
+  await c.env.DB.batch([
+    c.env.DB.prepare(
+      "INSERT OR IGNORE INTO profiles (name, user_id) VALUES ('Personal Profile', ?)"
+    ).bind(userId),
+    ...defaultCategoryInserts(
+      c.env.DB,
+      "SELECT own.id FROM profiles own WHERE own.user_id = ? AND own.name = 'Personal Profile'",
+      userId
+    ),
+  ]);
   p = await c.env.DB.prepare('SELECT id FROM profiles WHERE user_id = ? ORDER BY id LIMIT 1')
     .bind(userId)
     .first<{ id: number }>();

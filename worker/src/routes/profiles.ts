@@ -8,7 +8,7 @@ import { enforce } from '../ratelimit';
 import { getUserPlan } from '../plan';
 import { planLimit } from '../plans';
 import * as db from '../db';
-import { clearProfileData } from '../profileData';
+import { clearProfileData, defaultCategoryInserts } from '../profileData';
 import {
   checkProfileCreate,
   checkProfileRename,
@@ -70,18 +70,24 @@ profilesRoutes.post('/api/profiles', requireAuth, async (c) => {
   // concurrent creates can't both slip past a separate COUNT-then-INSERT check (TOCTOU): the row is
   // only inserted while the user is under the limit, and 0 rows changed means the cap was hit.
   const limit = planLimit(await getUserPlan(c), 'profiles');
-  const res =
+  const insert =
     limit === null
-      ? await db.run(c.env.DB, 'INSERT INTO profiles (name, user_id) VALUES (?, ?)', name, userId)
-      : await db.run(
-          c.env.DB,
+      ? c.env.DB.prepare('INSERT INTO profiles (name, user_id) VALUES (?, ?)').bind(name, userId)
+      : c.env.DB.prepare(
           `INSERT INTO profiles (name, user_id)
-             SELECT ?, ? WHERE (SELECT COUNT(*) FROM profiles WHERE user_id = ?) < ?`,
-          name,
-          userId,
-          userId,
-          limit
-        );
+             SELECT ?, ? WHERE (SELECT COUNT(*) FROM profiles WHERE user_id = ?) < ?`
+        ).bind(name, userId, userId, limit);
+  // The new profile starts with the default categories, in the same batch (profileData.ts). Over
+  // the cap nothing is inserted, so they find no profile to go into.
+  const [res] = await db.batch(c.env.DB, [
+    insert,
+    ...defaultCategoryInserts(
+      c.env.DB,
+      'SELECT own.id FROM profiles own WHERE own.user_id = ? AND own.name = ?',
+      userId,
+      name
+    ),
+  ]);
   if (limit !== null && !res.meta.changes) {
     throw new HttpError(
       403,

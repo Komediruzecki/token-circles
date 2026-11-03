@@ -2502,6 +2502,35 @@ check')` first, as the cushion and debt cases do.
     the two import cases for a space that has Restaurant pass before and after, as the guard that
     the fold keeps it. `categoryGroups.test.ts` expects Eating out for `UBER EATS`.
 
+### Found in the first-week test run (3 Nov)
+
+What the 3 Nov test run and the functionality review after it found in the first week's changes,
+fixed before the release. None of it is in CHANGELOG.md on its own: each one makes a line there
+true, or is too small for one.
+
+- **A new profile starts with the default categories, in both runtimes.** Only "Clear data" and
+  "Reset to defaults" wrote them, so a space made by sign-up, a first Google sign-in, the profile
+  menu or setup had none, and quick add "coffee 4.50" stored an entry with no category. On the
+  Worker, `defaultCategoryInserts` (`worker/src/profileData.ts`) gives the batch that makes a
+  profile one `INSERT ... SELECT` per default, each skipped where the profile already has that
+  name (compared without case). It runs with the sign-up's account batch (`routes/auth.ts`), the
+  Google sign-up (`resolveGoogleUser`), `POST /api/profiles` (with the plan cap: a refused profile
+  adds none, through the new `db.batch`, which retries only the export lock as `db.run` does) and
+  `ensureProfile`, for an account with no profile (two requests racing there add one set).
+  Local-first does the same in `createProfile` and `ensureAProfile` (`core/storage/idb.ts`), in the
+  transaction that makes the profile. Left alone: profiles made before (an empty one stays empty),
+  the example profiles' own seed, a restore (it brings the backup's categories), and the rows the
+  repair files under "Recovered entries" (`unfiledProfileRows.ts`). An import that names a
+  default in another case reuses it, as before. The e2e fixtures (`tests/e2e-seed.ts`,
+  `tests/release/release-fixtures.ts`) now use a category the profile has and make only missing
+  ones; release case 1.1 expects the new profile's defaults, not an empty page, and
+  `quick-entry-phone.spec.ts` makes "Pet food" where it made Groceries. Tests:
+  `worker/test/new-profile-categories.test.ts` (every path, the cap, the race, an import, a
+  restore, old profiles; five fail without the change, and the per-name guard's case fails with the
+  guard removed), `core/storage/__tests__/newProfileCategories.test.ts` (three fail without it) and
+  `tests/new-space-categories.spec.ts` (a fresh account and a fresh local-only browser file
+  "coffee 4.50" under Eating out; both fail without it).
+
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
 The production build holds back the benchmarks and the questions that choose their figures

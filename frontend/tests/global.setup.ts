@@ -93,9 +93,9 @@ setup('sign in and save the session', async () => {
 /**
  * The profile every spec starts in.
  *
- * Not the one registration creates: that one is inserted directly, so it has no categories, and a
- * categories page with nothing on it renders its empty state rather than its grid. `POST
- * /api/profiles` is the path the app uses and it seeds the defaults.
+ * Not the one registration creates, so the specs' data stays apart from the account's first
+ * profile. `POST /api/profiles` is the path the app uses, and like registration it gives the
+ * profile the default categories (worker/src/profileData.ts).
  */
 async function e2eProfile(api: Awaited<ReturnType<typeof request.newContext>>): Promise<number> {
   const list = await api.get('/api/profiles')

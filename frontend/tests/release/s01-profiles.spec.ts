@@ -64,15 +64,24 @@ for (const [pass, test] of both) {
     test('1.1 a profile created with the button becomes the selection @release', async ({ m }) => {
       const { page } = m
       const name = `zz-new${m.suffix}`
+      // A category only the profile before it has, which the new profile's pages must not show.
+      const onlyInA = `zz-a-only${m.suffix}`.slice(0, 40)
+      await m.api('/api/categories', {
+        method: 'POST',
+        body: { name: onlyInA, type: 'expense', color: '#0ea5e9', icon: 'tag' },
+      })
       await createProfileFromSidebar(page, name, 'button')
       const created = await m.profileNamed(name)
 
       await expect(profileButton(page)).toContainText(name)
       expect(await storedSelection(page)).toEqual({ current: created.id, selected: [created.id] })
 
-      // Pages show the new profile's (empty) data.
+      // Pages show the new profile's data: the default categories it starts with.
       await goPage(page, 'categories', 'categories-header')
-      await expect(page.getByTestId('category-card')).toHaveCount(0)
+      const own = (await m.rows<{ name: string }>('categories', created.id)).map((c) => c.name)
+      expect(own).toEqual(expect.arrayContaining(['Groceries', 'Eating out']))
+      await expect(page.getByTestId('category-card')).toHaveCount(own.length)
+      await expect(categoryCards(page, onlyInA)).toHaveCount(0)
 
       await openHousehold(page)
       expect(await householdActiveId(page)).toBe(created.id)

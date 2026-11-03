@@ -46,8 +46,8 @@ export async function seedProfile(
   })
   if (existing.ok() && ((await existing.json()) as unknown[]).length > 0) return
 
-  // A new profile has no categories — nothing seeds defaults on create, and a categories page with
-  // none of them renders its empty state instead of its grid.
+  // A new profile starts with the default categories (worker/src/profileData.ts), these six among
+  // them, so a name it has is used as it is and only a missing one is made.
   const categoryIds: Record<string, number> = {}
   const categories = [
     { name: 'Salary', type: 'income', icon: 'wallet', color: '#22c55e' },
@@ -57,9 +57,20 @@ export async function seedProfile(
     { name: 'Eating out', type: 'expense', icon: 'coffee', color: '#14b8a6' },
     { name: 'Utilities', type: 'expense', icon: 'bolt', color: '#0ea5e9' },
   ]
+  const had = await api.get('/api/categories', {
+    headers: { 'X-Profile-Id': String(profileId) },
+  })
+  expect(had.ok(), `/api/categories -> ${had.status()}`).toBeTruthy()
+  const byName = new Map(
+    ((await had.json()) as Array<{ id: number; name: string }>).map((c) => [
+      c.name.toLowerCase(),
+      c.id,
+    ])
+  )
   for (const c of categories) {
-    const created = await post(api, '/api/categories', profileId, c)
-    categoryIds[c.name] = Number(created.id)
+    categoryIds[c.name] =
+      byName.get(c.name.toLowerCase()) ??
+      Number((await post(api, '/api/categories', profileId, c)).id)
   }
 
   const checking = await post(api, '/api/accounts', profileId, {

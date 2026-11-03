@@ -396,17 +396,44 @@ export function getDB() {
  */
 async function ensureAProfile(): Promise<number> {
   const db = await getDB()
-  const tx = db.transaction('profiles', 'readwrite')
-  const existing = (await tx.store.getAll()) as Array<{ id: number }>
-  const id =
-    existing.length > 0
-      ? existing[0].id
-      : ((await tx.store.add({
-          name: DEFAULT_PROFILE_NAME,
-          created_at: new Date().toISOString(),
-        })) as number)
+  const tx = db.transaction(['profiles', 'categories'], 'readwrite')
+  const profiles = tx.objectStore('profiles')
+  const existing = (await profiles.getAll()) as Array<{ id: number }>
+  if (existing.length > 0) {
+    await tx.done
+    return existing[0].id
+  }
+  const id = (await profiles.add({
+    name: DEFAULT_PROFILE_NAME,
+    created_at: new Date().toISOString(),
+  })) as number
+  await addDefaultCategories(tx.objectStore('categories'), id)
   await tx.done
   return id
+}
+
+/**
+ * Give a profile just made the default categories (DEFAULT_CATEGORIES below), as complete rows,
+ * in the transaction that makes it, as the Worker does (defaultCategoryInserts in
+ * worker/src/profileData.ts). Every local path that makes a profile for a person runs it: a new
+ * profile from setup or the profile menu, and the one a workspace without any is given. The example
+ * profiles have their own set, and a restore brings the backup's.
+ */
+async function addDefaultCategories(
+  store: { add: (row: Record<string, unknown>) => Promise<unknown> },
+  profileId: number
+): Promise<void> {
+  const now = new Date().toISOString()
+  for (const category of DEFAULT_CATEGORIES) {
+    // icon/parent_id/created_at are required by CategorySchema — write complete rows.
+    await store.add({
+      icon: '',
+      parent_id: null,
+      created_at: now,
+      ...category,
+      profile_id: profileId,
+    })
+  }
 }
 
 // ---- Seed Data ----
@@ -592,7 +619,13 @@ export class IndexedDBAdapter implements StorageAdapter {
 
   async createProfile(name: string): Promise<number> {
     const db = await getDB()
-    const id = (await db.add('profiles', { name, created_at: new Date().toISOString() })) as number
+    // The profile and its default categories, together or not at all.
+    const tx = db.transaction(['profiles', 'categories'], 'readwrite')
+    const id = (await tx
+      .objectStore('profiles')
+      .add({ name, created_at: new Date().toISOString() })) as number
+    await addDefaultCategories(tx.objectStore('categories'), id)
+    await tx.done
     localStorage.setItem('currentProfileId', String(id))
     return id
   }
@@ -1963,17 +1996,9 @@ export async function seedDefaultCategories(profileId: number): Promise<void> {
   const existing = await db.getAllFromIndex('categories', 'by_profile', profileId)
   if (existing.length > 0) return // Already seeded
 
-  const now = new Date().toISOString()
-  for (const cat of DEFAULT_CATEGORIES) {
-    // icon/parent_id/created_at are required by CategorySchema — write complete rows.
-    await db.add('categories', {
-      icon: '',
-      parent_id: null,
-      created_at: now,
-      ...cat,
-      profile_id: profileId,
-    })
-  }
+  const tx = db.transaction('categories', 'readwrite')
+  await addDefaultCategories(tx.store, profileId)
+  await tx.done
 }
 
 // ── Demo Profile Seeding ──────────────────────────────────────────────────────

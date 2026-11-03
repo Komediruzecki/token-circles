@@ -101,6 +101,14 @@ export interface SeededProfile {
  * not open over the page (a profile with an account is not pristine). Specs add what they test.
  */
 export async function seedSmallProfile(api: ProfileApi, now = Date.now()): Promise<SeededProfile> {
+  // A new profile starts with the default categories (worker/src/profileData.ts), these six among
+  // them: a name it has is used as it is, and only a missing one is made.
+  const had = new Map(
+    (await api.get<Array<{ id: number; name: string }>>('/api/categories')).map((c) => [
+      c.name.toLowerCase(),
+      c.id,
+    ])
+  )
   const categories: Record<string, number> = {}
   for (const c of [
     { name: 'Salary', type: 'income', icon: 'wallet', color: '#22c55e' },
@@ -110,8 +118,8 @@ export async function seedSmallProfile(api: ProfileApi, now = Date.now()): Promi
     { name: 'Utilities', type: 'expense', icon: 'bolt', color: '#0ea5e9' },
     { name: 'Subscriptions', type: 'expense', icon: 'repeat', color: '#ec4899' },
   ]) {
-    const created = await api.post<{ id: number }>('/api/categories', c)
-    categories[c.name] = created.id
+    categories[c.name] =
+      had.get(c.name.toLowerCase()) ?? (await api.post<{ id: number }>('/api/categories', c)).id
   }
 
   const account = await api.post<{ id: number }>('/api/accounts', {

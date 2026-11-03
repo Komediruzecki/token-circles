@@ -131,6 +131,44 @@ export const DEFAULT_CATEGORIES = [
   kind: Kind | null;
 }[];
 
+/**
+ * The statements that give a new profile the default categories, for the batch that makes the
+ * profile, so the profile and its categories are written together or not at all. Every path that
+ * makes a profile runs them: sign-up, a Google sign-up, a new profile, and the one an account with
+ * none is given (profile.ts). A restore brings its own categories and makes its profiles another
+ * way.
+ *
+ * `profileSql` selects the new profile's id, with `params` for it: the profile is made in the same
+ * batch, so its id is not known yet. Each category goes in only where the profile has none of that
+ * name, so running them again, or two batches racing to make one profile, never gives a profile two
+ * of the same name. A profile made before these ran stays as it is.
+ */
+export function defaultCategoryInserts(
+  DB: D1Database,
+  profileSql: string,
+  ...params: unknown[]
+): D1PreparedStatement[] {
+  return DEFAULT_CATEGORIES.map((category) =>
+    DB.prepare(
+      `INSERT INTO categories (name, color, icon, type, tax_deductible, kind, profile_id)
+       SELECT ?, ?, ?, ?, ?, ?, p.id FROM profiles p
+       WHERE p.id = (${profileSql})
+         AND NOT EXISTS (
+           SELECT 1 FROM categories c WHERE c.profile_id = p.id AND lower(c.name) = lower(?)
+         )`
+    ).bind(
+      category.name,
+      category.color,
+      category.icon,
+      category.type,
+      category.taxDeductible,
+      category.kind,
+      ...params,
+      category.name
+    )
+  );
+}
+
 // Every table a profile's rows live in, besides settings and the child tables below. Clearing a
 // profile and deleting an account both delete from each one, through profileRowDeletes.
 export const PROFILE_TABLES = [

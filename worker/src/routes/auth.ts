@@ -62,6 +62,7 @@ import {
   renderPasswordReset,
 } from '../emailTemplates';
 import { claimWelcomeOnConfirm, welcomeAfterAnswer, welcomeClaimed } from '../welcome';
+import { defaultCategoryInserts } from '../profileData';
 import { clearRateLimit, enforce, clientIp, rateLimit } from '../ratelimit';
 import { getTotpForLogin, issueTwofaChallengeCookie } from '../twofa';
 import { logAuthEvent } from '../authlog';
@@ -286,6 +287,13 @@ async function accountAt(
     env.DB.prepare(
       "INSERT INTO profiles (name, user_id) SELECT 'Personal Profile', id FROM users WHERE email = ?"
     ).bind(email),
+    // The profile starts with the default categories (profileData.ts).
+    ...defaultCategoryInserts(
+      env.DB,
+      `SELECT own.id FROM profiles own JOIN users u ON u.id = own.user_id
+       WHERE u.email = ? AND own.name = 'Personal Profile'`,
+      email
+    ),
     await firstConfirmLink(env.DB, email, token),
   ]);
   return { made: { token } };
