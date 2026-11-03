@@ -2801,6 +2801,27 @@ true, or is too small for one.
   under Show more in an old layout, off in one). Without the carry six fail; with the gauge never
   in the tail, without drawing it there, or drawing it at the top whatever the order, one or two
   each; without the no-switches rule one.
+- **Entries without a category mean one thing everywhere, and circle 1 says which it counts**
+  (A19). Circle 1 counted an entry filed under a category the profile no longer has as without
+  one (before #384 in July 2026, deleting a category left its entries pointing at it), while
+  Getting started, Your next step, the day-7 mail and the Transactions filter they link to counted
+  only entries with no category at all, so those entries showed "—" on Transactions and could not
+  be found from there to sort. All five now read one rule (`shared/uncategorised.ts`, and the same
+  in SQL in `worker/src/weekOne.ts`): no category, or one the profile does not have, transfers
+  aside. The Transactions filter and Auto Categorize list them, so they can be sorted; until the
+  category list has loaded the filter counts only entries with none, so a filed entry never shows
+  as unsorted while it loads. Circle 1 still counts the spending of its months, and now says so:
+  "Entries without a category: 0" became "Spending without a category: None" with "Only spending
+  from November 2025 to October 2026 counts here." on the demo ("4 entries", "1 entry"; the row
+  grows from 42 to 62 px at 1280 and to 80 at 390; the note reads 5.35:1 light, 8.84:1 dark).
+  The "Named everything" badge and its Progress advice still read entries with no category at
+  all. Tests: `src/core/__tests__/uncategorised.test.ts`, `orientationFacts.test.ts`,
+  `guidanceCircleView.test.ts`, `src/features/__tests__/transactionsUncategorisedLink.test.tsx`
+  (a deleted category's entry listed, another profile's category, nothing while the list loads)
+  and `worker/test/week-one-mails.test.ts` (a deleted category, another profile's). With the rule
+  reading no category alone, seven fail (its own, Getting started's, circle 1's three and the
+  filter's two); without the loading guard, the profile check on Transactions, Getting started's
+  count or the mail's profile check, one each; with the mail counting no category alone, two.
 
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 

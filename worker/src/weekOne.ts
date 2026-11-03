@@ -175,12 +175,17 @@ export async function weekOneDay7Content(
   );
   if (!profile) return null;
   const pid = profile.id;
+  // Without a category as shared/uncategorised.ts reads it, as circle 1, Getting started and the
+  // Transactions filter do: none, or one the profile no longer has (before #384, deleting a
+  // category left its entries pointing at it), transfers aside.
   const tx = await db.first<{ imported: number; entries: number; uncategorised: number }>(
     env.DB,
-    `SELECT COALESCE(SUM(import_id IS NOT NULL), 0) AS imported,
-            COALESCE(SUM(type != 'transfer'), 0) AS entries,
-            COALESCE(SUM(type != 'transfer' AND category_id IS NULL), 0) AS uncategorised
-       FROM transactions WHERE profile_id = ?`,
+    `SELECT COALESCE(SUM(t.import_id IS NOT NULL), 0) AS imported,
+            COALESCE(SUM(t.type != 'transfer'), 0) AS entries,
+            COALESCE(SUM(t.type != 'transfer' AND (t.category_id IS NULL OR NOT EXISTS (
+              SELECT 1 FROM categories c WHERE c.id = t.category_id AND c.profile_id = t.profile_id
+            ))), 0) AS uncategorised
+       FROM transactions t WHERE t.profile_id = ?`,
     pid
   );
   // A tracked month as shared/trackedMonths.ts defines one: enough transactions dated in it.

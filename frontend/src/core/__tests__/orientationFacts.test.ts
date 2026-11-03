@@ -148,6 +148,15 @@ describe('the facts', () => {
     expect(facts.uncategorised).toBe(4)
   })
 
+  it('count an entry under a category the profile no longer has as without one', () => {
+    // Before #384 (July 2026), deleting a category left its entries pointing at it: the
+    // Transactions filter the step links to lists them, and circle 1 counts them too.
+    const gone = [...transactions, row('2025-02-03', { category_id: 42 })]
+    const withGone = orientationFacts(source(gone), NOW)
+    expect(withGone.uncategorised).toBe(facts.uncategorised + 1)
+    expect(withGone.entries).toBe(facts.entries + 1)
+  })
+
   it('name the biggest category with no budget or bill in the last full month', () => {
     // Rent has a bill and Transport a budget; October's trip is not a full month yet.
     expect(facts.topUnbudgeted).toEqual({ categoryId: 7, name: 'Groceries' })

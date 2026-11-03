@@ -44,6 +44,7 @@ import { nextPaymentMonth } from '../loanScenarios';
 import { DEFAULT_SETTINGS, MIN_MONTHS_FOR_AVERAGES } from '../retirementSettings';
 import { monthlyEquivalent } from '../subscriptionMath';
 import { trackedMonthsInYearWindow, trackedMonthsOf, YEAR_ON_FILE_MONTHS } from '../trackedMonths';
+import { isUncategorised } from '../uncategorised';
 import { CLEAR_PICTURE_MONTHS } from './circles';
 import { flowsOf } from './flows';
 import {
@@ -495,10 +496,12 @@ function sumWindow(
     }
     if (entry.type !== 'expense') continue;
     const spent = Math.abs(amount(entry));
-    // Filed under a category the profile no longer has: no category. Before #384 (July 2026),
-    // deleting a category in either runtime left its entries pointing at it; both clear it now.
-    // Nothing can mark a category that is gone, and the essentials question cannot list it.
-    const filed = isId(id) && lookup(id) !== undefined;
+    // Filed under a category the profile no longer has: no category, as every count of them reads
+    // it (shared/uncategorised.ts). Before #384 (July 2026), deleting a category in either runtime
+    // left its entries pointing at it; both clear it now. Nothing can mark a category that is
+    // gone, and the essentials question cannot list it.
+    const filed =
+      isId(id) && !isUncategorised(entry, (categoryId) => lookup(categoryId) !== undefined);
     const month = sums.byMonth.get(monthOf(entry.date)) ?? { spent: 0, byCategory: new Map() };
     month.spent += spent;
     const key = filed ? id : 0;

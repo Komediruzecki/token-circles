@@ -370,6 +370,27 @@ function partsNote(facts: GuidanceFacts, words: LedgerWords): string | undefined
   return `${text.charAt(0).toUpperCase()}${text.slice(1)}.`;
 }
 
+/**
+ * Clear picture's count of spending without a category. It counts the expenses of the months it
+ * reads, so it says so: Getting started, the day-7 mail and the Transactions filter count every
+ * entry without one, income and older months too (shared/uncategorised.ts).
+ */
+function uncategorisedRow(facts: GuidanceFacts): NumberRow {
+  const n = facts.uncategorisedEntries ?? 0;
+  const first = facts.months[0];
+  const last = facts.months[facts.months.length - 1];
+  return {
+    label: 'Spending without a category',
+    value: n === 0 ? 'None' : n === 1 ? '1 entry' : `${n} entries`,
+    note:
+      first && last
+        ? first === last
+          ? `Only spending in ${monthYear(first)} counts here.`
+          : `Only spending from ${monthYear(first)} to ${monthYear(last)} counts here.`
+        : undefined,
+  };
+}
+
 /** The person's numbers behind one circle's checks. */
 export function circleNumbers(
   circle: CircleNumber,
@@ -411,7 +432,7 @@ export function circleNumbers(
                 ? unknown
                 : `${shareOf(facts.sortedShare, 100, facts.sortedShare >= 100)}%`,
           },
-          { label: 'Entries without a category', value: String(facts.uncategorisedEntries ?? 0) },
+          uncategorisedRow(facts),
         ],
       };
     case 2: {

@@ -38,6 +38,8 @@ let attempts = 0;
 let whileSending: ((to: string) => Promise<void>) | null = null;
 let nextId = FIRST_ID;
 const mine: number[] = [];
+/** Each account's one category, which its entries are filed under unless a row says otherwise. */
+const categoryOf = new Map<number, number>();
 
 async function removeAccounts(): Promise<void> {
   if (mine.length === 0) return;
@@ -46,12 +48,14 @@ async function removeAccounts(): Promise<void> {
     env.DB.prepare(`DELETE FROM transactions WHERE profile_id IN (${ids})`),
     env.DB.prepare(`DELETE FROM bills WHERE profile_id IN (${ids})`),
     env.DB.prepare(`DELETE FROM loans WHERE profile_id IN (${ids})`),
+    env.DB.prepare(`DELETE FROM categories WHERE profile_id IN (${ids})`),
     env.DB.prepare(`DELETE FROM reminder_dedup WHERE user_id IN (${ids})`),
     env.DB.prepare(`DELETE FROM reminder_sends WHERE user_id IN (${ids})`),
     env.DB.prepare(`DELETE FROM profiles WHERE id IN (${ids})`),
     env.DB.prepare(`DELETE FROM users WHERE id IN (${ids})`),
   ]);
   mine.length = 0;
+  categoryOf.clear();
 }
 
 interface AccountOptions {
@@ -91,6 +95,7 @@ async function account(opts: AccountOptions = {}): Promise<{ id: number; email: 
       `Week one ${id}`
     ),
   ]);
+  categoryOf.set(id, await category(id));
   const ago = opts.confirmedAgo === undefined ? 2 * DAY : opts.confirmedAgo;
   if (ago !== null) {
     await env.DB.prepare(
@@ -110,7 +115,19 @@ interface Tx {
   categoryId?: number | null;
 }
 
+/** A category of the profile's, by its id. */
+async function category(profileId: number): Promise<number> {
+  const made = await env.DB.prepare(
+    "INSERT INTO categories (name, type, profile_id) VALUES ('Sample groceries', 'expense', ?)"
+  )
+    .bind(profileId)
+    .run();
+  return Number(made.meta.last_row_id);
+}
+
 async function transactions(profileId: number, rows: Tx[]): Promise<void> {
+  // A profile added beside an account's own gets a category on its first entries.
+  if (!categoryOf.has(profileId)) categoryOf.set(profileId, await category(profileId));
   await env.DB.batch(
     rows.map((row) =>
       env.DB.prepare(
@@ -120,7 +137,7 @@ async function transactions(profileId: number, rows: Tx[]): Promise<void> {
         row.amount ?? 12.5,
         row.date,
         row.type ?? 'expense',
-        row.categoryId === undefined ? 1 : row.categoryId,
+        row.categoryId === undefined ? categoryOf.get(profileId)! : row.categoryId,
         profileId,
         row.imported === false ? null : 'import-sample'
       )
@@ -511,6 +528,34 @@ describe('the day-2 mail itself', () => {
     expect(text).toContain(`Sparkasse import as they are. ${ynab} Any other CSV`);
     expect(html).toContain(ynab);
     expect(text).not.toContain('YNAB exports');
+  });
+});
+
+describe('the entries without a category the day-7 mail counts', () => {
+  it('counts one under a category the profile no longer has, as Transactions lists it', async () => {
+    // Before #384 (July 2026), deleting a category left its entries pointing at it.
+    const a = await account({ confirmedAgo: 7 * DAY });
+    const gone = await category(a.id);
+    await env.DB.prepare('DELETE FROM categories WHERE id = ?').bind(gone).run();
+    await transactions(a.id, [
+      { date: '2030-05-02' },
+      { date: '2030-05-03', categoryId: gone },
+      { date: '2030-05-04', categoryId: null },
+      { date: '2030-05-05', categoryId: gone, type: 'transfer' },
+    ]);
+    await run();
+    expect(mailsTo(a.email)[0]!.text).toContain('Entries without a category: 2');
+  });
+
+  it("counts one under another profile's category as without one, as circle 1 does", async () => {
+    const a = await account({ confirmedAgo: 7 * DAY });
+    const b = await account({ confirmedAgo: 30 * DAY });
+    await transactions(a.id, [
+      { date: '2030-05-02' },
+      { date: '2030-05-03', categoryId: categoryOf.get(b.id)! },
+    ]);
+    await run();
+    expect(mailsTo(a.email)[0]!.text).toContain('Entries without a category: 1');
   });
 });
 

@@ -10,7 +10,12 @@ import { baseAmount } from './evaluate'
 import type { BudgetRow } from './budgets'
 import type { Tx } from './evaluate'
 
-/** Entries with no category. A transfer needs none, so transfers are left out. */
+/**
+ * Entries with no category at all, as the "Named everything" badge reads them (evaluate.ts). A
+ * transfer needs none, so transfers are left out. Getting started, circle 1, the Transactions
+ * filter and the day-7 mail also count one under a category the profile no longer has
+ * (shared/uncategorised.ts).
+ */
 export function uncategorisedIn(list: Tx[]): number {
   return list.filter((t) => t.type !== 'transfer' && t.category_id === null).length
 }

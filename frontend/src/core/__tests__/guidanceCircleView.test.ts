@@ -363,8 +363,24 @@ describe("the person's numbers", () => {
     expect(numbers(facts({ uncategorisedEntries: 4 }), 1).rows).toEqual([
       { label: 'Months on file', value: '12 of 12', article: 'one-month' },
       { label: 'Spending sorted', value: '96%' },
-      { label: 'Entries without a category', value: '4' },
+      {
+        label: 'Spending without a category',
+        value: '4 entries',
+        note: 'Only spending from January 2025 to December 2025 counts here.',
+      },
     ])
+  })
+
+  it('says the entries without a category it counts are the spending of its months', () => {
+    // Getting started, the day-7 mail and the Transactions filter count every entry, income and
+    // older months too (review A10): this count says it is less.
+    const row = (f: GuidanceFacts) => numbers(f, 1).rows[2]
+    expect(row(facts({ uncategorisedEntries: 1 })).value).toBe('1 entry')
+    expect(row(facts({ uncategorisedEntries: 0 })).value).toBe('None')
+    expect(row(facts({ months: ['2025-03'], averaged: false })).note).toBe(
+      'Only spending in March 2025 counts here.'
+    )
+    expect(row(facts({ months: [], averaged: false })).note).toBeUndefined()
   })
 
   it('shows own income without the support marked', () => {
