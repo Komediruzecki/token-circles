@@ -163,7 +163,8 @@ function clearPicture(facts: GuidanceFacts, place: CirclePlace, state: RowState)
         : held !== null
           ? `${share !== null && share >= 100 ? 'Every entry has a category' : `${shareWords} of spending has a category`}; ${held}.`
           : state === 'current'
-            ? `${shareWords} of spending sorted; ${SORTED_SHARE}% is needed.`
+            ? // "Needed" is what a month costs elsewhere (review M9): this says what the circle asks.
+              `${shareWords} of spending sorted; this circle asks for ${SORTED_SHARE}%.`
             : `${shareWords} of spending sorted.`,
     measure: months < 12 ? months / 12 : share === null ? null : Math.min(1, share / SORTED_SHARE),
     months: months < 12 ? months : null,

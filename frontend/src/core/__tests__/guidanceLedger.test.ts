@@ -229,11 +229,11 @@ describe('the rows', () => {
     expect(first.measure).toBeCloseTo(n < 12 ? n / 12 : 80 / 90, 6)
   })
 
-  it('says how much is sorted, and what is needed while Clear picture is the circle', () => {
+  it('says how much is sorted, and what the circle asks while it is the one (review M9)', () => {
     const f = facts({ sortedShare: 89.9 })
     expect(row(f, 1)).toMatchObject({
       state: 'current',
-      detail: '89% of spending sorted; 90% is needed.',
+      detail: '89% of spending sorted; this circle asks for 90%.',
     })
     expect(row(base, 1).detail).toBe('96% of spending sorted.')
   })

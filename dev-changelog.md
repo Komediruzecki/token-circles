@@ -2873,6 +2873,12 @@ true, or is too small for one.
   the Worker; without the catch-all's needed share, the parent rule, the card's sentence, circle 1's
   line or the row's note, one each.
 
+- **Circle 1 says what it asks for, not what is "needed"** (M9). While Clear picture is the
+  circle, its line read "89% of spending sorted; 90% is needed." beside "Needed every month" on the
+  same page, where needed means what a month costs. It now reads "89% of spending sorted; this
+  circle asks for 90%." (`shared/guidance/ledger.ts`). Test: `guidanceLedger.test.ts`, which fails
+  on the old line.
+
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
 The production build holds back the benchmarks and the questions that choose their figures
