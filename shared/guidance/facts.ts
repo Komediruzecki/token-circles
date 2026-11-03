@@ -291,7 +291,11 @@ export interface GuidanceFacts {
   debts: Debt[];
   /** Whether the accounts were read: without them, a card or an overdraft is not known of. */
   accountsKnown: boolean;
-  /** Loan principal repaid, a month on average over the window. */
+  /**
+   * Loan principal repaid, a month on average over the window, up to what the window's entries
+   * spent paying loans (`loanPaymentsSpent`): a loan paid by transfer or from outside the app is
+   * in `cash` as kept already.
+   */
   principalRepaid: number | null;
   /**
    * What was kept, in percent of income: `cash` is income less spending, `withPrincipal` adds the
@@ -431,6 +435,8 @@ interface WindowSums {
   byMonth: Map<string, { spent: number; byCategory: Map<number, number> }>;
   /** What was spent under each kind, by the kind its category goes by. */
   byKind: Map<Kind, number>;
+  /** Each month's expenses not filed under the Debt payments kind, one amount each. */
+  otherExpenses: Map<string, number[]>;
 }
 
 /** The window's money, added up, without the expenses that only moved money (`holdsTransfers`). */
@@ -475,6 +481,7 @@ function sumWindow(
     uncategorisedEntries: 0,
     byMonth: new Map(),
     byKind: new Map(),
+    otherExpenses: new Map(),
   };
   const add = (totals: Map<number, number>, id: number, value: number) => {
     totals.set(id, (totals.get(id) ?? 0) + value);
@@ -497,7 +504,13 @@ function sumWindow(
     const key = filed ? id : 0;
     month.byCategory.set(key, (month.byCategory.get(key) ?? 0) + spent);
     sums.byMonth.set(monthOf(entry.date), month);
+    const other = () => {
+      const others = sums.otherExpenses.get(monthOf(entry.date));
+      if (others) others.push(spent);
+      else sums.otherExpenses.set(monthOf(entry.date), [spent]);
+    };
     if (!filed) {
+      other();
       sums.uncategorisedEntries += 1;
       sums.uncategorised += spent;
       sums.essentials += spent;
@@ -516,6 +529,7 @@ function sumWindow(
     }
     const kind = kinds.get(id);
     if (kind) sums.byKind.set(kind, (sums.byKind.get(kind) ?? 0) + spent);
+    if (kind !== 'debt') other();
     const verdict = verdicts.get(id)!;
     // Filed under a category that can take no kind, an income category: spending, but nothing
     // can mark it needed and the essentials question does not list it, so it counts neither as
@@ -873,6 +887,52 @@ function principalIn(loans: readonly FactsLoan[], months: readonly string[]): nu
   return repaid;
 }
 
+/** How far a booked payment may be from the schedule's and still be that payment. */
+const paymentLeeway = (due: number): number => Math.max(1, due * 0.01);
+
+/**
+ * What the window's entries spent paying loans: the expenses filed under the Debt payments kind,
+ * and any other expense the size of a payment a loan's schedule has due that month, as a mortgage
+ * filed under Housing is (the bank rules file one there). A loan's payments count only when they
+ * recur, in at least half its months in the window: an expense of about its size once is chance.
+ * Its extra payments are then looked for too. Each expense counts once. A loan paid by transfer,
+ * or from an account the app does not hold, shows none: its payments were never spending, so
+ * `cash` has them as kept already (3 Nov review A5).
+ */
+function loanPaymentsSpent(
+  sums: WindowSums,
+  loans: readonly FactsLoan[],
+  months: readonly string[]
+): number {
+  let spent = sums.byKind.get('debt') ?? 0;
+  const inWindow = new Set(months);
+  const left = new Map([...sums.otherExpenses].map(([month, list]) => [month, [...list]]));
+  /** Take an expense the size of `due` from `month`'s, and answer its amount. */
+  const take = (month: string, due: number): number | null => {
+    const pool = left.get(month);
+    const at = pool ? pool.findIndex((amount) => Math.abs(amount - due) <= paymentLeeway(due)) : -1;
+    return pool && at >= 0 ? pool.splice(at, 1)[0] : null;
+  };
+  for (const loan of loans) {
+    const due = amortize(loan).filter((row) => row.payment > 0 && inWindow.has(monthOf(row.date)));
+    const found: Array<{ month: string; amount: number }> = [];
+    for (const row of due) {
+      const amount = take(monthOf(row.date), row.payment);
+      if (amount !== null) found.push({ month: monthOf(row.date), amount });
+    }
+    if (found.length * 2 < due.length) {
+      for (const { month, amount } of found) left.get(month)?.push(amount);
+      continue;
+    }
+    for (const { amount } of found) spent += amount;
+    for (const row of due) {
+      const amount = row.prepayment > 0 ? take(monthOf(row.date), row.prepayment) : null;
+      if (amount !== null) spent += amount;
+    }
+  }
+  return spent;
+}
+
 const percentOf = (part: number, whole: number): number | null =>
   whole > 0 ? (part / whole) * 100 : null;
 
@@ -891,7 +951,12 @@ export function guidanceFacts(input: GuidanceInput): GuidanceFacts {
   const spending = perMonth(sums.spending);
   const essentials = perMonth(sums.essentials);
   const liquid = liquidOf(input.accounts, input.transactions, today);
-  const principalRepaid = perMonth(principalIn(input.loans ?? [], months));
+  // D6 counts principal repaid as kept where its payments were spent: no more than the entries
+  // spent paying loans, or a loan paid by transfer would count twice.
+  const loans = input.loans ?? [];
+  const principalRepaid = perMonth(
+    Math.min(principalIn(loans, months), loanPaymentsSpent(sums, loans, months))
+  );
   const kept = income !== null && spending !== null ? income - spending : null;
   const cash = kept === null || income === null ? null : percentOf(kept, income);
   const withPrincipal =

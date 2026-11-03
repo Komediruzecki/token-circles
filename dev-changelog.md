@@ -2746,6 +2746,29 @@ true, or is too small for one.
   the e2e fail ("giro" made); without the profile's accounts left out, that case; without the
   reset on a new file, that one.
 
+- **The savings rate adds loan principal back only where the loan's payments were spending.**
+  D6 counts principal repaid as kept, and the rate added the schedule's principal to income less
+  spending whatever the entries showed, so a loan paid by transfer or from an account outside the
+  app counted twice: the review's case, 3,000 in, 1,700 spent and 1,000 a month paid by
+  transfer, read 76.7% where cash alone is 43.3%. `guidanceFacts` (`shared/guidance/facts.ts`)
+  now adds back at most what the window's entries spent paying loans (`loanPaymentsSpent`): what
+  was filed under the Debt payments kind, and any other expense the size of a payment a loan's
+  schedule has due that month, within 1% or 1.00, as a mortgage under Housing is (the bank rules
+  file "mortgage" rows there, so the kind alone would have dropped every imported mortgage from
+  D6). A loan's payments found that way count only when they recur in at least half of its
+  months in the window, so one grocery bill of the same size is not taken for one; its extra
+  payments are looked for once its payments are found, and each expense counts once. The demo's
+  loans are never paid from its entries: Example Mid Income's gauge read "You kept 25.4% of your
+  income" with "Of your loan payments, €637 a month on average paid the debt down; that counts as
+  saving here. Cash alone: 20%." before, and "You kept 20% of your income" after; Example High
+  Income 40.0% before, 29.8% after (measured on the seed, both themes and sizes the same). Tests:
+  `src/core/__tests__/guidanceFacts.test.ts` (debt payments counted, extra payments, a transfer,
+  nothing booked, part of it booked, a mortgage under Housing found by its size, rent and one
+  chance match not, two loans of one size, a chance match left for the loan due it, extra
+  payments found the same way). Without the cap four fail; with the Debt payments kind alone
+  two; without the leeway, the recurrence rule, counting each expense once, putting a chance
+  match back or the extra payments, one each.
+
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
 The production build holds back the benchmarks and the questions that choose their figures

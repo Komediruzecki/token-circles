@@ -1006,21 +1006,34 @@ describe('invested money', () => {
 })
 
 describe('the savings rate (D6)', () => {
-  it('counts the loan principal repaid in the window as kept, and keeps the cash figure beside it', () => {
-    const loan = {
-      principal: 12000,
-      interest_rate: 0,
-      start_date: '2025-01-01',
-      term_months: 120,
-      rate_periods: [],
-      prepayments: [],
-    }
-    // At no interest, 100 of principal a month.
-    expect(amortize(loan)[0].principal).toBeCloseTo(100, 6)
-    const facts = guidanceFacts(input({ loans: [loan] }))
+  // The four months of `input()`: 2,000 in and 1,000 spent on groceries in each.
+  const window = [1, 2, 3, 4].map(ago)
+  const debtKind = { id: 3, name: 'Loan payments', type: 'expense', kind: 'debt' }
+  const housing = { id: 4, name: 'Housing', type: 'expense', kind: 'housing' }
+  const withCategories = [...categories, debtKind, housing]
+  /** At no interest, 100 of principal a month, and every payment is that 100. */
+  const interestFree = {
+    principal: 12000,
+    interest_rate: 0,
+    start_date: '2025-01-01',
+    term_months: 120,
+    rate_periods: [],
+    prepayments: [],
+  }
+  /** Each window month's groceries, with `extra` booked on the 20th. */
+  const booked = (extra: (ym: string) => FactsEntry[]) =>
+    window.flatMap((ym) => [...month(ym, 2000, 1000), ...extra(ym)])
+
+  it('counts the principal of the loan payments it spent as kept, and keeps the cash figure beside it', () => {
+    expect(amortize(interestFree)[0].principal).toBeCloseTo(100, 6)
+    const paid = booked((ym) => [entry(`${ym}-20`, { amount: 100, category_id: 3 })])
+    const facts = guidanceFacts(
+      input({ transactions: paid, categories: withCategories, loans: [interestFree] })
+    )
     expect(facts.principalRepaid).toBeCloseTo(100, 6)
-    expect(facts.savings.cash).toBeCloseTo(50, 6)
-    expect(facts.savings.withPrincipal).toBeCloseTo(55, 6)
+    // 2,000 in, 1,100 out: 45% in cash, and 50% with the 100 that paid the loan down.
+    expect(facts.savings.cash).toBeCloseTo(45, 6)
+    expect(facts.savings.withPrincipal).toBeCloseTo(50, 6)
     expect(LOAN_PRINCIPAL_IS_SAVING).toBe(true)
     expect(facts.savings.rate).toBe(facts.savings.withPrincipal)
   })
@@ -1034,15 +1047,140 @@ describe('the savings rate (D6)', () => {
       rate_periods: [],
       prepayments: [{ month: 20, amount: 500 }],
     }
-    const window = new Set([1, 2, 3, 4].map(ago))
-    const rows = amortize(loan).filter((row) => window.has(row.date.slice(0, 7)))
+    const windowSet = new Set(window)
+    const rows = amortize(loan).filter((row) => windowSet.has(row.date.slice(0, 7)))
     expect(rows).toHaveLength(4)
     expect(rows.some((row) => row.prepayment > 0)).toBe(true)
+    // Each payment, and the extra one, spent as debt payments in its month.
+    const paid = booked((ym) =>
+      rows
+        .filter((row) => row.date.startsWith(ym))
+        .flatMap((row) => [row.payment, row.prepayment])
+        .filter((amount) => amount > 0)
+        .map((amount) => entry(`${ym}-20`, { amount, category_id: 3 }))
+    )
     const repaid = rows.reduce((sum, row) => sum + row.principal + row.prepayment, 0) / 4
-    expect(guidanceFacts(input({ loans: [loan] })).principalRepaid).toBeCloseTo(repaid, 6)
+    expect(
+      guidanceFacts(input({ transactions: paid, categories: withCategories, loans: [loan] }))
+        .principalRepaid
+    ).toBeCloseTo(repaid, 6)
     expect(repaid).toBeLessThan(
       rows.reduce((sum, row) => sum + row.payment + row.prepayment, 0) / 4
     )
+  })
+
+  // 3 Nov review A5: the principal was added on top of `cash` whatever the entries showed, so a
+  // loan whose payments never were spending counted twice.
+  it('adds nothing for a loan paid by transfer, or from outside the app', () => {
+    const byTransfer = booked((ym) => [
+      entry(`${ym}-20`, { type: 'transfer', amount: 100, account_id: 1, transfer_account_id: 7 }),
+    ])
+    for (const transactions of [byTransfer, booked(() => [])]) {
+      const facts = guidanceFacts(
+        input({ transactions, categories: withCategories, loans: [interestFree] })
+      )
+      expect(facts.principalRepaid).toBe(0)
+      expect(facts.savings.withPrincipal).toBeCloseTo(50, 6)
+      expect(facts.savings.rate).toBe(facts.savings.cash)
+    }
+    // The review's own case: 3,000 in, 1,700 spent, and a loan of 1,000 a month paid by transfer.
+    const big = { ...interestFree, principal: 120000 }
+    const review = window.flatMap((ym) => [
+      ...month(ym, 3000, 1700),
+      entry(`${ym}-20`, { type: 'transfer', amount: 1000, account_id: 1, transfer_account_id: 7 }),
+    ])
+    const facts = guidanceFacts(input({ transactions: review, loans: [big] }))
+    expect(facts.savings.cash).toBeCloseTo(43.33, 1)
+    // Was 76.7%: the 1,000 added back on top of the 1,300 kept.
+    expect(facts.savings.rate).toBeCloseTo(43.33, 1)
+  })
+
+  it('adds back at most what the entries spent on debt payments', () => {
+    // Two of the four months' payments booked: 200 spent, of 400 principal.
+    const half = booked((ym) =>
+      window.indexOf(ym) < 2 ? [entry(`${ym}-20`, { amount: 100, category_id: 3 })] : []
+    )
+    const facts = guidanceFacts(
+      input({ transactions: half, categories: withCategories, loans: [interestFree] })
+    )
+    expect(facts.principalRepaid).toBeCloseTo(50, 6)
+  })
+
+  it('finds a payment filed under another kind by its size, as a mortgage under Housing is', () => {
+    const mortgage = { ...interestFree, principal: 96000, interest_rate: 3, term_months: 240 }
+    const windowSet = new Set(window)
+    const rows = amortize(mortgage).filter((row) => windowSet.has(row.date.slice(0, 7)))
+    const principal = rows.reduce((sum, row) => sum + row.principal, 0) / 4
+    // The bank's installment, a few cents off the schedule's, filed under Housing.
+    const paid = booked((ym) => {
+      const due = rows.find((row) => row.date.startsWith(ym))!.payment
+      return [entry(`${ym}-20`, { amount: Math.round(due * 100) / 100 + 0.03, category_id: 4 })]
+    })
+    expect(
+      guidanceFacts(input({ transactions: paid, categories: withCategories, loans: [mortgage] }))
+        .principalRepaid
+    ).toBeCloseTo(principal, 6)
+    // Rent of another size is no payment of it.
+    const rent = booked((ym) => [entry(`${ym}-20`, { amount: 850, category_id: 4 })])
+    expect(
+      guidanceFacts(input({ transactions: rent, categories: withCategories, loans: [mortgage] }))
+        .principalRepaid
+    ).toBe(0)
+    // Nor is one expense of its size in one month of the four: that is chance, not a payment.
+    const once = booked((ym) => {
+      const due = rows.find((row) => row.date.startsWith(ym))!.payment
+      return ym === window[0] ? [entry(`${ym}-20`, { amount: due, category_id: 4 })] : []
+    })
+    expect(
+      guidanceFacts(input({ transactions: once, categories: withCategories, loans: [mortgage] }))
+        .principalRepaid
+    ).toBe(0)
+  })
+
+  it('counts one expense as one payment, however many loans are due its size', () => {
+    // Two loans of 100 a month, and one 100 under Housing each month: one of them was paid.
+    const paid = booked((ym) => [entry(`${ym}-20`, { amount: 100, category_id: 4 })])
+    const facts = guidanceFacts(
+      input({
+        transactions: paid,
+        categories: withCategories,
+        loans: [interestFree, { ...interestFree }],
+      })
+    )
+    expect(facts.principalRepaid).toBeCloseTo(100, 6)
+  })
+
+  it('then finds its extra payments the same way', () => {
+    const base = { ...interestFree, principal: 96000, interest_rate: 3, term_months: 240 }
+    const start = amortize(base).findIndex((row) => row.date.startsWith(window[1]))
+    const mortgage = { ...base, prepayments: [{ month: start + 1, amount: 2000 }] }
+    const windowSet = new Set(window)
+    const rows = amortize(mortgage).filter((row) => windowSet.has(row.date.slice(0, 7)))
+    expect(rows.find((row) => row.date.startsWith(window[1]))?.prepayment).toBe(2000)
+    const paid = booked((ym) => {
+      const row = rows.find((r) => r.date.startsWith(ym))!
+      return [row.payment, row.prepayment]
+        .filter((amount) => amount > 0)
+        .map((amount) => entry(`${ym}-20`, { amount, category_id: 4 }))
+    })
+    const repaid = rows.reduce((sum, row) => sum + row.principal + row.prepayment, 0) / 4
+    expect(
+      guidanceFacts(input({ transactions: paid, categories: withCategories, loans: [mortgage] }))
+        .principalRepaid
+    ).toBeCloseTo(repaid, 6)
+  })
+
+  it('leaves a payment it found by chance for a loan that was due it', () => {
+    // A loan due all four months with one 100 found, and a new one of 100 due only last month:
+    // the 100 is the new loan's payment, not a chance match of the old one's.
+    const fresh = { ...interestFree, start_date: `${window[0]}-01` }
+    const paid = booked((ym) =>
+      ym === window[0] ? [entry(`${ym}-20`, { amount: 100, category_id: 4 })] : []
+    )
+    const facts = guidanceFacts(
+      input({ transactions: paid, categories: withCategories, loans: [interestFree, fresh] })
+    )
+    expect(facts.principalRepaid).toBeCloseTo(25, 6)
   })
 
   it('has none without income', () => {
