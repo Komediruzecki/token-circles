@@ -559,6 +559,8 @@ describe('a YNAB Register file', () => {
     expect(byTestId('onboarding-import-accounts')?.textContent).toBe(
       'Each row goes to its own account: Test Checking and Test Savings.'
     )
+    // Neither starts below zero: no question about what they are.
+    expect(byTestId('onboarding-import-types')).toBeNull()
     expect(footer()).toEqual([
       { id: 'onboarding-import-skip', text: 'Skip' },
       { id: 'onboarding-import-selected', text: 'Import 3' },
@@ -618,6 +620,149 @@ describe('a YNAB Register file', () => {
     expect(byTestId('onboarding-import-done')?.textContent).toBe(
       'Imported 3 transactions into Test Checking and Test Savings.'
     )
+  })
+})
+
+/**
+ * The same plan with a card YNAB tracks: it starts 640.00 below zero, and a purchase goes on it.
+ * As a current account it read as a 640.00 overdraft, expensive debt that held Solid ground back
+ * (3 Nov review A4).
+ */
+const REGISTER_WITH_CARD = [
+  REGISTER,
+  registerRow('Test Card', '01/02/2026', 'Starting Balance', TO_ASSIGN, '', '$640.00', '$0.00'),
+  registerRow(
+    'Test Card',
+    '01/16/2026',
+    'Corner Grocer',
+    ['Everyday', 'Groceries'],
+    '',
+    '$32.10',
+    '$0.00'
+  ),
+].join('\n')
+
+/** The type each account was made as, by name. */
+const typesByName = async () =>
+  Object.fromEntries((await accounts()).map((a) => [a.name as string, a.type as string]))
+
+/** The question about the accounts that start below zero: each row's name and its choice. */
+const typeRows = () =>
+  [...(byTestId('onboarding-import-types')?.querySelectorAll<HTMLLabelElement>('label') ?? [])].map(
+    (row) => {
+      const select = row.querySelector('select')!
+      return {
+        name: row.querySelector('[data-test-id="onboarding-import-type-name"]')?.textContent,
+        chosen: select.value,
+        options: [...select.options].map((o) => o.textContent),
+      }
+    }
+  )
+
+describe('a YNAB Register file with an account that starts below zero', () => {
+  it('asks what it is, with Credit Card chosen, and makes it one', async () => {
+    await openAt('import')
+    choose(REGISTER_NAME, REGISTER_WITH_CARD)
+    await readUntil('ready')
+
+    expect(byTestId('onboarding-import-types-lead')?.textContent).toBe(
+      'Starts below zero, as a card often does. What kind of account is it?'
+    )
+    // The Import page's own choices; the accounts that start above zero are not asked about.
+    expect(typeRows()).toEqual([
+      {
+        name: 'Test Card',
+        chosen: 'credit',
+        options: ['Giro', 'Savings', 'Investment', 'Cash', 'Credit Card'],
+      },
+    ])
+    byTestId('onboarding-import-selected')!.click()
+    await vi.waitFor(() => {
+      expect(onboardingStep()).toBe('subscriptions')
+    }, waitLong)
+    expect(await typesByName()).toEqual({
+      'Test Card': 'credit',
+      'Test Checking': 'giro',
+      'Test Savings': 'giro',
+    })
+  })
+
+  it('makes it what the person chose instead', async () => {
+    await openAt('import')
+    choose(REGISTER_NAME, REGISTER_WITH_CARD)
+    await readUntil('ready')
+    const select = byTestId('onboarding-import-types')!.querySelector('select')!
+    select.value = 'giro'
+    select.dispatchEvent(new Event('change', { bubbles: true }))
+    await settle()
+    expect(typeRows()[0].chosen).toBe('giro')
+
+    byTestId('onboarding-import-selected')!.click()
+    await vi.waitFor(() => {
+      expect(onboardingStep()).toBe('subscriptions')
+    }, waitLong)
+    expect((await typesByName())['Test Card']).toBe('giro')
+  })
+
+  it('says it of each, when more than one does', async () => {
+    const withLoan = [
+      REGISTER_WITH_CARD,
+      registerRow(
+        'Car Loan',
+        '01/02/2026',
+        'Starting Balance',
+        TO_ASSIGN,
+        '',
+        '$9,800.00',
+        '$0.00'
+      ),
+    ].join('\n')
+    await openAt('import')
+    choose(REGISTER_NAME, withLoan)
+    await readUntil('ready')
+    expect(byTestId('onboarding-import-types-lead')?.textContent).toBe(
+      'These start below zero, as cards often do. What kind of account is each?'
+    )
+    expect(typeRows().map((row) => [row.name, row.chosen])).toEqual([
+      ['Test Card', 'credit'],
+      ['Car Loan', 'credit'],
+    ])
+  })
+
+  it('asks nothing of an account the profile already has, which keeps its type', async () => {
+    const db = await getDB()
+    await db.add('accounts', {
+      name: 'Test Card',
+      type: 'giro',
+      currency: 'USD',
+      balance: 0,
+      profile_id: 1,
+    })
+    await openAt('import')
+    choose(REGISTER_NAME, REGISTER_WITH_CARD)
+    await readUntil('ready')
+    expect(byTestId('onboarding-import-types')).toBeNull()
+  })
+
+  it('forgets the choice with the file: another file starts from Credit Card again', async () => {
+    await openAt('import')
+    choose(REGISTER_NAME, REGISTER_WITH_CARD)
+    await readUntil('ready')
+    const select = byTestId('onboarding-import-types')!.querySelector('select')!
+    select.value = 'cash'
+    select.dispatchEvent(new Event('change', { bubbles: true }))
+    await settle()
+    // Removed, and chosen again.
+    byTestId('onboarding-import-remove')!.click()
+    await settle()
+    choose(REGISTER_NAME, REGISTER_WITH_CARD)
+    await readUntil('ready')
+    expect(typeRows()[0].chosen).toBe('credit')
+    byTestId('onboarding-import-selected')!.click()
+    await vi.waitFor(() => {
+      expect(onboardingStep()).toBe('subscriptions')
+    }, waitLong)
+    expect((await typesByName())['Test Card']).toBe('credit')
   })
 })
 

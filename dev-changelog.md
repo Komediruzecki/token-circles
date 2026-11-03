@@ -2727,6 +2727,25 @@ true, or is too small for one.
   fail; sent after the mode change, the same four; without the first-setup check or the accounts
   check, the case for each.
 
+- **Setup asks what a YNAB account that starts below zero is.** A Register file made every
+  account it names a current account, so a card or a loan that starts below zero read as an
+  expensive overdraft and held Solid ground back. Setup's statement step now lists the accounts
+  the file starts below zero and the import makes, each with the Import page's type chooser and
+  Credit Card chosen: "Starts below zero, as a card often does. What kind of account is it?", or
+  "These start below zero, as cards often do. What kind of account is each?" for more than one
+  (`belowZero`, `components/onboarding/FirstImport.tsx`). The rest stay current accounts,
+  unasked, and an account the profile has keeps its own type. The choice goes with the import's
+  `accountTypes`, which both runtimes already read; a file chosen again starts from Credit Card.
+  The chooser's five choices now live in `features/import/accountTypeChoices.ts`, read by both
+  screens. Measured with a plan holding a card at 640.00 below zero: the statement card 158 px
+  tall before, 239 after at 1280 (200 and 299 at 390), the select 150x48, and the step still
+  needs no scrolling at either size. Tests: `components/onboarding/__tests__/onboardingFirstImport.test.tsx`
+  (asked with Credit Card and made a card, another choice kept, two accounts, one the profile
+  has, a file chosen again; no question for a plan that starts above zero) and the Register
+  case on the Worker in `tests/onboarding-server.spec.ts`. Without the choice sent, the first and
+  the e2e fail ("giro" made); without the profile's accounts left out, that case; without the
+  reset on a new file, that one.
+
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
 The production build holds back the benchmarks and the questions that choose their figures

@@ -488,6 +488,42 @@
   color: var(--text-secondary);
 }
 
+/* The accounts a YNAB Register file starts below zero, each with what it is made as. */
+.typeChoice {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.typeChoice legend {
+  padding: 0;
+  margin-bottom: 2px;
+}
+
+.typeRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.typeName {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 15px;
+  color: var(--text);
+}
+
+.typeSelect {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 150px;
+}
+
 .cardLine {
   display: flex;
   align-items: center;

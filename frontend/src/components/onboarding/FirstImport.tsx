@@ -16,6 +16,7 @@
  */
 import { createSignal, createUniqueId, For, onCleanup, Show } from 'solid-js'
 import { listAdapters } from '../../core/bankImport'
+import { IMPORT_ACCOUNT_TYPES } from '../../features/import/accountTypeChoices'
 import { createImportFlow, namesItsAccounts } from '../../features/import/importFlow'
 import styles from './Onboarding.module.css'
 import type { BankId } from '../../core/bankImport'
@@ -136,6 +137,26 @@ export function createFirstImport(options: FirstImportOptions) {
   /** The accounts such a file names, in its order. */
   const fileAccounts = (): string[] => statement()?.meta.accounts ?? []
   /**
+   * The accounts such a file names that start below zero and this import makes: a card or a loan
+   * in YNAB, which as a current account read as an overdraft, expensive debt that held Solid
+   * ground back (3 Nov review A4). Setup asks what each one is, with Credit Card chosen; the
+   * others are current accounts, unasked. An account the profile has keeps its own type.
+   */
+  const belowZero = (): string[] => {
+    const row = statement()
+    if (!row || !namesItsAccounts(row)) return []
+    const opening = row.meta.startingBalances ?? {}
+    const have = new Set(flow.bankAccounts().map((a) => a.name.trim().toLowerCase()))
+    return fileAccounts().filter(
+      (name) => (opening[name]?.amount ?? 0) < 0 && !have.has(name.trim().toLowerCase())
+    )
+  }
+  /** The type an account that starts below zero is made as: Credit Card until chosen. */
+  const typeOf = (name: string): string => flow.accountTypes()[name] ?? 'credit'
+  const setTypeOf = (name: string, type: string) => {
+    flow.setAccountTypes({ ...flow.accountTypes(), [name]: type })
+  }
+  /**
    * The accounts the new transactions go into: each one's own, and a transfer's other end. The
    * same columns the mapping step reads accounts from.
    */
@@ -231,6 +252,8 @@ export function createFirstImport(options: FirstImportOptions) {
     setReading(true)
     try {
       flow.resetForm()
+      // The flow keeps the types chosen for the last file: this one starts from its own.
+      flow.setAccountTypes({})
       // The account setup's last step created has to be one "Goes into" can offer.
       await flow.loadBankAccounts()
       if (mine !== generation) return
@@ -247,6 +270,9 @@ export function createFirstImport(options: FirstImportOptions) {
       }
       if (!row.targetAccount) flow.updateBankFile(0, { targetAccount: defaultTarget(row) })
       await prepare(mine)
+      if (mine !== generation) return
+      // What the import makes them as: Credit Card, until the person chooses another.
+      for (const name of belowZero()) setTypeOf(name, typeOf(name))
     } finally {
       if (mine === generation) setReading(false)
     }
@@ -320,6 +346,9 @@ export function createFirstImport(options: FirstImportOptions) {
     targetChoices,
     namesAccounts,
     fileAccounts,
+    belowZero,
+    typeOf,
+    setTypeOf,
     dateRange,
     choose,
     setTarget,
@@ -512,6 +541,43 @@ export function FirstImportPanel(props: { importer: FirstImport }) {
               <p class={styles.hint} data-test-id="onboarding-import-accounts">
                 Each row goes to its own account: {someOf(importer.fileAccounts())}.
               </p>
+            </Show>
+            <Show when={importer.belowZero().length > 0}>
+              <fieldset class={styles.typeChoice} data-test-id="onboarding-import-types">
+                <legend class={styles.hint} data-test-id="onboarding-import-types-lead">
+                  {importer.belowZero().length === 1
+                    ? 'Starts below zero, as a card often does. What kind of account is it?'
+                    : 'These start below zero, as cards often do. What kind of account is each?'}
+                </legend>
+                <For each={importer.belowZero()}>
+                  {(name) => (
+                    <label class={styles.typeRow}>
+                      <span class={styles.typeName} data-test-id="onboarding-import-type-name">
+                        {name}
+                      </span>
+                      <select
+                        class={`${styles.input} ${styles.typeSelect}`}
+                        data-test-id="onboarding-import-type"
+                        disabled={importer.importing()}
+                        onChange={(e) => {
+                          importer.setTypeOf(name, e.currentTarget.value)
+                        }}
+                      >
+                        <For each={IMPORT_ACCOUNT_TYPES}>
+                          {(choice) => (
+                            <option
+                              value={choice.value}
+                              selected={choice.value === importer.typeOf(name)}
+                            >
+                              {choice.label}
+                            </option>
+                          )}
+                        </For>
+                      </select>
+                    </label>
+                  )}
+                </For>
+              </fieldset>
             </Show>
             <Show when={!importer.namesAccounts()}>
               <label class={styles.field}>

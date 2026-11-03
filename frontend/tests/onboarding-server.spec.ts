@@ -149,6 +149,31 @@ const YNAB_REGISTER = [
   .map((cells) => cells.map((c) => `"${c}"`).join(','))
   .join('\n')
 
+/** The same plan with a card YNAB tracks: it starts 640.00 below zero, and a purchase goes on it. */
+const YNAB_REGISTER_WITH_CARD = [
+  YNAB_REGISTER,
+  ...[
+    ['Test Card', '', '01/02/2026', 'Starting Balance', 'Inflow: Ready to Assign', 'Inflow'],
+    ['Test Card', '', '01/16/2026', 'Corner Grocer', 'Everyday: Groceries', 'Everyday'],
+  ].map(([account, flag, date, payee, both, group], i) =>
+    [
+      account,
+      flag,
+      date,
+      payee,
+      both,
+      group,
+      i === 0 ? 'Ready to Assign' : 'Groceries',
+      '',
+      i === 0 ? '$640.00' : '$32.10',
+      '$0.00',
+      'Cleared',
+    ]
+      .map((c) => `"${c}"`)
+      .join(',')
+  ),
+].join('\n')
+
 test.describe('the setup wizard on the account @smoke', () => {
   test.beforeEach(() => {
     test.setTimeout(120_000)
@@ -404,6 +429,53 @@ test.describe('the setup wizard on the account @smoke', () => {
       await expect(page.getByTestId('onboarding-import-done')).toHaveText(
         'Imported 3 transactions into Test Checking and Test Savings.'
       )
+    } finally {
+      await deleteAccount(ctx, email)
+    }
+  })
+
+  test('a Register account that starts below zero is asked about, and made a card on the Worker', async ({
+    page,
+  }) => {
+    const ctx = page.context()
+    const { email } = await signUpAndIn(ctx)
+    try {
+      await bootSignedIn(ctx)
+      await page.goto(`${E2E_BASE}/#dashboard`, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+      await expect(page.getByTestId('onboarding-step-space')).toBeVisible({ timeout: 30_000 })
+      await page.getByTestId('onboarding-next').click()
+      await expect(page.getByTestId('onboarding-step-about')).toBeVisible({ timeout: 30_000 })
+      await page.getByTestId('onboarding-next').click()
+      await expect(page.getByTestId('onboarding-step-account')).toBeVisible({ timeout: 30_000 })
+      await page.getByTestId('onboarding-account-skip').click()
+      await expect(page.getByTestId('onboarding-step-import')).toBeVisible({ timeout: 30_000 })
+      await page.getByTestId('onboarding-import-input').setInputFiles({
+        name: 'Test Plan as of 2026-01-31 Register.csv',
+        mimeType: 'text/csv',
+        buffer: Buffer.from(YNAB_REGISTER_WITH_CARD),
+      })
+      await expect(page.getByTestId('onboarding-import-file')).toHaveAttribute(
+        'data-state',
+        'ready',
+        { timeout: 30_000 }
+      )
+      // Only the card is asked about, with Credit Card chosen.
+      await expect(page.getByTestId('onboarding-import-type-name')).toHaveText(['Test Card'])
+      await expect(page.getByTestId('onboarding-import-type')).toHaveValue('credit')
+      await page.getByTestId('onboarding-import-selected').click()
+      await expect(page.getByTestId('onboarding-step-subscriptions')).toBeVisible({
+        timeout: 30_000,
+      })
+
+      const accounts = (await (await ctx.request.get(`${E2E_BASE}/api/accounts`)).json()) as {
+        name: string
+        type: string
+      }[]
+      expect(Object.fromEntries(accounts.map((a) => [a.name, a.type]))).toEqual({
+        'Test Card': 'credit',
+        'Test Checking': 'giro',
+        'Test Savings': 'giro',
+      })
     } finally {
       await deleteAccount(ctx, email)
     }

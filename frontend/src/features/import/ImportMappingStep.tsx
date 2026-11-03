@@ -7,6 +7,7 @@ import { For, Show } from 'solid-js'
 import { getLocalCurrency } from '../../core/api'
 import { FIELD_NAMES } from '../../core/importMapping'
 import styles from '../Import.module.css'
+import { IMPORT_ACCOUNT_TYPES } from './accountTypeChoices'
 import type { ImportFlow, UploadResult } from './importFlow'
 
 /**
@@ -174,11 +175,18 @@ export function ImportMappingStep(props: { flow: ImportFlow; embedded?: boolean 
                                 flow.setAccountTypes(v)
                               }}
                             >
-                              <option value="giro">Giro</option>
-                              <option value="savings">Savings</option>
-                              <option value="ib">Investment</option>
-                              <option value="cash">Cash</option>
-                              <option value="credit">Credit Card</option>
+                              <For each={IMPORT_ACCOUNT_TYPES}>
+                                {(choice) => (
+                                  <option
+                                    value={choice.value}
+                                    selected={
+                                      choice.value === (flow.accountTypes()[category] || 'giro')
+                                    }
+                                  >
+                                    {choice.label}
+                                  </option>
+                                )}
+                              </For>
                             </select>
                             <input
                               type="text"
