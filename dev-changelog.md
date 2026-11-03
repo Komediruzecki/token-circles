@@ -2541,6 +2541,22 @@ true, or is too small for one.
   (the token on `--card-bg`, `--surface` and `--bg` in all three themes, and the rule that sets
   the word); all ten cases fail without the change.
 
+- **Setup no longer opens over a profile the person made.** In local-first, setup opened at the
+  next load over the current profile whenever it held no account, transaction or bill and the
+  browser had no decision (`shouldOfferLocally`), so a profile made from the profile menu got setup
+  on reload, and so did one the local-only switch's confirm says "You carry on with". A profile
+  the person made now counts as a decision taken: `countProfileMadeAsDecided`
+  (`core/onboardingStore.ts`) keeps "skipped" for a local workspace with no decision yet, mirrors
+  it to the profile's settings and begins Getting started, as leaving setup does. The profile
+  menu's Create Profile (`ProfileModal.tsx`) calls it; signed in it does nothing, as the account's
+  record decides. The switch (`chooseLocalOnly`) calls it for `local` over a workspace with
+  profiles of the person's own, instead of forgetting the local decision and marking setup
+  pending, which it still does over nothing or the examples. Setup's own space step does not call
+  it. Tests: `components/__tests__/profileModal.test.tsx` (setup stays closed over the new
+  profile; a decision taken before is kept; nothing kept for a signed-in account) and
+  `components/onboarding/__tests__/onboardingOverExamples.test.tsx` (the switch over an empty
+  Household: no marker, no setup after the reload). Each first case fails without its change.
+
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
 The production build holds back the benchmarks and the questions that choose their figures

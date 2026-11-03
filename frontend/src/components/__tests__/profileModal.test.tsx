@@ -12,6 +12,8 @@ import { render } from 'solid-js/web'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PROFILE_MESSAGES as M } from '../../../../shared/profileSchema'
 import { __resetDataVersionsForTest } from '../../core/dataVersions'
+import { accountOnboardingOwner, onboardingFlagKey } from '../../core/onboardingFlag'
+import * as onboarding from '../../core/onboardingStore'
 import { getDB } from '../../core/storage/idb'
 import { removeToast, toasts } from '../../core/toastStore'
 import type { apiFetch as ApiFetch } from '../../core/apiFetch'
@@ -218,5 +220,51 @@ describe("past the plan's profile cap, in cloud mode", () => {
     expect(sent).toEqual(['POST /api/profiles'])
     expect(created).toEqual([])
     expect(failureToasts()).toEqual([])
+  })
+})
+
+describe('setup after a profile is made from the menu', () => {
+  // A profile the person made is a decision taken (3 Nov test run): setup opened over it at the
+  // next load, because it held no account, transaction or bill yet.
+  const pristineAfterCreate = async () => {
+    await mount()
+    type('Side business')
+    submitButton().click()
+    await vi.waitFor(() => {
+      expect(created.map((p) => p.name)).toEqual(['Side business'])
+    })
+    // What App does with the new profile: it becomes the one the app shows and writes to.
+    localStorage.setItem('currentProfileId', String(created[0].id))
+    localStorage.setItem('selectedProfileIds', JSON.stringify([created[0].id]))
+  }
+
+  afterEach(() => {
+    onboarding.setOnboardingOwner(null)
+  })
+
+  it('keeps setup closed over the new profile in local-first, as a skip would', async () => {
+    onboarding.setOnboardingOwner('local')
+    onboarding.forgetOnboardingStatus('local')
+    await pristineAfterCreate()
+
+    expect(onboarding.getOnboardingStatus('local')).toBe('skipped')
+    expect(await onboarding.whereToOfferOnboarding()).toBeNull()
+  })
+
+  it('leaves a decision taken before as it was', async () => {
+    onboarding.setOnboardingOwner('local')
+    localStorage.setItem(onboardingFlagKey('local'), 'completed')
+    await pristineAfterCreate()
+
+    expect(onboarding.getOnboardingStatus('local')).toBe('completed')
+  })
+
+  it("keeps nothing in this browser for a signed-in account: the account's record decides", async () => {
+    onboarding.setOnboardingOwner(accountOnboardingOwner(7))
+    onboarding.forgetOnboardingStatus('local')
+    await pristineAfterCreate()
+
+    expect(onboarding.getOnboardingStatus(accountOnboardingOwner(7))).toBeNull()
+    expect(onboarding.getOnboardingStatus('local')).toBeNull()
   })
 })

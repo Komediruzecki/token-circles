@@ -1,4 +1,5 @@
 import { Show } from 'solid-js'
+import { countProfileMadeAsDecided } from '../core/onboardingStore'
 import { setSettingsTab } from '../core/settingsStore'
 import { createProfileCreateForm } from '../features/profileForm'
 import { Field, FormNotice, SubmitButton } from './form'
@@ -18,6 +19,8 @@ export interface ProfileModalProps {
 export default function ProfileModal(props: ProfileModalProps) {
   const form = createProfileCreateForm({
     onCreated: (created) => {
+      // A profile the person made is a decision taken: setup does not open over it, empty as it is.
+      countProfileMadeAsDecided()
       props.onSuccess(created)
     },
   })

@@ -19,6 +19,7 @@ import { confirmRequests, resolveConfirm } from '../../../core/confirmStore'
 import { __resetDataVersionsForTest } from '../../../core/dataVersions'
 import { EXAMPLE_PROFILE_NAMES } from '../../../core/demoMode'
 import {
+  forgetOnboardingStatus,
   LOCAL_SETUP_PENDING_KEY,
   markLocalSetupPending,
   onboardingOpen,
@@ -26,6 +27,7 @@ import {
   setOnboardingOwner,
   skipOnboarding,
   startOnboarding,
+  whereToOfferOnboarding,
 } from '../../../core/onboardingStore'
 import { getDB } from '../../../core/storage/idb'
 import { setStorageMode } from '../../../core/storage/storageFactory'
@@ -320,6 +322,24 @@ it("opens the app on the person's own profile, not an example, when both are her
   // App opens on the stored profile when the workspace has it (loadProfiles): the oldest own one.
   expect(localStorage.getItem('currentProfileId')).toBe('4')
   expect(JSON.parse(localStorage.getItem('selectedProfileIds') ?? '[]')).toEqual([4])
+})
+
+it("carries on with an empty profile of the person's own without opening setup over it", async () => {
+  // 3 Nov test run: the confirm said "You carry on with it", and setup opened over Household after
+  // the reload, because Household held no account, transaction or bill yet.
+  const db = await getDB()
+  await db.add('profiles', { id: 4, name: 'Household', created_at: '2026-02-01T00:00:00.000Z' })
+  // Made before a profile counted as a decision: no decision is kept for it.
+  forgetOnboardingStatus('local')
+
+  const { question } = await switchToLocalOnly()
+  expect(question).toContain('your profile "Household". You carry on with it')
+  expect(localStorage.getItem(LOCAL_SETUP_PENDING_KEY)).toBeNull()
+
+  // The reload: local-first, the browser's own workspace.
+  setOnboardingOwner('local')
+  expect(await whereToOfferOnboarding()).toBeNull()
+  expect(localStorage.getItem('currentProfileId')).toBe('4')
 })
 
 it('leaves the selection for the app to pick over the examples alone, as before', async () => {

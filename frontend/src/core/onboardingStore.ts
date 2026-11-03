@@ -282,6 +282,25 @@ function decide(outcome: OnboardingDecision): void {
   if (first) beginGettingStarted(of)
 }
 
+/**
+ * A profile the person made counts as the decision setup asks for. In local-first, a workspace
+ * with no decision yet keeps "skipped", as leaving setup would, and Getting started begins as it
+ * does then, so setup never opens over that profile, empty as it starts. Signed in, the account's
+ * record decides, and nothing changes here.
+ *
+ * Called by the profile menu's Create Profile (ProfileModal) for the current owner, and by the
+ * local-only switch for `local` over a workspace with profiles of the person's own, which its
+ * confirm says they carry on with. Setup's own space step does not call it: setup decides itself.
+ */
+export function countProfileMadeAsDecided(of: string | null = owner): void {
+  if (of !== LOCAL_ONBOARDING_OWNER || getOnboardingStatus(of) !== null) return
+  setOnboardingStatus('skipped', of)
+  // The mirror goes to the settings of the workspace open now, which is this one only when it is
+  // local-first's; the switch calls this from the account.
+  if (owner === of) persistRemoteStatus('skipped')
+  beginGettingStarted(of)
+}
+
 /** Finish the wizard. */
 export function completeOnboarding() {
   decide('completed')

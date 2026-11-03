@@ -41,9 +41,11 @@ import { showConfirm } from '../../core/confirmStore'
 import { isExampleProfileName } from '../../core/demoMode'
 import { loadAnswers, saveAnswers } from '../../core/guidanceAnswers'
 import { benchmarksShown } from '../../core/guidanceGate'
+import { LOCAL_ONBOARDING_OWNER } from '../../core/onboardingFlag'
 import {
   clearLocalSetupPending,
   completeOnboarding,
+  countProfileMadeAsDecided,
   forgetOnboardingStatus,
   goToOnboardingStep,
   markLocalSetupPending,
@@ -674,16 +676,20 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
     try {
       // The example seed never runs into a workspace the person chose: an empty one stays empty.
       localStorage.setItem('finance_had_profiles', '1')
-      // A relaunched wizard may carry a completed/skipped flag; a fresh local workspace should
-      // offer setup again. (Harmless when local data exists: a workspace of the person's own that
-      // is not pristine never auto-opens the wizard.)
-      forgetOnboardingStatus('local')
       // The account's selection means nothing against the local DB: the oldest profile of the
       // person's own where there is one, else none, for App to pick (localOnly.ts).
       leaveSelectionForLocalWorkspace(found)
-      // Setup opens on the space after the reload unless the workspace has a profile of the
-      // person's own (onboardingStore.ts, whereToOfferOnboarding).
-      markLocalSetupPending()
+      if (found.kind === 'own') {
+        // The confirm says they carry on with their profiles: those count as a decision taken,
+        // so setup does not open over them after the reload, empty or not.
+        countProfileMadeAsDecided(LOCAL_ONBOARDING_OWNER)
+      } else {
+        // A relaunched wizard may carry a completed/skipped flag; a fresh local workspace should
+        // offer setup again, and setup opens on the space after the reload
+        // (onboardingStore.ts, whereToOfferOnboarding).
+        forgetOnboardingStatus('local')
+        markLocalSetupPending()
+      }
     } catch {
       // Non-fatal: worst case the first init seeds the demo profiles.
     }
