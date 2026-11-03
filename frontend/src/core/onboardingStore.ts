@@ -46,6 +46,7 @@ import {
   localSetupPending,
   onboardingFlagKey,
 } from './onboardingFlag'
+import { forgetTypedBalances } from './setupTypedBalances'
 import type { OnboardingDecision, OnboardingStep } from '../../../shared/accountStateKeys'
 
 // The step names are stored on the account and counted by the first-week measurement, so they
@@ -278,6 +279,8 @@ function decide(outcome: OnboardingDecision): void {
   store.setOnboardingOpen(false)
   // Left or finished: a local-only switch's setup never opens again by itself.
   clearLocalSetupPending()
+  // Its "Balance today" figures say nothing about an import after it (review M2).
+  forgetTypedBalances()
   if (isServerAccount(of)) {
     // Relaunched over a finished record: the first decision stands, so there is nothing to send.
     // Over one this build cannot read, the decision may stand there too, so the same.

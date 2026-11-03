@@ -358,6 +358,20 @@ test.describe('the setup wizard on the account @smoke', () => {
       )
       expect(listed.ok(), `GET /api/transactions: ${String(listed.status())}`).toBeTruthy()
       expect(((await listed.json()) as { total: number }).total).toBe(7)
+      // What was typed is what the bank shows now (review M2): the statement's +1,888.85 is worked
+      // back from it, and the account still reads 1,500.
+      await expect
+        .poll(
+          async () =>
+            (
+              (await (await ctx.request.get(`${E2E_BASE}/api/accounts`)).json()) as {
+                balance: number
+                starting_balance: number
+              }[]
+            ).map((a) => [a.balance, Math.round(a.starting_balance * 100) / 100]),
+          { timeout: 15000 }
+        )
+        .toEqual([[1500, -388.85]])
     } finally {
       await deleteAccount(ctx, email)
     }

@@ -222,6 +222,12 @@ export interface ImportFlowOptions {
   autoResetAfterImport?: boolean
   /** Fired once per successful (non-dry-run) execute with the result summary. */
   onImported?: (summary: ImportSummary) => void
+  /**
+   * Awaited as an import starts, before anything is sent: the Import page reads what the accounts
+   * hold, to tell afterwards which ones the import touched (ImportBalances.tsx). A failure here
+   * stops nothing.
+   */
+  beforeImport?: () => Promise<void>
 }
 
 /**
@@ -1533,6 +1539,9 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     setResultMessage(null)
 
     try {
+      await opts.beforeImport?.().catch((err: unknown) => {
+        console.error('Before the import:', err)
+      })
       const mapping = columnMapping()
       const types = categoryTypes()
 

@@ -85,10 +85,14 @@ export interface FirstAccountValues {
 
 /** What the wizard keeps of an account it created, for the step's chips and the summary. */
 export interface CreatedAccount {
+  /** Null when the reply named none. */
+  id: number | null
   name: string
   type: string
   currency: string
   balance: number
+  /** Whether a balance was typed: a blank one is 0, and says nothing about the bank. */
+  typed: boolean
 }
 
 export interface FirstAccountFormOptions {
@@ -133,12 +137,14 @@ export function createFirstAccountForm(options: FirstAccountFormOptions): Form<F
     },
     send: async (values) => {
       const { body } = firstAccountBody(values)
-      await apiPost('/api/accounts', body)
+      const reply = await apiPost<{ id?: unknown } | null>('/api/accounts', body)
       return {
+        id: typeof reply?.id === 'number' ? reply.id : null,
         name: values.name.trim(),
         type: values.type,
         currency: values.currency,
         balance: body.balance as number,
+        typed: values.balance.trim() !== '',
       }
     },
     saved: (created) => {

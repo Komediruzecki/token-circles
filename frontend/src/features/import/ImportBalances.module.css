@@ -1,0 +1,102 @@
+/* The balances after an import (ImportBalances.tsx): one line an account, and the way to set it. */
+.balances {
+  padding: 16px;
+  border: 1px solid color-mix(in oklab, var(--primary) 10%, var(--border));
+  border-radius: var(--radius);
+  background: color-mix(in oklab, var(--card-bg) 74%, transparent);
+}
+
+.title {
+  margin: 0 0 4px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  min-height: 44px;
+  border-top: 1px solid var(--border);
+}
+
+.row:first-child {
+  border-top: none;
+}
+
+.name {
+  color: var(--text);
+  font-size: 14px;
+}
+
+.figure {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.set {
+  min-height: 44px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--primary-hover);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.set:focus-visible,
+.input:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  flex-basis: 100%;
+  padding-bottom: 12px;
+}
+
+.label {
+  flex-basis: 100%;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.input {
+  width: 10em;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+.button {
+  min-height: 44px;
+}
+
+.error {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--danger);
+  font-size: 13px;
+}

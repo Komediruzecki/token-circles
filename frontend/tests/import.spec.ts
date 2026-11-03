@@ -98,6 +98,36 @@ test.describe('import page', () => {
     await expect(select).toHaveValue('Onboarding E2E Bank', { timeout: 10000 })
   })
 
+  test("lists each account it touched with its balance today, and sets it to the bank's (review M2)", async ({
+    page,
+  }) => {
+    test.setTimeout(90000)
+    await gotoServerless(page, 'import', 'import-header')
+    await page.getByTestId('import-tab-bank-imports').click()
+    await page.getByTestId('bank-file-input').setInputFiles('tests/fixtures/revolut-sample.csv')
+    await expect(page.getByTestId('bank-file-row')).toBeVisible()
+    const select = page.getByTestId('bank-target-account')
+    await select.selectOption('__create-account__')
+    await page.getByTestId('account-select-name').fill('Balances E2E Bank')
+    await page.getByTestId('account-select-submit').click()
+    await expect(select).toHaveValue('Balances E2E Bank', { timeout: 10000 })
+    await page.getByTestId('bank-process-btn').click()
+    await page.getByTestId('import-continue-preview').click()
+    await page.getByTestId('import-execute-all').click()
+    await expect(page.getByTestId('import-result')).toContainText('Imported', { timeout: 15000 })
+
+    // Only the account the statement went into, at what the statement left: +1,888.85.
+    const rows = page.getByTestId('import-balance-row')
+    await expect(rows).toHaveCount(1, { timeout: 15000 })
+    await expect(rows.first()).toContainText('Balances E2E Bank')
+    await expect(rows.first().getByTestId('import-balance-today')).toContainText('1,888.85')
+    await rows.first().getByText("Not what your bank shows? Set today's balance").click()
+    await rows.first().getByTestId('import-balance-input').fill('500')
+    await rows.first().getByTestId('import-balance-save').click()
+    await expect(rows.first().getByTestId('import-balance-today')).toContainText('500.00')
+    await expect(rows.first().getByTestId('import-balance-input')).toHaveCount(0)
+  })
+
   // The import log keeps the formats of the statements a session read, in a column of its own
   // (shared/bankFormats.ts): the hint the app takes to where the person lives.
   test("a bank statement's import is logged with its bank's format", async ({ page }) => {

@@ -803,3 +803,71 @@ describe('leaving setup at its subscriptions', () => {
     expect(onboardingStep()).toBe('subscriptions')
   })
 })
+
+describe('the balance setup was given (review M2)', () => {
+  /** Setup's account step, with a name and what was typed as the balance. */
+  async function makeAccount(balance: string): Promise<void> {
+    await openAt('account')
+    for (const [id, value] of [
+      ['onboarding-account-name', 'Main checking'],
+      ['onboarding-account-balance', balance],
+    ] as const) {
+      const input = byTestId(id) as HTMLInputElement
+      input.focus()
+      input.value = value
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    }
+    byTestId('onboarding-account-create')!.click()
+    await vi.waitFor(() => {
+      expect(onboardingStep()).toBe('import')
+    }, waitLong)
+  }
+
+  async function importStatement(): Promise<void> {
+    choose('revolut.csv', revolut())
+    await readUntil('ready')
+    byTestId('onboarding-import-selected')!.click()
+    await vi.waitFor(() => {
+      expect(onboardingStep()).toBe('subscriptions')
+    }, waitLong)
+  }
+
+  it('is what the account reads today once a statement is in, the statement worked back from it', async () => {
+    await makeAccount('1240.50')
+    await importStatement()
+    // The statement nets +1,888.85, all of it dated before today.
+    await vi.waitFor(async () => {
+      const [main] = await accounts()
+      expect(main.balance).toBeCloseTo(1240.5, 6)
+      expect(main.starting_balance).toBeCloseTo(1240.5 - 1888.85, 6)
+    }, waitLong)
+    expect(await transactions()).toHaveLength(7)
+  })
+
+  it('holds across a reload between the account and the statement', async () => {
+    // Off to the bank to export the statement, and back: setup reopens at the statement.
+    await makeAccount('1240.50')
+    await reopenAt('import')
+    await importStatement()
+    await vi.waitFor(async () => {
+      const [main] = await accounts()
+      expect(main.balance).toBeCloseTo(1240.5, 6)
+    }, waitLong)
+  })
+
+  it('is forgotten once setup is left, so a later import adds up as it comes', async () => {
+    await makeAccount('1240.50')
+    skipOnboarding()
+    expect(localStorage.getItem('finance_setup_balances')).toBeNull()
+  })
+
+  it('left blank, says nothing about the bank, and the statement adds up from zero', async () => {
+    await makeAccount('')
+    await importStatement()
+    await settle()
+    await settle()
+    const [main] = await accounts()
+    expect(main.balance).toBeCloseTo(1888.85, 6)
+    expect(main.starting_balance ?? 0).toBeCloseTo(0, 6)
+  })
+})

@@ -155,6 +155,48 @@ test.describe('onboarding wizard', () => {
     expect(flag).toBe('completed')
   })
 
+  test("takes the balance typed as today's, and works the statement back from it (review M2)", async ({
+    page,
+  }) => {
+    await gotoServerlessZeroState(page, 'dashboard', 'onboarding-wizard')
+    await toAccount(page)
+    await expect(page.getByTestId('onboarding-step-account')).toContainText(
+      'What your bank shows now. Entries you import here are worked back from it.'
+    )
+    await page.getByTestId('onboarding-account-name').fill('Main Checking')
+    await page.getByTestId('onboarding-account-balance').fill('1500')
+    await page.getByTestId('onboarding-account-create').click()
+    await expect(page.getByTestId('onboarding-step-import')).toBeVisible()
+    await page
+      .getByTestId('onboarding-import-input')
+      .setInputFiles('tests/fixtures/revolut-sample.csv')
+    await fileIn(page, 'ready')
+    await page.getByTestId('onboarding-import-selected').click()
+    await expect(page.getByTestId('onboarding-step-subscriptions')).toBeVisible({ timeout: 15000 })
+
+    // The statement nets +1,888.85, all of it before today: the account still reads 1,500.
+    const stored = () =>
+      page.evaluate(
+        () =>
+          new Promise<unknown>((resolve) => {
+            const req = indexedDB.open('finance-manager')
+            req.onsuccess = () => {
+              const db = req.result
+              const all = db.transaction('accounts', 'readonly').objectStore('accounts').getAll()
+              all.onsuccess = () => {
+                db.close()
+                resolve(
+                  (all.result as { name: string; balance: number; starting_balance: number }[]).map(
+                    (a) => [a.name, a.balance, Math.round(a.starting_balance * 100) / 100]
+                  )
+                )
+              }
+            }
+          })
+      )
+    await expect.poll(stored, { timeout: 15000 }).toEqual([['Main Checking', 1500, -388.85]])
+  })
+
   test('@smoke reads a statement, imports it in one tap, and tracks the subscriptions it shows', async ({
     page,
   }) => {

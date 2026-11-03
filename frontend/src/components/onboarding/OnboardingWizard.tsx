@@ -56,8 +56,10 @@ import {
   prevOnboardingStep,
   skipOnboarding,
 } from '../../core/onboardingStore'
+import { rememberTypedBalance, typedBalances } from '../../core/setupTypedBalances'
 import { getStorageMode, setStorageMode } from '../../core/storage/storageFactory'
 import { handFileToImport } from '../../features/import/importHandoff'
+import { localToday } from '../../utils/period'
 import { Field, FormNotice } from '../form'
 import { currentNextSteps, NextSteps } from '../GettingStarted'
 import { SPACE_QUESTIONS_LEAD } from '../guidance/regionWords'
@@ -82,11 +84,13 @@ import {
   createSpaceForm,
   spaceAnswerChanges,
 } from './onboardingForms'
+import { workBackTypedBalances } from './setupBalances'
 import type { AnswerChanges, Answers } from '../../../../shared/guidance/answers'
 import type { OrientationStep } from '../../../../shared/orientation'
 import type { ImportSummary } from '../../features/import/importFlow'
 import type { AccountType } from '../../types/models'
 import type { LocalWorkspace } from './localOnly'
+import type { CreatedAccount } from './onboardingForms'
 
 /** The counted steps: Space, Account, Statement. Done is not one of them. */
 const COUNTED_STEPS = 3
@@ -242,7 +246,7 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
 
   // ---- what this visit did, for Done's summary ----
   const [createdAccounts, setCreatedAccounts] = createSignal<
-    { name: string; type: AccountType; currency: string; balance: number }[]
+    (CreatedAccount & { type: AccountType })[]
   >([])
   const [importSummary, setImportSummary] = createSignal<ImportSummary | null>(null)
   const [subsAdded, setSubsAdded] = createSignal(0)
@@ -377,6 +381,10 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
   const accountForm = createFirstAccountForm({
     onCreated: async (account) => {
       setCreatedAccounts((prev) => [...prev, { ...account, type: account.type as AccountType }])
+      // What the bank shows now, kept for the statements to come (review M2).
+      if (account.typed && account.id !== null) {
+        rememberTypedBalance({ id: account.id, figure: account.balance, asOf: localToday() })
+      }
       bumpProfileVersion()
       await refreshProfileAccounts()
       if (onboardingOpen() && onboardingStep() === 'account') nextOnboardingStep()
@@ -412,6 +420,14 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
             }
           : summary
       )
+      // "Balance today" is what the bank shows now (review M2): the accounts this visit made with
+      // one typed read it again, with the statement worked back from it.
+      if (summary.imported > 0) {
+        void workBackTypedBalances(typedBalances()).catch((err: unknown) => {
+          console.error('Could not set the balance today after the statement:', err)
+          showToast("Couldn't set your account's balance today. Accounts can set it.", 'warning')
+        })
+      }
       // On to what the import made possible. With nothing new, the step says so and stays.
       if (summary.imported > 0) goToOnboardingStep('subscriptions')
     },
@@ -934,7 +950,7 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
           label="Balance today"
           class={styles.field}
           labelClass={styles.fieldLabel}
-          hint="It becomes the account's opening balance."
+          hint="What your bank shows now. Entries you import here are worked back from it."
           hintClass={styles.hint}
         >
           {(control) => (

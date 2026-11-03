@@ -2879,6 +2879,32 @@ true, or is too small for one.
   circle asks for 90%." (`shared/guidance/ledger.ts`). Test: `guidanceLedger.test.ts`, which fails
   on the old line.
 
+- **The balance typed in setup is today's, and an import is worked back from it** (M2). Setup
+  asks for "Balance today", stored it as the opening balance, and every entry imported after went
+  on top: 1,240.50 typed, the review's made-up N26 statement (September to October, +1,865.87)
+  imported, and Accounts read €3,106.37. Setup now remembers the figure and the day it was typed
+  (`frontend/src/core/setupTypedBalances.ts`, kept through a reload until setup is finished or
+  skipped) and, after each statement it imports, sets the account's balance today back to it by
+  moving the opening balance (`workBackTypedBalances` in
+  `frontend/src/components/onboarding/setupBalances.ts`, the rule in `shared/balanceToday.ts`).
+  Entries dated after today stay on top, as they will once their day comes. A blank balance is
+  left alone. The same statement now reads €1,240.50. The hint under the field changed from "It
+  becomes the account's opening balance." to "What your bank shows now. Entries you import here
+  are worked back from it." The Import page, after any import, lists each account it changed with
+  its balance today and "Not what your bank shows? Set today's balance", which opens a field for
+  the bank's figure and sets it the same way (`ImportBalances.tsx`). An account whose entries net
+  to exactly zero is not listed. Both runtimes: the calls go through the storage seam. Captures at
+  1280 and 390, light and dark: `m02-hint-*`, `m02-accounts-*`, `m02-import-*` (the block, then its
+  form), numbers in `m02-balance-before.json` and `m02-balance-after.json`; the button reads 5.78:1
+  in light and 9.35:1 in dark, and the button, field and Save are 44px tall. Tests:
+  `src/core/__tests__/balanceToday.test.ts`, `balanceTodayCalls.test.ts`,
+  `components/onboarding/__tests__/setupBalances.test.ts`, `onboardingFirstImport.test.tsx`,
+  `features/import/__tests__/importBalances.test.tsx`, and in e2e `onboarding.spec.ts`,
+  `onboarding-server.spec.ts` (on the Worker) and `import.spec.ts`. Without the work-back, with a
+  blank balance counted as typed, with later entries not kept on top, with the day typed ignored
+  and without the figure forgotten after setup, one fails each; without it kept through a reload,
+  two.
+
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
 The production build holds back the benchmarks and the questions that choose their figures

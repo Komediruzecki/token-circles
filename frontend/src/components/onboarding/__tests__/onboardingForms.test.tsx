@@ -299,7 +299,7 @@ describe('creating your first account', () => {
     const name = field('onboarding-account-name')
     expect(describedBy(name)).toBe(ACCOUNT_MESSAGES.name)
     expect(describedBy(field('onboarding-account-balance'))).toBe(
-      `${ACCOUNT_MESSAGES.balance} | It becomes the account's opening balance.`
+      `${ACCOUNT_MESSAGES.balance} | What your bank shows now. Entries you import here are worked back from it.`
     )
     expect(document.activeElement).toBe(name)
     expect(await accounts()).toEqual([])

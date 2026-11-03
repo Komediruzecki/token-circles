@@ -41,26 +41,48 @@ import { createEffect, createSignal, For, on, onMount, Show, untrack } from 'sol
 import { OrbitSpinner } from '../components/OrbitSpinner'
 import { SubscriptionScanModal } from '../components/SubscriptionScan'
 import { useAppState } from '../core/appStore'
+import { storedAccounts } from '../core/balanceToday'
 import { showConfirm } from '../core/confirmStore'
 import { entityVersion } from '../core/dataVersions'
 import { refetchOnActive, usePageActive } from '../core/pageVisibility'
 import { addToast } from '../core/toastStore'
 import styles from './Import.module.css'
 import { ConnectedSources } from './import/ConnectedSources'
+import { balancesById, ImportBalances, touchedSince } from './import/ImportBalances'
 import { ImportDataEntry } from './import/ImportDataEntry'
 import { createImportFlow } from './import/importFlow'
 import { handedImportFile, takeHandedImportFile } from './import/importHandoff'
 import { ImportMappingStep } from './import/ImportMappingStep'
 import { ImportPreviewStep } from './import/ImportPreviewStep'
+import type { StoredAccount } from '../core/balanceToday'
 
 export default function Import() {
   // After a successful import, offer a subscription scan over the fresh data.
   const [scanOfferCount, setScanOfferCount] = createSignal<number | null>(null)
   const [showScan, setShowScan] = createSignal(false)
 
+  // The accounts an import touched, each with its balance today (review M2): read what they held
+  // just before it ran, and again once it is in.
+  let heldBefore: Map<number, number> | null = null
+  const [touched, setTouched] = createSignal<StoredAccount[]>([])
+
   const flow = createImportFlow({
+    beforeImport: async () => {
+      setTouched([])
+      heldBefore = null
+      heldBefore = await balancesById()
+    },
     onImported: (summary) => {
       if (summary.imported > 0) setScanOfferCount(summary.imported)
+      const before = heldBefore
+      heldBefore = null
+      if (summary.imported > 0 && before !== null) {
+        storedAccounts()
+          .then((after) => setTouched(touchedSince(before, after)))
+          .catch((err: unknown) => {
+            console.error('Reading the balances after the import:', err)
+          })
+      }
     },
   })
 
@@ -121,6 +143,7 @@ export default function Import() {
       [() => state.profileVersion, () => state.currentProfile?.id],
       () => {
         flow.reloadBankRulesIfProfileChanged()
+        setTouched([])
       },
       { defer: true }
     )
@@ -147,6 +170,11 @@ export default function Import() {
         <div class={`${styles.resultMessage} ${styles.success}`} data-test-id="import-result">
           {flow.resultMessage()!.text}
         </div>
+      </Show>
+
+      {/* Post-import: each account it touched, with its balance today and the way to set it */}
+      <Show when={touched().length > 0 ? touched() : null} keyed>
+        {(accounts) => <ImportBalances accounts={accounts} />}
       </Show>
 
       {/* Post-import: offer to detect subscriptions in the imported data */}
