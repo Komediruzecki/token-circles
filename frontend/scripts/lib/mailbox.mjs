@@ -7,9 +7,17 @@
 // reply_to, headers. The answer is the one Resend gives, { id }, so the Worker goes on exactly as
 // it does once Resend has taken a mail.
 //
-// Each mail is kept under an id this server makes (never one taken from the mail), in memory for
-// the API and on disk for people: <dir>/<id>.json (the body, with the id and when it came),
-// <id>.html and <id>.txt.
+// It takes a mail only as the Worker sends one: a POST with Content-Type exactly application/json
+// and neither an Origin nor a Sec-Fetch-Site header, one of which a browser adds whenever a page
+// posts. A web form cannot send that type, and a page's fetch with it is preflighted, which this
+// server refuses.
+//
+// The stored record holds only the fields above, and its id and arrival time are this server's,
+// set after them: an id or anything else the body carries is not kept. Each mail is kept under that
+// id, in memory for the API and on disk for people: <dir>/<id>.json (the fields, with the id and
+// when it came), <id>.html (the mail's HTML behind a meta Content-Security-Policy) and <id>.txt.
+// Past a number of mails or of bytes (MAX_MAILS, MAX_TOTAL_BYTES) the oldest is dropped, from
+// memory and its three files; nothing else in the folder is touched.
 //
 //   POST /emails          take a mail; answers { id }
 //   GET  /mails?to=ADDR   the mails, oldest first, without their bodies; `to` filters by address
@@ -24,19 +32,40 @@
 // never prints a mail's body or links: a mail holds sign-in links.
 // ============================================================
 import { randomBytes } from 'node:crypto'
-import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { join } from 'node:path'
 
 /** The largest mail this takes. The app's biggest mails are well under 200 KB. */
 const MAX_BODY_BYTES = 2 * 1024 * 1024
+/** The most mails kept; past it the oldest goes. */
+export const MAX_MAILS = 1000
+/** The most bytes of mail kept (each mail's record as JSON); past it the oldest goes. */
+export const MAX_TOTAL_BYTES = 64 * 1024 * 1024
 /** A mail's id: when it came (UTC, to the millisecond) and 8 random hex digits. */
 export const MAIL_ID = /^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z-[0-9a-f]{8}$/
 
-/** Nothing the mail carries can run, fetch a script, post a form or frame this page. */
-const MAIL_CSP =
+/** What a mail's HTML may load: its images and its own styles, nothing that runs or posts. */
+const MAIL_POLICY =
   "default-src 'none'; img-src http: https: data:; style-src 'unsafe-inline'; " +
-  "base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+  "base-uri 'none'; form-action 'none'"
+
+/**
+ * The served mail page: nothing in it can run, fetch a script, post a form, frame this page or
+ * move it elsewhere (`sandbox` also stops a meta refresh).
+ */
+const MAIL_CSP = `${MAIL_POLICY}; frame-ancestors 'none'; sandbox`
+
+/**
+ * The mail's HTML as its file: the same policy as a meta tag ahead of the mail, so the file opened
+ * from a file manager runs nothing either. A meta policy cannot carry `sandbox` or
+ * `frame-ancestors`; it goes after a doctype, which keeps the page out of quirks mode.
+ */
+function htmlFile(html) {
+  const meta = `<meta http-equiv="Content-Security-Policy" content="${MAIL_POLICY}">\n`
+  const doctype = /^\s*<!doctype[^>]*>\s*/i.exec(html)
+  return doctype ? `${doctype[0]}${meta}${html.slice(doctype[0].length)}` : `${meta}${html}`
+}
 
 const newId = () =>
   `${new Date().toISOString().replace(/[:.]/g, '-')}-${randomBytes(4).toString('hex')}`
@@ -70,6 +99,27 @@ function isMail(body) {
   return true
 }
 
+/**
+ * The mail as this server keeps it: the fields `isMail` checked and nothing else, then the id and
+ * arrival time given here. Set last, so a body cannot supply either.
+ */
+function record(body, id, receivedAt) {
+  return {
+    ...(body.from !== undefined ? { from: body.from } : {}),
+    to: body.to,
+    subject: body.subject,
+    html: body.html,
+    ...(body.text !== undefined ? { text: body.text } : {}),
+    ...(body.reply_to !== undefined ? { reply_to: body.reply_to } : {}),
+    ...(body.headers !== undefined ? { headers: { ...body.headers } } : {}),
+    id,
+    received_at: receivedAt,
+  }
+}
+
+/** The bytes a mail counts for against MAX_TOTAL_BYTES. */
+const weight = (mail) => Buffer.byteLength(JSON.stringify(mail))
+
 /** The addresses a mail went to, lowercased. */
 const recipients = (mail) => [mail.to].flat().map((a) => a.toLowerCase())
 
@@ -88,8 +138,10 @@ function loadMails(dir) {
   for (const name of readdirSync(dir)) {
     if (!name.endsWith('.json') || !MAIL_ID.test(name.slice(0, -5))) continue
     try {
-      const mail = JSON.parse(readFileSync(join(dir, name), 'utf8'))
-      if (isMail(mail) && mail.id === name.slice(0, -5)) mails.push(mail)
+      const kept = JSON.parse(readFileSync(join(dir, name), 'utf8'))
+      if (isMail(kept) && kept.id === name.slice(0, -5) && typeof kept.received_at === 'string') {
+        mails.push(record(kept, kept.id, kept.received_at))
+      }
     } catch {
       // Not a mail this server wrote. It stays where it is, unread.
     }
@@ -97,16 +149,18 @@ function loadMails(dir) {
   return mails.sort((a, b) => (a.id < b.id ? -1 : 1))
 }
 
-function indexPage(mails, to) {
+export function indexPage(mails, to) {
   const rows = mails
     .slice()
     .reverse()
-    .map(
-      (m) =>
+    .map((m) => {
+      const id = escapeHtml(encodeURIComponent(m.id))
+      return (
         `<tr><td>${escapeHtml(m.received_at)}</td><td>${escapeHtml([m.to].flat().join(', '))}</td>` +
-        `<td>${escapeHtml(m.subject)}</td><td><a href="/mails/${m.id}.html">HTML</a> ` +
-        `<a href="/mails/${m.id}.txt">Text</a> <a href="/mails/${m.id}">JSON</a></td></tr>`
-    )
+        `<td>${escapeHtml(m.subject)}</td><td><a href="/mails/${id}.html">HTML</a> ` +
+        `<a href="/mails/${id}.txt">Text</a> <a href="/mails/${id}">JSON</a></td></tr>`
+      )
+    })
     .join('\n')
   const shown = to ? ` to ${escapeHtml(to)}` : ''
   return `<!doctype html>
@@ -129,16 +183,64 @@ ${rows || '<tr><td colspan="4">No mail yet.</td></tr>'}
 }
 
 /**
- * Start a mailbox on `host`:`port` (0 picks a free port) that keeps its files in `dir`.
- * Resolves once it listens, with its address and a way to stop it.
+ * Start a mailbox on `host`:`port` (0 picks a free port) that keeps its files in `dir`, and at
+ * most `maxMails` mails and `maxBytes` bytes of them. Resolves once it listens, with its address
+ * and a way to stop it.
  *
- * @param {{ port: number, dir: string, host?: string, log?: (msg: string) => void }} opts
+ * @param {{ port: number, dir: string, host?: string, log?: (msg: string) => void,
+ *   maxMails?: number, maxBytes?: number }} opts
  * @returns {Promise<{ url: string, port: number, close: () => Promise<void> }>}
  */
-export async function startMailbox({ port, dir, host = '127.0.0.1', log = console.log }) {
+export async function startMailbox({
+  port,
+  dir,
+  host = '127.0.0.1',
+  log = console.log,
+  maxMails = MAX_MAILS,
+  maxBytes = MAX_TOTAL_BYTES,
+}) {
   mkdirSync(dir, { recursive: true })
   const mails = loadMails(dir)
+  let totalBytes = mails.reduce((sum, m) => sum + weight(m), 0)
   let actualPort = port
+
+  /** Drop the oldest mails, and their own three files, until the newest fits under both caps. */
+  const trim = () => {
+    while (mails.length > 1 && (mails.length > maxMails || totalBytes > maxBytes)) {
+      const oldest = mails.shift()
+      totalBytes -= weight(oldest)
+      if (!MAIL_ID.test(oldest.id)) continue
+      for (const ext of ['.json', '.html', '.txt']) {
+        try {
+          rmSync(join(dir, `${oldest.id}${ext}`), { force: true })
+        } catch (e) {
+          log(`[mailbox] could not remove ${oldest.id}${ext}: ${e.message}`)
+        }
+      }
+      log(
+        `[mailbox] dropped ${oldest.id}, the oldest, to keep ${maxMails} mails or ${maxBytes} bytes`
+      )
+    }
+  }
+  trim()
+
+  /**
+   * Whether a POST is the Worker's: JSON by its exact type, and neither of the headers a browser
+   * adds when a page posts. Null when it is; otherwise the status and reason to refuse it with.
+   */
+  const notFromWorker = (req) => {
+    if (req.headers.origin !== undefined || req.headers['sec-fetch-site'] !== undefined) {
+      return [403, 'Sent by a web page']
+    }
+    if (
+      String(req.headers['content-type'] ?? '')
+        .trim()
+        .toLowerCase() !== 'application/json'
+    ) {
+      return [415, 'Only application/json']
+    }
+    return null
+  }
 
   /** Only this machine, by the name or address it listens on. */
   const addressedHere = (req) =>
@@ -160,6 +262,13 @@ export async function startMailbox({ port, dir, host = '127.0.0.1', log = consol
     send(res, status, 'application/json; charset=utf-8', JSON.stringify(value))
 
   const take = (req, res) => {
+    const refusal = notFromWorker(req)
+    if (refusal) {
+      // Answered before the body is read; the rest is drained and the connection closed.
+      res.setHeader('Connection', 'close')
+      req.resume()
+      return json(res, refusal[0], { error: refusal[1] })
+    }
     let size = 0
     const chunks = []
     let refused = false
@@ -183,19 +292,22 @@ export async function startMailbox({ port, dir, host = '127.0.0.1', log = consol
         return json(res, 400, { error: 'Not JSON' })
       }
       if (!isMail(body)) return json(res, 422, { error: 'Not a mail' })
-      const mail = { id: newId(), received_at: new Date().toISOString(), ...body }
+      const mail = record(body, newId(), new Date().toISOString())
+      if (!MAIL_ID.test(mail.id)) return json(res, 500, { error: 'Bad id' })
       // The files are a copy for people. The API reads memory, so a file removed by hand, or a
       // test-results folder Playwright clears at the start of a run, loses no mail mid-run.
       try {
         mkdirSync(dir, { recursive: true })
         writeFileSync(join(dir, `${mail.id}.json`), `${JSON.stringify(mail, null, 2)}\n`)
-        writeFileSync(join(dir, `${mail.id}.html`), mail.html)
+        writeFileSync(join(dir, `${mail.id}.html`), htmlFile(mail.html))
         writeFileSync(join(dir, `${mail.id}.txt`), mail.text ?? '')
       } catch (e) {
         log(`[mailbox] could not write ${mail.id} to ${dir}: ${e.message}`)
       }
       mails.push(mail)
+      totalBytes += weight(mail)
       log(`[mailbox] took ${mail.id}`)
+      trim()
       json(res, 200, { id: mail.id })
     })
   }
