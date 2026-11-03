@@ -58,6 +58,9 @@
   --primary-bg: rgba(110, 155, 255, 0.12);
   --primary-strong: #3b6fe0;
   --success: #22c55e;
+  /* Small text in the success hue, such as a circle check's "Met": 7.4:1 on --surface and 8.4:1 on
+     --bg, so the dark theme uses --success itself. */
+  --success-text: #22c55e;
   --danger: #ef4444;
   --danger-hover: #dc2626;
   --danger-outline: #ff9d9d;

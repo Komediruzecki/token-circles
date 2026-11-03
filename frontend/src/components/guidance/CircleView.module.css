@@ -192,8 +192,10 @@
   color: var(--text-secondary);
 }
 
+/* The word is small text, so it takes --success-text; the mark beside it is a graphic, and
+   --success holds the 3:1 a graphic needs. */
 .check[data-state='met'] .check-state {
-  color: var(--success);
+  color: var(--success-text);
 }
 
 .check-detail,

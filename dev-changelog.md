@@ -2531,6 +2531,16 @@ true, or is too small for one.
   `tests/new-space-categories.spec.ts` (a fresh account and a fresh local-only browser file
   "coffee 4.50" under Eating out; both fail without it).
 
+- **A met circle check's "Met" reads at 5.4:1 in the light theme.** The word was set in `--success`
+  (#14985a), 3.70:1 on the check's white card, under the 4.5:1 small text needs. A new token,
+  `--success-text`, is #0e7a47 in `dawn-light.css` (5.39:1 on `--surface`, 5.12:1 on `--bg`) and
+  `--success` itself in `orbit-dark.css` (7.36:1 on `--surface`; 8.09:1 on the instrument deck's
+  card). `.check[data-state='met'] .check-state` (`CircleView.module.css`) uses it; the check's
+  mark stays on `--success`, a graphic at 3:1. Measured in the demo's circle 1 at 1280 and 390:
+  light 3.70:1 before, 5.39:1 after; dark 7.36:1 both. Test: `src/__tests__/successTextContrast.test.ts`
+  (the token on `--card-bg`, `--surface` and `--bg` in all three themes, and the rule that sets
+  the word); all ten cases fail without the change.
+
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
 The production build holds back the benchmarks and the questions that choose their figures
