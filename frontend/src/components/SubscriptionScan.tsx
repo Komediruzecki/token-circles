@@ -36,6 +36,7 @@ import { apiGet, apiPost, getLocalCurrency, listRows, showToast } from '../core/
 import { ApiError } from '../core/apiError'
 import { parseDecimalInput } from '../core/decimalInput'
 import { monthlyEquivalent } from '../core/subscriptionMath'
+import { dueDateLabel } from '../features/billDue'
 import { matchBrand } from '../features/subscriptionBrands'
 import {
   detectSubscriptions,
@@ -145,7 +146,8 @@ export function SubscriptionScanPanel(props: SubscriptionScanPanelProps) {
           included: worthTracking(d),
           frequency: d.frequency,
         }
-        prices[d.key] = String(d.amount)
+        // As money is written: 4.50, never 4.5.
+        prices[d.key] = d.amount.toFixed(2)
       }
       setRows(next)
       form.reset(prices)
@@ -356,9 +358,17 @@ export function SubscriptionScanPanel(props: SubscriptionScanPanelProps) {
                 <span class={styles.plan}>{d.matchedPlan!.label}</span>
               </Show>
             </span>
-            <span class={styles.meta}>
-              {d.occurrences} charge{d.occurrences === 1 ? '' : 's'} · last {d.lastDate} ·{' '}
-              {isTracked() ? 'Already tracked' : confidenceLabel[d.confidence]}
+            {/* Each part keeps its words together, so a narrow row breaks between them. */}
+            <span class={styles.meta} data-test-id="sub-scan-meta">
+              <span class={styles.metaPart}>
+                {d.occurrences} charge{d.occurrences === 1 ? '' : 's'}
+              </span>
+              {' · '}
+              <span class={styles.metaPart}>last {dueDateLabel(d.lastDate)}</span>
+              {' · '}
+              <span class={styles.metaPart}>
+                {isTracked() ? 'Already tracked' : confidenceLabel[d.confidence]}
+              </span>
             </span>
           </span>
         </label>

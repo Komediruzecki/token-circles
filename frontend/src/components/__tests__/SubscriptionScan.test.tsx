@@ -5,11 +5,15 @@
  * reason is said in the notice, naming it. It said "Some subscriptions could not be added",
  * whatever the reason, and named none; then the reason in a toast, with nothing marked.
  */
+/* eslint-disable security/detect-non-literal-fs-filename -- the one stylesheet named below */
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { render } from 'solid-js/web'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { BILL_MESSAGES } from '../../../../shared/billSchema'
 import { ApiError } from '../../core/apiError'
 import { orientationFacts } from '../../core/orientation'
+import { dueDateLabel } from '../../features/billDue'
 import { localToday } from '../../utils/period'
 import { SubscriptionScanPanel } from '../SubscriptionScan'
 
@@ -403,5 +407,45 @@ describe('in the setup wizard', () => {
 
     expect(apiMocks.showToast).toHaveBeenCalledWith('2 subscriptions added', 'success')
     expect(rescan()).toBeDefined()
+  })
+})
+
+describe('what a row says', () => {
+  // 3 Nov test run: "4.5" and "48.1" in the price fields, "last 2026-10-18", and at 1280 the
+  // confidence cut to "High con...".
+  beforeEach(() => {
+    apiMocks.apiGet.mockImplementation(async (url: string) => {
+      if (url === '/api/transactions') {
+        return [
+          ...[95, 65, 35, 5].map((days) => charge('NETFLIX.COM AMSTERDAM', 4.5, days)),
+          ...[95, 65, 35, 5].map((days) => charge('Spotify P0FF8B1C34', 48.1, days)),
+        ]
+      }
+      return []
+    })
+  })
+
+  it('writes each price as money is written, with its cents', async () => {
+    await mountScan()
+    expect(price('Netflix').value).toBe('4.50')
+    expect(price('Spotify').value).toBe('48.10')
+  })
+
+  it("says the last charge's date as the app does, never as an ISO date", async () => {
+    await mountScan()
+    const last = new Date(Date.now() - 5 * 86_400_000).toISOString().slice(0, 10)
+    const meta = host.querySelector('[data-name="Netflix"] [data-test-id="sub-scan-meta"]')!
+    expect(meta.textContent).toBe(`4 charges · last ${dueDateLabel(last)} · High confidence`)
+    expect(meta.textContent).not.toMatch(/\d{4}-\d{2}-\d{2}/)
+  })
+
+  it('wraps the line instead of cutting it short, keeping each part whole', () => {
+    const css = readFileSync(resolve(__dirname, '../SubscriptionScan.module.css'), 'utf8').replace(
+      /\/\*[\s\S]*?\*\//g,
+      ''
+    )
+    const meta = /\.meta\s*\{([^}]*)\}/.exec(css)?.[1] ?? ''
+    expect(meta).not.toMatch(/white-space:\s*nowrap|text-overflow|overflow:\s*hidden/)
+    expect(/\.meta-part\s*\{([^}]*)\}/.exec(css)?.[1] ?? '').toMatch(/white-space:\s*nowrap/)
   })
 })

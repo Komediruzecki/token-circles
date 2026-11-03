@@ -2569,6 +2569,18 @@ true, or is too small for one.
   `core/__tests__/achievementsStore.test.ts` (taken back and said again; not said again once gone;
   not said on another profile after a switch); the first and the third fail without the change.
 
+- **The subscription scan writes prices with their cents, dates as the app does, and the whole
+  line.** A row's price field started at `String(d.amount)`, so 4.50 read "4.5", and its line said
+  "last 2026-10-18" and at 1280 was cut by an ellipsis to "High con...". The price now starts at
+  `toFixed(2)`, the date is `dueDateLabel` (`features/billDue.ts`, "Oct 18, 2026" on the local
+  calendar), and the line (`sub-scan-meta`) wraps at every width instead of only on a coarse
+  pointer, each of its three parts kept whole (`.meta-part`). The same component is the scan on
+  Bills and setup's subscriptions step. Measured on setup's step after a made-up Revolut statement
+  with 4.50 and 48.10 charges: prices "4.5" and "48.1" before, "4.50" and "48.10" after; the line
+  cut at 1280 in both themes before (scrollWidth over clientWidth), whole on two lines after; at
+  390 it wrapped before and after. Tests: `components/__tests__/SubscriptionScan.test.tsx` (the
+  cents, the date, and the rule that wraps the line); all three fail without the change.
+
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
 The production build holds back the benchmarks and the questions that choose their figures

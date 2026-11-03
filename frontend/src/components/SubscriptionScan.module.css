@@ -121,11 +121,14 @@
   padding: 1px 8px;
 }
 
+/* Wrapped, never cut short: at 1280 the ellipsis took "High confidence" down to "High con...".
+   Each part stays whole, so a line breaks between them. */
 .meta {
   font-size: 12px;
   color: var(--text-secondary);
-  overflow: hidden;
-  text-overflow: ellipsis;
+}
+
+.meta-part {
   white-space: nowrap;
 }
 
@@ -381,11 +384,9 @@
     font-size: 12px;
   }
 
-  /* Wrapped, not cut short: at 13 px "how sure" at the end of the line no longer fit a phone's
-     row, and the ellipsis took it. */
+  /* 13 px on a phone; it wraps there as everywhere (.meta above). */
   .meta {
     font-size: 13px;
-    white-space: normal;
   }
 
   .price-wrap {
