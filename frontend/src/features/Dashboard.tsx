@@ -2,7 +2,7 @@
  * Dashboard Component
  */
 
-import { batch, createEffect, createSignal, For, Show } from 'solid-js'
+import { batch, createEffect, createMemo, createSignal, For, Show } from 'solid-js'
 import BadgeRail from '../components/BadgeRail'
 import CalcTracer, { isCalcTracerEnabled } from '../components/CalcTracer'
 import { getCategorySvg } from '../components/CategoryIcon'
@@ -27,7 +27,9 @@ import {
   getLocalCurrency,
   toast,
 } from '../core/api'
-import { useAppState } from '../core/appStore'
+import { householdProfileIds } from '../core/apiProfileScope'
+import { getProfileVersion, useAppState } from '../core/appStore'
+import { circlesProfileName } from '../core/circlesProfile'
 import { loadWidgetPrefs } from '../core/dashboardWidgets'
 import { entityVersion } from '../core/dataVersions'
 import { useGuidance } from '../core/guidance'
@@ -109,6 +111,14 @@ export default function Dashboard() {
 
   // The circles: Your next step in Getting started's place, and the savings gauge's 12 months.
   const guidance = useGuidance('dashboard')
+  // Both are the active profile's, while the cards around them add up the profiles selected: with
+  // more than one, they name theirs. The selection is stored, and every change to it bumps the
+  // profile version (App's applyProfileSelection, Settings > Household).
+  const circlesProfile = createMemo(() => {
+    void getProfileVersion()
+    const view = guidance()
+    return view ? circlesProfileName(view.profileId, householdProfileIds(), state.profiles) : null
+  })
   // A goal this browser kept before goals were the profile's moves to the first profile here.
   createEffect(() => {
     const view = guidance()
@@ -517,7 +527,7 @@ export default function Dashboard() {
         bar pins it for zero pixels — which is exactly what a row holding the bar and the rail did.
       */}
       <PeriodBar tourAnchor="dashboard-period" class={styles.periodBarSlot} />
-      <DashboardNextStep view={guidance} />
+      <DashboardNextStep view={guidance} profile={circlesProfile} />
       <Show when={isWidgetVisible('badges')}>
         <BadgeRail />
       </Show>
@@ -728,7 +738,7 @@ export default function Dashboard() {
           {/* The savings rate over the last 12 months, at its own spot like the metrics: it reads
               the circles' facts, not the period above. */}
           <Show when={isWidgetVisible('savings-gauge')}>
-            <SavingsGauge view={guidance()} />
+            <SavingsGauge view={guidance()} profile={circlesProfile()} />
           </Show>
 
           {/* Direction A overview deck — the default "mission control" view.

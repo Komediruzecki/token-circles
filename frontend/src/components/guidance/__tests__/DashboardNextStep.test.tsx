@@ -88,13 +88,16 @@ afterEach(() => {
   host?.remove()
 })
 
-async function mount(view: GuidanceView | null): Promise<HTMLDivElement> {
+async function mount(
+  view: GuidanceView | null,
+  profile: string | null = null
+): Promise<HTMLDivElement> {
   const { createRoot, createSignal } = await import('solid-js')
   const [current, set] = createRoot(() => createSignal<GuidanceView | null>(view))
   setView = (next) => set(() => next)
   host = document.createElement('div')
   document.body.appendChild(host)
-  dispose = render(() => <DashboardNextStep view={current} />, host)
+  dispose = render(() => <DashboardNextStep view={current} profile={() => profile} />, host)
   return host
 }
 
@@ -153,5 +156,24 @@ describe("Getting started's place on Dashboard", () => {
     expect(shows(c)).toEqual({ gettingStarted: false, nextStep: false })
     record.setKnown!(true)
     expect(shows(c)).toEqual({ gettingStarted: false, nextStep: true })
+  })
+})
+
+describe('the profile Your next step is for', () => {
+  // The circles are the active profile's, while the Dashboard around them can add up a household.
+  // The Dashboard names the profile then (core/circlesProfile.ts); alone, it names none.
+  it('is named under the heading', async () => {
+    record.set!({ hidden: true })
+    const c = await mount(viewOf(YEAR), 'Holiday house')
+    expect(c.querySelector('[data-test-id="next-step-profile"]')!.textContent).toBe(
+      'For Holiday house only'
+    )
+  })
+
+  it('is not named when the Dashboard shows that profile alone', async () => {
+    record.set!({ hidden: true })
+    const c = await mount(viewOf(YEAR))
+    expect(shows(c).nextStep).toBe(true)
+    expect(c.querySelector('[data-test-id="next-step-profile"]')).toBeNull()
   })
 })

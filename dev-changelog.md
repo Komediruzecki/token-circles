@@ -2768,6 +2768,21 @@ true, or is too small for one.
   payments found the same way). Without the cap four fail; with the Debt payments kind alone
   two; without the leeway, the recurrence rule, counting each expense once, putting a chance
   match back or the extra payments, one each.
+- **The savings gauge and Your next step name their profile on a household Dashboard** (A17).
+  Both are worked out for the active profile, while the cards around them add up every profile
+  selected, so a household's totals sat beside one profile's rate with nothing to tell them apart.
+  With more than one profile selected, both cards now say "For Example Mid Income only" under
+  their heading; with one, the whole page is that profile and neither does. The line follows the
+  selection from the sidebar and Settings > Household without a reload
+  (`frontend/src/core/circlesProfile.ts`). Profiles are often places or purposes ("Holiday
+  house"), so the name is not put in a possessive. On the demo with two profiles: the gauge keeps
+  its height (264 px at 1280, 510 at 390) and its 50x48 Details link, the line sitting inside the
+  head; Your next step grows 22 px (337 to 359 at 1280, 375 to 398 at 390); the line reads 5.35:1
+  (gauge) and 5.63:1 (step) in light, 8.84:1 and 7.71:1 in dark. Tests:
+  `src/core/__tests__/circlesProfile.test.ts`, the two cards' own tests and
+  `src/features/__tests__/dashboardCirclesProfile.test.tsx` (named with two, not with one, follows
+  a change of selection). Without the one-profile check three fail, without following the
+  selection one, counting a profile listed twice twice one.
 
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 

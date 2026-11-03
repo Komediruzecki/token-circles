@@ -251,3 +251,22 @@ describe('behind the benchmarks gate', () => {
     expect(text(c, 'savings-gauge-goal')).toMatch(/^Goal: 20% until you set your own\./)
   })
 })
+
+describe('the profile it reads', () => {
+  // The rate is the active profile's, while the Dashboard around it can add up a household. The
+  // Dashboard names the profile then (core/circlesProfile.ts); alone, it names none.
+  const mountFor = (profile: string | null): HTMLDivElement => {
+    host = document.createElement('div')
+    document.body.appendChild(host)
+    dispose = render(() => <SavingsGauge view={viewOf(facts())} profile={profile} />, host)
+    return host
+  }
+
+  it('names the profile it is worked out for', () => {
+    expect(text(mountFor('Holiday house'), 'savings-gauge-profile')).toBe('For Holiday house only')
+  })
+
+  it('names none when the Dashboard shows that profile alone', () => {
+    expect(mountFor(null).querySelector('[data-test-id="savings-gauge-profile"]')).toBeNull()
+  })
+})

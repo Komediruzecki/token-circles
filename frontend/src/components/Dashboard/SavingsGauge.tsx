@@ -7,7 +7,10 @@
  * Behind the benchmarks gate (core/guidanceGate.ts): the typical band where the person lives, as an
  * arc on the ring and a line in the legend, the savings card's sentence for their band, and which
  * region it is. Without a goal of their own the band is the target while the gate is open; with it
- * closed, 20% as before. The band comes from the cards chunk (shared/guidance/cards.ts), loaded with
+ * closed, 20% as before.
+ *
+ * The rate is the active profile's, while the Dashboard around it can add up a household: then the
+ * Dashboard passes the profile's name (`profile`, core/circlesProfile.ts) and the card says so. The band comes from the cards chunk (shared/guidance/cards.ts), loaded with
  * `import()` only while the gate is open, so a closed gate never fetches it.
  */
 import { createEffect, createMemo, createSignal, Show } from 'solid-js'
@@ -19,6 +22,7 @@ import {
   shownRate,
 } from '../../../../shared/guidance/savingsWords'
 import { round } from '../../../../shared/retirementSettings'
+import { circlesProfileLine } from '../../core/circlesProfile'
 import { DEFAULT_SAVINGS_GOAL } from '../../core/savingsGoal'
 import { setSettingsTab } from '../../core/settingsStore'
 import { createAnswerSave } from '../guidance/questionParts'
@@ -39,7 +43,11 @@ const pointsToGo = (gap: number): string => {
   return Number.isInteger(up) ? String(up) : up.toFixed(1)
 }
 
-export default function SavingsGauge(props: { view: GuidanceView | null }): JSX.Element {
+export default function SavingsGauge(props: {
+  view: GuidanceView | null
+  /** The profile the rate is for, named while the Dashboard adds up more than one. */
+  profile?: string | null
+}): JSX.Element {
   // Loaded only while the gate is open, which a build fixes: so the band shows only then too.
   const [cards, setCards] = createSignal<typeof Cards | null>(null)
   createEffect(() => {
@@ -91,9 +99,18 @@ export default function SavingsGauge(props: { view: GuidanceView | null }): JSX.
   return (
     <section class={styles.card} data-test-id="savings-gauge" aria-labelledby="savings-gauge-title">
       <div class={styles.head}>
-        <h3 id="savings-gauge-title" class={styles.title}>
-          Savings rate
-        </h3>
+        <div>
+          <h3 id="savings-gauge-title" class={styles.title}>
+            Savings rate
+          </h3>
+          <Show when={props.profile}>
+            {(name) => (
+              <p class={styles.profile} data-test-id="savings-gauge-profile">
+                {circlesProfileLine(name())}
+              </p>
+            )}
+          </Show>
+        </div>
         <a class={styles.details} href="#progress/5" data-test-id="savings-gauge-details">
           Details
         </a>
