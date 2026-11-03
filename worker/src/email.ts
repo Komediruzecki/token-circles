@@ -113,8 +113,9 @@ export async function sendMail(
 /**
  * Hand `body`, the request Resend would have had, to the development mailbox at `url`. Its answer
  * reads as Resend's: a 2xx with the mail's id is taken, anything else is refused with its status,
- * and a mailbox that is down throws as a network failure does. Neither the body nor anything the
- * mailbox answers is logged: a mail holds sign-in links.
+ * and a mailbox that is down throws as a network failure does. A redirect is not followed: the
+ * mail goes to the URL DEV_MAIL_SINK names or nowhere, and a 3xx is a refusal like any other
+ * non-2xx. Neither the body nor anything the mailbox answers is logged: a mail holds sign-in links.
  */
 async function sendToSink(
   url: string,
@@ -126,6 +127,9 @@ async function sendToSink(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body,
+    // workerd takes 'follow' or 'manual' only; 'manual' hands back the 3xx itself, which !res.ok
+    // below refuses.
+    redirect: 'manual',
     signal: AbortSignal.timeout(MAIL_TIMEOUT_MS),
   });
   if (!res.ok) {

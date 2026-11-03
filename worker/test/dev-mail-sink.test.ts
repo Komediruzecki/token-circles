@@ -24,6 +24,7 @@ interface Call {
   method: string;
   headers: Headers;
   body: string;
+  redirect: RequestRedirect | undefined;
 }
 let calls: Call[] = [];
 /** What the next fetch answers. */
@@ -32,16 +33,29 @@ let answer: () => Response | Promise<Response> = () => Response.json({ id: 'mb_1
 beforeEach(() => {
   calls = [];
   answer = () => Response.json({ id: 'mb_1' });
-  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+  const fake = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     // Every request this file's code makes is recorded and answered here: none leaves the test.
+    const url = String(input instanceof Request ? input.url : input);
     calls.push({
-      url: String(input instanceof Request ? input.url : input),
+      url,
       method: init?.method ?? 'GET',
       headers: new Headers(init?.headers),
       body: String(init?.body ?? ''),
+      redirect: init?.redirect,
     });
-    return answer();
-  }) as typeof fetch;
+    const res = await answer();
+    // As fetch does: a redirect is followed unless the caller says 'manual'. A 307 or 308 sends
+    // the same request on to Location; 301, 302 and 303 send a GET with no body.
+    const location = res.headers.get('Location');
+    if (res.status >= 300 && res.status < 400 && location && init?.redirect !== 'manual') {
+      const to = new URL(location, url).href;
+      return [307, 308].includes(res.status)
+        ? fake(to, init)
+        : fake(to, { ...init, method: 'GET', body: undefined });
+    }
+    return res;
+  };
+  globalThis.fetch = fake as typeof fetch;
 });
 
 afterEach(() => {
@@ -115,6 +129,29 @@ describe('a development Worker with a loopback DEV_MAIL_SINK', () => {
       status: 422,
     });
   });
+
+  it.each([301, 302, 303, 307, 308])(
+    'refuses a %s and sends the mail nowhere else',
+    async (status) => {
+      // The first answer points elsewhere; anything after it would take the mail.
+      let first = true;
+      answer = () => {
+        if (!first) return Response.json({ id: 'taken-elsewhere' });
+        first = false;
+        return new Response(null, {
+          status,
+          headers: { Location: 'http://127.0.0.2:3840/emails' },
+        });
+      };
+      expect(await send(envWith({}))).toEqual({
+        sent: false,
+        error: `DEV mailbox ${String(status)}`,
+        status,
+      });
+      expect(calls.map((c) => c.url)).toEqual([SINK]);
+      expect(calls[0].redirect).toBe('manual');
+    }
+  );
 
   it('throws when the mailbox is down, as a network failure to Resend does', async () => {
     answer = () => {
