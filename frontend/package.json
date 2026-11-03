@@ -33,6 +33,7 @@
     "test": "vitest run",
     "test:e2e": "playwright test",
     "test:tours": "node scripts/walk-tours.mjs",
+    "time-machine": "node tests/time-machine/cli.ts",
     "marketing:shots": "node scripts/gen-marketing-shots.mjs",
     "test:e2e:smoke": "playwright test --grep @smoke",
     "test:e2e:release": "E2E_RELEASE=1 playwright test --project=release",
