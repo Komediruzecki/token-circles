@@ -2557,6 +2557,18 @@ true, or is too small for one.
   `components/onboarding/__tests__/onboardingOverExamples.test.tsx` (the switch over an empty
   Household: no marker, no setup after the reload). Each first case fails without its change.
 
+- **A badge toast on screen when setup opens waits until setup closes.** Badges earned while setup
+  is open were already held (`core/achievementsStore.ts`), but one announced just before, such as
+  the demo's "20 badges and 26 prints from your history so far." at boot, stayed up beside the
+  wizard through What's New, Run setup again, with "See my prints" leading away from it. The
+  store now keeps the last announcement (`shown`); when setup opens while its toast is still on
+  the `achievements` channel, the toast goes and the announcement joins the held ones, said again
+  when setup closes, and, as before, only for the profile still in use. One already gone is not
+  said again. Measured in the demo with setup opened over the toast: one toast on screen before
+  (at 1280 beside the 600 px wizard, at 390 over it), none after, in both themes. Tests:
+  `core/__tests__/achievementsStore.test.ts` (taken back and said again; not said again once gone;
+  not said on another profile after a switch); the first and the third fail without the change.
+
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
 The production build holds back the benchmarks and the questions that choose their figures

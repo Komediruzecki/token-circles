@@ -26,7 +26,7 @@ import { onboardingOpen } from './onboardingStore'
 import { shelfOf } from './prints/windows'
 import { openPrints } from './progressRoute'
 import { getStorageMode } from './storage/storageFactory'
-import { addToast } from './toastStore'
+import { addToast, hasToastOnChannel, removeToastsByChannel } from './toastStore'
 import type { Account, Bill, Transaction } from '../types/models'
 import type { EvaluateInput, Evaluation } from './achievements/evaluate'
 import type { UnlockRecord } from './achievements/records'
@@ -319,18 +319,35 @@ async function run(profileId: number): Promise<UnlockRecord[]> {
  */
 let held: { profileId: number; newly: UnlockRecord[]; firstRun: boolean }[] = []
 
+/**
+ * The announcement last made, while its toast may still be on screen. Setup opening over it takes
+ * it back and holds it with the rest: the demo's "26 badges and 2 prints from your history so far."
+ * sat beside the wizard at 1280 (3 Nov test run).
+ */
+let shown: { profileId: number; newly: UnlockRecord[]; firstRun: boolean } | null = null
+
+const CHANNEL = 'achievements'
+
 createRoot(() => {
   createEffect(
     on(onboardingOpen, (open) => {
-      if (open || held.length === 0) return
+      if (open) {
+        if (shown && hasToastOnChannel(CHANNEL)) {
+          removeToastsByChannel(CHANNEL)
+          held.push(shown)
+        }
+        shown = null
+        return
+      }
+      if (held.length === 0) return
       // Only the profile still in use hears about its badges, as when they are announced at once.
       const waiting = held.filter((batch) => batch.profileId === activeProfileId())
       held = []
       if (waiting.length === 0) return
-      announceNow(
-        waiting.flatMap((batch) => batch.newly),
-        waiting.some((batch) => batch.firstRun)
-      )
+      const newly = waiting.flatMap((batch) => batch.newly)
+      const firstRun = waiting.some((batch) => batch.firstRun)
+      shown = { profileId: activeProfileId(), newly, firstRun }
+      announceNow(newly, firstRun)
     })
   )
 })
@@ -340,6 +357,7 @@ function announce(profileId: number, newly: UnlockRecord[], firstRun: boolean): 
     held.push({ profileId, newly, firstRun })
     return
   }
+  shown = { profileId, newly, firstRun }
   announceNow(newly, firstRun)
 }
 
@@ -358,7 +376,7 @@ const PRINT_BADGES = new Set<string>([
 function announceNow(newly: UnlockRecord[], firstRun: boolean): void {
   const toast = (text: string, label: string, onClick: () => void) => {
     addToast(text, 'success', {
-      channel: 'achievements',
+      channel: CHANNEL,
       durationMs: 9000,
       action: { label, onClick },
     })

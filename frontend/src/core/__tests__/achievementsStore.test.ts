@@ -34,7 +34,24 @@ vi.mock('../api', () => ({
   apiPut: vi.fn(async () => ({})),
 }))
 const toasts: string[] = []
-vi.mock('../toastStore', () => ({ addToast: vi.fn((m: string) => toasts.push(m)) }))
+/** The channelled toasts on screen: a toast on a channel replaces the one before it there. */
+const onScreen: { message: string; channel?: string }[] = []
+vi.mock('../toastStore', () => ({
+  addToast: vi.fn((m: string, _type?: string, opts?: { channel?: string }) => {
+    toasts.push(m)
+    if (!opts?.channel) return
+    for (let i = onScreen.length - 1; i >= 0; i--) {
+      if (onScreen[i].channel === opts.channel) onScreen.splice(i, 1)
+    }
+    onScreen.push({ message: m, channel: opts.channel })
+  }),
+  hasToastOnChannel: (channel: string) => onScreen.some((t) => t.channel === channel),
+  removeToastsByChannel: (channel: string) => {
+    for (let i = onScreen.length - 1; i >= 0; i--) {
+      if (onScreen[i].channel === channel) onScreen.splice(i, 1)
+    }
+  },
+}))
 vi.mock('../storage/storageFactory', () => ({ getStorageMode: () => env.mode }))
 vi.mock('../appStore', () => ({ setPage: vi.fn() }))
 
@@ -93,6 +110,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   for (const k of Object.keys(calls)) delete calls[k]
   toasts.length = 0
+  onScreen.length = 0
   settingsStore = {}
   env.mode = 'serverless'
   localStorage.clear()
@@ -661,6 +679,43 @@ describe('badges earned while the setup wizard is open', () => {
 
     expect(toasts).toHaveLength(first.length + second.length)
     for (const toast of toasts) expect(toast).toMatch(/^Badge unlocked: .+\.$/)
+  })
+
+  it('one still on screen when setup opens goes, and comes back when setup closes', async () => {
+    calls.transactions = [...month(thisMonth)]
+    const newly = await refreshAchievements()
+    const said = `${newly.length} badges earned from your history so far.`
+    expect(toasts).toEqual([said])
+
+    startOnboarding('space')
+    expect(onScreen).toEqual([])
+
+    skipOnboarding()
+    expect(toasts).toEqual([said, said])
+    expect(onScreen.map((t) => t.message)).toEqual([said])
+  })
+
+  it('one already gone when setup opens is not said again', async () => {
+    calls.transactions = [...month(thisMonth)]
+    await refreshAchievements()
+    // Its nine seconds are up, or it was closed.
+    onScreen.length = 0
+
+    startOnboarding('space')
+    skipOnboarding()
+    expect(toasts).toHaveLength(1)
+  })
+
+  it('one taken back is not said on another profile, when setup closes after a switch', async () => {
+    localStorage.setItem('currentProfileId', '1')
+    calls.transactions = [...month(thisMonth)]
+    await refreshAchievements()
+    startOnboarding('space')
+
+    localStorage.setItem('currentProfileId', '2')
+    completeOnboarding()
+    expect(toasts).toHaveLength(1)
+    expect(onScreen).toEqual([])
   })
 
   it('are not announced on another profile, when setup closes after a switch', async () => {
