@@ -15,6 +15,7 @@ import { insertEmailVerification, verifyLink, VERIFY_TOKEN_TTL_HOURS } from './e
 import { renderEmailChange, renderEmailChangeNotice } from './emailTemplates';
 import { HttpError } from './http';
 import { clientIp, enforce } from './ratelimit';
+import { aboutOrigin } from './reminders';
 import { claimWelcomeOnMove, welcomeClaimed } from './welcome';
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
@@ -118,6 +119,8 @@ export async function sendEmailChangeLink(
   const mail = renderEmailChange({
     link: verifyLink(new URL(c.req.url).origin, token, base),
     ttlHours: VERIFY_TOKEN_TTL_HOURS,
+    appUrl: base,
+    aboutUrl: aboutOrigin(c.env),
     assetOrigin: base,
   });
   const result = await sendMail(c.env, email, mail.subject, mail.html, { text: mail.text }).catch(
@@ -151,7 +154,11 @@ async function mailEmailChangeNotice(
   current: string,
   named: string | null
 ): Promise<void> {
-  const notice = renderEmailChangeNotice({ newEmail: named, appUrl: appBase(c) });
+  const notice = renderEmailChangeNotice({
+    newEmail: named,
+    appUrl: appBase(c),
+    aboutUrl: aboutOrigin(c.env),
+  });
   await sendMail(c.env, current, notice.subject, notice.html, { text: notice.text }).catch(
     (e: unknown) => {
       console.error('Email change notice failed to send:', e);

@@ -11,6 +11,7 @@ import * as db from '../db';
 import { sendMail } from '../email';
 import type { BillingAccount } from '../billingMail';
 import { mailForBillingEvent } from '../billingMail';
+import { aboutOrigin } from '../reminders';
 import { STRIPE_API_VERSION } from '../stripe';
 
 // Stripe billing — implemented with raw fetch to the Stripe REST API (no SDK, so the Worker
@@ -599,7 +600,13 @@ billingRoutes.post('/api/billing/webhook', async (c) => {
    * already makes the whole handler idempotent, so one delivery is one send.
    */
   const notify = async (account: BillingAccount | null): Promise<void> => {
-    const outgoing = mailForBillingEvent(event.type ?? '', obj, account, appOrigin);
+    const outgoing = mailForBillingEvent(
+      event.type ?? '',
+      obj,
+      account,
+      appOrigin,
+      aboutOrigin(c.env)
+    );
     if (!outgoing) return;
     try {
       const { to, mail } = outgoing;

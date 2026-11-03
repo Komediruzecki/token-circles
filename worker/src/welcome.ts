@@ -23,6 +23,7 @@ import type { Context } from 'hono';
 import type { AppEnv, Env } from './index';
 import { sendMail } from './email';
 import { renderWelcome } from './emailTemplates';
+import { aboutOrigin } from './reminders';
 
 /** The reminder_dedup key that records an account's welcome. */
 export const WELCOME_KEY = 'welcome';
@@ -79,7 +80,7 @@ export async function mailWelcome(env: Env, userId: number, appUrl: string): Pro
       .bind(userId)
       .first<{ email: string | null }>();
     if (!user?.email) return;
-    const mail = renderWelcome({ appUrl });
+    const mail = renderWelcome({ appUrl, aboutUrl: aboutOrigin(env) });
     await sendMail(env, user.email, mail.subject, mail.html, { text: mail.text });
   } catch (e) {
     console.error('Welcome email failed:', e);

@@ -466,7 +466,8 @@ describe('the mail itself', () => {
     // Main's guard (origin/main email-verification.test.ts): before its address is confirmed an
     // account's sign-in is refused, as a wrong password, so a confirm mail links nowhere in the app.
     // The wordmark, the text footer's "Open the app" and any page link would all end there.
-    // The app the mail is sent from, and the canonical one the wordmark and the footer name.
+    // The app the mail is sent from, which the wordmark and the footer name (A20), and the
+    // canonical one they named before.
     const appLink = /href="(?:http:\/\/localhost:3800|https:\/\/tokencircles\.com)(?:\/[^"]*)?"/;
     for (const mail of [confirm, fresh]) {
       expect(mail.html).not.toMatch(appLink);
@@ -476,8 +477,8 @@ describe('the mail itself', () => {
         expect(part).not.toMatch(/is ready/);
       }
     }
-    // The Welcome, which goes once the address is confirmed, keeps them.
-    expect(welcome.text).toContain(`Open the app: https://tokencircles.com`);
+    // The Welcome, which goes once the address is confirmed, keeps them, on the app it is sent from.
+    expect(welcome.text).toContain(`Open the app: ${APP}`);
     expect(welcome.html).toMatch(appLink);
   });
 

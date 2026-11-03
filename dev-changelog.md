@@ -2823,6 +2823,32 @@ true, or is too small for one.
   filter's two); without the loading guard, the profile check on Transactions, Getting started's
   count or the mail's profile check, one each; with the mail counting no category alone, two.
 
+- **Dev links to dev: the app's and the mails' links follow the deployment** (A20). The about
+  site's address was fixed in code (`shared/articles.ts`), so the dev app's Privacy, Terms and
+  article links, and every mail's About, Terms and Privacy and the day-2 article, opened
+  production's about site; and every confirmed mail's wordmark, its "Open the app" line and the
+  reminders' buttons (Budgets, Analytics, Bills, Settings) opened production's app, while the
+  import link in the same mail opened the run's own. The frontend now reads `VITE_ABOUT_ORIGIN`
+  (`frontend/src/core/aboutSite.ts`) and the Worker `ABOUT_ORIGIN` (`aboutOrigin` in
+  `worker/src/reminders.ts`), both production's `https://about.tokencircles.com` when unset; dev
+  sets `https://dev.about.tokencircles.com` in `frontend/.env.dev` and in `wrangler.jsonc`'s
+  `env.dev`, and production sets neither. Every mail renderer takes the app and about origins
+  (`MailOrigins` in `worker/src/emailTemplates.ts`), and every sender passes its deployment's
+  (`mailOriginsOf`). No mail's wording changed, and production's mails are byte for byte what they
+  were: 18 renderers on production's origins, 72 of 72 renders identical to before. The
+  payment-failed digest in `mail-catalogue.test.ts` is re-pinned because its sample grid renders
+  on a dev origin too, where the wordmark now opens dev. Built bundles: `--mode dev` holds
+  `dev.about.tokencircles.com` and the production build does not. `index.html`'s no-script line and
+  `public/llms.txt` still name production's about site; both are static, and dev is not indexed.
+  Tests: `worker/test/mail-origins.test.ts` (all 19 samples on made-up origins, the footer, all 19
+  on production's when none are given, dev's and prod's config), `mail-origins-senders.test.ts`
+  (every sender through its route or run, on made-up origins: 12 of 12 failed before),
+  `week-one-mails.test.ts`, and in the frontend `src/core/__tests__/aboutSite.test.ts` (the
+  default, a named origin, what the dev and production builds are given), `LegalLinks.test.tsx`
+  and the article link's test. With the Worker ignoring `ABOUT_ORIGIN` 13 fail, without dev's
+  value 1; with the app ignoring `VITE_ABOUT_ORIGIN` 3, Privacy and Terms on the fixed address 1,
+  the article link on it 1, and without `.env.dev`'s value 1.
+
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
 The production build holds back the benchmarks and the questions that choose their figures

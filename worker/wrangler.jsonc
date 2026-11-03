@@ -43,6 +43,9 @@
         "CORS_ORIGIN": "https://dev.tokencircles.com",
         "APP_ORIGINS": "https://dev.tokencircles.com",
         "API_PUBLIC_ORIGIN": "https://api.dev.tokencircles.com",
+        // The about site dev's mails link to (articles, legal pages); prod leaves it unset and
+        // links to https://about.tokencircles.com (worker/src/reminders.ts aboutOrigin).
+        "ABOUT_ORIGIN": "https://dev.about.tokencircles.com",
         "COOKIE_DOMAIN": ".dev.tokencircles.com",
         "EMAIL_FROM": "Token Circles <hello@tokencircles.com>",
         // Stripe per-tier Price ids (TEST mode for dev) — vars, NOT secret. STRIPE_SECRET_KEY +

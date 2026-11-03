@@ -13,7 +13,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import worker, { type Env } from '../src/index';
 import { WEEK_ONE_CRON } from '../src/weekOne';
-import wranglerConfig from '../wrangler.jsonc?raw';
+import { wrangler } from './helpers/wrangler-config';
 
 const ID = 97500;
 const EMAIL = 'week-one-cron-97500@example.com';
@@ -72,29 +72,6 @@ async function fire(cron: string): Promise<void> {
     ctx
   );
   await waitOnExecutionContext(ctx);
-}
-
-/** wrangler.jsonc as data: JSON once its comments and trailing commas are taken out. */
-function wrangler(): { env: Record<string, { triggers?: { crons?: string[] } }> } {
-  let json = '';
-  let inString = false;
-  for (let i = 0; i < wranglerConfig.length; i++) {
-    const ch = wranglerConfig[i]!;
-    if (inString) {
-      json += ch;
-      if (ch === '\\') json += wranglerConfig[++i] ?? '';
-      else if (ch === '"') inString = false;
-    } else if (ch === '"') {
-      inString = true;
-      json += ch;
-    } else if (ch === '/' && wranglerConfig[i + 1] === '/') {
-      while (i < wranglerConfig.length && wranglerConfig[i] !== '\n') i++;
-      json += '\n';
-    } else {
-      json += ch;
-    }
-  }
-  return JSON.parse(json.replace(/,(\s*[}\]])/g, '$1'));
 }
 
 describe('the week-one trigger', () => {

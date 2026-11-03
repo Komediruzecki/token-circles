@@ -37,6 +37,8 @@ interface ImportMetaEnv {
   readonly VITE_CORS_ORIGINS?: string
   /** "true" shows the benchmarks in a production build (core/guidanceGate.ts). */
   readonly VITE_ENABLE_BENCHMARKS?: string
+  /** The about site the app links to (core/aboutSite.ts); production's when unset. */
+  readonly VITE_ABOUT_ORIGIN?: string
 }
 
 interface ImportMeta {

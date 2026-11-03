@@ -36,7 +36,9 @@ export function mailForBillingEvent(
   type: string,
   obj: Record<string, unknown>,
   account: BillingAccount | null,
-  appUrl: string
+  appUrl: string,
+  /** The about site the footer links to: production's when left out. */
+  aboutUrl?: string
 ): { to: string; mail: RenderedEmail } | null {
   // No address, no mail. A Google account can reach this state with its email left off.
   const to = account?.email;
@@ -61,6 +63,7 @@ export function mailForBillingEvent(
           // Stripe's hosted page is the only place the card can actually be replaced.
           payUrl: str(obj.hosted_invoice_url),
           appUrl,
+          aboutUrl,
         }),
       };
     }
@@ -74,10 +77,11 @@ export function mailForBillingEvent(
           planName,
           payUrl: str(obj.hosted_invoice_url),
           appUrl,
+          aboutUrl,
         }),
       };
     case 'customer.subscription.deleted':
-      return { to, mail: renderSubscriptionEnded({ planName, appUrl }) };
+      return { to, mail: renderSubscriptionEnded({ planName, appUrl, aboutUrl }) };
     default:
       return null;
   }

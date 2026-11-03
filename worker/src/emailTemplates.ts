@@ -22,7 +22,7 @@
  * the four over a grid of inputs.
  */
 
-import { articleUrl } from '../../shared/articles.ts';
+import { articleUrl, DEFAULT_ABOUT_ORIGIN } from '../../shared/articles.ts';
 import {
   CONFIRM_LINK_SIGN_IN,
   notYourSignUp,
@@ -33,13 +33,36 @@ import {
 
 export const BRAND = 'Token Circles';
 
+/** The app and the about site a mail links to when its caller names none: production's. */
 const APP_URL = 'https://tokencircles.com';
-const ABOUT_URL = 'https://about.tokencircles.com';
+const ABOUT_URL = DEFAULT_ABOUT_ORIGIN;
 const REPO_URL = 'https://github.com/Komediruzecki/token-circles';
-const TERMS_URL = `${ABOUT_URL}/terms`;
-const PRIVACY_URL = `${ABOUT_URL}/privacy`;
 const CONTACT_EMAIL = 'hello@tokencircles.com';
 const FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
+
+/**
+ * Where a mail's links and art point: the sending environment's (worker/src/reminders.ts
+ * `appOrigin` and `aboutOrigin`), so a mail from dev or a self-hosted Worker never links into
+ * production. Each is production's when the caller names none.
+ */
+export interface MailOrigins {
+  /** The app the links open: the wordmark, "Open the app" and every button into the app. */
+  appUrl?: string;
+  /** The about site: the footer's About, Terms and Privacy, and the articles. */
+  aboutUrl?: string;
+  /** The origin that serves the wordmark and the art; the app when left out. */
+  assetOrigin?: string;
+}
+
+/** The app a mail's links open, as renderMail reads it. */
+const appOf = (origins: MailOrigins): string => origins.appUrl || APP_URL;
+
+/** The origins a renderer hands the layout. */
+const mailOrigins = (origins: MailOrigins): MailOrigins => ({
+  appUrl: origins.appUrl,
+  aboutUrl: origins.aboutUrl,
+  assetOrigin: origins.assetOrigin,
+});
 
 export interface RenderedEmail {
   subject: string;
@@ -242,7 +265,7 @@ export interface MailTable {
  * headline, one or two paragraphs, at most two tables, one button or a button and a quieter second
  * one, and at most one list of steps. Every string is plain text; renderMail escapes it.
  */
-export interface MailSpec {
+export interface MailSpec extends MailOrigins {
   subject: string;
   /** The line inbox lists show beside the subject, hidden in the mail itself. */
   preheader: string;
@@ -281,8 +304,6 @@ export interface MailSpec {
    * that answers as a wrong password (routes/auth.ts).
    */
   unconfirmed?: boolean;
-  /** The origin that serves the wordmark and the art: the sending environment's app. */
-  assetOrigin?: string;
 }
 
 const paragraphText = (paragraph: MailParagraph): string =>
@@ -396,11 +417,11 @@ const TAGLINE = 'Your money, in clear orbit. Open source and local-first.';
  * and no line starts or ends with a dot: about 200 px at 13 px, which fits the 264 px a 320 px
  * phone leaves it. The app is the wordmark's link; the contact address has a line of its own.
  */
-const FOOTER_LINKS: MailLink[] = [
-  { label: 'About', href: ABOUT_URL },
+const footerLinks = (about: string): MailLink[] => [
+  { label: 'About', href: about },
   { label: 'GitHub', href: REPO_URL },
-  { label: 'Terms', href: TERMS_URL },
-  { label: 'Privacy', href: PRIVACY_URL },
+  { label: 'Terms', href: `${about}/terms` },
+  { label: 'Privacy', href: `${about}/privacy` },
 ];
 
 const footerLink = ({ label, href }: MailLink, color: string = INK.link, cls = 'tc-link') =>
@@ -410,7 +431,12 @@ const footerLink = ({ label, href }: MailLink, color: string = INK.link, cls = '
  * The footer, centred under the card, one block a line: the tagline, the links, the copyright,
  * the contact address, and then, set apart, why this mail came with its unsubscribe link.
  */
-function mailFooter(reason: string, unsubUrl?: string | null, unsubLabel = 'Unsubscribe'): string {
+function mailFooter(
+  reason: string,
+  unsubUrl: string | null | undefined,
+  unsubLabel = 'Unsubscribe',
+  about = ABOUT_URL
+): string {
   // Each sentence of the tagline holds together, so a phone breaks it between them and never
   // after "local-", which left "first." alone on a line at 375 px.
   const taglineHtml = TAGLINE.split('. ')
@@ -424,7 +450,14 @@ function mailFooter(reason: string, unsubUrl?: string | null, unsubLabel = 'Unsu
     `<p class="tc-muted" style="margin:${margin};font:${size}px/1.6 ${FONT};color:${INK.muted};${extra}">${html}</p>`;
   return `<tr><td align="center" style="padding:24px 16px 8px;text-align:center">
 ${p('0 0 12px', 14, taglineHtml)}
-${p('0 0 14px', 13, FOOTER_LINKS.map((link) => footerLink(link)).join(dot), 'white-space:nowrap')}
+${p(
+  '0 0 14px',
+  13,
+  footerLinks(about)
+    .map((link) => footerLink(link))
+    .join(dot),
+  'white-space:nowrap'
+)}
 ${p('0 0 4px', 12, `&copy; ${new Date().getUTCFullYear()} ${BRAND} &middot; AGPL-3.0`, 'white-space:nowrap')}
 ${p('0', 12, footerLink({ label: CONTACT_EMAIL, href: `mailto:${CONTACT_EMAIL}` }, INK.muted, 'tc-muted'))}
 ${p('18px 0 0', 12, `${escapeHtml(reason)}${unsubUrl ? ` ${footerLink({ label: unsubLabel, href: unsubUrl })}` : ''}`)}
@@ -434,14 +467,16 @@ ${p('18px 0 0', 12, `${escapeHtml(reason)}${unsubUrl ? ` ${footerLink({ label: u
 /** The text twin's last lines, the same for every mail on this layout, in the footer's order. */
 const mailTextFooter = (
   reason: string,
-  unsubUrl?: string | null,
+  unsubUrl: string | null | undefined,
   unconfirmed = false,
-  unsubLabel = 'Unsubscribe'
+  unsubLabel = 'Unsubscribe',
+  app = APP_URL,
+  about = ABOUT_URL
 ) =>
   [
     TAGLINE,
-    ...(unconfirmed ? [] : [`Open the app: ${APP_URL}`]),
-    ...FOOTER_LINKS.map(({ label, href }) => `${label}: ${href}`),
+    ...(unconfirmed ? [] : [`Open the app: ${app}`]),
+    ...footerLinks(about).map(({ label, href }) => `${label}: ${href}`),
     `© ${new Date().getUTCFullYear()} ${BRAND} · AGPL-3.0`,
     CONTACT_EMAIL,
     '',
@@ -451,10 +486,12 @@ const mailTextFooter = (
 
 /** One mail on the layout: its HTML and its plain-text twin, from the same words. */
 export function renderMail(spec: MailSpec): RenderedEmail {
-  // The wordmark and the art load from the SENDING environment's app origin, so a dev mail never
-  // depends on a prod release shipping the file; the links stay canonical. The prod app when the
-  // caller names none.
-  const assets = spec.assetOrigin || APP_URL;
+  // The links and the art follow the SENDING environment (MailOrigins): a dev mail never depends
+  // on a prod release shipping the file, and never links into production. The prod app and about
+  // site when the caller names none; the art comes from the app when no other origin is named.
+  const app = appOf(spec);
+  const about = spec.aboutUrl || ABOUT_URL;
+  const assets = spec.assetOrigin || app;
   const art = ART[spec.art];
   const wordmark = `<img src="${assets}/icon-192.png" width="26" height="26" alt="" class="tc-text" style="vertical-align:middle;border:0;border-radius:7px;color:${INK.text}"><span class="tc-text" style="font:600 16px/1 ${FONT};color:${INK.text};vertical-align:middle;letter-spacing:-0.1px">&nbsp;&nbsp;${BRAND}</span>`;
   const img = `<img src="${assets}${art.path}" width="${art.width}" height="${art.height}" alt="" class="tc-soft" style="display:block;width:100%;height:auto;border:0;border-radius:18px 18px 0 0;color:${INK.soft}">`;
@@ -502,9 +539,9 @@ ${mailStyle(!!spec.tables)}
 <table role="presentation" class="tc-page" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${INK.page}" style="background:${INK.page}"><tr><td align="center" style="padding:22px 12px 30px">
 <!--[if mso]><table role="presentation" align="center" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px"><tr><td><![endif]-->
 <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px">
-<tr><td style="padding:2px 6px 14px">${spec.unconfirmed ? wordmark : `<a class="tc-text" href="${APP_URL}" style="text-decoration:none;color:${INK.text}">${wordmark}</a>`}</td></tr>
+<tr><td style="padding:2px 6px 14px">${spec.unconfirmed ? wordmark : `<a class="tc-text" href="${escapeHtml(app)}" style="text-decoration:none;color:${INK.text}">${wordmark}</a>`}</td></tr>
 <tr><td class="tc-card" bgcolor="${INK.card}" style="background:${INK.card};border-radius:18px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${rows}</table></td></tr>
-${mailFooter(spec.reason, spec.unsubUrl, spec.unsubLabel)}
+${mailFooter(spec.reason, spec.unsubUrl, spec.unsubLabel, about)}
 </table>
 <!--[if mso]></td></tr></table><![endif]-->
 </td></tr></table>
@@ -532,7 +569,7 @@ ${mailFooter(spec.reason, spec.unsubUrl, spec.unsubLabel)}
       : []),
     ...(spec.signOff ? [spec.signOff] : []),
     ...(spec.aside ? [spec.aside] : []),
-    mailTextFooter(spec.reason, spec.unsubUrl, spec.unconfirmed, spec.unsubLabel),
+    mailTextFooter(spec.reason, spec.unsubUrl, spec.unconfirmed, spec.unsubLabel, app, about),
   ].join('\n\n');
   // The footer's unsubscribe link is also the List-Unsubscribe header sendMail sends, so the two
   // can never name different links.
@@ -577,11 +614,12 @@ const SIGNED_UP = `You are getting this because this address was used to sign up
  * asks for the password, and that sign-in confirms the address (email-link.ts). With the
  * same-browser sign-in off, the mail says the second way only.
  */
-export function renderConfirmEmail(opts: {
-  link: string;
-  ttlHours: number;
-  assetOrigin?: string;
-}): RenderedEmail {
+export function renderConfirmEmail(
+  opts: {
+    link: string;
+    ttlHours: number;
+  } & MailOrigins
+): RenderedEmail {
   const oneClick = CONFIRM_LINK_SIGN_IN.sameBrowser;
   return renderMail({
     subject: `Confirm your email for ${BRAND}`,
@@ -601,7 +639,7 @@ export function renderConfirmEmail(opts: {
     aside: notYou(),
     unconfirmed: true,
     reason: SIGNED_UP,
-    assetOrigin: opts.assetOrigin,
+    ...mailOrigins(opts),
   });
 }
 
@@ -614,11 +652,12 @@ export function renderConfirmEmail(opts: {
  * at once where its own account is signed in (a link asked for from the Confirm your email screen,
  * in that session).
  */
-export function renderEmailVerification(opts: {
-  link: string;
-  ttlHours: number;
-  assetOrigin?: string;
-}): RenderedEmail {
+export function renderEmailVerification(
+  opts: {
+    link: string;
+    ttlHours: number;
+  } & MailOrigins
+): RenderedEmail {
   return renderMail({
     subject: `Your new confirm link for ${BRAND}`,
     preheader: `It replaces the links sent before. It works once, for ${lasts(opts.ttlHours)}.`,
@@ -636,7 +675,7 @@ export function renderEmailVerification(opts: {
     aside: notYou(),
     unconfirmed: true,
     reason: SIGNED_UP,
-    assetOrigin: opts.assetOrigin,
+    ...mailOrigins(opts),
   });
 }
 
@@ -667,8 +706,8 @@ const WELCOME_STEPS = [
  * badge a year earns (frontend/src/core/achievements/definitions.ts). `appUrl` is the app the links
  * open; the art loads from `assetOrigin`, or from the app.
  */
-export function renderWelcome(opts: { appUrl?: string; assetOrigin?: string } = {}): RenderedEmail {
-  const app = opts.appUrl || APP_URL;
+export function renderWelcome(opts: MailOrigins = {}): RenderedEmail {
+  const app = appOf(opts);
   return renderMail({
     subject: `${BRAND} is ready for your first statement`,
     preheader: 'Import a year from your bank and the app has something to show you on day one.',
@@ -690,7 +729,7 @@ export function renderWelcome(opts: { appUrl?: string; assetOrigin?: string } = 
     },
     signOff: "Questions, or a bank file that won't import? Reply to this mail.",
     reason: `You are getting this because a ${BRAND} account was created with this address.`,
-    assetOrigin: opts.assetOrigin || opts.appUrl,
+    ...mailOrigins(opts),
   });
 }
 
@@ -699,11 +738,12 @@ export function renderWelcome(opts: { appUrl?: string; assetOrigin?: string } = 
  * change: until then the account keeps the address it has. It says only what is true for every
  * account, Google ones included: the sign-in it may ask for is with the address in use now.
  */
-export function renderEmailChange(opts: {
-  link: string;
-  ttlHours: number;
-  assetOrigin?: string;
-}): RenderedEmail {
+export function renderEmailChange(
+  opts: {
+    link: string;
+    ttlHours: number;
+  } & MailOrigins
+): RenderedEmail {
   return renderMail({
     subject: `Confirm your new email for ${BRAND}`,
     preheader: `Open the link and your account uses this address. It works for ${lasts(opts.ttlHours)}.`,
@@ -718,7 +758,7 @@ export function renderEmailChange(opts: {
     paste: opts.link,
     aside: "Didn't ask for this? Ignore this mail. Without the link, nothing changes.",
     reason: `You are getting this because this address was entered as the new email for a ${BRAND} account.`,
-    assetOrigin: opts.assetOrigin,
+    ...mailOrigins(opts),
   });
 }
 
@@ -728,11 +768,12 @@ export function renderEmailChange(opts: {
  * when it was not the owner, which is Settings, where the change can be cancelled. `newEmail` is
  * null when the notice should not name it (the current address is unconfirmed).
  */
-export function renderEmailChangeNotice(opts: {
-  newEmail: string | null;
-  appUrl?: string;
-}): RenderedEmail {
-  const app = opts.appUrl || APP_URL;
+export function renderEmailChangeNotice(
+  opts: {
+    newEmail: string | null;
+  } & MailOrigins
+): RenderedEmail {
+  const app = appOf(opts);
   const named = opts.newEmail;
   return renderMail({
     subject: `Someone asked to change your ${BRAND} email`,
@@ -751,7 +792,7 @@ export function renderEmailChangeNotice(opts: {
     ],
     buttons: [{ label: 'Open Settings', href: `${app}/#settings` }],
     reason: `You are getting this because a new email address was asked for on your ${BRAND} account.`,
-    assetOrigin: opts.appUrl,
+    ...mailOrigins(opts),
   });
 }
 
@@ -760,8 +801,8 @@ export function renderEmailChangeNotice(opts: {
  * opens the app; Reset password opens its sign-in screen on the form that sends a reset link
  * (#forgot-password, frontend/src/components/LoginScreen.tsx).
  */
-export function renderAccountExists(opts: { appUrl?: string }): RenderedEmail {
-  const app = opts.appUrl || APP_URL;
+export function renderAccountExists(opts: MailOrigins): RenderedEmail {
+  const app = appOf(opts);
   return renderMail({
     subject: `You already have a ${BRAND} account`,
     preheader: 'Someone tried to sign up with your address. Your account is unchanged.',
@@ -776,16 +817,17 @@ export function renderAccountExists(opts: { appUrl?: string }): RenderedEmail {
       { label: 'Reset password', href: `${app}/#forgot-password` },
     ],
     reason: `You are getting this because someone tried to sign up for ${BRAND} with this address.`,
-    assetOrigin: opts.appUrl,
+    ...mailOrigins(opts),
   });
 }
 
 /** The password reset link. */
-export function renderPasswordReset(opts: {
-  link: string;
-  ttlHours: number;
-  assetOrigin?: string;
-}): RenderedEmail {
+export function renderPasswordReset(
+  opts: {
+    link: string;
+    ttlHours: number;
+  } & MailOrigins
+): RenderedEmail {
   return renderMail({
     subject: `Reset your ${BRAND} password`,
     preheader: `Choose a new password. The link works for ${lasts(opts.ttlHours)}.`,
@@ -799,16 +841,17 @@ export function renderPasswordReset(opts: {
     paste: opts.link,
     aside: "Didn't ask for a reset? Ignore this mail. Your password stays as it is.",
     reason: 'You are getting this because a password reset was asked for on this address.',
-    assetOrigin: opts.assetOrigin,
+    ...mailOrigins(opts),
   });
 }
 
 /** A one-time sign-in code. The subject starts with the code, so an inbox list shows it. */
-export function renderLoginCode(opts: {
-  code: string;
-  ttlMinutes: number;
-  assetOrigin?: string;
-}): RenderedEmail {
+export function renderLoginCode(
+  opts: {
+    code: string;
+    ttlMinutes: number;
+  } & MailOrigins
+): RenderedEmail {
   return renderMail({
     subject: `${opts.code} is your ${BRAND} sign-in code`,
     preheader: `It works once, for ${opts.ttlMinutes} minutes.`,
@@ -820,7 +863,7 @@ export function renderLoginCode(opts: {
     ],
     aside: "Didn't try to sign in? Ignore this mail. Nobody gets in without the code.",
     reason: 'You are getting this because a sign-in code was asked for on this address.',
-    assetOrigin: opts.assetOrigin,
+    ...mailOrigins(opts),
   });
 }
 
@@ -839,15 +882,16 @@ export function renderLoginCode(opts: {
  * A card was declined and Stripe is retrying. The subscription is still live meanwhile. It shows
  * the amount due, when Stripe gave one.
  */
-export function renderPaymentFailed(opts: {
-  planName: string;
-  amountDue?: number | null;
-  currency?: string | null;
-  nextAttempt?: Date | null;
-  payUrl?: string | null;
-  appUrl?: string;
-}): RenderedEmail {
-  const app = opts.appUrl || APP_URL;
+export function renderPaymentFailed(
+  opts: {
+    planName: string;
+    amountDue?: number | null;
+    currency?: string | null;
+    nextAttempt?: Date | null;
+    payUrl?: string | null;
+  } & MailOrigins
+): RenderedEmail {
+  const app = appOf(opts);
   const amount =
     typeof opts.amountDue === 'number' && opts.amountDue > 0
       ? formatMoney(opts.amountDue, opts.currency)
@@ -877,7 +921,7 @@ export function renderPaymentFailed(opts: {
       'If the retries run out, the account moves to Free. Nothing is deleted: your data stays where it is, and you can pick the plan back up whenever you like.',
     ],
     reason: `You are getting this because a payment for your ${BRAND} subscription could not be collected.`,
-    assetOrigin: opts.appUrl,
+    ...mailOrigins(opts),
   });
 }
 
@@ -886,12 +930,13 @@ export function renderPaymentFailed(opts: {
  * decline: nothing is wrong, and the only thing that fixes it is the user opening a page, which a
  * "your payment failed" subject line makes them less likely to do, not more. It shows no amount.
  */
-export function renderPaymentActionRequired(opts: {
-  planName: string;
-  payUrl?: string | null;
-  appUrl?: string;
-}): RenderedEmail {
-  const app = opts.appUrl || APP_URL;
+export function renderPaymentActionRequired(
+  opts: {
+    planName: string;
+    payUrl?: string | null;
+  } & MailOrigins
+): RenderedEmail {
+  const app = appOf(opts);
   return renderMail({
     subject: `Your bank needs you to confirm a ${BRAND} payment`,
     preheader: 'A quick confirmation with your bank, then the payment goes through.',
@@ -905,18 +950,19 @@ export function renderPaymentActionRequired(opts: {
       "Your plan stays active while this is outstanding. If it isn't confirmed, the payment is treated as failed and we retry it.",
     ],
     reason: `You are getting this because your bank asked you to confirm a ${BRAND} subscription payment.`,
-    assetOrigin: opts.appUrl,
+    ...mailOrigins(opts),
   });
 }
 
 /**
  * The subscription is over: cancelled, or dunning ran out. Says what happens to the data.
  */
-export function renderSubscriptionEnded(opts: {
-  planName: string;
-  appUrl?: string;
-}): RenderedEmail {
-  const app = opts.appUrl || APP_URL;
+export function renderSubscriptionEnded(
+  opts: {
+    planName: string;
+  } & MailOrigins
+): RenderedEmail {
+  const app = appOf(opts);
   return renderMail({
     subject: `Your ${BRAND} ${opts.planName} plan has ended`,
     preheader: 'Your account is on Free now. Nothing has been deleted.',
@@ -931,7 +977,7 @@ export function renderSubscriptionEnded(opts: {
       "If you didn't mean to end it (a card that expired, say), choosing the plan again is all it takes.",
     ],
     reason: `You are getting this because your ${BRAND} subscription ended.`,
-    assetOrigin: opts.appUrl,
+    ...mailOrigins(opts),
   });
 }
 
@@ -959,14 +1005,15 @@ const plural = (n: number, one: string, many: string) => (n === 1 ? one : many);
  * and where it stands. The scheduled send lists those at 80% or more; the preview from Settings
  * lists every budget, so its headline claims "close" only when every one is.
  */
-export function renderBudgetAlert(opts: {
-  alerts: BudgetAlertRow[];
-  currency?: string | null;
-  unsubUrl?: string | null;
-  periodLabel?: string;
-  test?: boolean;
-  assetOrigin?: string;
-}): RenderedEmail | null {
+export function renderBudgetAlert(
+  opts: {
+    alerts: BudgetAlertRow[];
+    currency?: string | null;
+    unsubUrl?: string | null;
+    periodLabel?: string;
+    test?: boolean;
+  } & MailOrigins
+): RenderedEmail | null {
   if (opts.alerts.length === 0) return null;
   const money = (amount: number) => formatMoney(amount, opts.currency);
   const over = opts.alerts.filter((a) => a.status === 'over').length;
@@ -1011,10 +1058,10 @@ export function renderBudgetAlert(opts: {
         })),
       },
     ],
-    buttons: [{ label: 'Review budgets', href: `${APP_URL}/#budgets` }],
+    buttons: [{ label: 'Review budgets', href: `${appOf(opts)}/#budgets` }],
     reason: reminderReason('budget alerts', opts.test),
     unsubUrl: opts.unsubUrl,
-    assetOrigin: opts.assetOrigin,
+    ...mailOrigins(opts),
   });
 }
 
@@ -1029,14 +1076,15 @@ export interface SpendingReportData {
 }
 
 /** A period's income, spending and what was left, then the categories it went to. */
-export function renderSpendingReport(opts: {
-  report: SpendingReportData;
-  currency?: string | null;
-  unsubUrl?: string | null;
-  periodLabel?: string;
-  test?: boolean;
-  assetOrigin?: string;
-}): RenderedEmail | null {
+export function renderSpendingReport(
+  opts: {
+    report: SpendingReportData;
+    currency?: string | null;
+    unsubUrl?: string | null;
+    periodLabel?: string;
+    test?: boolean;
+  } & MailOrigins
+): RenderedEmail | null {
   const r = opts.report;
   if (r.transactionCount === 0) return null;
   const money = (amount: number) => formatMoney(amount, opts.currency);
@@ -1082,10 +1130,10 @@ export function renderSpendingReport(opts: {
         empty: 'No spending in this period.',
       },
     ],
-    buttons: [{ label: 'Open analytics', href: `${APP_URL}/#analytics` }],
+    buttons: [{ label: 'Open analytics', href: `${appOf(opts)}/#analytics` }],
     reason: reminderReason('spending reports', opts.test),
     unsubUrl: opts.unsubUrl,
-    assetOrigin: opts.assetOrigin,
+    ...mailOrigins(opts),
   });
 }
 
@@ -1098,13 +1146,14 @@ export interface UpcomingBillRow {
 }
 
 /** The bills overdue or due within a week, each with its amount, due date and how soon. */
-export function renderBillsReminder(opts: {
-  bills: UpcomingBillRow[];
-  currency?: string | null;
-  unsubUrl?: string | null;
-  test?: boolean;
-  assetOrigin?: string;
-}): RenderedEmail | null {
+export function renderBillsReminder(
+  opts: {
+    bills: UpcomingBillRow[];
+    currency?: string | null;
+    unsubUrl?: string | null;
+    test?: boolean;
+  } & MailOrigins
+): RenderedEmail | null {
   if (opts.bills.length === 0) return null;
   const money = (amount: number) => formatMoney(amount, opts.currency);
   const when = (b: UpcomingBillRow) =>
@@ -1168,10 +1217,10 @@ export function renderBillsReminder(opts: {
         })),
       },
     ],
-    buttons: [{ label: 'Open bills', href: `${APP_URL}/#bills` }],
+    buttons: [{ label: 'Open bills', href: `${appOf(opts)}/#bills` }],
     reason: reminderReason('reminders for upcoming bills', opts.test),
     unsubUrl: opts.unsubUrl,
-    assetOrigin: opts.assetOrigin,
+    ...mailOrigins(opts),
   });
 }
 
@@ -1181,7 +1230,7 @@ export function renderBillsReminder(opts: {
  * Settings, Email reminders, Test: checks that mail reaches the account's address. It says nothing
  * of how the reminders look: the previews beside it send the real ones.
  */
-export function renderTestBasic(opts: { assetOrigin?: string } = {}): RenderedEmail {
+export function renderTestBasic(opts: MailOrigins = {}): RenderedEmail {
   return renderMail({
     subject: `Test mail from ${BRAND}`,
     preheader: `Mail from ${BRAND} reaches this address.`,
@@ -1191,14 +1240,14 @@ export function renderTestBasic(opts: { assetOrigin?: string } = {}): RenderedEm
       `This is the test you sent from Email reminders in Settings. It arrived, so mail from ${BRAND} reaches this address.`,
       'Budget alerts, spending reports and bill reminders come here too, once you turn them on.',
     ],
-    buttons: [{ label: 'Open Settings', href: `${APP_URL}/#settings` }],
+    buttons: [{ label: 'Open Settings', href: `${appOf(opts)}/#settings` }],
     reason: 'You are getting this because you chose Test under Email reminders in Settings.',
-    assetOrigin: opts.assetOrigin,
+    ...mailOrigins(opts),
   });
 }
 
 /** Support-request acknowledgement. It repeats nothing the sender wrote: see support.ts. */
-export function renderSupportAck(opts: { ticketId: string; assetOrigin?: string }): RenderedEmail {
+export function renderSupportAck(opts: { ticketId: string } & MailOrigins): RenderedEmail {
   return renderMail({
     subject: `We got your message (${opts.ticketId})`,
     preheader: `Your reference is ${opts.ticketId}. We'll reply as soon as we can.`,
@@ -1210,7 +1259,7 @@ export function renderSupportAck(opts: { ticketId: string; assetOrigin?: string 
     ],
     aside: "Didn't write to us? Ignore this mail.",
     reason: `You are getting this because this address was given with a message to ${BRAND} support.`,
-    assetOrigin: opts.assetOrigin,
+    ...mailOrigins(opts),
   });
 }
 
@@ -1230,9 +1279,9 @@ export const WEEK_ONE_UNSUB_LABEL = 'Stop first-week mails';
  * quieter second button opens the about site's article with each bank's steps.
  */
 export function renderWeekOneDay2(
-  opts: { appUrl?: string; assetOrigin?: string; unsubUrl?: string | null } = {}
+  opts: { unsubUrl?: string | null } & MailOrigins = {}
 ): RenderedEmail {
-  const app = opts.appUrl || APP_URL;
+  const app = appOf(opts);
   return renderMail({
     subject: 'How to get a year of statements out of your bank',
     preheader: 'Most banks hand over a year of transactions as one CSV or Excel file.',
@@ -1246,13 +1295,13 @@ export function renderWeekOneDay2(
     ],
     buttons: [
       { label: 'Import statements', href: `${app}/#import` },
-      { label: 'Steps for your bank', href: articleUrl('bank-year') },
+      { label: 'Steps for your bank', href: articleUrl('bank-year', opts.aboutUrl || ABOUT_URL) },
     ],
     signOff: "Can't find your bank's export, or a file won't import? Reply to this mail.",
     reason: `You are getting this because your ${BRAND} account is new and has no import yet. There are two first-week mails at most.`,
     unsubUrl: opts.unsubUrl,
     unsubLabel: WEEK_ONE_UNSUB_LABEL,
-    assetOrigin: opts.assetOrigin || opts.appUrl,
+    ...mailOrigins(opts),
   });
 }
 
@@ -1285,14 +1334,14 @@ export interface WeekOneStep {
 const count = (n: number) => n.toLocaleString('en-US');
 
 /** Day 7: what the first week found, in counts, for an account with an import. */
-export function renderWeekOneDay7(opts: {
-  counts: WeekOneCounts;
-  step: WeekOneStep | null;
-  appUrl?: string;
-  assetOrigin?: string;
-  unsubUrl?: string | null;
-}): RenderedEmail {
-  const app = opts.appUrl || APP_URL;
+export function renderWeekOneDay7(
+  opts: {
+    counts: WeekOneCounts;
+    step: WeekOneStep | null;
+    unsubUrl?: string | null;
+  } & MailOrigins
+): RenderedEmail {
+  const app = appOf(opts);
   const c = opts.counts;
   const monthsLabel = `Months tracked of the last ${c.windowMonths}`;
   const rows: Array<[string, number]> = [
@@ -1343,6 +1392,6 @@ export function renderWeekOneDay7(opts: {
     reason: `You are getting this because your ${BRAND} account is a week old and has its first import. This is the last first-week mail.`,
     unsubUrl: opts.unsubUrl,
     unsubLabel: WEEK_ONE_UNSUB_LABEL,
-    assetOrigin: opts.assetOrigin || opts.appUrl,
+    ...mailOrigins(opts),
   });
 }

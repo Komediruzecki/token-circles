@@ -29,7 +29,7 @@ const AMOUNT_MAIL_DIGESTS = {
   },
   renderPaymentFailed: {
     inputs: 128,
-    digest: '15b05f67fb121631342860aa29272862823d5e420ba43a4459e686c730a956fb',
+    digest: '3a21303052f0cb6f113fa32f3e5048dcb0dcb35cde82a4691c9426284a8ca024',
   },
 };
 
@@ -263,6 +263,10 @@ describe('the mail catalogue', () => {
     // Taken again for the "light only" head (mail-color-scheme.test.ts): every one of the 464 mails
     // differs only in its head, <body id="body">, and the inline colours of the preheader, the
     // wordmark's link and the two pictures; subjects and text twins are unchanged.
+    // Taken again on 2026-11-03 for the failed payment alone, when a mail's wordmark and "Open the
+    // app" began to follow the app the caller names (A20, mail-origins.test.ts): only its grid's
+    // dev-origin half changed. Rendered with production's origins, or none, every renderer gives
+    // the output it gave before, compared mail by mail against the commit before.
     expect(await amountMailDigests(templates)).toEqual(AMOUNT_MAIL_DIGESTS);
   });
 

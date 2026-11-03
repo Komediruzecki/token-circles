@@ -11,6 +11,7 @@ import { env } from 'cloudflare:test';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { renderWeekOneDay2, renderWeekOneDay7 } from '../src/emailTemplates';
 import { runWeekOneMails, WEEK_ONE, WEEK_ONE_CRON } from '../src/weekOne';
+import { offOrigins } from './helpers/mail-links';
 
 const NOW = new Date('2030-06-15T08:00:00Z');
 const HOUR = 3_600_000;
@@ -528,6 +529,34 @@ describe('the day-2 mail itself', () => {
     expect(text).toContain(`Sparkasse import as they are. ${ynab} Any other CSV`);
     expect(html).toContain(ynab);
     expect(text).not.toContain('YNAB exports');
+  });
+});
+
+describe("the links in the first-week mails, on this deployment's origins", () => {
+  // The wordmark, "Open the app", the footer and the bank article pointed at production from dev
+  // and from a self-hosted Worker (A20). The app and the API are wrangler.jsonc's local vars.
+  const ABOUT = 'https://about.example.test';
+  const vars = env as unknown as Record<string, string | undefined>;
+  afterEach(() => {
+    delete vars.ABOUT_ORIGIN;
+  });
+
+  it('day 2 and day 7 link only to the app, the about site and the API they are sent from', async () => {
+    vars.ABOUT_ORIGIN = ABOUT;
+    const day2 = await account({ confirmedAgo: 3 * DAY });
+    const day7 = await account({ confirmedAgo: 7 * DAY });
+    await imported(day7.id);
+    await run();
+    const origins = [vars.CORS_ORIGIN!, ABOUT, vars.API_PUBLIC_ORIGIN!];
+    for (const a of [day2, day7]) {
+      const [mail] = mailsTo(a.email);
+      expect(mail).toBeDefined();
+      expect(offOrigins(mail!, origins)).toEqual([]);
+      expect(mail!.html).toContain(`href="${ABOUT}/terms"`);
+    }
+    expect(mailsTo(day2.email)[0]!.html).toContain(
+      `href="${ABOUT}/articles/getting-a-year-out-of-your-bank/"`
+    );
   });
 });
 

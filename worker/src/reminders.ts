@@ -10,7 +10,8 @@ import {
   renderBudgetAlert,
   renderSpendingReport,
 } from './emailTemplates';
-import type { RenderedEmail, UpcomingBillRow } from './emailTemplates';
+import type { MailOrigins, RenderedEmail, UpcomingBillRow } from './emailTemplates';
+import { DEFAULT_ABOUT_ORIGIN } from '../../shared/articles';
 import { comingUp, type ScheduledBill } from '../../shared/billSchedule';
 
 // Reminder emails (budget alerts + spending reports + upcoming bills), ported from
@@ -26,6 +27,21 @@ import { comingUp, type ScheduledBill } from '../../shared/billSchedule';
 // here so a dev-sent mail never depends on a prod release shipping the asset.
 export function appOrigin(env: Env): string {
   return env.CORS_ORIGIN || env.APP_ORIGINS?.split(',')[0] || 'https://tokencircles.com';
+}
+
+/**
+ * The about site THIS deployment's mails link to: the footer's About, Terms and Privacy, and the
+ * articles (shared/articles.ts). Dev names its own (wrangler.jsonc env.dev ABOUT_ORIGIN);
+ * production's when unset.
+ */
+export function aboutOrigin(env: Env): string {
+  return env.ABOUT_ORIGIN || DEFAULT_ABOUT_ORIGIN;
+}
+
+/** Where THIS deployment's mails link and load their art from (emailTemplates.ts MailOrigins). */
+export function mailOriginsOf(env: Env): MailOrigins {
+  const app = appOrigin(env);
+  return { appUrl: app, aboutUrl: aboutOrigin(env), assetOrigin: app };
 }
 
 export function unsubscribeUrl(unsubToken: string | null, env: Env): string | null {
@@ -327,7 +343,7 @@ export async function sendBudgetAlertsForUser(env: Env, u: UserRow): Promise<boo
     alerts: deduped,
     currency: await profileCurrency(env, pids[0]),
     unsubUrl: unsubscribeUrl(await ensureUnsubToken(env, u), env),
-    assetOrigin: appOrigin(env),
+    ...mailOriginsOf(env),
   });
   if (!mail) return false;
   if (!(await withinQuota(env, u))) return false;
@@ -355,7 +371,7 @@ export async function sendSpendingReportForUser(env: Env, u: UserRow): Promise<b
       report,
       currency: await profileCurrency(env, pid),
       unsubUrl,
-      assetOrigin: appOrigin(env),
+      ...mailOriginsOf(env),
     });
     if (mail) {
       if (!(await withinQuota(env, u))) return false;
@@ -410,7 +426,7 @@ export async function sendBillsRemindersForUser(env: Env, u: UserRow): Promise<b
     bills: all.sort((a, b) => a.daysUntilDue - b.daysUntilDue),
     currency: await profileCurrency(env, pids[0]),
     unsubUrl: unsubscribeUrl(await ensureUnsubToken(env, u), env),
-    assetOrigin: appOrigin(env),
+    ...mailOriginsOf(env),
   });
   if (!mail) return false;
   if (!(await withinQuota(env, u))) return false;
@@ -481,7 +497,7 @@ export async function composeReminderPreview(
         unsubUrl,
         periodLabel,
         test: true,
-        assetOrigin: appOrigin(env),
+        ...mailOriginsOf(env),
       });
       if (mail) return mail;
     }
@@ -496,7 +512,7 @@ export async function composeReminderPreview(
       currency,
       unsubUrl,
       test: true,
-      assetOrigin: appOrigin(env),
+      ...mailOriginsOf(env),
     });
   }
 
@@ -512,7 +528,7 @@ export async function composeReminderPreview(
     unsubUrl,
     periodLabel,
     test: true,
-    assetOrigin: appOrigin(env),
+    ...mailOriginsOf(env),
   });
 }
 

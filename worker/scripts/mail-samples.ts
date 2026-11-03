@@ -42,12 +42,13 @@ export interface MailSample {
 export interface SampleOptions {
   /** The app the mails link into. */
   appUrl?: string;
+  /** The about site the footers and the articles link to; production's when left out. */
+  aboutUrl?: string;
+  /** The API the sample links (confirm, unsubscribe) go through. */
+  apiUrl?: string;
   /** Where the mails load the wordmark and the art from. */
   assetOrigin?: string;
 }
-
-/** A sample link, to an address that answers nothing. */
-const sampleLink = (path: string) => `https://api.tokencircles.com${path}?token=EXAMPLE-ONLY`;
 
 /** The amount mails render nothing without data; the samples always have some. */
 function rendered(mail: RenderedEmail | null, template: string): RenderedEmail {
@@ -58,6 +59,10 @@ function rendered(mail: RenderedEmail | null, template: string): RenderedEmail {
 export function mailSamples(opts: SampleOptions = {}): MailSample[] {
   const appUrl = opts.appUrl ?? 'https://tokencircles.com';
   const assetOrigin = opts.assetOrigin ?? appUrl;
+  const origins = { appUrl, aboutUrl: opts.aboutUrl, assetOrigin };
+  const api = opts.apiUrl ?? 'https://api.tokencircles.com';
+  /** A sample link, to an address that answers nothing. */
+  const sampleLink = (path: string) => `${api}${path}?token=EXAMPLE-ONLY`;
   const unsubUrl = sampleLink('/api/notifications/unsubscribe');
   const weekOneUnsubUrl = `${unsubUrl}&list=week-one`;
   return [
@@ -68,7 +73,7 @@ export function mailSamples(opts: SampleOptions = {}): MailSample[] {
         renderConfirmEmail({
           link: sampleLink('/api/auth/verify-email'),
           ttlHours: 24,
-          assetOrigin,
+          ...origins,
         }),
     },
     {
@@ -78,13 +83,13 @@ export function mailSamples(opts: SampleOptions = {}): MailSample[] {
         renderEmailVerification({
           link: sampleLink('/api/auth/verify-email'),
           ttlHours: 24,
-          assetOrigin,
+          ...origins,
         }),
     },
     {
       name: 'welcome',
       template: 'renderWelcome',
-      render: () => renderWelcome({ appUrl, assetOrigin }),
+      render: () => renderWelcome(origins),
     },
     {
       name: 'email-change',
@@ -93,23 +98,23 @@ export function mailSamples(opts: SampleOptions = {}): MailSample[] {
         renderEmailChange({
           link: sampleLink('/api/auth/verify-email'),
           ttlHours: 24,
-          assetOrigin,
+          ...origins,
         }),
     },
     {
       name: 'email-change-notice',
       template: 'renderEmailChangeNotice',
-      render: () => renderEmailChangeNotice({ newEmail: 'new.address@example.com', appUrl }),
+      render: () => renderEmailChangeNotice({ newEmail: 'new.address@example.com', ...origins }),
     },
     {
       name: 'email-change-notice-unnamed',
       template: 'renderEmailChangeNotice',
-      render: () => renderEmailChangeNotice({ newEmail: null, appUrl }),
+      render: () => renderEmailChangeNotice({ newEmail: null, ...origins }),
     },
     {
       name: 'account-exists',
       template: 'renderAccountExists',
-      render: () => renderAccountExists({ appUrl }),
+      render: () => renderAccountExists(origins),
     },
     {
       name: 'password-reset',
@@ -118,23 +123,23 @@ export function mailSamples(opts: SampleOptions = {}): MailSample[] {
         renderPasswordReset({
           link: `${appUrl}/#reset-password?token=EXAMPLE-ONLY`,
           ttlHours: 2,
-          assetOrigin,
+          ...origins,
         }),
     },
     {
       name: 'login-code',
       template: 'renderLoginCode',
-      render: () => renderLoginCode({ code: '123456', ttlMinutes: 10, assetOrigin }),
+      render: () => renderLoginCode({ code: '123456', ttlMinutes: 10, ...origins }),
     },
     {
       name: 'test-basic',
       template: 'renderTestBasic',
-      render: () => renderTestBasic({ assetOrigin }),
+      render: () => renderTestBasic(origins),
     },
     {
       name: 'support-ack',
       template: 'renderSupportAck',
-      render: () => renderSupportAck({ ticketId: 'TC-SAMPLE', assetOrigin }),
+      render: () => renderSupportAck({ ticketId: 'TC-SAMPLE', ...origins }),
     },
     {
       name: 'payment-failed',
@@ -145,18 +150,18 @@ export function mailSamples(opts: SampleOptions = {}): MailSample[] {
           amountDue: 4,
           currency: 'EUR',
           nextAttempt: new Date('2026-11-04T00:00:00Z'),
-          appUrl,
+          ...origins,
         }),
     },
     {
       name: 'payment-action-required',
       template: 'renderPaymentActionRequired',
-      render: () => renderPaymentActionRequired({ planName: 'Basic', appUrl }),
+      render: () => renderPaymentActionRequired({ planName: 'Basic', ...origins }),
     },
     {
       name: 'subscription-ended',
       template: 'renderSubscriptionEnded',
-      render: () => renderSubscriptionEnded({ planName: 'Basic', appUrl }),
+      render: () => renderSubscriptionEnded({ planName: 'Basic', ...origins }),
     },
     {
       name: 'budget-alert',
@@ -185,7 +190,7 @@ export function mailSamples(opts: SampleOptions = {}): MailSample[] {
             currency: 'EUR',
             unsubUrl,
             periodLabel: 'November 2026',
-            assetOrigin,
+            ...origins,
           }),
           'renderBudgetAlert'
         ),
@@ -211,7 +216,7 @@ export function mailSamples(opts: SampleOptions = {}): MailSample[] {
             currency: 'EUR',
             unsubUrl,
             periodLabel: 'October 2026, first half',
-            assetOrigin,
+            ...origins,
           }),
           'renderSpendingReport'
         ),
@@ -240,7 +245,7 @@ export function mailSamples(opts: SampleOptions = {}): MailSample[] {
             ],
             currency: 'EUR',
             unsubUrl,
-            assetOrigin,
+            ...origins,
           }),
           'renderBillsReminder'
         ),
@@ -248,7 +253,7 @@ export function mailSamples(opts: SampleOptions = {}): MailSample[] {
     {
       name: 'week-one-day-2',
       template: 'renderWeekOneDay2',
-      render: () => renderWeekOneDay2({ appUrl, assetOrigin, unsubUrl: weekOneUnsubUrl }),
+      render: () => renderWeekOneDay2({ ...origins, unsubUrl: weekOneUnsubUrl }),
     },
     {
       name: 'week-one-day-7',
@@ -269,8 +274,7 @@ export function mailSamples(opts: SampleOptions = {}): MailSample[] {
             hash: '#import',
             label: 'Import',
           },
-          appUrl,
-          assetOrigin,
+          ...origins,
           unsubUrl: weekOneUnsubUrl,
         }),
     },

@@ -35,7 +35,7 @@ import * as db from './db';
 import { sendMail } from './email';
 import { renderWeekOneDay2, renderWeekOneDay7 } from './emailTemplates';
 import type { RenderedEmail, WeekOneCounts, WeekOneStep } from './emailTemplates';
-import { appOrigin, ensureUnsubToken, unsubscribeUrl } from './reminders';
+import { aboutOrigin, appOrigin, ensureUnsubToken, unsubscribeUrl } from './reminders';
 import { WELCOME_KEY } from './welcome';
 import { nextSteps } from '../../shared/orientation';
 import {
@@ -301,6 +301,7 @@ async function sendDue(
 ): Promise<{ sent: number; stopped: boolean }> {
   const due = await candidates(env, mail, sqliteInstant(now), limit);
   const appUrl = appOrigin(env);
+  const aboutUrl = aboutOrigin(env);
   const today = now.toISOString().slice(0, 10);
   let sent = 0;
   for (const account of due) {
@@ -308,11 +309,11 @@ async function sendDue(
       let rendered: RenderedEmail;
       const stopUrl = weekOneStopUrl(await ensureUnsubToken(env, account), env);
       if (mail === 'day2') {
-        rendered = renderWeekOneDay2({ appUrl, unsubUrl: stopUrl });
+        rendered = renderWeekOneDay2({ appUrl, aboutUrl, unsubUrl: stopUrl });
       } else {
         const content = await weekOneDay7Content(env, account.id, today);
         if (!content) continue;
-        rendered = renderWeekOneDay7({ ...content, appUrl, unsubUrl: stopUrl });
+        rendered = renderWeekOneDay7({ ...content, appUrl, aboutUrl, unsubUrl: stopUrl });
       }
       if (!(await claim(env, mail, account.id))) continue;
       const outcome = await sendClaimedOnce(env, mail, account.id, account.email, rendered);
