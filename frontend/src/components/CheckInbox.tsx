@@ -56,14 +56,17 @@ export default function CheckInbox(props: { email: string; onBack: () => void })
   return (
     <div data-test-id="check-inbox">
       <p class={styles.lead} data-test-id="check-inbox-lead">
-        We sent a link to <strong data-test-id="check-inbox-address">{props.email}</strong>.{' '}
+        We sent a link to{' '}
+        <span class={styles.address}>
+          <strong data-test-id="check-inbox-address">{props.email}</strong>.
+        </span>{' '}
         {whereTheLinkSignsIn()}
       </p>
       <FormNotice form={resend} testId="check-inbox-error" />
       <Show when={sentAgain()}>
         <p class={styles.lead} role="status" data-test-id="check-inbox-sent">
-          If {props.email} still needs confirming, a fresh link is on its way. Only the newest link
-          works.
+          If <span class={styles.address}>{props.email}</span> still needs confirming, a fresh link
+          is on its way. Only the newest link works.
         </p>
       </Show>
       <form {...resend.attrs}>

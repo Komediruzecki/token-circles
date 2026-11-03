@@ -2649,6 +2649,20 @@ true, or is too small for one.
   (focused beside the pressed print and on it, in both themes, and forced colours; fails on the
   old rules), and the existing whole-ring test fails with the strip's padding left at 5 px.
 
+- **Check your inbox keeps the address and the footer's items whole.** At 1280 and 390 the
+  address broke at a hyphen ("uat-j01-" on one line, the rest on the next), and in the sign-in
+  footer "Contact support" and a build's version ("v5.17.6-2-g70a3431d") each took two lines. The
+  address, with its full stop, now sits in an inline block (`.address`, `SignInSteps.module.css`)
+  that moves to the next line whole, and still breaks inside an address longer than the line; the
+  "fresh link is on its way" line wraps its address the same way. The footer
+  (`LoginScreen.module.css`, also the Confirm your email screen's) keeps each item on one line and
+  wraps as a row, so a version too long for the row moves to a line of its own; a release's
+  "v5.17.6" still fits beside the other two. Measured after a sign-up with a hyphenated address,
+  both themes: the address on 2 lines before, 1 after; Contact support and the version on 2 lines
+  each before, 1 after, the version on a second row (footer 53 to 58px tall). Test:
+  `tests/check-inbox-layout.spec.ts` (at 1280 and 390; fails on the address with the old markup
+  and on Contact support with the old footer). The footer has `data-test-id="sign-in-footer"`.
+
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
 The production build holds back the benchmarks and the questions that choose their figures

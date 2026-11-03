@@ -18,6 +18,15 @@
   color: var(--text);
 }
 
+/* An address moves to the next line whole instead of breaking at a hyphen in it: at 1280 Check
+   your inbox showed "uat-j01-" at the end of one line and the rest on the next. One longer than
+   the line still breaks inside it. */
+.address {
+  display: inline-block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
 .field {
   margin-bottom: 12px;
   text-align: left;
