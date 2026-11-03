@@ -11,6 +11,11 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ### Deploy notes
 
+- `deploy-worker.yml` no longer exports the database before migrating. It records a D1 Time Travel
+  bookmark (`wrangler d1 time-travel info`) and writes it to the job summary; a bad migration is
+  undone with `wrangler d1 time-travel restore <db> --env <env> --bookmark=<bookmark>`, up to 30 days
+  back on Workers Paid. The data stays inside Cloudflare. The prod-update skill lists the new steps
+  and the rollback.
 - `0033_welcome_once.sql` is data only: it adds a `reminder_dedup` row `(user_id, 'welcome')` for
   every account, so no account that exists before it gets the new Welcome. The migration runs
   before the deploy, so a password account that signs up in between gets the old welcome, with its

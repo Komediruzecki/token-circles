@@ -84,29 +84,39 @@ jobs:
         working-directory: worker
         run: pnpm run typecheck
 
-      # Migrations can be destructive (e.g. 0002 recreates the profiles table). Snapshot the
-      # remote D1 to a SQL dump and keep it as an artifact before applying, so a bad migration
-      # is recoverable.
-      - name: Back up remote D1 before migrations (${{ steps.env.outputs.env }})
+      # Migrations can be destructive (e.g. 0002 recreates the profiles table). D1 Time Travel
+      # keeps every database restorable to any minute of the last 30 days (7 on the Workers Free
+      # plan), so record the bookmark for this moment before applying: a bad migration is undone
+      # with `wrangler d1 time-travel restore <db> --env <env> --bookmark=<bookmark>`.
+      # Never put a dump of the database in an artifact: this repository is public, and any
+      # signed-in GitHub account can download its artifacts.
+      - name: Record the D1 restore point before migrations (${{ steps.env.outputs.env }})
+        id: restore_point
         if: env.DEPLOY_ENABLED == 'true'
         uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: worker
-          command: d1 export ${{ steps.env.outputs.db }} --remote --env ${{ steps.env.outputs.env }} --output d1-backup.sql
+          command: d1 time-travel info ${{ steps.env.outputs.db }} --env ${{ steps.env.outputs.env }}
           packageManager: pnpm
           # wrangler-action@v3 installs an old default wrangler that can't run `d1 migrations
           # apply` against this config or deploy an assets-only Worker. Pin a current 4.x.
           wranglerVersion: '4.106.0'
 
-      - name: Upload D1 backup artifact
+      - name: Show the restore point in the job summary
         if: env.DEPLOY_ENABLED == 'true'
-        uses: actions/upload-artifact@v7
-        with:
-          name: d1-backup-${{ steps.env.outputs.env }}-${{ github.sha }}
-          path: worker/d1-backup.sql
-          retention-days: 30
+        env:
+          RESTORE_POINT: ${{ steps.restore_point.outputs.command-output }}
+          DEPLOY_TARGET: ${{ steps.env.outputs.env }}
+        run: |
+          {
+            echo "### D1 restore point, $DEPLOY_TARGET, before migrations"
+            echo
+            echo '```'
+            echo "$RESTORE_POINT"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Apply D1 migrations (${{ steps.env.outputs.env }})
         if: env.DEPLOY_ENABLED == 'true'
