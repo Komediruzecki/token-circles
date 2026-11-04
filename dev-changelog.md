@@ -3276,6 +3276,14 @@ true, or is too small for one.
   expense of its payment size"): all three fail on the old code; looking for transfers last fails
   the Debt payments case; taking any kind fails the childcare case with no transfer; a 1% leeway
   for Debt payments fails the Jordan example in `guidanceExamples.test.ts`.
+- **Setting today's balance after an import reads the account at Save.** `ImportBalances` worked
+  the starting balance back from the account as its list read it, when the import finished. An
+  entry saved on that account while the list was up (Quick entry, another tab) had moved the
+  stored balance since, so the starting balance came out off by that entry. Save now reads the
+  account as stored first and works back from that. Test: `importBalances.test.tsx`, "works back
+  from the account as stored at Save, not as the list read it", which fails without the read. The
+  test that reads the figure back now has the stored account change when the figure is set, as it
+  does, rather than before Save.
 
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 

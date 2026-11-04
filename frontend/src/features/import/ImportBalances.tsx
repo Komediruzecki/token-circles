@@ -71,7 +71,10 @@ export function ImportBalances(props: { accounts: readonly StoredAccount[] }): J
     }
     setSaving(true)
     try {
-      await setBalanceToday(row.account, figure)
+      // The account as stored now, not as the list read it: an entry saved since then moved its
+      // balance, and the starting balance worked back from the old one would be off by it.
+      const now = (await storedAccounts()).find((account) => account.id === row.account.id)
+      await setBalanceToday(now ?? row.account, figure)
       // Read back from what is stored now, so the line shows what the app holds.
       const stored = (await storedAccounts()).find((account) => account.id === row.account.id)
       const next = stored ? await read([stored]) : []
