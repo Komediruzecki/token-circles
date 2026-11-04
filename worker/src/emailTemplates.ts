@@ -687,7 +687,7 @@ export function renderEmailVerification(
 const WELCOME_STEPS = [
   {
     title: 'Bring your history',
-    text: 'Statements from Revolut, N26, Wise, Erste, PBZ, ING, DKB and Sparkasse import as they are. So does the Register file in a YNAB plan export, with its accounts and transfers. Its starting balances go to accounts that are new or still empty. Any other CSV or Excel file works once you match its columns. Rows you already have are skipped.',
+    text: 'Statements from Revolut, N26, Wise, Erste, PBZ, ING NL, DKB and Sparkasse import as they are. So does the Register file in a YNAB plan export, with its accounts and transfers. Its starting balances go to accounts that are new or still empty. Any other CSV or Excel file works once you match its columns. Rows you already have are skipped.',
     label: 'Open Import',
     hash: '#import',
   },
@@ -713,7 +713,9 @@ const WELCOME_STEPS = [
 export function renderWelcome(opts: MailOrigins = {}): RenderedEmail {
   const app = appOf(opts);
   return renderMail({
-    subject: `${BRAND} is ready for your first statement`,
+    // It goes when the address is first confirmed, and a Google sign-up has it while setup runs, so
+    // it is often read after setup imported a statement: the subject holds either way (review M19).
+    subject: `Welcome to ${BRAND}: start with a year`,
     preheader: 'Import a year from your bank and the app has something to show you on day one.',
     art: 'hero',
     artHref: `${app}/#dashboard`,
@@ -1297,7 +1299,7 @@ export function renderWeekOneDay2(
     paragraphs: [
       "Most banks let you download your transactions as a CSV or Excel file. In online banking, open the account's transactions, look for Export or Download, and choose the last 12 months. A PDF statement won't import, so pick CSV or Excel.",
       // The YNAB file is the welcome's to name: day 2 said it word for word again (review M14).
-      'Files from Revolut, N26, Wise, Erste, PBZ, ING, DKB and Sparkasse import as they are. Any other CSV or Excel file works once you match its columns. Rows you already have are skipped, so a longer range does no harm.',
+      'Files from Revolut, N26, Wise, Erste, PBZ, ING NL, DKB and Sparkasse import as they are. Any other CSV or Excel file works once you match its columns. Rows you already have are skipped, so a longer range does no harm.',
     ],
     buttons: [
       { label: 'Import statements', href: `${app}/${BANK_IMPORT_HASH}` },

@@ -75,7 +75,7 @@ describe('the mail catalogue', () => {
         "week-one-day-2": "How to get a year of statements out of your bank",
         "week-one-day-7": "Your first week in Token Circles",
         "week-one-day-7-year": "Your first week in Token Circles",
-        "welcome": "Token Circles is ready for your first statement",
+        "welcome": "Welcome to Token Circles: start with a year",
       }
     `);
   });

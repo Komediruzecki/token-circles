@@ -584,7 +584,7 @@ describe('the mail itself', () => {
   });
 
   it('welcomes with no confirm link, and points at the three pages to start on', () => {
-    expect(welcome.subject).toBe('Token Circles is ready for your first statement');
+    expect(welcome.subject).toBe('Welcome to Token Circles: start with a year');
     for (const part of [welcome.html, welcome.text]) {
       expect(part).not.toContain('verify-email');
       expect(part).not.toContain('Confirm my email');

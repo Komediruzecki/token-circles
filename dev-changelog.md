@@ -3118,6 +3118,16 @@ true, or is too small for one.
   note "Expired? Open it anyway and choose Send the link again." Tests:
   `loginScreen.refusals.test.tsx` and `email-verification.test.ts`; the old note fails the second.
 
+- **The mails name ING NL, as the importer does, and the welcome's subject holds after a setup
+  import** (M19). The welcome and the day-2 mail listed "ING" among the banks whose files import
+  as they are; the Import page lists "ING NL", and both mails now say that. The welcome goes when
+  an address is first confirmed, and a Google sign-up has it while setup runs, so it is often read
+  after setup has imported a statement. Its subject "Token Circles is ready for your first
+  statement" was then untrue; it is now "Welcome to Token Circles: start with a year". Tests:
+  `mail-bank-names.test.ts` holds both lists to the importer's labels and fails on "ING" or on a
+  bank the importer does not read; `email-verification.test.ts`, `mail-catalogue.test.ts` and
+  `welcome-once.test.ts` pin the subject.
+
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
 The production build holds back the benchmarks and the questions that choose their figures

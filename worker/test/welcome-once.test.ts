@@ -21,12 +21,11 @@ const API = 'https://api.example.com';
 const APP = 'http://localhost:3800';
 const PASSWORD = 'correct horse battery staple';
 const CONFIRM_SUBJECT = 'Confirm your email for Token Circles';
-const WELCOME_SUBJECT = 'Token Circles is ready for your first statement';
+const WELCOME_SUBJECT = 'Welcome to Token Circles: start with a year';
 
 /** Words and links that belong to the Welcome, none of which Confirm may carry. */
 const WELCOME_CONTENT = [
   'Welcome',
-  'is ready',
   'Start with a year',
   'Where to go first',
   'Import statements',
