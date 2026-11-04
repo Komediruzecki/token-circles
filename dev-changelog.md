@@ -2616,6 +2616,108 @@ check')` first, as the cushion and debt cases do.
   above. Test: `tests/a11y-phone.spec.ts` (`@smoke`) reads the size of every badge name and date
   on the Dashboard and Progress, the tagline, "primary" and every Settings section label.
 
+- **A solid fill that carries words reads 4.5:1** (round 2, item 1). White on the light theme's
+  green #14985a was 3.70:1 on the "On Track" and "Fully Allocated" budget badges and an account's
+  "savings" badge, and the other worded fills were no better: white on the red #d64550 4.35:1
+  (Over budget, the import's "err", the transaction form's Expense when picked), on the amber
+  #f59e0b and #d97f2e 2.15:1 and 2.99:1 (Warning, the import's "dup"). In the dark theme white sat
+  on light hues: 2.28:1 on #22c55e, 1.99:1 on the expense pink and 1.25:1 on the income mint the
+  transaction form's Income used. Each theme now has `--success-fill`, `--danger-fill`,
+  `--warning-fill` and `--info-fill`, and `--on-fill` for the words: in light, white on #0e7a47
+  (5.39:1), #b93842 (5.66:1), #9c5416 (5.69:1) and #3b6fe0 (4.63:1); in dark, the night ink
+  #0a0e1c on #22c55e (8.44:1), #ef4444 (5.11:1), #f0a860 (9.59:1) and #6e9bff (7.14:1).
+  `Badge.module.css` (`.badge-over`, `.badge-warning`, `.badge-ok`, `.badgeSuccess`,
+  `.badgeInfo`), `Import.module.css` (`.dupBadge`, `.errorBadge`) and the transaction form's
+  Expense and Income (`TransactionsPage.module.css`) use them. Fills without words (bars, dots,
+  strips) keep the brand colour. Tests: `brandTextContrast.test.ts` measures `--on-fill` on each
+  fill in all three themes and fails when any stylesheet rule pairs a solid semantic fill with a
+  text colour other than a fill token under `--on-fill`; with the light `--success-fill` back at
+  #14985a it fails (3.70:1).
+
+- **The savings rate's period reads 5.6:1** (round 2, item 2). "across 2026" under the savings
+  rate on Analytics was `--text-secondary` at 0.8 opacity, 3.68:1 in the light theme and 4.26:1
+  in the graphite deck; at full strength it is 5.63:1 and 6.00:1 (`AnalyticsPage.module.css`).
+  Test: `brandTextContrast.test.ts` reads the rule for the token and no opacity, and measures
+  `--text-secondary` on every page ground in all three themes.
+
+- **A toast's title and action read in the hue's text token** (round 2, item 3). The title and
+  the action button were `--toast-accent`, the brand colour the icon and the border use: in a
+  warning toast #d97f2e on the light surface, 2.99:1, and in an error toast #d64550, 4.35:1 (dark:
+  #ef4444, 4.45:1). Each kind now also sets `--toast-accent-text` (`--primary-text`,
+  `--success-text`, `--warning-text`, `--danger-text`: 5.69:1 for warning and 5.66:1 for error in
+  light, 8.43:1 for error in dark), and `.title` and `.actionBtn` read it; the success toast's
+  one-off rule is gone (`Toast.module.css`). Tests: `brandTextContrast.test.ts` reads each kind's
+  token and both rules; `successTextContrast.test.ts` now reads the success toast through
+  `--toast-accent-text`.
+
+- **Words in a component's inline style take the text token** (round 2, item 4). Inline styles
+  set words in the brand colours the stylesheet scan could not see: Transactions' required
+  asterisk and two buttons, Settings' billing status line and two more, the Import history's
+  delete button, the import preview's skipped-rows note, Reconciliation's matched and unmatched counts, the reset page's
+  "Finance." full stop, Two-factor's Enabled pill and link, Billing's "2 months free" and
+  LoginModal's four links. They read `--primary-text`, `--success-text`, `--warning-text` and
+  `--danger-text` now. The overview's sparkline series colours and the plan list's check mark
+  keep the brand colour. Test: `brandTextContrast.test.ts` scans every `.tsx` under `src/` for a
+  `color:` that names a brand colour, in a style object or a style string, and fails on any that
+  is not in its list of four marks, or on a listed one that is gone; with `ResetPassword.tsx` back
+  on `--primary` it fails.
+
+- **The hovered primary button reads 4.8:1** (round 2, item 5). A hovered tinted button laid
+  `--primary` at 20% over its ground, and `--primary-text` on that was 4.43:1 on the dark theme's
+  cards and 4.29:1 on the light theme's `--bg-secondary`. At 16% (`--btn-primary-bg-hover`,
+  `styles/index.css`) the worst case is 4.77:1 in dark and 4.51:1 in light; measured in the
+  browser, Add Account, Add Bill and Refresh hovered are 5.69:1 (dark) and 4.77:1 (light) on the
+  page. Test: `brandTextContrast.test.ts` reads the alpha from the stylesheet and measures
+  `--primary-text` on the hovered tint over every page ground in all three themes; at 20% three
+  cases fail.
+
+- **Quick entry is a fingertip on a phone** (round 2, item 6). The quick-entry bar's fields were
+  19 to 24px tall at 390 (Quick entry 288x24, Category and Account 19, Date 19.5), its Expense and
+  Income 28 and Add entry 35. They are 44 under `@media (max-width: 768px), (pointer: coarse)`,
+  with the chips' vertical padding given to the field inside (`CommandBar.module.css`). The guided
+  sheet a tap on the plus opens had Close 30x30, Expense and Income 40, Cancel 36, Next 40, Back
+  40x44 and the date and note fields 20; Close and Back are 44x44, the rest 44 tall, and the
+  summary row holding the date or the note gives its padding to the field, so the row keeps its
+  height (`GuidedOrbit.module.css`). Test: `tests/a11y-phone.spec.ts` (`@smoke`) walks the sheet
+  to its summary and opens the bar with Ctrl+K, and measures every field and button's hit area;
+  without the bar's select rule, Category measures 132x19 and fails.
+
+- **The Import preview's checkboxes say which row** (round 2, item 7). The select-all box and
+  each row's box had no accessible name. Select-all is "Select all rows", and a row's box says
+  "Import row 3: 2026-07-02 · A11y Test Groceries · -52.30": its row in the file and the date,
+  description and amount the duplicate hint already summarises (`ImportPreviewStep.tsx`). Test:
+  `tests/a11y-phone.spec.ts` finds both names in the preview of a pasted CSV.
+
+- **The profile menu's checkboxes are a fingertip** (round 2, item 8). Each was a bare 16x16 box
+  with no name. It sits in a 44x44 label now, whose negative margins take the row's padding, so the
+  row stays 44 tall and the name starts where the label ends (a tap on the name still picks the
+  primary profile); the box is named "Include <profile name>" (`App.tsx`, `Profile.module.css`).
+  Test: `tests/a11y-phone.spec.ts` opens the menu at 390 and measures each profile's label and
+  reads its box's name; with the label overlapping the name by 4px, the right edge landed on the
+  name and the test failed.
+
+- **The first paint is the theme the screen settles on** (round 2, item 9). `public/theme-init.js`
+  stamped the system theme before first paint, then App's start-up set dark (signed-out screens
+  stay dark), then on a signed-in boot `core/theme.ts` set the system theme back. Measured with a
+  watcher on `data-theme`, with the system on light and no stored choice: signed out went light
+  then dark at 57 ms, signed in light, dark at 52 ms and light at 163 ms; the other ten
+  combinations of signed in or out, system light or dark and stored light, dark or none were
+  stamped once. Now one rule, `themeFor` in the new `core/screenTheme.ts` (a stored choice wins, a
+  signed-out screen is dark, the app follows the system), decides both: App applies it once it
+  knows who is signed in, and on every sign-in state change after, and records the screen it
+  settled on (`finance-screen`); theme-init.js reads that record before first paint, or with none
+  yet a kept `currentProfileId`, and treats the password-reset link as signed out and local-first
+  as the app. All twelve combinations are now stamped once and never change. The stamp can still
+  be wrong once when the answer changed since the last visit (a session that expired; a first
+  visit to a local-first build). App's old dark default in `onMount` is gone. The themes README's
+  "Signed out is dark" paragraph says how it works now. Tests: `themeFirstPaint.test.ts` runs
+  theme-init.js for 288 combinations of stored choice, system theme, storage mode, recorded
+  screen, kept profile and reset link against `themeFor` (26 fail on the old script), and checks
+  `applyScreenTheme` records the screen and leaves a fitting theme alone;
+  `tests/theme-first-paint.spec.ts` boots each of the twelve combinations twice as a returning
+  visitor, plus a signed-in first visit since the record began, and requires one theme from the
+  first stamp on (on the old code the two system-light, no-choice cases fail).
+
 ### Found in the first-week test run (3 Nov)
 
 What the 3 Nov test run and the functionality review after it found in the first week's changes,
