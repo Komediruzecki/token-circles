@@ -67,6 +67,7 @@ import {
 import { initPeriodSync, orbitOpen, stepPeriod } from './core/periodStore'
 import { clearPlanIntent, setHighlightedPlan, storedPlanIntent } from './core/planIntent'
 import { createQuickEntryList } from './core/quickEntryLists'
+import { applyScreenTheme } from './core/screenTheme'
 import { lockDocumentScroll } from './core/scrollLock'
 import { setSettingsTab } from './core/settingsStore'
 import { setShowShortcuts, showShortcuts } from './core/shortcutsStore'
@@ -80,6 +81,7 @@ import {
 import { getStorageMode, setStorageMode } from './core/storage/storageFactory'
 import { pages as allPages } from './router.tsx'
 import type { SignedInAccount } from './core/api.js'
+import type { Screen } from './core/screenTheme'
 import type { PageName } from './router.tsx'
 import type { Account, Category, Profile } from './types/models'
 
@@ -387,21 +389,27 @@ export function App() {
     setShowDropdown(false)
   }
 
+  // Which screen is showing, for its theme; known once start-up has asked who is signed in.
+  let screenKnown = false
+  const screenNow = (): Screen => (serverMode && !isAuthenticated() ? 'signed-out' : 'app')
+  createEffect(
+    on(
+      isAuthenticated,
+      () => {
+        if (screenKnown) applyScreenTheme(screenNow())
+      },
+      { defer: true }
+    )
+  )
+
   onMount(async () => {
     // Initialize logging system
     logger.init()
 
-    // Initialize theme (dark by default)
-    const savedTheme = localStorage.getItem('finance-theme')
-    if (savedTheme === 'light') {
-      document.documentElement.setAttribute('data-theme', 'light')
-    } else {
-      document.documentElement.setAttribute('data-theme', 'dark')
-    }
-
     // Password-reset link: <ResetPassword/> takes over the view; skip the profile/category
     // bootstrap below (irrelevant here and would 401 in server mode without a session).
     if (isResetRoute) {
+      applyScreenTheme('signed-out')
       _setIsLoading(false)
       return
     }
@@ -451,6 +459,12 @@ export function App() {
     if (waiting) setConfirmGate(account)
     const loggedIn = account !== null && !waiting
     setIsAuthenticated(loggedIn)
+    // The theme follows the screen from here on: signed out (sign-in, Confirm your email) is dark
+    // unless a theme was chosen, the app follows the system. theme-init.js stamped the same answer
+    // before first paint from the screen recorded last time, so this changes nothing unless that
+    // answer changed since (core/screenTheme.ts).
+    screenKnown = true
+    applyScreenTheme(screenNow())
     // Onboarding is decided per account: the signed-in one, or local-first's one local account.
     setOnboardingOwner(onboardingOwnerFor(serverMode, loggedIn ? account.id : null))
     // A `?plan=` link from the marketing site, parked in localStorage by planIntent because

@@ -1,8 +1,9 @@
 // Stamp the theme before first paint so the boot loader (and the app behind
 // it) never flashes the wrong theme. Resolution order:
 //   1. Explicit user choice in localStorage
-//   2. System prefers-color-scheme media query
-//   3. Default: dark
+//   2. A signed-out screen: dark
+//   3. System prefers-color-scheme media query
+//   4. Default: dark
 // Kept as an external file — not inline — because the self-hosted Express
 // deployment enforces `script-src 'self'` (helmet CSP), which blocks inline
 // scripts.
@@ -25,11 +26,28 @@ function stampTheme(theme) {
   if (meta && BG[theme]) meta.setAttribute('content', BG[theme])
 }
 
+// The rule is core/screenTheme.ts's themeFor, which App applies once auth answers; a test runs
+// this file against it. A stored choice wins; a signed-out screen is dark; the app follows the
+// system. Whether this boot shows a signed-out screen: the password-reset link always does,
+// local-first never does, and otherwise the screen App settled on last time (finance-screen).
+// A browser that has no record yet (its first visit since the record began) is signed in when
+// it holds a current profile, which App keeps while signed in and drops at sign-out.
 try {
   var saved = localStorage.getItem('finance-theme')
+  var resetRoute = location.hash.slice(1).split('?')[0] === 'reset-password'
+  var screen = localStorage.getItem('finance-screen')
+  var showsApp =
+    !resetRoute &&
+    (localStorage.getItem('finance_storage_mode') === 'serverless' ||
+      screen === 'app' ||
+      (screen === null && localStorage.getItem('currentProfileId') !== null))
   if (saved === 'light' || saved === 'dark') {
     stampTheme(saved)
-  } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
+  } else if (
+    showsApp &&
+    window.matchMedia &&
+    window.matchMedia('(prefers-color-scheme: light)').matches
+  ) {
     stampTheme('light')
   } else {
     stampTheme('dark')
