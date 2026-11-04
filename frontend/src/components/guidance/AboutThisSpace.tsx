@@ -10,6 +10,9 @@
  *
  * The region follows what decides it: the answers, the profile's import logs (their bank formats)
  * and the base currency, each re-read when it changes.
+ *
+ * A load that fails shows its error in place of the answers, which would otherwise read as "Not
+ * answered yet." beside it, and the next load that succeeds clears it (review M21).
  */
 import { createSignal, Show } from 'solid-js'
 import { mergeAnswers, readAnswers } from '../../../../shared/guidance/answers'
@@ -40,7 +43,9 @@ export function AboutThisSpace() {
     new Map()
   )
   const [saving, setSaving] = createSignal(false)
+  // A save that failed; a load that failed is `loadFailed`, and hides the answers.
   const [problem, setProblem] = createSignal<string | null>(null)
+  const [loadFailed, setLoadFailed] = createSignal(false)
 
   const load = async () => {
     const profileId = activeProfileId()
@@ -64,6 +69,7 @@ export function AboutThisSpace() {
         (log) => log.profile_id === undefined || Number(log.profile_id) === profileId
       )
     )
+    setLoadFailed(false)
   }
 
   refetchOnActive(
@@ -75,7 +81,11 @@ export function AboutThisSpace() {
       entityVersion('categories'),
     ],
     () => {
-      load().catch(() => setProblem(LOAD_FAILED))
+      const profileId = activeProfileId()
+      load().catch(() => {
+        // A load for a profile no longer open says nothing about the one that is.
+        if (activeProfileId() === profileId) setLoadFailed(true)
+      })
     }
   )
 
@@ -112,32 +122,41 @@ export function AboutThisSpace() {
 
   return (
     <div data-test-id="about-this-space">
-      <Show when={benchmarksShown()}>
-        <SpaceQuestions
-          idPrefix="settings-space"
+      <Show
+        when={!loadFailed()}
+        fallback={
+          <p class={styles.problem} role="alert" data-test-id="about-this-space-problem">
+            {LOAD_FAILED}
+          </p>
+        }
+      >
+        <Show when={benchmarksShown()}>
+          <SpaceQuestions
+            idPrefix="settings-space"
+            answers={answers()}
+            disabled={saving()}
+            onChoose={(changes) => void save(changes)}
+            regionNote={regionNote()}
+            householdNote={householdNote()}
+            onAskAgain={(question) =>
+              void save(question === 'region' ? { region: null } : { adults: null, children: null })
+            }
+          />
+        </Show>
+        <CircleAnswers
           answers={answers()}
+          currency={currency()}
+          categoryNames={categoryNames()}
+          gate={benchmarksShown()}
+          region={region().region}
           disabled={saving()}
-          onChoose={(changes) => void save(changes)}
-          regionNote={regionNote()}
-          householdNote={householdNote()}
-          onAskAgain={(question) =>
-            void save(question === 'region' ? { region: null } : { adults: null, children: null })
-          }
+          onSave={save}
         />
-      </Show>
-      <CircleAnswers
-        answers={answers()}
-        currency={currency()}
-        categoryNames={categoryNames()}
-        gate={benchmarksShown()}
-        region={region().region}
-        disabled={saving()}
-        onSave={save}
-      />
-      <Show when={problem()}>
-        <p class={styles.problem} role="alert" data-test-id="about-this-space-problem">
-          {problem()}
-        </p>
+        <Show when={problem()}>
+          <p class={styles.problem} role="alert" data-test-id="about-this-space-problem">
+            {problem()}
+          </p>
+        </Show>
       </Show>
     </div>
   )

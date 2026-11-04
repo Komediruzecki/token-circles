@@ -3128,6 +3128,14 @@ true, or is too small for one.
   bank the importer does not read; `email-verification.test.ts`, `mail-catalogue.test.ts` and
   `welcome-once.test.ts` pin the subject.
 
+- **Settings shows only the error while its answers could not be read, and clears it on the next
+  load** (M21). About this space showed "Not answered yet." and "Nothing yet. A circle asks ..."
+  above "Couldn't load your answers. Reload the page to try again.", and the error stayed after a
+  later load succeeded. The error now takes the place of the answers, the next load that succeeds
+  clears it, a failed load for a profile no longer open says nothing, and a failed save stays said.
+  Tests: `AboutThisSpace.test.tsx`; without the clearing, the hiding or the profile check, one of
+  them fails.
+
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
 The production build holds back the benchmarks and the questions that choose their figures
