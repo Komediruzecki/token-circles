@@ -141,11 +141,13 @@ export function ImportDataEntry(props: { flow: ImportFlow; compact?: boolean }) 
             <div class={styles.settingsCard} style={{ 'margin-bottom': '16px' }}>
               <h3 class={styles.settingsCardTitle}>Expected columns</h3>
               {/*
-                This table is the import's contract, so it has to tell the truth. Only Amount
-                hard-fails a row. A missing Date imports as today and is flagged; a blank
-                Description imports (bank exports are full of them — a rule that rejected blanks
-                once silently dropped 291 rows). Everything else is optional with the default
-                shown beside the sample, so "optional" never reads as "mysterious".
+                This table is the import's contract, so it has to tell the truth. Date is marked
+                required because Map columns stars it (decided 4 Nov 2026); only Amount
+                hard-fails a row, so Date's sample says what a blank cell does: it imports as
+                today and is flagged. Description stays optional although Map columns stars it,
+                because a blank Description imports (bank exports are full of them; a rule that
+                rejected blanks once silently dropped 291 rows). Everything else is optional with
+                the default shown beside the sample, so "optional" never reads as "mysterious".
               */}
               <div class={styles.tableWrapper} style={{ 'margin-bottom': 0 }}>
                 <table class={styles.previewTable} data-test-id="import-expected-columns">
@@ -159,8 +161,8 @@ export function ImportDataEntry(props: { flow: ImportFlow; compact?: boolean }) 
                   <tbody>
                     <tr>
                       <td>Date</td>
-                      <td>No</td>
-                      <td>2024-01-15 (today's date, and the row is flagged)</td>
+                      <td>Yes</td>
+                      <td>2024-01-15 (a blank cell imports as today, and the row is flagged)</td>
                     </tr>
                     <tr>
                       <td>Description</td>

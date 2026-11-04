@@ -89,6 +89,12 @@ All notable changes to Token Circles are documented here. The format is based on
   the Dutch bank's export. DKB was already there. Test: `ynabRegister.test.ts` now reads the list
   in `frontend/public/llms.txt` and checks it against every adapter's label except YNAB, and the
   count in words, so a bank added to the importer has to be added there too.
+- **Import's Google Sheets "Expected columns" table marks Date as required, as Map columns does.** It
+  said No while the next step starred it. Date's sample still says what a blank cell does: the row
+  imports as today and is flagged. Description stays optional there, though Map columns stars it,
+  because a blank one imports.
+  - Test: `expectedColumnsTable.test.ts` expects Date and Amount as the required columns, every
+    required column to be one Map columns stars, and Date's row to name the blank-cell rule.
 
 ### Deploy notes
 
