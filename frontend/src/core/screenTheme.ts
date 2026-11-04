@@ -31,6 +31,18 @@ export function themeFor(stored: string | null, screen: Screen, systemLight: boo
   return systemLight ? 'light' : 'dark'
 }
 
+/**
+ * The screen App last recorded. Only App records it, and core/theme.ts loads behind sign-in, so
+ * no record yet there means the app.
+ */
+export function recordedScreen(): Screen {
+  try {
+    return localStorage.getItem(SCREEN_KEY) === 'signed-out' ? 'signed-out' : 'app'
+  } catch {
+    return 'app'
+  }
+}
+
 /** Record the screen App settled on and give it its theme, touching nothing that already fits. */
 export function applyScreenTheme(screen: Screen): void {
   let stored: string | null = null

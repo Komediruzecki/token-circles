@@ -117,3 +117,36 @@ describe('ThemeStore following the system', () => {
     expect(activeTheme()).toBe('light')
   })
 })
+
+describe('ThemeStore after a sign-out in the same tab', () => {
+  // App records the screen it shows (core/screenTheme.ts). Signed out, the sign-in screen is dark
+  // unless a theme was chosen; the listener used to apply the raw system theme and turned it light.
+  it('keeps the sign-in screen dark when the OS turns light', () => {
+    const mm = installMatchMedia(false)
+    new ThemeStore().init()
+    localStorage.setItem('finance-screen', 'signed-out')
+    mm.set(true)
+    expect(activeTheme()).toBe('dark')
+  })
+
+  it('follows the system again once signed back in', () => {
+    const mm = installMatchMedia(false)
+    new ThemeStore().init()
+    localStorage.setItem('finance-screen', 'signed-out')
+    mm.set(true)
+    localStorage.setItem('finance-screen', 'app')
+    mm.set(false)
+    mm.set(true)
+    expect(activeTheme()).toBe('light')
+  })
+
+  it('keeps a chosen light theme on the sign-in screen', () => {
+    const mm = installMatchMedia(false)
+    const store = new ThemeStore()
+    store.init()
+    store.setTheme('light')
+    localStorage.setItem('finance-screen', 'signed-out')
+    mm.set(true)
+    expect(activeTheme()).toBe('light')
+  })
+})
