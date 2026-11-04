@@ -2759,6 +2759,25 @@ check')` first, as the cushion and debt cases do.
   a strict `script-src 'self'` can be enforced without moving it, the service worker precaches
   it, and tests run it as the browser does.
 
+- **Red words take `--danger-text`** (round 4). 24 stylesheet rules set words in `--danger`
+  (some with a hex fallback): form and dialog errors (`ConfirmDialog .error`, `ImportBalances
+  .error`, `Import .resultMessage.error` and `.statValue.invalid`, `SubscriptionCatalogModal
+  .priceError`, `SpaceQuestions .problem`, Settings' unsubscribe alert), overdue and over-budget
+  amounts (Bills, the bill calendar, subscriptions, Budgets, Categories, the Dashboard's budget
+  alerts), Bills' Unpaid tag, API access's Revoked and Revoke, Tags' delete and negative, the
+  overflow menu's danger item, and two hovered remove buttons. Before and after:
+  | Where | Before | After |
+  | --- | --- | --- |
+  | Light, on `--bg` | 4.13:1 | 5.38:1 |
+  | Light, on white | 4.35:1 | 5.66:1 |
+  | Dark, on `--surface` | 4.45:1 | 8.43:1 |
+  | Unpaid tag on its pink tint, light | 3.89:1 | 5.06:1 |
+  | Unpaid tag on its pink tint, dark | 3.72:1 | 7.04:1 |
+  No stylesheet sets text in `--info`, so `--info-text` was not added. `BulkActions/` and
+  `TagFilter` are left as they are. Test: `brandTextContrast.test.ts`'s stylesheet scan now
+  covers every semantic colour (primary, income, expense, success, warning, danger and info).
+  With `ConfirmDialog .error` back on `--danger` it fails.
+
 ### Found in the first-week test run (3 Nov)
 
 What the 3 Nov test run and the functionality review after it found in the first week's changes,
