@@ -40,7 +40,9 @@
   --btn-primary-fg: var(--primary-text);
   --btn-primary-border: 1px solid color-mix(in oklab, var(--primary) 45%, transparent);
   --btn-primary-shadow: var(--glow-primary, none);
-  --btn-primary-bg-hover: color-mix(in oklab, var(--primary) 20%, transparent);
+  /* 16%, not 20%: --primary-text over a 20% tint was 4.4:1 in the dark theme and 4.3:1 on the
+     light theme's --bg-secondary. */
+  --btn-primary-bg-hover: color-mix(in oklab, var(--primary) 16%, transparent);
   --btn-primary-border-hover: var(--primary);
 }
 

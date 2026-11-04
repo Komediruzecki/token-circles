@@ -53,13 +53,10 @@ function rgb(hex: string): Rgb {
 /** `top` at `alpha` over the opaque `under`, as a tint or a translucent label paints. */
 function over(top: string, alpha: number, under: string): string {
   const [t, u] = [rgb(top), rgb(under)]
-  return (
-    `#${ 
-    t
-      .map((v, i) => Math.round(v * alpha + u[i] * (1 - alpha)))
-      .map((v) => v.toString(16).padStart(2, '0'))
-      .join('')}`
-  )
+  return `#${t
+    .map((v, i) => Math.round(v * alpha + u[i] * (1 - alpha)))
+    .map((v) => v.toString(16).padStart(2, '0'))
+    .join('')}`
 }
 
 function luminance(hex: string): number {
@@ -291,4 +288,169 @@ describe('words take the text token', () => {
   it('every listed icon rule still exists', () => {
     expect(ICONS.filter((i) => !found.includes(i))).toEqual([])
   })
+})
+
+/** Every `.tsx` under src/, tests aside. */
+function walkTsx(dir: string, found: string[] = []): string[] {
+  for (const entry of readdirSync(dir)) {
+    const full = join(dir, entry)
+    if (statSync(full).isDirectory()) {
+      if (entry !== '__tests__') walkTsx(full, found)
+    } else if (entry.endsWith('.tsx')) found.push(full)
+  }
+  return found
+}
+
+/**
+ * `file: line` for every `color:` in a component's source that names a brand colour: an inline
+ * style object (`color: 'var(--primary)'`) or a style string (`style="color: var(--primary)"`).
+ * The stylesheet scan above cannot see these.
+ */
+function inlineBrandColourText(): string[] {
+  const found: string[] = []
+  const brand =
+    /(?<![-\w])color['"]?\s*:\s*['"]?var\(--(primary|income|expense|success|warning|danger|info)\s*[,)]/
+  for (const file of walkTsx(SRC)) {
+    for (const line of readFileSync(file, 'utf8').split('\n'))
+      if (brand.test(line)) found.push(`${relative(SRC, file)}: ${line.trim()}`)
+  }
+  return found
+}
+
+/** Brand colours in a component's source that are not words, each with why. */
+const INLINE_EXCEPTIONS: [string, string][] = [
+  // The series colours of the overview's sparklines: a line, handed to <Sparkline color>.
+  ["components/Dashboard/OverviewDeck.tsx: color: 'var(--primary)',", 'a sparkline stroke'],
+  ["components/Dashboard/OverviewDeck.tsx: color: 'var(--income)',", 'a sparkline stroke'],
+  ["components/Dashboard/OverviewDeck.tsx: color: 'var(--expense)',", 'a sparkline stroke'],
+  [
+    "components/BillingPlans.tsx: style={{ color: 'var(--primary, #4f46e5)', 'flex-shrink': 0 }}",
+    "the plan list's check mark, an svg drawn in currentColor",
+  ],
+]
+
+describe("a component's inline words take the text token", () => {
+  const found = inlineBrandColourText()
+  const allowed = INLINE_EXCEPTIONS.map(([line]) => line)
+
+  it('no inline style sets color from a brand colour except a listed mark', () => {
+    expect(found.filter((f) => !allowed.includes(f))).toEqual([])
+  })
+
+  it('every listed exception still exists', () => {
+    expect(allowed.filter((a) => !found.includes(a))).toEqual([])
+  })
+})
+
+/**
+ * A solid fill that carries words: "On Track", "Fully Allocated", an account's "savings", the
+ * import's "dup" and "err", the transaction form's Expense and Income. White on the light theme's
+ * green was 3.7:1. Each hue has a fill token for words and `--on-fill` for the words on it.
+ */
+const FILLS = ['--success-fill', '--danger-fill', '--warning-fill', '--info-fill']
+
+describe('fills that carry words', () => {
+  for (const [theme, t] of themes) {
+    for (const fill of FILLS) {
+      it(`--on-fill reaches 4.5:1 on ${fill} in ${theme}`, () => {
+        expect(contrast(value(t, '--on-fill'), value(t, fill))).toBeGreaterThanOrEqual(4.5)
+      })
+    }
+  }
+
+  /** `file:selector` for each rule with a solid fill and words on it, and what it sets. */
+  function solidFillsWithWords(): { at: string; bg: string; color: string }[] {
+    const out: { at: string; bg: string; color: string }[] = []
+    for (const file of walk(SRC)) {
+      if (file.startsWith(THEMES)) continue
+      const css = readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+      for (const m of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+        const bg = /(?<![-\w])background(?:-color)?:\s*([^;]+)/.exec(m[2])?.[1].trim()
+        const color = /(?<![-\w])color:\s*([^;]+)/.exec(m[2])?.[1].trim()
+        if (!bg || !color) continue
+        const solid =
+          /^var\(--(success|income|expense|danger|warning|info)(-fill)?\s*[,)]/.test(bg) &&
+          !bg.includes('color-mix')
+        if (solid)
+          out.push({ at: `${relative(SRC, file)}:${m[1].trim().replace(/\s+/g, ' ')}`, bg, color })
+      }
+    }
+    return out
+  }
+
+  it('a solid semantic fill with words is a fill token under --on-fill', () => {
+    const wrong = solidFillsWithWords()
+      .filter(({ bg, color }) => !/^var\(--[a-z]+-fill\)$/.test(bg) || color !== 'var(--on-fill)')
+      .map(({ at, bg, color }) => `${at} (${bg} / ${color})`)
+    expect(wrong).toEqual([])
+  })
+
+  it('finds the badges the review measured', () => {
+    const at = solidFillsWithWords().map((f) => f.at)
+    for (const rule of [
+      'components/Badge.module.css:.badge-ok',
+      'components/Badge.module.css:.badgeSuccess',
+      'features/Import.module.css:.dupBadge',
+    ])
+      expect(at).toContain(rule)
+  })
+})
+
+describe('the primary button, hovered', () => {
+  const rule = ruleIn(resolve(SRC, 'styles/index.css'), ':root')
+  const alpha =
+    Number(
+      /--btn-primary-bg-hover:\s*color-mix\(in oklab, var\(--primary\) ([\d.]+)%/.exec(rule)?.[1]
+    ) / 100
+
+  it('is a tint of --primary', () => {
+    expect(alpha).toBeGreaterThan(0)
+  })
+
+  for (const [theme, t] of themes) {
+    for (const ground of PAGE_GROUNDS) {
+      it(`--primary-text reaches 4.5:1 on the hovered tint over ${ground} in ${theme}`, () => {
+        const tint = over(value(t, '--primary'), alpha, value(t, ground))
+        expect(contrast(value(t, '--primary-text'), tint)).toBeGreaterThanOrEqual(4.5)
+      })
+    }
+  }
+})
+
+describe('muted words at full strength', () => {
+  it("the savings rate's period is --text-secondary, not faded", () => {
+    const rule = ruleIn(resolve(SRC, 'features/AnalyticsPage.module.css'), '.rate-hero-period')
+    expect(rule).toMatch(/(?<![-\w])color:\s*var\(--text-secondary\)/)
+    expect(rule).not.toMatch(/opacity/)
+  })
+
+  for (const [theme, t] of themes) {
+    for (const ground of PAGE_GROUNDS) {
+      it(`--text-secondary reaches 4.5:1 on ${ground} in ${theme}`, () => {
+        expect(contrast(value(t, '--text-secondary'), value(t, ground))).toBeGreaterThanOrEqual(4.5)
+      })
+    }
+  }
+})
+
+describe("a toast's title and action", () => {
+  const TOAST = resolve(SRC, 'components/Toast.module.css')
+  const kinds: [string, string][] = [
+    ['.toast.info', '--primary-text'],
+    ['.toast.success', '--success-text'],
+    ['.toast.warning', '--warning-text'],
+    ['.toast.error', '--danger-text'],
+  ]
+
+  for (const [kind, token] of kinds) {
+    it(`${kind} sets its words in ${token}`, () => {
+      expect(ruleIn(TOAST, kind)).toContain(`--toast-accent-text: var(${token});`)
+    })
+  }
+
+  for (const selector of ['.title', '.actionBtn']) {
+    it(`${selector} reads --toast-accent-text`, () => {
+      expect(ruleIn(TOAST, selector)).toMatch(/(?<![-\w])color:\s*var\(--toast-accent-text\)/)
+    })
+  }
 })

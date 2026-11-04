@@ -687,10 +687,10 @@
   letter-spacing: 0.5px;
 }
 
+/* The theme's muted text at full strength: at 0.8 opacity it was 3.7:1. */
 .rate-hero-period {
   font-size: 11px;
   color: var(--text-secondary);
-  opacity: 0.8;
 }
 
 .rate-info {

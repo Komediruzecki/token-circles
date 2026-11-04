@@ -338,7 +338,7 @@ export default function BillingPlans(props: {
           </For>
         </div>
         <Show when={interval() === 'annual'}>
-          <span style={{ 'font-size': '12px', color: 'var(--primary)' }}>≈ 2 months free</span>
+          <span style={{ 'font-size': '12px', color: 'var(--primary-text)' }}>≈ 2 months free</span>
         </Show>
       </div>
 

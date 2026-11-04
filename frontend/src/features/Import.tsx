@@ -394,7 +394,7 @@ export default function Import() {
                           'font-size': '12px',
                           padding: '4px 10px',
                           border: '1px solid var(--danger, #ef4444)',
-                          color: 'var(--danger, #ef4444)',
+                          color: 'var(--danger-text)',
                           background: 'transparent',
                           'border-radius': '6px',
                           cursor: 'pointer',

@@ -634,8 +634,8 @@
   font-size: 10px;
   padding: 1px 5px;
   border-radius: 4px;
-  background: var(--warning);
-  color: #fff;
+  background: var(--warning-fill);
+  color: var(--on-fill);
   font-weight: 600;
 }
 
@@ -644,8 +644,8 @@
   margin-left: 4px;
   padding: 1px 5px;
   border-radius: 4px;
-  background: var(--danger);
-  color: #fff;
+  background: var(--danger-fill);
+  color: var(--on-fill);
   font-size: 10px;
   font-weight: 600;
 }

@@ -79,6 +79,14 @@
      2.8:1 on --bg. */
   --warning-text: #9c5416;
   --info: #3b6fe0;
+  /* A solid fill that carries words, such as an "On Track" badge, and --on-fill for the words.
+     White on --success is 3.7:1, enough for a mark, not for 11px words. White reads 5.4:1 on
+     these success and danger fills, 5.7:1 on warning and 4.6:1 on info. */
+  --on-fill: #ffffff;
+  --success-fill: #0e7a47;
+  --danger-fill: #b93842;
+  --warning-fill: #9c5416;
+  --info-fill: #3b6fe0;
 
   /* Semantic money */
   --income: #14985a;

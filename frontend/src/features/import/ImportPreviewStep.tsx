@@ -362,7 +362,7 @@ export function ImportPreviewStep(props: { flow: ImportFlow; embedded?: boolean 
               </button>
             </Show>
             <Show when={flow.dateSkippedCount() > 0}>
-              <span style={{ 'font-size': '13px', color: 'var(--warning, #f59e0b)' }}>
+              <span style={{ 'font-size': '13px', color: 'var(--warning-text)' }}>
                 {flow.dateSkippedCount()} of {total()} rows outside this range will be skipped
               </span>
             </Show>

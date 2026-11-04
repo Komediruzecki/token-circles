@@ -74,6 +74,14 @@
   /* Small text in the warning hue: --warning itself reads 8.4:1 on --surface. */
   --warning-text: #f0a860;
   --info: #6e9bff;
+  /* A solid fill that carries words, such as an "On Track" badge, and --on-fill for the words.
+     White on these hues is 2.0:1 to 3.8:1; the night ink reads 8.4:1 on success, 5.1:1 on
+     danger, 9.6:1 on warning and 7.1:1 on info. */
+  --on-fill: #0a0e1c;
+  --success-fill: #22c55e;
+  --danger-fill: #ef4444;
+  --warning-fill: #f0a860;
+  --info-fill: #6e9bff;
 
   /* Semantic money — reserved for numbers, never decoration */
   --income: #7dffb0;

@@ -23,6 +23,7 @@
 
 .toast {
   --toast-accent: var(--primary);
+  --toast-accent-text: var(--primary-text);
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -38,20 +39,28 @@
   animation: toastIn 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
+/* Each kind has two colours: --toast-accent for the icon and the border (a mark needs 3:1), and
+   --toast-accent-text for the title and the action's label, the hue's text token, which reads
+   4.5:1 on the toast's surface where the brand colour does not (--warning is 2.8:1 there in the
+   light theme). */
 .toast.info {
   --toast-accent: var(--primary);
+  --toast-accent-text: var(--primary-text);
 }
 
 .toast.success {
   --toast-accent: var(--success);
+  --toast-accent-text: var(--success-text);
 }
 
 .toast.warning {
   --toast-accent: var(--warning);
+  --toast-accent-text: var(--warning-text);
 }
 
 .toast.error {
   --toast-accent: var(--danger);
+  --toast-accent-text: var(--danger-text);
 }
 
 /* Severity reads from the icon and the border alone. */
@@ -78,7 +87,7 @@
    colour only. */
 .title {
   margin-right: 0.35rem;
-  color: var(--toast-accent);
+  color: var(--toast-accent-text);
   font-size: 0.82rem;
   font-weight: 700;
 }
@@ -93,7 +102,7 @@
 .actionBtn {
   flex-shrink: 0;
   padding: 0.26rem 0.55rem;
-  color: var(--toast-accent);
+  color: var(--toast-accent-text);
   background: transparent;
   border: 1px solid color-mix(in srgb, var(--toast-accent) 40%, transparent);
   border-radius: 0.4rem;
@@ -104,13 +113,6 @@
 
 .actionBtn:hover {
   background: color-mix(in srgb, var(--toast-accent) 14%, transparent);
-}
-
-/* The button's label is small text: in a success toast ("See badges", "See my prints") it takes
-   --success-text, which reads 4.5:1 on the surface where --success, kept for the icon and the
-   border, does not. */
-.toast.success .actionBtn {
-  color: var(--success-text);
 }
 
 .closeBtn {
