@@ -437,12 +437,18 @@ describe('the mail itself', () => {
    */
   const WHERE =
     "Open it within an hour in the browser you signed up in and you're signed in. Later, or anywhere else, it asks you to sign in first.";
-  const CONFIRM_SAYS = `This link confirms your address and opens your Token Circles account. ${WHERE}`;
-  const FRESH_SAYS = [
-    'Use this link to confirm your address. It replaces the ones sent before.',
+  // How long the link works, once, beside what it does (review M18); where it signs in after it.
+  const CONFIRM_SAYS = [
+    'This link confirms your address and opens your Token Circles account. It works once, for 24 hours.',
     WHERE,
   ];
-  const inHtml = (words: string) => words.replaceAll("'", '&#39;');
+  const FRESH_SAYS = [
+    'Use this link to confirm your address. It replaces the ones sent before, and works once, for 24 hours.',
+    WHERE,
+  ];
+  // The HTML holds a number and its unit together with a no-break space.
+  const inHtml = (words: string) =>
+    words.replaceAll("'", '&#39;').replace('24 hours', '24&nbsp;hours');
 
   it('gives a password sign-up Confirm: the link as its button, and again as text to paste', () => {
     expect(confirm.subject).toBe('Confirm your email for Token Circles');
@@ -454,8 +460,10 @@ describe('the mail itself', () => {
   });
 
   it('says in both confirm mails, html and text, where the link signs in by itself and where it asks for the password', () => {
-    expect(confirm.html).toContain(inHtml(CONFIRM_SAYS));
-    expect(confirm.text).toContain(CONFIRM_SAYS);
+    for (const words of CONFIRM_SAYS) {
+      expect(confirm.html).toContain(inHtml(words));
+      expect(confirm.text).toContain(words);
+    }
     for (const words of FRESH_SAYS) {
       expect(fresh.html).toContain(inHtml(words));
       expect(fresh.text).toContain(words);
@@ -505,17 +513,25 @@ describe('the mail itself', () => {
     expect(confirm.text).toMatch(/^One click and you're in\./);
   });
 
-  it('says in both confirm mails how long the link works, and what to do once it has run out', () => {
+  // Review M18: "Open it within an hour" in the body, then "The link works once, for 24 hours. Run
+  // out?" in a note: two lengths of time, and a vague question. How long the link works is one
+  // sentence beside what it does, and the note says what to do once it has expired.
+  it('says in both confirm mails, once, how long the link works, and what to do once it expires', () => {
     // The HTML holds the number and its unit together with a no-break space.
-    const lasts = (space: string) =>
-      `The link works once, for 24${space}hours. Run out? Open it anyway and choose Send the link again.`;
+    const body = (mail: { text: string }) => mail.text.split('\n\nDidn')[0];
     for (const mail of [confirm, fresh]) {
-      expect(mail.html).toContain(lasts('&nbsp;'));
-      expect(mail.text).toContain(lasts(' '));
+      expect(mail.html).toContain('works once, for 24&nbsp;hours.');
+      expect(body(mail).match(/24 hours/g)).toHaveLength(1);
+      expect(mail.text).toContain('Expired? Open it anyway and choose Send the link again.');
+      expect(mail.html + mail.text).not.toContain('Run out?');
     }
-    expect(renderConfirmEmail({ link, ttlHours: 1 }).text).toContain(
-      'The link works once, for 1 hour.'
+    expect(confirm.text).toContain(
+      'This link confirms your address and opens your Token Circles account. It works once, for 24 hours.'
     );
+    expect(fresh.text).toContain(
+      'Use this link to confirm your address. It replaces the ones sent before, and works once, for 24 hours.'
+    );
+    expect(renderConfirmEmail({ link, ttlHours: 1 }).text).toContain('It works once, for 1 hour.');
   });
 
   it('says in the fresh link, html and text, that it replaces the links sent before it', () => {

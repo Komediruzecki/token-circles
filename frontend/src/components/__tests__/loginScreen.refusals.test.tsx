@@ -410,7 +410,9 @@ describe('creating an account', () => {
     )
   })
 
-  it('says on Check your inbox to look in spam, or to create the account again with the same password', async () => {
+  // Review M18: "create the account again with the same password" ran into the sign-up limit after
+  // a few tries. The button above it sends the link again.
+  it('says on Check your inbox to look in spam, or to send the link again', async () => {
     answers['/api/auth/register'] = () => json({ ok: true })
     await mount()
     button('Create one').click()
@@ -420,7 +422,7 @@ describe('creating an account', () => {
     await submit()
 
     expect(host.querySelector('[data-test-id="check-inbox-no-mail"]')?.textContent?.trim()).toBe(
-      'No mail after a few minutes? Check your spam folder, or create the account again with the same password.'
+      'No mail after a few minutes? Check spam, or send the link again.'
     )
   })
 

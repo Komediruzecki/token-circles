@@ -604,6 +604,9 @@ const lasts = (hours: number) => (hours === 1 ? '1 hour' : `${hours} hours`);
 const notYou = () =>
   `${notYourSignUp(BRAND)} Nobody can use the account until this address is confirmed.`;
 
+/** What both confirm mails say to do once the link has expired (review M18). */
+const LINK_EXPIRED = 'Expired? Open it anyway and choose Send the link again.';
+
 /** Why a mail with a confirm link came. */
 const SIGNED_UP = `You are getting this because this address was used to sign up for ${BRAND}.`;
 
@@ -630,13 +633,14 @@ export function renderConfirmEmail(
       : `Open the link, then sign in where it opens. It works for ${lasts(opts.ttlHours)}.`,
     art: 'banner',
     headline: oneClick ? "One click and you're in." : "One link, one sign-in, and you're in.",
+    // How long the link works is said once, beside what it does (review M18): a note said it
+    // again after "within an hour", and asked "Run out?".
     paragraphs: [
-      `This link confirms your address and opens your ${BRAND} account. ${whereTheLinkSignsIn()}`,
+      `This link confirms your address and opens your ${BRAND} account. It works once, for ${lasts(opts.ttlHours)}.`,
+      whereTheLinkSignsIn(),
     ],
     buttons: [{ label: 'Confirm my email', href: opts.link }],
-    notes: [
-      `The link works once, for ${lasts(opts.ttlHours)}. Run out? Open it anyway and choose Send the link again.`,
-    ],
+    notes: [LINK_EXPIRED],
     paste: opts.link,
     aside: notYou(),
     unconfirmed: true,
@@ -666,13 +670,11 @@ export function renderEmailVerification(
     art: 'banner',
     headline: "Here's a fresh link.",
     paragraphs: [
-      'Use this link to confirm your address. It replaces the ones sent before.',
+      `Use this link to confirm your address. It replaces the ones sent before, and works once, for ${lasts(opts.ttlHours)}.`,
       whereTheLinkSignsIn(),
     ],
     buttons: [{ label: 'Confirm my email', href: opts.link }],
-    notes: [
-      `The link works once, for ${lasts(opts.ttlHours)}. Run out? Open it anyway and choose Send the link again.`,
-    ],
+    notes: [LINK_EXPIRED],
     paste: opts.link,
     aside: notYou(),
     unconfirmed: true,

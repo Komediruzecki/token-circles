@@ -3107,6 +3107,17 @@ true, or is too small for one.
   ties the same way ("November and December 2026 the least"). A month with no tie reads as
   before. Tests: `printsSeal.test.ts`; without the tie, or with the year said twice, it fails.
 
+- **Check your inbox points at Send the link again, and the confirm mails say once how long the
+  link works** (M18). With no mail, the screen said to "create the account again with the same
+  password", which a few tries took into the sign-up limit; it now says "No mail after a few
+  minutes? Check spam, or send the link again.", under the button that does it. The confirm mail
+  said "Open it within an hour" in its body and "The link works once, for 24 hours. Run out? ..."
+  in a note: two lengths of time and a vague question. Both confirm mails now say it beside what
+  the link does ("It works once, for 24 hours." in the first, "It replaces the ones sent before,
+  and works once, for 24 hours." in the fresh link's), where it signs in on its own line, and the
+  note "Expired? Open it anyway and choose Send the link again." Tests:
+  `loginScreen.refusals.test.tsx` and `email-verification.test.ts`; the old note fails the second.
+
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
 The production build holds back the benchmarks and the questions that choose their figures
