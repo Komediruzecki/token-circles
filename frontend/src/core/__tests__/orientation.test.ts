@@ -61,7 +61,8 @@ describe('import-year', () => {
       id: 'import-year',
       title: 'Import the rest of your year',
       reason: '4 of the last 13 months are tracked. A month counts once it holds 3 entries.',
-      link: { hash: '#import', label: 'Import' },
+      // The Bank Imports tab (review M4): the step is about a year from the bank.
+      link: { hash: '#import/bank', label: 'Import' },
       article: 'bank-year',
     })
     expect(only({ trackedMonthsInYear: 1 }).reason).toBe(
@@ -71,6 +72,7 @@ describe('import-year', () => {
       /^11 of the last 13 months are tracked\./
     )
     expect(orientationSteps(facts({ trackedMonthsInYear: 12 }))).toEqual([])
+    expect(only({ trackedMonthsInYear: 0 }).link).toEqual({ hash: '#import/bank', label: 'Import' })
   })
 
   it('asks for a year when nothing of the past year is tracked', () => {

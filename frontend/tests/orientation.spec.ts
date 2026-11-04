@@ -46,7 +46,7 @@ const AFTER_IMPORT = [
   {
     title: 'Import the rest of your year',
     reason: '4 of the last 13 months are tracked. A month counts once it holds 3 entries.',
-    href: '#import',
+    href: '#import/bank',
   },
   {
     title: 'Review the 2 subscriptions we spotted',
@@ -63,7 +63,7 @@ const AFTER_IMPORT = [
 const NOTHING_YET = {
   title: 'Import a year of statements',
   reason: 'None of the last 13 months is tracked yet. A month counts once it holds 3 entries.',
-  href: '#import',
+  href: '#import/bank',
 }
 
 /** The steps a list shows, read off the page. */
@@ -300,7 +300,7 @@ const BEFORE_A_CUSHION = [
   {
     title: 'Import the rest of your year',
     reason: '4 of the last 13 months are tracked. A month counts once it holds 3 entries.',
-    href: '#import',
+    href: '#import/bank',
   },
   {
     title: 'Set a budget for Groceries',

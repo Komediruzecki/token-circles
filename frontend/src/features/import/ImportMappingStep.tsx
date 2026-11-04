@@ -1,6 +1,6 @@
 /**
  * Column-mapping step of the import flow: map source columns onto the 12 target
- * fields and review detected category types (with per-account setup for values
+ * fields (three of them required, and starred) and review detected category types (with per-account setup for values
  * flagged as accounts). Shared by the Import page and the onboarding wizard.
  */
 import { For, Show } from 'solid-js'
@@ -45,8 +45,8 @@ export function ImportMappingStep(props: { flow: ImportFlow; embedded?: boolean 
             </p>
           )}
         </Show>
-        <p class={styles.mappingSubtitle}>
-          Map your data columns to the 12 required fields. Fields in bold are required.
+        <p class={styles.mappingSubtitle} data-test-id="import-map-intro">
+          Match your columns. Starred fields are required.
         </p>
 
         <div class={styles.mappingGrid}>

@@ -64,7 +64,8 @@ describe('before a year is on file', () => {
       why: '7 of the last 13 months are tracked. A month counts once it holds 3 entries.',
       // In Clear picture's view, the key figure says the months and the check how one counts.
       whyHere: '5 months to go.',
-      action: { kind: 'open', hash: '#import', label: 'Open Import' },
+      // Getting started's link: the Bank Imports tab (review M4).
+      action: { kind: 'open', hash: '#import/bank', label: 'Open Import' },
       meter: { kind: 'cells', on: 7, left: '7 of 12 months on file', right: 'A year' },
       then: 'Then: sort the 30 entries without a category, and build a one-month cushion.',
       fine: null,

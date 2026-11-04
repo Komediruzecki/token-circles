@@ -23,6 +23,7 @@
  */
 
 import { articleUrl, DEFAULT_ABOUT_ORIGIN } from '../../shared/articles.ts';
+import { BANK_IMPORT_HASH } from '../../shared/importRoute.ts';
 import {
   CONFIRM_LINK_SIGN_IN,
   notYourSignUp,
@@ -1286,7 +1287,8 @@ export function renderWeekOneDay2(
     subject: 'How to get a year of statements out of your bank',
     preheader: 'Most banks hand over a year of transactions as one CSV or Excel file.',
     art: 'banner',
-    artHref: `${app}/#import`,
+    // The Bank Imports tab, where the files this mail names are read as they are (review M4).
+    artHref: `${app}/${BANK_IMPORT_HASH}`,
     eyebrow: 'Your first week',
     headline: 'Your bank already has your year.',
     paragraphs: [
@@ -1294,7 +1296,7 @@ export function renderWeekOneDay2(
       'Files from Revolut, N26, Wise, Erste, PBZ, ING, DKB and Sparkasse import as they are. So does the Register file in a YNAB plan export, with its accounts and transfers. Its starting balances go to accounts that are new or still empty. Any other CSV or Excel file works once you match its columns. Rows you already have are skipped, so a longer range does no harm.',
     ],
     buttons: [
-      { label: 'Import statements', href: `${app}/#import` },
+      { label: 'Import statements', href: `${app}/${BANK_IMPORT_HASH}` },
       { label: 'Steps for your bank', href: articleUrl('bank-year', opts.aboutUrl || ABOUT_URL) },
     ],
     signOff: "Can't find your bank's export, or a file won't import? Reply to this mail.",

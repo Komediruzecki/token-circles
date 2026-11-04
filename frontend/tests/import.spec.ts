@@ -13,6 +13,33 @@ const PASTED_CSV = [
 ].join('\n')
 
 test.describe('import page', () => {
+  // The day-2 mail and Getting started open the Bank Imports tab (review M4); the sidebar's
+  // #import opens the page on its first tab, as before. The page mounts once per session, so a
+  // link followed while it is already open has to move the tab too.
+  test('#import/bank opens the Bank Imports tab, and #import the first tab (review M4)', async ({
+    page,
+  }) => {
+    await gotoServerless(page, 'import/bank', 'import-header')
+    await expect(page.getByTestId('bank-file-input')).toBeAttached()
+    await expect(page.getByTestId('import-sheet-url')).toHaveCount(0)
+
+    await page.evaluate(() => {
+      window.location.hash = 'dashboard'
+    })
+    await expect(page.getByTestId('import-header')).toBeHidden()
+    await page.evaluate(() => {
+      window.location.hash = 'import'
+    })
+    await expect(page.getByTestId('import-header')).toBeVisible()
+    await page.getByTestId('import-tab-google-sheets').click()
+    await expect(page.getByTestId('import-sheet-url')).toBeVisible()
+    await page.evaluate(() => {
+      window.location.hash = 'import/bank'
+    })
+    await expect(page.getByTestId('bank-file-input')).toBeAttached()
+    await expect(page.getByTestId('import-sheet-url')).toHaveCount(0)
+  })
+
   test('@smoke paste CSV walks upload → mapping → preview → execute', async ({ page }) => {
     await gotoServerless(page, 'import', 'import-header')
 
@@ -112,8 +139,7 @@ test.describe('import page', () => {
     await page.getByTestId('account-select-submit').click()
     await expect(select).toHaveValue('Balances E2E Bank', { timeout: 10000 })
     await page.getByTestId('bank-process-btn').click()
-    await page.getByTestId('import-continue-preview').click()
-    await page.getByTestId('import-execute-all').click()
+    await page.getByTestId('import-summary-import').click()
     await expect(page.getByTestId('import-result')).toContainText('Imported', { timeout: 15000 })
 
     // Only the account the statement went into, at what the statement left: +1,888.85.
@@ -126,6 +152,70 @@ test.describe('import page', () => {
     await rows.first().getByTestId('import-balance-save').click()
     await expect(rows.first().getByTestId('import-balance-today')).toContainText('500.00')
     await expect(rows.first().getByTestId('import-balance-input')).toHaveCount(0)
+  })
+
+  // A statement from a bank the app knows opens on what it brings in and one button, as setup
+  // reads it (review M4); the columns, which said "12 required fields" over three starred ones, are
+  // behind Check the columns and go on to the preview as before.
+  test('a statement from a bank it knows opens on what it brings in, and one button (review M4)', async ({
+    page,
+  }) => {
+    test.setTimeout(90000)
+    await gotoServerless(page, 'import/bank', 'import-header')
+    await page.getByTestId('bank-file-input').setInputFiles('tests/fixtures/revolut-sample.csv')
+    await expect(page.getByTestId('bank-file-row')).toBeVisible()
+    const select = page.getByTestId('bank-target-account')
+    await select.selectOption('__create-account__')
+    await page.getByTestId('account-select-name').fill('Summary E2E Bank')
+    await page.getByTestId('account-select-submit').click()
+    await expect(select).toHaveValue('Summary E2E Bank', { timeout: 10000 })
+    await page.getByTestId('bank-process-btn').click()
+
+    const summary = page.getByTestId('import-bank-summary')
+    await expect(summary).toBeVisible({ timeout: 15000 })
+    await expect(page.getByTestId('import-summary-line')).toHaveText(
+      /^Revolut file recognised: 7 entries, 14\u00a0Apr(\u00a02026)? to 1\u00a0Jul(\u00a02026)?\.$/
+    )
+    await expect(summary).toContainText('Goes into Summary E2E Bank.')
+    await expect(page.getByTestId('import-summary-import')).toHaveText('Import 7 entries')
+    await expect(page.getByTestId('import-map-intro')).toHaveCount(0)
+    await expect(page.getByTestId('import-preview-total')).toHaveCount(0)
+
+    // The columns, one tap away, and on to the preview from there.
+    await page.getByTestId('import-summary-columns').click()
+    await expect(page.getByTestId('import-map-intro')).toHaveText(
+      'Match your columns. Starred fields are required.'
+    )
+    await page.getByTestId('import-continue-preview').click()
+    await expect(page.getByTestId('import-preview-total')).toHaveText('7', { timeout: 15000 })
+    await expect(summary).toHaveCount(0)
+
+    // Cancel, the statement again, and its one button this time.
+    await page
+      .locator('[class*="importButtons"]')
+      .getByRole('button', { name: 'Cancel', exact: true })
+      .click()
+    await page.getByTestId('bank-file-input').setInputFiles('tests/fixtures/revolut-sample.csv')
+    await expect(page.getByTestId('bank-file-row')).toBeVisible()
+    await page.getByTestId('bank-target-account').selectOption('Summary E2E Bank')
+    await page.getByTestId('bank-process-btn').click()
+    await page.getByTestId('import-summary-import').click()
+    await expect(page.getByTestId('import-result')).toContainText('Imported', { timeout: 15000 })
+    // Gone as soon as it is in, not when the page starts over three seconds later: a second tap
+    // would import the statement again.
+    await expect(page.getByTestId('import-summary-import')).toHaveCount(0, { timeout: 1000 })
+
+    // Read again, it is all here already: nothing to import, and it says so.
+    await expect(page.getByTestId('bank-file-input')).toBeAttached({ timeout: 15000 })
+    await page.getByTestId('bank-file-input').setInputFiles('tests/fixtures/revolut-sample.csv')
+    await expect(page.getByTestId('bank-file-row')).toBeVisible()
+    await page.getByTestId('bank-target-account').selectOption('Summary E2E Bank')
+    await page.getByTestId('bank-process-btn').click()
+    await expect(page.getByTestId('import-summary-line')).toHaveText(
+      'Revolut file recognised: all 7 entries in it are here already.',
+      { timeout: 15000 }
+    )
+    await expect(page.getByTestId('import-summary-import')).toHaveCount(0)
   })
 
   // The import log keeps the formats of the statements a session read, in a column of its own
@@ -143,8 +233,7 @@ test.describe('import page', () => {
     await expect(select).toHaveValue('Formats E2E Bank', { timeout: 10000 })
 
     await page.getByTestId('bank-process-btn').click()
-    await page.getByTestId('import-continue-preview').click()
-    await page.getByTestId('import-execute-all').click()
+    await page.getByTestId('import-summary-import').click()
     await expect(page.getByTestId('import-result')).toContainText('Imported', { timeout: 15000 })
 
     const formats = () =>

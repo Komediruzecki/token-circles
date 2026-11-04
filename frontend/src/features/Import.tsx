@@ -37,7 +37,8 @@
  * The onboarding wizard embeds the same flow + components.
  */
 
-import { createEffect, createSignal, For, on, onMount, Show, untrack } from 'solid-js'
+import { createEffect, createSignal, For, on, onCleanup, onMount, Show, untrack } from 'solid-js'
+import { importTabFromHash } from '../../../shared/importRoute'
 import { OrbitSpinner } from '../components/OrbitSpinner'
 import { SubscriptionScanModal } from '../components/SubscriptionScan'
 import { useAppState } from '../core/appStore'
@@ -47,6 +48,8 @@ import { entityVersion } from '../core/dataVersions'
 import { refetchOnActive, usePageActive } from '../core/pageVisibility'
 import { addToast } from '../core/toastStore'
 import styles from './Import.module.css'
+import { BankImportSummary } from './import/BankImportSummary'
+import { summarises } from './import/bankSummary'
 import { ConnectedSources } from './import/ConnectedSources'
 import { balancesById, ImportBalances, touchedSince } from './import/ImportBalances'
 import { ImportDataEntry } from './import/ImportDataEntry'
@@ -66,6 +69,15 @@ export default function Import() {
   let heldBefore: Map<number, number> | null = null
   const [touched, setTouched] = createSignal<StoredAccount[]>([])
 
+  // A statement whose every file is from a bank the app knows opens on a summary with one button,
+  // as setup's does (review M4): read, then dry-run straight away, with the columns step behind
+  // Check the columns. While that runs the columns step stays out of sight, so it does not flash
+  // between the two. Off again whenever the flow leaves the preview: Check the columns, Cancel, a
+  // finished import.
+  const [summary, setSummary] = createSignal(false)
+  const [preparing, setPreparing] = createSignal(false)
+  const [summaryImported, setSummaryImported] = createSignal(false)
+
   const flow = createImportFlow({
     beforeImport: async () => {
       setTouched([])
@@ -73,6 +85,7 @@ export default function Import() {
       heldBefore = await balancesById()
     },
     onImported: (summary) => {
+      setSummaryImported(true)
       if (summary.imported > 0) setScanOfferCount(summary.imported)
       const before = heldBefore
       heldBefore = null
@@ -85,6 +98,29 @@ export default function Import() {
       }
     },
   })
+
+  createEffect(
+    on(flow.activeStep, (step) => {
+      if (step !== 'preview') setSummary(false)
+    })
+  )
+  const processBank = async () => {
+    setSummary(false)
+    setSummaryImported(false)
+    if (!summarises(flow.bankFiles())) {
+      await flow.processBankFiles()
+      return
+    }
+    setPreparing(true)
+    try {
+      await flow.processBankFiles()
+      if (flow.activeStep() !== 'mapping') return
+      await flow.goToPreview()
+      if (flow.activeStep() === 'preview') setSummary(true)
+    } finally {
+      setPreparing(false)
+    }
+  }
 
   const state = useAppState()
   // Keep-alive: the page mounts once per session, so each list on it follows the writes that
@@ -130,6 +166,25 @@ export default function Import() {
       flow.setActiveImportTab(handed.tab)
       if (handed.tab === 'bank-imports') void flow.addBankFiles([handed.file])
       else void flow.readFile(handed.file)
+    })
+  })
+
+  // `#import/bank` opens the Bank Imports tab (shared/importRoute.ts): the day-2 mail and Getting
+  // started link there. The page mounts once per session, so the address is read each time the
+  // page is shown and on every change of it while shown. A statement handed over by setup picks
+  // its own tab above, and a file being matched or previewed keeps its step.
+  const openNamedTab = () => {
+    if (!pageActive() || handedImportFile() || flow.activeStep() !== 'upload') return
+    const tab = importTabFromHash(window.location.hash)
+    if (tab) flow.setActiveImportTab(tab)
+  }
+  createEffect(() => {
+    if (pageActive()) untrack(openNamedTab)
+  })
+  onMount(() => {
+    window.addEventListener('hashchange', openNamedTab)
+    onCleanup(() => {
+      window.removeEventListener('hashchange', openNamedTab)
     })
   })
 
@@ -214,7 +269,7 @@ export default function Import() {
 
       {/* Loading overlay. dropProcessing has its own inline spinner in the
           dropzone — don't stack the page-sized overlay on top of it. */}
-      <Show when={flow.loading() && !flow.dropProcessing()}>
+      <Show when={(flow.loading() || preparing()) && !flow.dropProcessing()}>
         <div class={styles.loadingOverlay} data-test-id="import-loading">
           <OrbitSpinner size={72} label="Processing your data…" />
         </div>
@@ -222,16 +277,29 @@ export default function Import() {
 
       {/* Form content */}
       <Show when={flow.activeStep() === 'upload'}>
-        <ImportDataEntry flow={flow} />
+        <ImportDataEntry flow={flow} onProcessBank={processBank} />
       </Show>
       <Show when={flow.activeStep() === 'upload'}>
         <ConnectedSources />
       </Show>
-      <Show when={flow.activeStep() === 'mapping'}>
+      <Show when={flow.activeStep() === 'mapping' && !preparing()}>
         <ImportMappingStep flow={flow} />
       </Show>
-      <Show when={flow.activeStep() === 'preview'}>
+      <Show when={flow.activeStep() === 'preview' && !summary() && !preparing()}>
         <ImportPreviewStep flow={flow} />
+      </Show>
+      <Show when={flow.activeStep() === 'preview' && summary()}>
+        <BankImportSummary
+          flow={flow}
+          imported={summaryImported}
+          onCheckColumns={() => {
+            setSummary(false)
+            flow.setActiveStep('mapping')
+          }}
+          onCancel={() => {
+            flow.resetForm()
+          }}
+        />
       </Show>
 
       {/* Done state */}

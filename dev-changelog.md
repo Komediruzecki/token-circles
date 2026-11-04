@@ -2905,6 +2905,34 @@ true, or is too small for one.
   and without the figure forgotten after setup, one fails each; without it kept through a reload,
   two.
 
+- **A statement from a bank the app knows opens on what it brings in, and one button** (M4, with
+  B8). The day-2 mail says files from Revolut, N26 and the rest "import as they are", and its
+  "Import statements" opened the Import page on Google Sheets. A statement chosen under Bank
+  Imports then opened on Map columns: "Map your data columns to the 12 required fields. Fields in
+  bold are required." over three starred fields, then category types and a row count. The mail's
+  button and picture, and Getting started's import step (with it the day-7 mail's), now open
+  `#import/bank`, the Bank Imports tab (`shared/importRoute.ts`); `#import` opens the page as
+  before. After Process & continue, a statement whose every file is from a bank the app knows is
+  read and dry-run straight away and opens on a summary in setup's words (`bankSummary.ts`,
+  `BankImportSummary.tsx`): "N26 file recognised: 300 entries, 1 Oct 2025 to 28 Oct 2026.", "Goes
+  into N26 year.", the new categories, how many are here already, and "Import 300 entries". The
+  count is what the import adds. Check the columns opens the columns step, from where the preview
+  goes on as before, and Cancel starts over. A YNAB Register file, which names its accounts, and a
+  file the app does not know still open on the columns. The columns step's intro now reads "Match
+  your columns. Starred fields are required." Captures at 1280 and 390, light and dark:
+  `m04-landing-*` (where the mail lands), `m04-opens-*` (what the statement opens on) and
+  `m04-columns-*`, numbers in `m04-bank-before.json` and `m04-bank-after.json`; the summary's
+  line reads 16.69:1 in light and 16.85:1 in dark, its notes 5.35:1 and 8.84:1, Check the columns
+  15.68:1 and 15.85:1, and its three buttons are 44px tall. Tests:
+  `src/core/__tests__/importRoute.test.ts`, `hashRoute.test.ts`, `orientation.test.ts`,
+  `GettingStarted.test.tsx`, `features/import/__tests__/bankSummary.test.ts`,
+  `mappingSource.test.tsx`, `worker/test/week-one-mails.test.ts`, and in e2e `import.spec.ts`; the
+  release suite's import helper goes through Check the columns, and its case 4.2 counts two dry
+  runs, the summary's and the preview's. Without the page reading the
+  address on a change, with Process & continue going to the columns, with the summary's button
+  kept after the import (a second tap imports again), with entries here already counted, with a
+  YNAB file summarised, and with the mail's button or picture on `#import`, one fails each.
+
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
 The production build holds back the benchmarks and the questions that choose their figures

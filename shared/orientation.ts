@@ -10,6 +10,7 @@
  */
 import { addCalendarMonths } from './calendarMonths';
 import { FIRST_CUSHION_MONTHS } from './guidance/circles';
+import { BANK_IMPORT_HASH } from './importRoute';
 import {
   TRACKED_MONTH_MIN_TRANSACTIONS,
   YEAR_ON_FILE_MONTHS,
@@ -126,6 +127,8 @@ const RULES: Rule[] = [
     id: 'import-year',
     // A year on file (shared/trackedMonths.ts), and the reason names its window: the badges and
     // the streak count months in a row, so "tracked months" alone would read as their number.
+    // The link opens the Bank Imports tab, where a statement from a bank the app knows is read as
+    // it is (review M4).
     step: ({ trackedMonthsInYear: n }) => {
       if (n >= YEAR_ON_FILE_MONTHS) return null;
       const counts = `A month counts once it holds ${TRACKED_MONTH_MIN_TRANSACTIONS} entries.`;
@@ -134,13 +137,13 @@ const RULES: Rule[] = [
         ? {
             title: 'Import a year of statements',
             reason: `None of ${window} is tracked yet. ${counts}`,
-            link: { hash: '#import', label: 'Import' },
+            link: { hash: BANK_IMPORT_HASH, label: 'Import' },
             article: 'bank-year',
           }
         : {
             title: 'Import the rest of your year',
             reason: `${n} of ${window} ${n === 1 ? 'is' : 'are'} tracked. ${counts}`,
-            link: { hash: '#import', label: 'Import' },
+            link: { hash: BANK_IMPORT_HASH, label: 'Import' },
             article: 'bank-year',
           };
     },

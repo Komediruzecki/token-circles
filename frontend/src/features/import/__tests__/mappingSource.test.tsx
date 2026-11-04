@@ -96,6 +96,25 @@ describe('Map columns', () => {
     expect(sourceLine()).toBe('From budget.xlsx, sheet April')
   })
 
+  // Review M4 (B8): the intro said "Map your data columns to the 12 required fields. Fields in bold
+  // are required." Twelve fields are listed, three are starred, and none is bold.
+  it('says the starred fields are required, and stars exactly those', async () => {
+    await flow.readFile(
+      new File(['When,What,How much\n2026-06-01,Groceries,-10.00\n'], 'statement.csv', {
+        type: 'text/csv',
+      })
+    )
+    await settled()
+    sourceLine()
+    const intro = host!.querySelector('[data-test-id="import-map-intro"]')
+    expect(intro?.textContent).toBe('Match your columns. Starred fields are required.')
+    const { FIELD_NAMES } = await import('../../../core/importMapping')
+    const starred = Array.from(host!.querySelectorAll('label'))
+      .filter((label) => label.querySelector('span')?.textContent === '*')
+      .map((label) => label.textContent?.replace('*', '').trim())
+    expect(starred).toEqual(FIELD_NAMES.filter((f) => f.required).map((f) => f.label))
+  })
+
   it('names nothing for pasted text, which is no file', () => {
     expect(
       mappingSource({ filename: 'pasted-data.csv', sheetName: 'Pasted', sheetNames: ['Pasted'] })

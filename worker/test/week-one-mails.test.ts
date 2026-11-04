@@ -231,8 +231,12 @@ describe('day 2', () => {
     // The address comes from the app's one list of articles (shared/articles.ts).
     const steps = 'https://about.tokencircles.com/articles/getting-a-year-out-of-your-bank/';
     expect(mail!.html).toMatch(
-      /<a class="tc-btn" href="[^"]+\/#import"[^>]*>Import statements<\/a>/
+      /<a class="tc-btn" href="[^"]+\/#import\/bank"[^>]*>Import statements<\/a>/
     );
+    // The mail is about a year from the bank: its button and its picture open the Bank Imports
+    // tab (review M4), not the page's first tab, Google Sheets.
+    expect(mail!.text).toContain('Import statements: http://localhost:3800/#import/bank');
+    expect(mail!.html).toMatch(/<a href="[^"]+\/#import\/bank" style="display:block">/);
     const second = /<a class="tc-btn2" href="([^"]+)"[^>]*>([^<]+)<\/a>/.exec(mail!.html);
     expect(second?.slice(1)).toEqual([steps, 'Steps for your bank']);
     expect(mail!.text).toContain(`Steps for your bank: ${steps}`);
@@ -347,7 +351,7 @@ describe('day 7', () => {
     expect(mail!.text).toContain('Entries without a category: 1');
     expect(mail!.text).toContain('Import the rest of your year');
     expect(mail!.text).toContain('2 of the last 13 months are tracked.');
-    expect(mail!.text).toContain('Open Import: http://localhost:3800/#import');
+    expect(mail!.text).toContain('Open Import: http://localhost:3800/#import/bank');
     for (const part of parts) {
       for (const amount of ['4321', '4,321', '8765', '8,765', '1234', '1,234', '2468', '1357']) {
         expect(part).not.toContain(amount);
