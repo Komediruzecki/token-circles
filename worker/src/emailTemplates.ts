@@ -1321,9 +1321,9 @@ export interface WeekOneCounts {
    * the "A year" badge.
    */
   prints: number;
-  /** Active subscriptions on Bills. */
-  subscriptions: number;
-  /** Active bills on Bills. */
+  /**
+   * Active bills and subscriptions on Bills: one count, as setup's done step says it (review M12).
+   */
   bills: number;
   /** Entries other than transfers with no category. */
   uncategorised: number;
@@ -1363,8 +1363,7 @@ export function renderWeekOneDay7(
       `${Math.min(c.monthsTracked, YEAR_ON_FILE_MONTHS)} of ${YEAR_ON_FILE_MONTHS}`,
     ],
   ];
-  if (c.subscriptions > 0) rows.push(['Subscriptions you track', count(c.subscriptions)]);
-  if (c.bills > 0) rows.push(['Bills you track', count(c.bills)]);
+  if (c.bills > 0) rows.push(['Regular payments on Bills', count(c.bills)]);
   if (c.uncategorised > 0) rows.push(['Entries without a category', count(c.uncategorised)]);
   // A year that came in says so, with what came with it that the Worker can count (review M11).
   // The first import is said only while it is news: five days on, it read as late.

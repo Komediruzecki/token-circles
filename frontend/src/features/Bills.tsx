@@ -572,7 +572,7 @@ export default function Bills() {
               <OrbitalDivider
                 id="bills-sec-unpaid"
                 label="Unpaid Bills"
-                meta={`${unpaidBills().length} bills`}
+                meta={`${unpaidBills().length} ${unpaidBills().length === 1 ? 'bill' : 'bills'}`}
               />
               <div data-test-id="bills-list" class={styles.billsList}>
                 <For each={unpaidBills()}>

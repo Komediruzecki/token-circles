@@ -166,6 +166,15 @@ it('says what the profile holds, though this visit counted nothing: as after a r
     type: 'subscription',
   }
   await db.add('bills', { ...bill, id: 21, name: 'Netflix', amount: 15.99, is_active: 1 } as never)
+  // A bill and a subscription are one count in one word (review M12).
+  await db.add('bills', {
+    ...bill,
+    id: 23,
+    name: 'Rent',
+    amount: 650,
+    is_active: 1,
+    type: 'bill',
+  } as never)
   // Paused: not tracked any more, as the week-one mail counts them.
   await db.add('bills', { ...bill, id: 22, name: 'Gym', amount: 30, is_active: 0 } as never)
   await db.add('bills', { ...bill, id: 24, name: 'Paper', amount: 9, is_active: false } as never)
@@ -189,7 +198,7 @@ it('says what the profile holds, though this visit counted nothing: as after a r
     { timeout: 10_000 }
   )
   expect(host.querySelector('[data-test-id="onboarding-done-summary"]')?.textContent).toBe(
-    'Personal has 1 account, 12 transactions and 1 tracked subscription.'
+    'Personal has 1 account, 12 transactions and 2 regular payments tracked on Bills.'
   )
 })
 

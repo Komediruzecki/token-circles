@@ -470,7 +470,7 @@ describe('adding the subscriptions the scan found', () => {
     expect(successToasts()).toEqual([])
     await vi.waitFor(() => {
       expect(byTestId('onboarding-done-summary')?.textContent).toBe(
-        'Personal has 2 tracked subscriptions.'
+        'Personal has 2 regular payments tracked on Bills.'
       )
     })
   })

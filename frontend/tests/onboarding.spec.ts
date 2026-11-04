@@ -285,7 +285,7 @@ test.describe('onboarding wizard', () => {
     // Done says what went in, and no toast covered the wizard on the way.
     await expect(page.getByTestId('onboarding-step-done')).toBeVisible()
     await expect(page.getByTestId('onboarding-done-summary')).toHaveText(
-      'Personal Profile has 1 account, 7 transactions and 2 tracked subscriptions.'
+      'Personal Profile has 1 account, 7 transactions and 2 regular payments tracked on Bills.'
     )
     await expect(page.getByText('2 subscriptions added')).toHaveCount(0)
     await page.getByTestId('onboarding-finish').click()

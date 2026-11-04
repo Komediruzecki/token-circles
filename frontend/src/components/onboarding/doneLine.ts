@@ -18,12 +18,21 @@ export interface ProfileHolds {
   bills: number
 }
 
-/** "Personal Profile has 1 account, 69 transactions and 1 tracked subscription." */
+/**
+ * "Personal Profile has 1 account, 69 transactions and 2 regular payments tracked on Bills."
+ *
+ * One word and one count for what Bills holds, as the day-7 mail says it (review M12): the line
+ * called a rent and a streaming plan "2 tracked subscriptions" while the mail split them in two.
+ */
 export function doneLine(name: string, holds: ProfileHolds): string {
   const parts: string[] = []
   if (holds.accounts > 0) parts.push(counted(holds.accounts, 'account'))
   if (holds.transactions > 0) parts.push(counted(holds.transactions, 'transaction'))
-  if (holds.bills > 0) parts.push(counted(holds.bills, 'tracked subscription'))
+  if (holds.bills > 0) {
+    parts.push(
+      counted(holds.bills, 'regular payment tracked on Bills', 'regular payments tracked on Bills')
+    )
+  }
   return parts.length > 0 ? `${name} has ${listed(parts)}.` : `${name} is ready.`
 }
 

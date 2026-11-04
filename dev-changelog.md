@@ -3033,6 +3033,23 @@ true, or is too small for one.
   six days, the badge without a run, counting a month that has not begun, or a run that a gap does
   not end, one fails each.
 
+- **Regular payments are one count in one word, from setup to Bills** (M12). After the review's
+  Revolut statement, with the streaming plan and the gym ticked, setup's done step said "2
+  tracked subscriptions", the day-7 mail split the same two into "Subscriptions you track: 1" and
+  "Bills you track: 1", and Bills headed its list "Unpaid Bills, 1 bills". The done step now says
+  "Personal Profile has 1 account, 69 transactions and 2 regular payments tracked on Bills.", the
+  mail has one row, "Regular payments on Bills: 2", counting both kinds that are not paused, and
+  the heading counts "1 bill" and "2 bills". Why the streaming plan was an unpaid bill: Revolut's
+  file has no categories, so its charges were filed under Other, and the scan makes a regular
+  payment a subscription only when its category's kind is subscriptions or leisure; the made-up
+  name matches nothing in the catalogue. The scan also saves no last payment, so the bill reads
+  unpaid until it is marked paid. Neither is changed here. Captures at 1280 and 390, light and
+  dark: `m12-step-*`, `m12-done-*`, `m12-bills-*`, text and the stored rows in
+  `m12-bills-before.json` and `m12-bills-after.json`. Tests: `billCards.test.tsx`,
+  `onboardingDoneStep.test.tsx`, `onboardingForms.test.tsx`, `week-one-mails.test.ts`, and in e2e
+  `onboarding.spec.ts` and `onboarding-server.spec.ts`. Counting paused ones, or only one kind, in
+  the mail fails its test.
+
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
 The production build holds back the benchmarks and the questions that choose their figures

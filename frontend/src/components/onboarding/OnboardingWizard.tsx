@@ -500,7 +500,7 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
       createdAccounts().length + (importSummary()?.createdAccounts.length ?? 0)
     )
 
-  /** "Personal Profile has 1 account, 69 transactions and 1 tracked subscription." */
+  /** "Personal Profile has 1 account, 69 transactions and 1 regular payment tracked on Bills." */
   const doneSummary = () => {
     const from = counting()
     if (from === null) return ''

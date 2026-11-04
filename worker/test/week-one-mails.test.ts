@@ -336,6 +336,9 @@ describe('day 7', () => {
       env.DB.prepare(
         "INSERT INTO bills (profile_id, name, amount, frequency, due_date, is_active, type) VALUES (?, 'Sample old', 11, 'monthly', '2030-06-20', 0, 'bill')"
       ).bind(a.id),
+      env.DB.prepare(
+        "INSERT INTO bills (profile_id, name, amount, frequency, due_date, is_active, type) VALUES (?, 'Sample rent', 7654.32, 'monthly', '2030-06-02', 1, 'bill')"
+      ).bind(a.id),
     ]);
     await run();
 
@@ -348,8 +351,10 @@ describe('day 7', () => {
     // Six came in by an import; April and May hold three each, June one.
     expect(mail!.text).toContain('Entries imported: 6');
     expect(mail!.text).toContain('Months tracked: 2 of 12');
-    expect(mail!.text).toContain('Subscriptions you track: 1');
-    expect(mail!.text).not.toContain('Bills you track');
+    // One count in one word for both kinds on Bills, as setup's done step and Bills say it
+    // (review M12): a paused one is not tracked.
+    expect(mail!.text).toContain('Regular payments on Bills: 2');
+    expect(mail!.text).not.toMatch(/Subscriptions you track|Bills you track/);
     // One of the six entries that take a category has none: the transfer does not count.
     expect(mail!.text).toContain('Entries without a category: 1');
     expect(mail!.text).toContain('Import the rest of your year');
@@ -359,7 +364,9 @@ describe('day 7', () => {
       for (const amount of ['4321', '4,321', '8765', '8,765', '1234', '1,234', '2468', '1357']) {
         expect(part).not.toContain(amount);
       }
-      for (const amount of ['9753', '3141', '9876', '9,876']) expect(part).not.toContain(amount);
+      for (const amount of ['9753', '3141', '9876', '9,876', '7654', '7,654']) {
+        expect(part).not.toContain(amount);
+      }
       expect(part).not.toMatch(/[€$£]|EUR/);
     }
   });
@@ -671,7 +678,6 @@ describe('the day-7 mail itself', () => {
     firstImportNew: false,
     monthsTracked: 12,
     prints: 0,
-    subscriptions: 0,
     bills: 0,
     uncategorised: 0,
   };
@@ -692,7 +698,9 @@ describe('the day-7 mail itself', () => {
     const { text } = renderWeekOneDay7({ counts, step: null });
     expect(text).toContain('Entries imported: 1,284');
     expect(text).toContain('Months tracked: 12 of 12');
-    expect(text).not.toMatch(/Subscriptions you track|Bills you track|without a category/);
+    expect(text).not.toMatch(
+      /Regular payments|Subscriptions you track|Bills you track|without a category/
+    );
     expect(text).not.toContain('One next step');
   });
 

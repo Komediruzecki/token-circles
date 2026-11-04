@@ -208,9 +208,10 @@ export async function weekOneDay7Content(
   const tracked = months
     .filter((m) => /^\d{4}-\d{2}$/.test(m.month) && isTrackedMonth(m.n))
     .map((m) => m.month);
-  const bills = await db.all<{ type: string; n: number }>(
+  // Bills and subscriptions are one count, as setup's done step says it (review M12).
+  const bills = await db.first<{ n: number }>(
     env.DB,
-    'SELECT type, COUNT(*) AS n FROM bills WHERE profile_id = ? AND is_active = 1 GROUP BY type',
+    'SELECT COUNT(*) AS n FROM bills WHERE profile_id = ? AND is_active = 1',
     pid
   );
   const loans = await db.first<{ n: number }>(
@@ -249,8 +250,7 @@ export async function weekOneDay7Content(
       firstImportNew,
       monthsTracked,
       prints,
-      subscriptions: bills.find((b) => b.type === 'subscription')?.n ?? 0,
-      bills: bills.find((b) => b.type === 'bill')?.n ?? 0,
+      bills: bills?.n ?? 0,
       uncategorised,
     },
     step: first

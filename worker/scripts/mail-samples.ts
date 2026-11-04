@@ -265,8 +265,7 @@ export function mailSamples(opts: SampleOptions = {}): MailSample[] {
             firstImportNew: true,
             monthsTracked: 7,
             prints: 0,
-            subscriptions: 6,
-            bills: 2,
+            bills: 8,
             uncategorised: 38,
           },
           step: {
@@ -290,7 +289,6 @@ export function mailSamples(opts: SampleOptions = {}): MailSample[] {
             firstImportNew: false,
             monthsTracked: 12,
             prints: 1,
-            subscriptions: 0,
             bills: 0,
             uncategorised: 0,
           },
