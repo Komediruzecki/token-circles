@@ -1,11 +1,13 @@
 /**
- * Toast notification container — renders signal-driven toasts, top-right.
+ * Toast notification container — renders signal-driven toasts, top-right; on a phone, across the
+ * screen above the quick add button, and under the drawer while it is open.
  *
  * Deliberately plain: the icon, the message, and a border tinted by severity are what carry
  * information. A `title` renders as a coloured prefix on the message (not a heading above it),
  * an `action` is one bordered button, and every toast can be dismissed by hand.
  */
 import { For, Match, Show, Switch } from 'solid-js'
+import { getSidebarCollapsed } from '../core/appStore'
 import { removeToast, toasts } from '../core/toastStore'
 import styles from './Toast.module.css'
 import type { Component } from 'solid-js'
@@ -75,7 +77,12 @@ const ToastIcon: Component<{ type: ToastItem['type'] }> = (props) => (
 
 export default function ToastContainer() {
   return (
-    <div class={styles.toastContainer} role="region" aria-label="Notifications">
+    <div
+      class={styles.toastContainer}
+      classList={{ [styles.underDrawer]: !getSidebarCollapsed() }}
+      role="region"
+      aria-label="Notifications"
+    >
       <For each={toasts()}>
         {(toast) => (
           <div

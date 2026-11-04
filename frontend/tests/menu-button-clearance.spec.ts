@@ -83,32 +83,127 @@ for (const width of [390, 700]) {
   })
 }
 
-test('at 390, a toast leaves the menu button uncovered', async ({ page }) => {
-  // Phones stretched toasts from edge to edge at the top, over the menu button: the history toast
-  // ("20 badges and 26 prints from your history so far") hid it while it showed, and a tap there
-  // went to the toast.
-  test.setTimeout(90_000)
+/**
+ * The controls among `selectors` that a toast lies over: at the centre of each, or 3 px in from a
+ * corner, the topmost element is inside the Notifications region.
+ */
+async function underAToast(page: Page, selectors: string[]): Promise<string[]> {
+  return page.evaluate((selectors) => {
+    const hits: string[] = []
+    for (const selector of selectors) {
+      for (const el of Array.from(document.querySelectorAll<HTMLElement>(selector))) {
+        const b = el.getBoundingClientRect()
+        if (b.width === 0 || b.height === 0 || b.bottom <= 0 || b.top >= innerHeight) continue
+        const points = [
+          [b.left + b.width / 2, b.top + b.height / 2],
+          [b.left + 3, b.top + 3],
+          [b.right - 3, b.top + 3],
+          [b.left + 3, b.bottom - 3],
+          [b.right - 3, b.bottom - 3],
+        ]
+        const covered = points.some(([x, y]) =>
+          document.elementFromPoint(x, y)?.closest('[role="region"][aria-label="Notifications"]')
+        )
+        const name = el.getAttribute('aria-label') ?? el.dataset.testId ?? el.innerText.trim()
+        if (covered) hits.push(`${name.slice(0, 40)} ${JSON.stringify(b.toJSON())}`)
+      }
+    }
+    return hits
+  }, selectors)
+}
+
+/** The toasts on screen that nothing lies over: at its centre, the topmost element is the toast. */
+async function toastsOnTop(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    const region = document.querySelector('[role="region"][aria-label="Notifications"]')!
+    return Array.from(region.children).filter((toast) => {
+      const b = toast.getBoundingClientRect()
+      const top = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2)
+      return b.top >= 0 && b.bottom <= innerHeight && toast.contains(top)
+    }).length
+  })
+}
+
+test("at 390, a badge toast and the history toast cover none of the app's own controls", async ({
+  page,
+}) => {
+  // Phones laid the toasts across the top, so on the first run the history toast ("20 badges and
+  // 26 prints from your history so far") lay over the menu button for its 9 s, then over each
+  // page's own buttons beside it: Views and Refresh, Add account, the period bar once it pins.
+  // With the drawer open they lay over its toggle as well.
+  test.setTimeout(120_000)
+  await page.addInitScript(() => {
+    localStorage.setItem('finance-sticky-period-bar', 'true')
+  })
   await page.setViewportSize({ width: 390, height: 844 })
-  await page.goto(`${E2E_BASE}/#accounts`, { waitUntil: 'domcontentloaded', timeout: 30_000 })
-  await expect(page.getByTestId('accounts-header')).toBeVisible({ timeout: 30_000 })
-  await page.getByTestId('add-account-btn').click()
-  await page.getByTestId('add-account-modal').getByLabel('Account Name').fill('Toast check')
-  await page.getByTestId('add-account-modal').locator('button[type="submit"]').click()
+  await page.goto(`${E2E_BASE}/#dashboard`, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+  await expect(page.getByTestId('dashboard-header')).toBeVisible({ timeout: 60_000 })
+  await expect(page.getByTestId('period-bar')).toBeVisible()
   const toasts = page.getByRole('region', { name: 'Notifications' })
-  await expect(toasts.getByText('Added "Toast check" to your accounts.')).toBeVisible()
-  // Settled: the toast slides in.
-  const toast = await settledBox(toasts.locator(':scope > *').first())
-  const menu = (await page.getByRole('button', { name: 'Toggle sidebar' }).boundingBox())!
-  const overlap = {
-    x: Math.min(toast.x + toast.width, menu.x + menu.width) - Math.max(toast.x, menu.x),
-    y: Math.min(toast.y + toast.height, menu.y + menu.height) - Math.max(toast.y, menu.y),
-  }
+  // The demo's first run earns a run of badges at once and says so; wait for that toast, then put
+  // a badge toast beside it, both as core/achievementsStore.ts raises them. The two share a
+  // channel, so the app shows one at a time; both are up here, for the tallest pair.
+  const history = toasts.locator(':scope > *').filter({ hasText: 'from your history so far.' })
+  await expect(history).toBeVisible({ timeout: 30_000 })
+  const said = (await history.innerText()).split('\n')[0].trim()
+  const label = (await history.locator('button').first().innerText()).trim()
+  await page.evaluate(
+    async ({ said, label }) => {
+      const store = (await import('/src/core/toastStore.ts' as string)) as {
+        addToast: (message: string, type: string, opts: unknown) => void
+      }
+      // Up for the whole check: the app takes them down after 9 s.
+      const up = { durationMs: 120_000 }
+      store.addToast(said, 'success', {
+        ...up,
+        channel: 'achievements',
+        action: { label, onClick: () => {} },
+      })
+      store.addToast('Badge unlocked: First budget.', 'success', {
+        ...up,
+        action: { label: 'See badges', onClick: () => {} },
+      })
+    },
+    { said, label }
+  )
+  await expect(toasts.locator(':scope > *')).toHaveCount(2)
+  await settledBox(toasts.locator(':scope > *').last())
+
+  const chrome = ['button[aria-label="Toggle sidebar"]', 'button[aria-label="Quick add entry"]']
+  const top = ['[data-test-id="dashboard-header"] button', '[data-test-id="period-bar"] button']
+  expect(await toastsOnTop(page), 'both toasts on screen, and on top').toBe(2)
+  expect(await underAToast(page, [...chrome, ...top]), 'Dashboard at rest').toEqual([])
+
+  // Scrolled: the period bar pins under the menu button.
+  await page.evaluate(() => window.scrollTo(0, 600))
+  await expect
+    .poll(async () => Math.round((await page.getByTestId('period-bar').boundingBox())!.y), {
+      timeout: 10_000,
+    })
+    .toBeLessThan(80)
+  expect(await toastsOnTop(page)).toBe(2)
+  expect(await underAToast(page, [...chrome, ...top]), 'Dashboard, the period bar pinned').toEqual(
+    []
+  )
+
+  await page.evaluate(() => {
+    window.location.hash = 'accounts'
+  })
+  await expect(page.getByTestId('accounts-header')).toBeVisible({ timeout: 30_000 })
+  await expect(toasts.locator(':scope > *')).toHaveCount(2)
   expect(
-    overlap.x <= 0 || overlap.y <= 0,
-    `the toast ${JSON.stringify(toast)} and the menu button ${JSON.stringify(menu)}`
-  ).toBe(true)
-  // Beside it, not pushed off the screen.
-  expect(toast.x + toast.width).toBeLessThanOrEqual(390)
+    await underAToast(page, [...chrome, '[data-test-id="add-account-btn"]']),
+    'Accounts at rest'
+  ).toEqual([])
+
+  // The drawer open: its links and its toggle, now at its top right.
+  await page.getByRole('button', { name: 'Toggle sidebar' }).click()
+  await expect(page.locator('[data-test-id^="nav-link-"]').first()).toBeInViewport()
+  await page.waitForTimeout(400)
+  expect(
+    await underAToast(page, ['[data-test-id^="nav-link-"]', 'button[aria-label="Toggle sidebar"]']),
+    'the drawer open'
+  ).toEqual([])
 })
 
 /** The visible text and controls in the page whose boxes overlap the button named `label`. */

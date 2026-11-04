@@ -147,8 +147,9 @@ All notable changes to Token Circles are documented here. The format is based on
   below stops above the button. The Spotlight counts that strip as no room, as it already did the
   menu button's. On the demo, across 15 pages at 1280 and 390, the button covered text or a control
   at a page's end 14 times before (on 13 of the 30 page and width pairs) and none after. At the top
-  of a page the menu button covers nothing but the history toast ("20 badges and 26 prints from your
-  history ..."), on four pages at 390 while it shows; that toast is not part of this.
+  of a page the menu button covered nothing but the history toast ("20 badges and 26 prints from
+  your history ..."), on four pages at 390 while it showed; on a phone toasts now stand above the
+  quick add button instead (below).
   - Test: `menu-button-clearance.spec.ts` scrolls Import and Settings to their end at 390 and 1280
     and expects nothing under the quick add button, and brings Settings' last control into view
     from below and expects it above the button; `spotlightTipWiring.test.tsx` opens a target that
@@ -177,15 +178,28 @@ All notable changes to Token Circles are documented here. The format is based on
     safe-area padding already lifts it.
   - On such a phone a page now ends 96 px plus twice the inset below its last line (the body's
     padding and the clearance each add one), 34 px more than it needs.
-- **On a phone a toast no longer covers the menu button.** Up to 768 px toasts ran from edge to
-  edge across the top, so while one showed (the history toast, "20 badges and 26 prints from your
-  history so far", among them) it hid the menu button and took its tap. They now start 8 px right
-  of it (`Toast.module.css`). At 390 a toast covered the whole 36 by 36 px button before and none
-  of it after.
-  - Test: `menu-button-clearance.spec.ts` adds an account at 390 and expects its toast clear of the
-    menu button. On the old rule it fails: the toast spans x 8 to 382, over the button at 12 to 48.
-  - Not changed: with the sidebar open the button moves to the sidebar's top right, and a toast
-    that shows then still covers it; a tap outside the sidebar closes it as before.
+- **On a phone, toasts stand above the quick add button.** Up to 768 px they lay across the top of
+  the screen, so on a first run the history toast ("20 badges and 26 prints from your history so
+  far") lay over the menu button for its 9 s, and a toast lay over each page's own buttons beside
+  it: Views and Refresh, Add account, Budgets' period controls, the Settings and Import tabs, the
+  period bar once it pins. Toasts now run the width of the screen above the quick add button
+  (`Toast.module.css`, `bottom: var(--fab-clearance)`), where a phone's screen holds nothing else
+  of the app's, and while the drawer is open they sit under it and its overlay. On the demo at 390,
+  with a badge toast and the history toast up, the old placement lay over a page's header
+  controls on 14 of 18 pages at rest and over the pinned period bar on Dashboard, Transactions and
+  Budgets; the new one lies over none of them, nor over the menu or quick add button. Wider, the
+  two toasts are shorter too: 42 and 58 px tall instead of 58 and 80.
+  - Test: `menu-button-clearance.spec.ts` puts a badge toast beside the demo's history toast at 390
+    and checks what is topmost at each control's centre and corners: neither toast may lie over the
+    menu or quick add button, Dashboard's header and period bar (at rest and pinned), Add account,
+    or the open drawer's links and toggle, and both must be on screen and on top. On the old rule
+    it fails at once (Views and Refresh). Without the drawer rule, or with the container never
+    taking its class, the drawer's links fail; with the stack in the quick add button's row, the
+    button does.
+  - Not changed: while it shows, the stack still lies over whatever page content is under it,
+    which scrolls; at rest on the demo that is a control on 8 of the 18 pages, such as a bill's
+    Mark paid and Edit. A modal open on a phone still has the toasts over it, as at the top: over
+    two of Add account's fields instead of its close button and one field.
 - **Views on Dashboard reorders from the keyboard.** A drag was the only way to move a widget under
   Show more. Each of those rows now has Move up and Move down after its toggle, named for the
   widget ("Move Budget Alerts up"). Up is off on the first row and down on the last, and focus
