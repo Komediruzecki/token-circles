@@ -50,6 +50,25 @@ test.describe('Dashboard @smoke', () => {
     await expect(page.getByTestId('dashboard-views')).toBeVisible()
   })
 
+  test('gives Views drag handles only to the widgets under Show more', async ({ page }) => {
+    // The rest have a fixed spot on the page, so a drag there would save an order that changes
+    // nothing (core/dashboardWidgets.ts FIXED_SPOT_WIDGETS).
+    await page.getByTestId('dashboard-views').click()
+    const rows = page.locator('[data-test-id^="dashboard-views-row-"]')
+    await expect(rows).toHaveCount(15)
+    await expect(
+      page.locator('[data-test-id^="dashboard-views-row-"][draggable="true"]')
+    ).toHaveCount(6)
+    await expect(page.getByTestId('dashboard-views-row-metrics')).not.toHaveAttribute(
+      'draggable',
+      'true'
+    )
+    await expect(page.getByTestId('dashboard-views-row-category-chart')).toHaveAttribute(
+      'draggable',
+      'true'
+    )
+  })
+
   test('has navigation links to the key pages', async ({ page }) => {
     // Attached rather than visible: the links always exist in the nav, but the sidebar may be
     // collapsed depending on viewport/state, which is orthogonal to "the routes are wired up".

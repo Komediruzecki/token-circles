@@ -36,6 +36,12 @@
   opacity: 1;
 }
 
+/* Where a fixed-spot widget would have its handle, so every row's toggle starts at one edge. */
+.handle-space {
+  width: 24px;
+  flex-shrink: 0;
+}
+
 .dragging {
   opacity: 0.5;
 }

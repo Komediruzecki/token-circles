@@ -95,6 +95,15 @@ All notable changes to Token Circles are documented here. The format is based on
   because a blank one imports.
   - Test: `expectedColumnsTable.test.ts` expects Date and Amount as the required columns, every
     required column to be one Map columns stars, and Date's row to name the blank-cell rule.
+- **Dashboard Views gives drag handles only to the widgets under Show more.** The badge rail, the
+  metrics, the savings gauge and the overview deck's panels have a fixed spot on the page, so a
+  drag there was saved and changed nothing. Those rows now have no handle and take no drop, the
+  list shows them first in page order, and the hint says which rows move. `FIXED_SPOT_WIDGETS` in
+  `core/dashboardWidgets.ts` is the one list both the page and the dialog read.
+  - Test: `dashboardViewsFixedSpots.test.tsx` checks the handles, the order shown for a layout
+    saved with a Show more widget at the top, a drop on a fixed row (refused, order unchanged), a
+    drop among the Show more rows, and that the page's ordered tail renders exactly the widgets
+    without a fixed spot. `dashboard.spec.ts` counts the draggable rows in the real dialog.
 
 ### Deploy notes
 

@@ -2,10 +2,11 @@
  * Dashboard Settings Component - Configure widget visibility and order
  */
 
-import { createSignal, For, onMount } from 'solid-js'
+import { createSignal, For, onMount, Show } from 'solid-js'
 import {
   ALL_WIDGET_IDS,
   DEFAULT_WIDGET_ORDER,
+  hasFixedSpot,
   loadWidgetPrefs,
   WIDGET_STORAGE_KEY,
 } from '../core/dashboardWidgets'
@@ -25,7 +26,7 @@ export interface DashboardSettingsProps {
 export const DashboardSettings: Component<DashboardSettingsProps> = (props) => {
   const [selectedWidget, setSelectedWidget] = createSignal<string>(ALL_WIDGET_IDS.join(','))
   const [widgetOrder, setWidgetOrder] = createSignal<string[]>([...DEFAULT_WIDGET_ORDER])
-  const [dragIdx, setDragIdx] = createSignal<number | null>(null)
+  const [draggedId, setDraggedId] = createSignal<string | null>(null)
 
   const widgets = [
     {
@@ -313,45 +314,58 @@ export const DashboardSettings: Component<DashboardSettingsProps> = (props) => {
     return current ? current.split(',').includes(widgetId) : false
   }
 
-  // Drag-and-drop handlers
-  const handleDragStart = (e: DragEvent, idx: number) => {
-    setDragIdx(idx)
+  // Drag-and-drop handlers. Only the widgets under Show more follow the saved order, so only
+  // they drag or take a drop: a widget with a fixed spot (hasFixedSpot) stays where the page
+  // puts it, and an order that moved one would be saved and change nothing.
+  const handleDragStart = (e: DragEvent, id: string) => {
+    setDraggedId(id)
     const el = e.currentTarget as HTMLElement
     el.classList.add(styles.dragging)
     e.dataTransfer!.effectAllowed = 'move'
-    e.dataTransfer!.setData('text/plain', String(idx))
+    e.dataTransfer!.setData('text/plain', id)
   }
 
   const handleDragEnd = (e: DragEvent) => {
-    setDragIdx(null)
+    setDraggedId(null)
     const el = e.currentTarget as HTMLElement
     el.classList.remove(styles.dragging)
   }
 
-  const handleDragOver = (e: DragEvent, _idx: number) => {
+  // Cancelling dragover is how a row accepts a drop, so a fixed row leaves it alone.
+  const handleDragOver = (e: DragEvent, id: string) => {
+    if (hasFixedSpot(id)) return
     e.preventDefault()
     e.dataTransfer!.dropEffect = 'move'
   }
 
-  const handleDrop = (e: DragEvent, toIdx: number) => {
+  const handleDrop = (e: DragEvent, toId: string) => {
     e.preventDefault()
-    const fromIdx = parseInt(e.dataTransfer!.getData('text/plain'), 10)
-    if (fromIdx === toIdx || isNaN(fromIdx)) return
+    const fromId = draggedId() ?? e.dataTransfer!.getData('text/plain')
+    if (!fromId || fromId === toId || hasFixedSpot(fromId) || hasFixedSpot(toId)) return
 
     const order = [...widgetOrder()]
-    const [removed] = order.splice(fromIdx, 1)
-    order.splice(toIdx, 0, removed)
+    const fromIdx = order.indexOf(fromId)
+    const toIdx = order.indexOf(toId)
+    if (fromIdx < 0 || toIdx < 0) return
+    order.splice(fromIdx, 1)
+    order.splice(toIdx, 0, fromId)
     setWidgetOrder(order)
   }
 
-  // Sort widgets display by widgetOrder (with fallback for corrupted data)
+  // The list reads as the page does: the widgets with a fixed spot first, in page order, then
+  // the ones under Show more in the saved order. A layout saved before this rule may have a
+  // Show more widget above them; it is listed where the page shows it.
   const orderedWidgets = () => {
     const order = widgetOrder()
     if (!order || order.length === 0) {
       return widgets
     }
     const widgetMap = new Map(widgets.map((w) => [w.id, w]))
-    const result = order.map((id) => widgetMap.get(id)).filter(Boolean) as typeof widgets
+    const ids = [
+      ...DEFAULT_WIDGET_ORDER.filter(hasFixedSpot),
+      ...order.filter((id) => !hasFixedSpot(id)),
+    ]
+    const result = ids.map((id) => widgetMap.get(id)).filter(Boolean) as typeof widgets
     return result.length > 0 ? result : widgets
   }
 
@@ -375,30 +389,42 @@ export const DashboardSettings: Component<DashboardSettingsProps> = (props) => {
 
   return (
     <div class={styles.dashboardSettings}>
-      <p class={styles.dragHint}>Drag rows to reorder widgets on your dashboard</p>
+      <p class={styles.dragHint}>
+        Drag a handle to reorder the widgets under Show more. The others have a fixed spot.
+      </p>
       <div class={styles.settingsList}>
         <For each={orderedWidgets()}>
-          {(widget, idx) => (
+          {(widget) => (
             <div
-              class={`${styles.settingItem} ${styles.draggable}`}
-              classList={{ [styles.dragOver]: dragIdx() !== null && dragIdx() !== idx() }}
-              draggable="true"
+              class={styles.settingItem}
+              classList={{
+                [styles.draggable]: !hasFixedSpot(widget.id),
+                [styles.dragOver]:
+                  !hasFixedSpot(widget.id) && draggedId() !== null && draggedId() !== widget.id,
+              }}
+              data-test-id={`dashboard-views-row-${widget.id}`}
+              draggable={hasFixedSpot(widget.id) ? undefined : 'true'}
               onDragStart={(e) => {
-                handleDragStart(e, idx())
+                handleDragStart(e, widget.id)
               }}
               onDragEnd={handleDragEnd}
               onDragOver={(e) => {
-                handleDragOver(e, idx())
+                handleDragOver(e, widget.id)
               }}
               onDrop={(e) => {
-                handleDrop(e, idx())
+                handleDrop(e, widget.id)
               }}
             >
-              <span class={styles.dragHandle} title="Drag to reorder">
-                <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M8 6h2v2H8V6zm6 0h2v2h-2V6zM8 11h2v2H8v-2zm6 0h2v2h-2v-2zm-6 5h2v2H8v-2zm6 0h2v2h-2v-2z" />
-                </svg>
-              </span>
+              <Show
+                when={!hasFixedSpot(widget.id)}
+                fallback={<span class={styles.handleSpace} aria-hidden="true" />}
+              >
+                <span class={styles.dragHandle} title="Drag to reorder">
+                  <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M8 6h2v2H8V6zm6 0h2v2h-2V6zM8 11h2v2H8v-2zm6 0h2v2h-2v-2zm-6 5h2v2H8v-2zm6 0h2v2h-2v-2z" />
+                  </svg>
+                </span>
+              </Show>
               <button
                 class={styles.widgetToggle}
                 classList={{ [styles.active]: isVisible(widget.id) }}

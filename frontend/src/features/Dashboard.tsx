@@ -28,7 +28,7 @@ import {
   toast,
 } from '../core/api'
 import { useAppState } from '../core/appStore'
-import { loadWidgetPrefs } from '../core/dashboardWidgets'
+import { hasFixedSpot, loadWidgetPrefs } from '../core/dashboardWidgets'
 import { entityVersion } from '../core/dataVersions'
 import { useGuidance } from '../core/guidance'
 import { refetchOnActive } from '../core/pageVisibility'
@@ -851,14 +851,13 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Dynamic Widgets — rendered in saved order, only visible widgets shown */}
+            {/* Dynamic Widgets — rendered in saved order, only visible widgets shown. The ones
+                with a fixed spot are placed above, so the order skips them (and Views gives
+                them no drag handle). */}
             <For each={widgetOrder()}>
               {(widgetId) => (
                 <>
-                  {isWidgetVisible(widgetId) &&
-                  widgetId !== 'metrics' &&
-                  widgetId !== 'badges' &&
-                  !widgetId.startsWith('deck-')
+                  {isWidgetVisible(widgetId) && !hasFixedSpot(widgetId)
                     ? renderWidget(widgetId)
                     : null}
                 </>

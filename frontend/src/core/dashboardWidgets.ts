@@ -9,7 +9,7 @@
 
 export const WIDGET_STORAGE_KEY = 'dashboard_widgets'
 
-/** Page order, top to bottom. Some ids render at a fixed spot (see Dashboard.tsx). */
+/** Page order, top to bottom. Some ids render at a fixed spot: see FIXED_SPOT_WIDGETS. */
 export const DEFAULT_WIDGET_ORDER = [
   'badges',
   'metrics',
@@ -27,6 +27,26 @@ export const DEFAULT_WIDGET_ORDER = [
   'recurring-insights',
   'income-vs-expenses',
 ]
+
+/**
+ * Widgets the page places at their own spot whatever the saved order says: the badge rail, the
+ * metrics, the savings gauge and the overview deck's panels. Only the rest, under Show more,
+ * follow the order. Dashboard.tsx leaves these out of its ordered tail, and the Views dialog
+ * gives them no drag handle, since dragging one would save an order that changes nothing.
+ */
+export const FIXED_SPOT_WIDGETS: readonly string[] = [
+  'badges',
+  'metrics',
+  'savings-gauge',
+  'deck-sankey',
+  'deck-heatmap',
+  'deck-radar',
+  'deck-trends',
+  'deck-portfolio',
+  'deck-transactions',
+]
+
+export const hasFixedSpot = (id: string): boolean => FIXED_SPOT_WIDGETS.includes(id)
 
 /** "Reset Default" turns everything on, which is not the same as the first-run set below. */
 export const ALL_WIDGET_IDS = DEFAULT_WIDGET_ORDER
