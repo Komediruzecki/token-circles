@@ -61,6 +61,16 @@ All notable changes to Token Circles are documented here. The format is based on
   `scripts/walk-tours.mjs`. Tests: `TourSelectionModal.account.test.tsx` (the menu's heading),
   `onboardingDoneStep.test.tsx` (the tip, and the label in `App.tsx`), and in e2e
   `onboarding.spec.ts` (the button reads Tours and opens a menu headed Tours).
+- **Account cards name the type as the account form does** (B7). The type badge showed the stored
+  id: "giro", "credit", "ib". It now reads Giro / Checking, Savings, Investment / Brokerage, Cash
+  or Credit Card, and an account of a type this build does not have reads "Other account", as the
+  form says, where it said "account". The names live once, in `ACCOUNT_TYPE_NAMES`
+  (`frontend/src/core/accountTypes.ts`), which the badge (`accountTypeBadge`) and the form's
+  options in `Accounts.tsx` both read. The add-transaction form's account select uses the same
+  badge, so it reads "Everyday (Giro / Checking)". Tests: `accountTypes.test.ts`,
+  `accountsPageTypes.test.tsx`, `accountForm.test.tsx`, `transactionsAccountTypeWord.test.tsx`,
+  and in e2e `accounts-crud.spec.ts` (every badge is one of the form's names). With the badge back
+  on the raw id, 5 unit tests fail.
 
 ### Deploy notes
 

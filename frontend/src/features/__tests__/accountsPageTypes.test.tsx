@@ -104,14 +104,14 @@ describe('the Accounts page shows a stored type as the app reads it', () => {
 
   it('shows a type this build does not have as a plain account', async () => {
     const shown = await cards()
-    expect(shown['Sock drawer'].word).toBe('account')
+    expect(shown['Sock drawer'].word).toBe('Other account')
     expect(shown['Sock drawer'].className).toContain(badgeStyles.badgeDefault)
     expect(shown['Sock drawer'].icon).not.toBe(shown.Everyday.icon)
   })
 
   it('shows a credit card as a type of its own: word, colour and icon', async () => {
     const shown = await cards()
-    expect(shown.Visa.word).toBe('credit')
+    expect(shown.Visa.word).toBe('Credit Card')
     expect(shown.Visa.className).toContain(badgeStyles.badgeExpense)
     expect(shown.Visa.icon).not.toBe(shown['Sock drawer'].icon)
   })

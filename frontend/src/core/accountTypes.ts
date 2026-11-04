@@ -3,14 +3,26 @@
  *
  * The reader keeps a type this build does not have as it is (`storedAccountType` in
  * shared/accountSchema.ts): one a later build adds, or one an API client stored before the writers
- * checked. The pages show such an account as a plain one: the word "account", with no type's icon
+ * checked. The pages show such an account as a plain one: "Other account", with no type's icon
  * or colour. An edit sends the stored type back unchanged, so opening one here changes nothing.
  */
 import { isAccountType, storedAccountType } from '../../../shared/accountSchema'
 import type { AccountType } from '../../../shared/accountSchema'
 
-/** What the type badge says for an account of a type this build does not have. */
-export const PLAIN_ACCOUNT = 'account'
+/**
+ * Each type's name, as the account form lists it and the type badge shows it. The badge showed
+ * the stored id ("giro", "credit") before (first-week test run, B7).
+ */
+export const ACCOUNT_TYPE_NAMES: Readonly<Record<AccountType, string>> = {
+  giro: 'Giro / Checking',
+  savings: 'Savings',
+  ib: 'Investment / Brokerage',
+  cash: 'Cash',
+  credit: 'Credit Card',
+}
+
+/** What the type badge and the form say for an account of a type this build does not have. */
+export const PLAIN_ACCOUNT = 'Other account'
 
 /**
  * The type, when it is one this build has, a type v4 renamed read as the one that replaced it (a
@@ -22,9 +34,10 @@ export function knownAccountType(type: unknown): AccountType | null {
   return isAccountType(read) ? read : null
 }
 
-/** The word a type badge shows: the type as the pages have always shown it, or "account". */
+/** The words a type badge shows: the type's name, or "Other account". */
 export function accountTypeBadge(type: unknown): string {
-  return knownAccountType(type) ?? PLAIN_ACCOUNT
+  const known = knownAccountType(type)
+  return known ? ACCOUNT_TYPE_NAMES[known] : PLAIN_ACCOUNT
 }
 
 /** The badge colour each type has on the Accounts page; a plain account has the plain one. */
