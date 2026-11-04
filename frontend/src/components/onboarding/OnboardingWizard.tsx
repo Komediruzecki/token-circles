@@ -43,7 +43,6 @@ import { loadAnswers, saveAnswers } from '../../core/guidanceAnswers'
 import { benchmarksShown } from '../../core/guidanceGate'
 import { LOCAL_ONBOARDING_OWNER } from '../../core/onboardingFlag'
 import {
-  clearLocalSetupPending,
   completeOnboarding,
   countProfileMadeAsDecided,
   firstSetupOfTheAccount,
@@ -326,8 +325,8 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
         props.selectProfiles([created.id])
         if (leaving.length > 0) await removeExamples(leaving)
       }
-      // The space is saved: a switch to local-only that asked for it has it.
-      clearLocalSetupPending()
+      // The marker stays until setup is finished or left: a reload from here on opens setup
+      // again at the step it reached (review M7).
     },
     onSaved: () => {
       if (benchmarksShown()) setSpaceScreen('about')

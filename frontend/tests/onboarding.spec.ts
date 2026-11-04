@@ -197,6 +197,41 @@ test.describe('onboarding wizard', () => {
     await expect.poll(stored, { timeout: 15000 }).toEqual([['Main Checking', 1500, -388.85]])
   })
 
+  // Review M7: a reload part way through local-first setup landed on the Dashboard, with nothing
+  // imported and no Getting started. It opens setup again at the step it reached, as signed in.
+  test('comes back after a reload at the step it reached, and finishes into Getting started (review M7)', async ({
+    page,
+  }) => {
+    await gotoServerlessZeroState(page, 'dashboard', 'onboarding-wizard')
+    await toAccount(page)
+    await page.getByTestId('onboarding-account-name').fill('Main Checking')
+    await page.getByTestId('onboarding-account-create').click()
+    await expect(page.getByTestId('onboarding-step-import')).toBeVisible()
+
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    await expect(page.getByTestId('onboarding-step-import')).toBeVisible({ timeout: 30000 })
+    await page
+      .getByTestId('onboarding-import-input')
+      .setInputFiles('tests/fixtures/revolut-sample.csv')
+    await fileIn(page, 'ready')
+    await expect(page.getByTestId('onboarding-import-target')).toHaveValue('Main Checking')
+    await page.getByTestId('onboarding-import-selected').click()
+    await expect(page.getByTestId('onboarding-step-subscriptions')).toBeVisible({ timeout: 15000 })
+    await page.getByTestId('onboarding-subs-skip').click()
+    await expect(page.getByTestId('onboarding-step-done')).toBeVisible()
+
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    await expect(page.getByTestId('onboarding-step-done')).toBeVisible({ timeout: 30000 })
+    await page.getByTestId('onboarding-finish').click()
+    await expect(page.getByTestId('onboarding-wizard')).toHaveCount(0)
+    await expect(page.getByTestId('getting-started')).toBeVisible({ timeout: 30000 })
+
+    // Finished: a reload opens the Dashboard, and setup stays closed.
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    await expect(page.getByTestId('getting-started')).toBeVisible({ timeout: 30000 })
+    await expect(page.getByTestId('onboarding-wizard')).toHaveCount(0)
+  })
+
   test('@smoke reads a statement, imports it in one tap, and tracks the subscriptions it shows', async ({
     page,
   }) => {

@@ -2952,6 +2952,23 @@ true, or is too small for one.
   with it made while Getting started is hidden, with it decided before any month has an entry, and
   with the old "vs last month" for a month, one fails each.
 
+- **Local-first setup comes back after a reload, at the step it reached** (M7). Signed in, a
+  reload opens setup again at the step the account's record holds. In local-first, a reload on the
+  statement step landed on the Dashboard with nothing imported, and one on Done never gave
+  Getting started: the marker that asks for setup (`finance_local_setup_pending`,
+  `onboardingFlag.ts`) went once the space was saved, and with an account made the workspace no
+  longer read as new. Local-first's first setup now keeps the furthest step it reached in that
+  marker until it is finished or left, and a reload opens setup there (`keepLocalStep` and
+  `whereToOfferOnboarding` in `onboardingStore.ts`); finishing gives Getting started as before.
+  Setup run again after a decision keeps nothing, as signed in, and one the local-only switch asked
+  for keeps its steps over a decision the demo left behind. Tests:
+  `src/core/__tests__/onboardingAfterLocalOnly.test.ts`, `onboardingOverExamples.test.tsx` (whose
+  account cases now run as the account, as the app does), and in e2e `onboarding.spec.ts` (a
+  reload on the statement step and on Done). Without the reopening, four fail, and the e2e case;
+  without the steps kept, four; with the latest step kept in place of the furthest, with steps kept
+  after a decision, with the switch's setup over a decided demo dropped, and with the marker
+  cleared when the space is saved, one each.
+
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
 The production build holds back the benchmarks and the questions that choose their figures

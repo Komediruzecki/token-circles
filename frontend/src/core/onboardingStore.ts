@@ -44,6 +44,8 @@ import {
   clearLocalSetupPending,
   LOCAL_ONBOARDING_OWNER,
   localSetupPending,
+  localSetupStep,
+  markLocalSetupPending,
   onboardingFlagKey,
 } from './onboardingFlag'
 import { forgetTypedBalances } from './setupTypedBalances'
@@ -205,6 +207,10 @@ function recordDecision(
  */
 function recordStep(step: OnboardingStep): void {
   const of = owner
+  if (of === LOCAL_ONBOARDING_OWNER) {
+    keepLocalStep(step)
+    return
+  }
   if (!isServerAccount(of)) return
   const state = accountState()
   if (state === null || state.onboarding === UNREADABLE || onboardingFinished(state.onboarding)) {
@@ -217,6 +223,21 @@ function recordStep(step: OnboardingStep): void {
     // Not kept: the next step sends the furthest one again.
     if (owner === of) furthestSent = null
   })
+}
+
+/** A step as kept in the local marker, or null for none this build knows. */
+function knownStep(kept: string | null): OnboardingStep | null {
+  return ONBOARDING_STEPS.find((step) => step === kept) ?? null
+}
+
+/**
+ * Local-first: keep the furthest step the first setup reached in the marker, until it is finished
+ * or left (review M7). Setup run again after a decision keeps nothing, as signed in; one the
+ * local-only switch asked for keeps its steps over a decision the demo left behind.
+ */
+function keepLocalStep(step: OnboardingStep): void {
+  if (getOnboardingStatus(LOCAL_ONBOARDING_OWNER) !== null && !localSetupPending()) return
+  markLocalSetupPending(furthestStep(knownStep(localSetupStep()), step) ?? step)
 }
 
 /**
@@ -363,7 +384,10 @@ export async function whereToOfferOnboarding(): Promise<OnboardingStep | null> {
     if (owner !== asking || own === null) return null
     // Only the examples, or nothing: setup opens on the space, however much the examples hold.
     if (!own) return 'space'
-    // A workspace of the person's own: carried on with as before.
+    // Setup under way in this workspace: on again at the furthest step it reached (review M7).
+    const reached = knownStep(localSetupStep())
+    if (reached !== null) return openingStep(reached)
+    // The switch's ask, over a workspace of the person's own: carried on with as before.
     clearLocalSetupPending()
   }
   return (await shouldOfferLocally(asking)) ? 'space' : null

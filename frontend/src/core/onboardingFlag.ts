@@ -24,21 +24,34 @@ export const onboardingFlagKey = (owner: string) => `${BROWSER_WIDE_ONBOARDING_K
 /**
  * Set by the wizard's "Keep my data in this browser only" just before it reloads into the local
  * workspace, so that workspace offers setup for a space of the person's own (whereToOfferOnboarding).
+ * Local-first's first setup keeps it too, holding the furthest step it reached, until setup is
+ * finished or left (review M7): a reload part way through opens setup again at that step, as the
+ * account's record does signed in. '1' is the switch's ask, before setup has shown a step.
  */
 export const LOCAL_SETUP_PENDING_KEY = 'finance_local_setup_pending'
 
-/** Ask the local workspace the next load opens to offer setup (chooseLocalOnly). */
-export function markLocalSetupPending(): void {
+/** Ask the local workspace to offer setup (chooseLocalOnly), or keep the step setup reached. */
+export function markLocalSetupPending(step = '1'): void {
   try {
-    localStorage.setItem(LOCAL_SETUP_PENDING_KEY, '1')
+    localStorage.setItem(LOCAL_SETUP_PENDING_KEY, step)
   } catch {
     // Non-fatal: the workspace opens as it would have before.
   }
 }
 
+/** The step local setup reached, as kept; null for none, or for the switch's bare ask. */
+export function localSetupStep(): string | null {
+  try {
+    const kept = localStorage.getItem(LOCAL_SETUP_PENDING_KEY)
+    return kept === null || kept === '1' ? null : kept
+  } catch {
+    return null
+  }
+}
+
 /**
- * The marker has done its job, or no longer applies: the space is saved, setup was left, the demo
- * was asked for, or a signed-in account booted (onboardingStore.ts, whereToOfferOnboarding).
+ * The marker has done its job, or no longer applies: setup was finished or left, the demo was
+ * asked for, or a signed-in account booted (onboardingStore.ts, whereToOfferOnboarding).
  */
 export function clearLocalSetupPending(): void {
   try {

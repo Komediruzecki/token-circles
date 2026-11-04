@@ -18,7 +18,9 @@ import { getProfiles, setCurrentProfile, setProfiles, useAppState } from '../../
 import { confirmRequests, resolveConfirm } from '../../../core/confirmStore'
 import { __resetDataVersionsForTest } from '../../../core/dataVersions'
 import { EXAMPLE_PROFILE_NAMES } from '../../../core/demoMode'
+import { accountOnboardingOwner } from '../../../core/onboardingFlag'
 import {
+  completeOnboarding,
   forgetOnboardingStatus,
   LOCAL_SETUP_PENDING_KEY,
   markLocalSetupPending,
@@ -178,8 +180,22 @@ it('makes a new space over an example, selects it, and removes the examples by d
   expect(localStorage.getItem('currentProfileId')).toBe(String(ours))
   expect(JSON.parse(localStorage.getItem('selectedProfileIds') ?? '[]')).toEqual([ours])
   expect(await exampleRows()).toEqual([])
-  expect(localStorage.getItem(LOCAL_SETUP_PENDING_KEY)).toBeNull()
+  // The marker stays until setup is finished or left, with the step it reached (review M7).
+  expect(localStorage.getItem(LOCAL_SETUP_PENDING_KEY)).toBe('account')
   expect(toasts()).toEqual([])
+})
+
+// Review M7: the switch's ask outlives the space, so a reload later in setup opens it again, even
+// where the demo finished its own setup before and left that decision here.
+it('keeps asking past the space, over a demo that finished its setup before', async () => {
+  completeOnboarding()
+  markLocalSetupPending()
+  const name = await openSpaceStep()
+  nameAndContinue(name, 'Our flat')
+  await vi.waitFor(() => {
+    expect(onboardingStep()).toBe('account')
+  })
+  expect(localStorage.getItem(LOCAL_SETUP_PENDING_KEY)).toBe('account')
 })
 
 it('keeps the examples when asked, beside the new space, and renames none of them', async () => {
@@ -262,6 +278,8 @@ it('asks nothing about examples on an account, which has none', async () => {
 
 it('says on the switch that the examples are here, before anything changes', async () => {
   setStorageMode('self-hosted')
+  // The account's wizard, whose steps go to the account's record, never to the local marker.
+  setOnboardingOwner(accountOnboardingOwner(1))
   setCurrentProfile(null)
   setProfiles([])
   await openSpaceStep()
@@ -292,6 +310,8 @@ async function switchToLocalOnly(): Promise<{ question: string; reloads: () => n
     hash: '',
   } as unknown as Location)
   setStorageMode('self-hosted')
+  // The account's wizard, whose steps go to the account's record, never to the local marker.
+  setOnboardingOwner(accountOnboardingOwner(1))
   setCurrentProfile(null)
   setProfiles([])
   // What the account's session left: its own profile selected.
