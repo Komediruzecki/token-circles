@@ -183,6 +183,13 @@
   }
 }
 
+/* A toast's action is a fingertip tall on a phone: "See my prints" was 27px. */
+@media (max-width: 768px), (pointer: coarse) {
+  .actionBtn {
+    min-height: 44px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .toast {
     animation: none;

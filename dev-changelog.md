@@ -2583,6 +2583,12 @@ check')` first, as the cushion and debt cases do.
   measures each stage; `loginScreen.refusals.test.tsx` reads the phone rules and fails if a stage
   class comes back.
 
+- **A toast's action is 44px tall on a phone**: "See my prints" and "See badges" were 27px tall
+  (PR A's hand-back). `Toast.module.css` gives `.actionBtn` a 44px minimum height under
+  `@media (max-width: 768px), (pointer: coarse)`; measured at 390, "See badges" is 90x44. Test:
+  `tests/a11y-phone.spec.ts` (`@smoke`) raises a toast with an action through the app's own toast
+  store and measures it.
+
 ### Found in the first-week test run (3 Nov)
 
 What the 3 Nov test run and the functionality review after it found in the first week's changes,
