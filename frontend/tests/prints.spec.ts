@@ -153,7 +153,7 @@ test.describe('Prints', () => {
       timeout: 30_000,
     })
     const readout = page.getByTestId('prints-readout')
-    await expect(readout).toHaveText('Tap a petal to see its month.')
+    await expect(readout).toHaveText('Choose a petal to see its month.')
     const list = page.getByTestId('prints-months')
     await list.locator('summary').click()
     const lines = await list.locator('li').allTextContents()
@@ -163,7 +163,7 @@ test.describe('Prints', () => {
     expect(lines[2]).toMatch(new RegExp(`^${monthName(monthsAgo(4))} spent `))
     // Tapped again, it lets go, though the mouse is still on it.
     await tapPetal(page, 2)
-    await expect(readout).toHaveText('Tap a petal to see its month.')
+    await expect(readout).toHaveText('Choose a petal to see its month.')
   })
 
   test('signed in: an earlier print takes the newest one’s place when tapped', async ({ page }) => {
@@ -202,7 +202,9 @@ test.describe('Prints', () => {
       timeout: 30_000,
     })
     await tapPetal(page, 5)
-    await expect(page.getByTestId('prints-readout')).not.toHaveText('Tap a petal to see its month.')
+    await expect(page.getByTestId('prints-readout')).not.toHaveText(
+      'Choose a petal to see its month.'
+    )
     await page.getByTestId('prints-months').locator('summary').click()
 
     const shelf = page.getByTestId('progress-prints')

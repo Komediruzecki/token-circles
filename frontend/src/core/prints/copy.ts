@@ -56,7 +56,7 @@ export const LEGEND =
 export const SHAPE_LINE = 'Only the shape of your year is on it.'
 export const NEXT_HEADING = 'Next print'
 export const EVERY_HEADING = 'Every print'
-export const READOUT_IDLE = 'Tap a petal to see its month.'
+export const READOUT_IDLE = 'Choose a petal to see its month.'
 export const SHARE_LABEL = 'Share'
 export const SHARE_TEXT = 'Twelve months of my money, drawn as a seal by Token Circles.'
 export const shareTitle = (first: boolean): string => (first ? 'My first print' : 'My print')

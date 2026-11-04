@@ -23,6 +23,33 @@ All notable changes to Token Circles are documented here. The format is based on
   own categories and bring back the defaults for the profile ...". `DangerZone.tsx`; test:
   `dangerZoneCategoriesReset.test.tsx` (no "Delete" in the item or its confirm; both cases fail on
   the old component).
+- **Ten older strings rewritten** (B9, and the design review's M22). Eight said their second half
+  after an em dash, and two told a mouse user to tap:
+  - Import, after an import: "25 transactions imported. Want to check them for subscriptions like
+    Netflix or Spotify?" (was "... imported — want to check them for known subscriptions ..."; the
+    scan also finds payments it has no name for, so "known" went too).
+  - Recent Imports: "4.11.2026, 09:12:03 · 25 imported" (was "—").
+  - Paste CSV: "Paste a table straight from Excel, Google Sheets or any spreadsheet app. It's read
+    right here in your browser."
+  - Dashboard, Portfolio panel with none: "No holdings yet. Add one on the Portfolio page."
+  - Import preview, date range: "Rows outside this period are skipped. Leave a side blank for no
+    bound." (was "Only import transactions within this period — rows outside it are skipped.").
+  - Import preview, new categories: "... Untick any you don't want created. Their rows import
+    without a category."
+  - Settings, Storage: "Local mode: your data stays in this browser and works offline."
+  - The note on a bank row read as a transfer to an account the import cannot name:
+    "Possible transfer: the other account wasn't found." (`shared/bankImport/classify.ts`; was
+    "possible transfer — counterpart not resolved"). Rows imported before keep the old note.
+    Duplicate detection does not read notes, so a statement imported again still finds its rows.
+  - Prints: "Choose a petal to see its month." (was "Tap a petal ...").
+  - Add subscriptions: "Pick the ones you have · choose a plan or type your price" (was "Tap the
+    ones you have · pick a plan ...").
+    Test: `frontend/src/__tests__/oldCopyRewrites.test.ts` reads each file with its line breaks
+    collapsed and checks the new wording is there and the old is gone (all ten fail before the
+    change); `bankImport.test.ts`, `printsShelf.test.tsx`, `prints.spec.ts` and
+    `settings-email-change.spec.ts` now expect the new words. Other em dashes in older UI copy
+    remain (Connected sources' "Nothing new — ...", Recent Imports' delete question, the preview's
+    duplicate notes, "No new transactions — ...", "No date in this row — ..."): not in this list.
 
 ### Deploy notes
 

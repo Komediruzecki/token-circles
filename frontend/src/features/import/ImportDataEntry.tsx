@@ -412,8 +412,8 @@ export function ImportDataEntry(props: { flow: ImportFlow; compact?: boolean }) 
       {flow.activeImportTab() === 'paste-csv' && (
         <>
           <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 12px;">
-            Paste tabular data straight from Excel, Google Sheets, or any spreadsheet app — it's
-            parsed right in your browser.
+            Paste a table straight from Excel, Google Sheets or any spreadsheet app. It's read right
+            here in your browser.
           </p>
           <form {...pasteForm.attrs} data-test-id="import-paste-form">
             <FormNotice form={pasteForm} />

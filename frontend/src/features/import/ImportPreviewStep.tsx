@@ -216,8 +216,8 @@ export function ImportPreviewStep(props: { flow: ImportFlow; embedded?: boolean 
               New categories to create
             </p>
             <p class={styles.dropzoneHint} style={{ 'margin-bottom': '8px' }}>
-              These category values don't match an existing category. Uncheck any you don't want
-              created — rows with an unchecked category import without a category.
+              These category values don't match an existing category. Untick any you don't want
+              created. Their rows import without a category.
             </p>
             <div style={{ display: 'flex', 'flex-wrap': 'wrap', gap: '8px 16px' }}>
               <For each={flow.newCategories()}>
@@ -295,8 +295,7 @@ export function ImportPreviewStep(props: { flow: ImportFlow; embedded?: boolean 
             Date range <span style={{ 'font-weight': '400', opacity: '0.65' }}>(optional)</span>
           </p>
           <p class={styles.dropzoneHint} style={{ 'margin-bottom': '8px' }}>
-            Only import transactions within this period — rows outside it are skipped. Leave a side
-            blank for no bound.
+            Rows outside this period are skipped. Leave a side blank for no bound.
           </p>
           <div
             style={{

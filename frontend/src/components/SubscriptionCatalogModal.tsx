@@ -401,7 +401,7 @@ export function SubscriptionCatalogModal(props: SubscriptionCatalogModalProps) {
         <div class={styles.head}>
           <div>
             <h2 class={styles.title}>Add subscriptions</h2>
-            <p class={styles.sub}>Tap the ones you have · pick a plan or type your price</p>
+            <p class={styles.sub}>Pick the ones you have · choose a plan or type your price</p>
           </div>
           <button class={styles.close} onClick={props.onClose} aria-label="Close" type="button">
             <svg

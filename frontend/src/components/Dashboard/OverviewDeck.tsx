@@ -366,7 +366,7 @@ export default function OverviewDeck(props: OverviewDeckProps) {
           </header>
           <Show
             when={folio()?.rows.length}
-            fallback={<p class={styles.empty}>No holdings yet — add one on the Portfolio page.</p>}
+            fallback={<p class={styles.empty}>No holdings yet. Add one on the Portfolio page.</p>}
           >
             <ul class={styles.holdingList}>
               <For each={folio()!.rows}>

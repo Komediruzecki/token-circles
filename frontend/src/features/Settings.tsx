@@ -1471,7 +1471,7 @@ export default function Settings() {
                 )}
                 {!showStorageWarning() && storageMode() === 'serverless' && (
                   <p style="margin-top: 12px; color: var(--text-secondary); font-size: 13px;">
-                    Running in Local mode — data stays in this browser, fully offline.
+                    Local mode: your data stays in this browser and works offline.
                   </p>
                 )}
                 {!showStorageWarning() && storageMode() === 'self-hosted' && (

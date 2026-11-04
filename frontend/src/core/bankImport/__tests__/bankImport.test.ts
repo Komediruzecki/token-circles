@@ -203,7 +203,7 @@ describe('revolut adapter', () => {
     const txns = revolutAdapter.transform(parsed, baseCtx({ transferRules: rules }))
     const topup = txns.find((t) => t.description.includes('Top-up'))!
     expect(topup.type).toBe('Income') // +50, unresolved transfer → income on Revolut
-    expect(topup.notes).toContain('possible transfer')
+    expect(topup.notes).toContain("Possible transfer: the other account wasn't found.")
   })
 })
 
@@ -556,7 +556,7 @@ describe('wise adapter', () => {
     // Top-up: forced transfer, but no counterpart configured → signed income + note.
     expect(txns[1].type).toBe('Income')
     expect(txns[1].amount).toBe(500)
-    expect(txns[1].notes).toContain('possible transfer')
+    expect(txns[1].notes).toContain("Possible transfer: the other account wasn't found.")
   })
 })
 

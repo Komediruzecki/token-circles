@@ -50,7 +50,7 @@ export function buildTxn(raw: RawTxn, ctx: TransformContext): CanonicalTxn {
     // Transfer suspected but the counterpart account is unknown. Import as signed
     // income/expense so the one account we do know stays balanced, and flag it in
     // notes for the user to reclassify.
-    const note = [raw.notes, 'possible transfer — counterpart not resolved']
+    const note = [raw.notes, "Possible transfer: the other account wasn't found."]
       .filter(Boolean)
       .join(' | ');
     return incomeExpense(raw, ctx, note);
