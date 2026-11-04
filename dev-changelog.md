@@ -2589,6 +2589,13 @@ check')` first, as the cushion and debt cases do.
   `tests/a11y-phone.spec.ts` (`@smoke`) raises a toast with an action through the app's own toast
   store and measures it.
 
+- **Every confirm has an accessible name** (PR A's hand-back). A confirm with a title is named by
+  it, as `1fb2c645` made it; one without a title had no `aria-labelledby` and was announced as
+  "alert dialog" alone. It is named by its message now, and not described by the same text a
+  second time (`ConfirmDialog.tsx`). Tests: `ConfirmDialog.test.tsx` reads the name a confirm
+  with a title, one without, and one without and with several lines gets; without the change, the
+  last two fail.
+
 ### Found in the first-week test run (3 Nov)
 
 What the 3 Nov test run and the functionality review after it found in the first week's changes,
