@@ -43,3 +43,53 @@ export function resetKeepsIcon(name: string, icon: string | null | undefined): b
   const value = (icon ?? '').trim();
   return !UNCHOSEN_ICONS.has(value) && value !== REPLACED_DEFAULT_ICONS[key];
 }
+
+/** A category as the reset reads it. */
+export interface ResetCategory {
+  id: number;
+  name: string;
+  type?: string | null;
+}
+
+/** A default category as the reset reads it. */
+export interface ResetDefault {
+  name: string;
+  type: string;
+}
+
+/**
+ * What "Reset to defaults" does with each of a profile's categories.
+ *
+ * - `kept`: the category each default is set back to, by the default's lowercased name: the
+ *   lowest-id one of its reset name and the default's type, or with none of that type, the
+ *   lowest-id one of that name, so a default whose type was changed comes back as it was.
+ * - `removed`: every other category, with where its entries go: into the kept one of its name when
+ *   it has the default's type (a Groceries of the person's own beside Food), and otherwise into no
+ *   category, as for any category that is no default. An expense Gifts an import made beside the
+ *   income Gifts is not the income one's: matched by name alone, its expenses moved into income.
+ *
+ * Both runtimes reset by it (worker/src/profileData.ts, frontend/src/core/storage/idb.ts).
+ */
+export function planCategoryReset(
+  existing: readonly ResetCategory[],
+  defaults: readonly ResetDefault[]
+): { kept: Map<string, number>; removed: Map<number, number | null> } {
+  const byId = [...existing].sort((a, b) => a.id - b.id);
+  const defaultOf = new Map(defaults.map((one) => [one.name.toLocaleLowerCase(), one]));
+  const kept = new Map<string, number>();
+  for (const [key, one] of defaultOf) {
+    const named = byId.filter((category) => resetName(String(category.name ?? '')) === key);
+    const canonical = named.find((category) => category.type === one.type) ?? named[0];
+    if (canonical) kept.set(key, canonical.id);
+  }
+  const keptIds = new Set(kept.values());
+  const removed = new Map<number, number | null>();
+  for (const category of byId) {
+    if (keptIds.has(category.id)) continue;
+    const key = resetName(String(category.name ?? ''));
+    const one = defaultOf.get(key);
+    const into = one && category.type === one.type ? kept.get(key) : undefined;
+    removed.set(category.id, into ?? null);
+  }
+  return { kept, removed };
+}

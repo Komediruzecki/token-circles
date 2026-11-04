@@ -3310,6 +3310,20 @@ true, or is too small for one.
   it as loaded only for the profiles read now. Test: `transactionsUncategorisedLink.test.tsx`,
   "takes no filed entry for uncategorised while the new profile's categories load", which fails
   without it.
+- **Reset to defaults matches each default by name and type.** After the import fix above, an
+  import can leave an expense Gifts beside the default income Gifts. The reset keyed its kept
+  categories by name alone, so it folded the expense Gifts into the income one, its expenses with
+  it: the import's bug again, through the Danger Zone. Both runtimes now reset by one plan,
+  `planCategoryReset` in `shared/defaultCategories.ts`. Each default is set back on the lowest-id
+  category of its reset name and its own type, or, with none of that type, the lowest-id one of
+  that name, so a default whose type was changed comes back as before. Another category of that
+  name is folded into it, entries and budgets, only when it has the default's type; otherwise it
+  goes as any category that is no default does, its entries left with no category. Tests: the
+  contract scenario "resetting the categories matches each default by name and type", on D1 and
+  IndexedDB, fails on the old reset in both (the present landed in the income Gifts); it also
+  checks that Salary made an expense category comes back as income with its entry.
+  `categoryResetPlan.test.ts` covers the plan; preferring the lowest id whatever its type fails
+  its first case, and folding in whatever the type fails the contract scenario.
 
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
