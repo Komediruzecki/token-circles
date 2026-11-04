@@ -15,6 +15,14 @@ All notable changes to Token Circles are documented here. The format is based on
   so a screen reader announced only "button" between Budget and Delete category. It is now "Edit
   Groceries", and so on for each card (`frontend/src/features/Categories.tsx`). Test:
   `categoryForms.test.tsx`, which reads `aria-label` off the card's `edit-category-btn`.
+- **The Danger Zone calls the categories reset a reset, from its title to its last button** (B5).
+  The item was "Delete All Categories" with a "Delete Categories" button, its confirm asked
+  "Delete all categories for ...?" and its button said "Yes, Reset Categories", for an action that
+  puts the defaults back and keeps every transaction. Now the title, the button, the question and
+  its progress text ("Resetting...") all say reset, and the line under the title reads "Remove your
+  own categories and bring back the defaults for the profile ...". `DangerZone.tsx`; test:
+  `dangerZoneCategoriesReset.test.tsx` (no "Delete" in the item or its confirm; both cases fail on
+  the old component).
 
 ### Deploy notes
 

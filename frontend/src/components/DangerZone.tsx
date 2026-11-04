@@ -150,7 +150,7 @@ export default function DangerZone(props: DangerZoneProps) {
           </Show>
         </div>
 
-        {/* Delete All Categories */}
+        {/* Reset Categories */}
         <div class={styles['danger-zone-item']}>
           <Show
             when={confirming() !== 'categories'}
@@ -158,7 +158,7 @@ export default function DangerZone(props: DangerZoneProps) {
               <div class={styles['danger-confirm-box']}>
                 <div class={styles['danger-confirm-info']}>
                   <div class={styles['danger-confirm-title']}>
-                    Delete all categories for "{selectedProfileName()}"?
+                    Reset all categories for "{selectedProfileName()}"?
                   </div>
                   <div class={styles['danger-confirm-desc']}>
                     This will replace all categories with defaults. Custom categories will be lost.
@@ -176,16 +176,16 @@ export default function DangerZone(props: DangerZoneProps) {
                     onClick={() => executeDelete('/api/categories', 'Categories reset to defaults')}
                     disabled={loading()}
                   >
-                    {loading() ? 'Deleting...' : 'Yes, Reset Categories'}
+                    {loading() ? 'Resetting...' : 'Yes, Reset Categories'}
                   </button>
                 </div>
               </div>
             }
           >
             <div class={styles['danger-zone-item-content']}>
-              <div class={styles['danger-zone-item-title']}>Delete All Categories</div>
+              <div class={styles['danger-zone-item-title']}>Reset Categories</div>
               <div class={styles['danger-zone-item-desc']}>
-                Delete all custom categories and restore default categories for the profile{' '}
+                Remove your own categories and bring back the defaults for the profile{' '}
                 <strong>{selectedProfileName()}</strong>. Transactions will be preserved.
               </div>
             </div>
@@ -194,7 +194,7 @@ export default function DangerZone(props: DangerZoneProps) {
               onClick={() => setConfirming('categories')}
               disabled={loading()}
             >
-              Delete Categories
+              Reset Categories
             </button>
           </Show>
         </div>
