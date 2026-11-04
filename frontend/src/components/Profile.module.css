@@ -54,6 +54,28 @@
   font-size: 14px;
 }
 
+/* The checkbox draws at 16px; its label is the 44px fingertip around it. The negative margins
+   give the label the row's padding, so the row stays as tall as it was, and the name starts
+   where the label ends, so a tap on the name still picks the primary profile. */
+.profileCheckHit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  margin: -10px 0 -10px -14px;
+  cursor: pointer;
+}
+
+.profileCheck {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  cursor: pointer;
+  accent-color: var(--primary);
+}
+
 .profileDropdownItem:hover {
   background: var(--table-hover);
 }

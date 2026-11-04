@@ -13,6 +13,9 @@
  * - D8: badge names and dates, "primary", the tagline and the Settings "General" label were 9.5
  *   to 11px.
  * - D1: words in a brand colour in the light theme, from 2.58:1 to 4.40:1.
+ * - Quick entry: the bar's fields were 19 to 24 tall and its toggles 28; the guided sheet a tap
+ *   opens had Close 30x30, Cancel, Back and Next 35 to 40, and its date and note fields 20.
+ * - The profile menu's checkboxes were 16x16 with no name; the Import preview's had no name.
  *
  * A target is measured by its hit area, not its box: the pixels across its middle where a tap
  * lands on it (elementFromPoint), so a ring drawn by ::before counts and a neighbour on top does
@@ -197,6 +200,69 @@ test.describe('the phone Dashboard @smoke', () => {
     await expectReadable(primary, '"primary"')
   })
 
+  test('quick entry is fingertips: the guided sheet a tap opens and the bar behind ⌘K', async ({
+    page,
+  }) => {
+    await page.goto(`${E2E_BASE}/#dashboard`)
+    await expect(page.getByTestId('dashboard-views')).toBeVisible({ timeout: 30_000 })
+
+    // A tap on the plus opens the guided sheet: amount, then category, then the summary.
+    await page.getByRole('button', { name: 'Quick add entry' }).click()
+    const sheet = page.getByRole('dialog', { name: 'Add transaction' })
+    const sheetButton = (name: string) => sheet.getByRole('button', { name, exact: true })
+    await expect(sheet).toBeVisible()
+    for (const name of ['Close', 'Expense', 'Income', 'Cancel'])
+      await expectFingertip(sheetButton(name), `the sheet's ${name}`)
+    await sheetButton('4').click()
+    await expectFingertip(sheetButton('Next'), "the sheet's Next")
+    await sheetButton('Next').click()
+    await sheet.locator('[class*="catChip"]').first().click()
+    const next = sheetButton('Next')
+    if (await next.isVisible()) await next.click()
+    await expectFingertip(sheet.locator('input[type="date"]'), "the sheet's date")
+    await expectFingertip(sheet.locator('input[type="text"]'), "the sheet's note")
+    await expectFingertip(sheetButton('Back'), "the sheet's Back")
+    await sheetButton('Close').click()
+    await expect(
+      page.locator('[class*="overlay"]:has([aria-label="Add transaction"])')
+    ).not.toHaveClass(/open/)
+
+    // The one-line bar, on a phone with a keyboard.
+    await page.keyboard.press('Control+k')
+    const bar = page.getByRole('textbox', { name: 'Quick entry' })
+    await expect(bar).toBeVisible()
+    // The bar scales in from 0.99; measure it once it has landed.
+    await bar.evaluate((el) =>
+      Promise.all(
+        el
+          .closest('[role="dialog"]')!
+          .getAnimations({ subtree: true })
+          .filter((a) => a.effect?.getComputedTiming().iterations !== Infinity)
+          .map((a) => a.finished)
+      )
+    )
+    await expectFingertip(bar, 'the bar')
+    for (const name of ['Category', 'Account'])
+      await expectFingertip(page.getByRole('combobox', { name }), `the bar's ${name}`)
+    await expectFingertip(page.getByLabel('Date', { exact: true }), "the bar's date")
+    for (const name of ['Expense', 'Income', 'Add entry'])
+      await expectFingertip(page.getByRole('button', { name, exact: true }), `the bar's ${name}`)
+  })
+
+  test("the profile menu's checkboxes are fingertips and say which profile", async ({ page }) => {
+    await page.goto(`${E2E_BASE}/#dashboard`)
+    await expect(page.getByTestId('dashboard-views')).toBeVisible({ timeout: 30_000 })
+    await page.getByRole('button', { name: 'Toggle sidebar' }).click()
+    await page.getByTestId('profile-dropdown-btn').click()
+    const rows = await each(page.locator('[data-profile-id]'), 'profile rows')
+    for (const row of rows) {
+      const name = (await row.locator('span').first().innerText()).trim()
+      const box = row.getByRole('checkbox', { name: `Include ${name}`, exact: true })
+      await expect(box, `the ${name} checkbox`).toBeVisible()
+      await expectFingertip(row.locator('label'), `the ${name} checkbox`)
+    }
+  })
+
   test("a toast's action is a fingertip", async ({ page }) => {
     await page.goto(`${E2E_BASE}/#dashboard`)
     await expect(page.getByTestId('dashboard-views')).toBeVisible({ timeout: 30_000 })
@@ -287,6 +353,14 @@ test.describe('the phone Import columns view @smoke', () => {
     await expect(boxes.first()).toBeVisible({ timeout: 15_000 })
     for (const box of await boxes.all())
       await expectFingertip(box.locator('xpath=..'), "a row's checkbox")
+
+    // Each box says what it does: select every row, or import this one (its row in the file).
+    await expect(page.getByRole('checkbox', { name: 'Select all rows', exact: true })).toBeVisible()
+    for (const name of [
+      'Import row 2: 2026-07-01 · A11y Test Salary · 2000.00',
+      'Import row 3: 2026-07-02 · A11y Test Groceries · -52.30',
+    ])
+      await expect(page.getByRole('checkbox', { name, exact: true }), name).toBeVisible()
   })
 })
 

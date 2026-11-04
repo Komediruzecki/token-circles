@@ -988,24 +988,20 @@ export function App() {
                               data-profile-id={profile.id}
                               class={`${profileStyles.profileDropdownItem} ${currentProfile()?.id === profile.id ? profileStyles.active : ''}`}
                             >
-                              <input
-                                type="checkbox"
-                                checked={selectedProfileIds().includes(profile.id)}
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                }}
-                                onchange={() => {
-                                  toggleProfileSelection(profile.id)
-                                }}
-                                style={{
-                                  width: '16px',
-                                  height: '16px',
-                                  'margin-right': '10px',
-                                  cursor: 'pointer',
-                                  'accent-color': 'var(--primary)',
-                                  'flex-shrink': 0,
-                                }}
-                              />
+                              <label class={profileStyles.profileCheckHit}>
+                                <input
+                                  type="checkbox"
+                                  class={profileStyles.profileCheck}
+                                  aria-label={`Include ${profile.name}`}
+                                  checked={selectedProfileIds().includes(profile.id)}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                  }}
+                                  onchange={() => {
+                                    toggleProfileSelection(profile.id)
+                                  }}
+                                />
+                              </label>
                               <span
                                 style={{ flex: 1, cursor: 'pointer' }}
                                 onClick={() => {

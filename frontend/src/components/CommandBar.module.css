@@ -250,6 +250,21 @@
   }
 }
 
+/* A fingertip needs 44px. The chips keep their look and the fields inside
+   them take the height, so a tap anywhere on the row lands on a field. */
+@media (max-width: 768px), (pointer: coarse) {
+  .input,
+  .select,
+  .date,
+  .toggle button,
+  .add {
+    min-height: 44px;
+  }
+  .chip {
+    padding-block: 0;
+  }
+}
+
 @media (max-width: 560px) {
   .overlay {
     padding-top: 8vh;

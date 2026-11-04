@@ -397,3 +397,30 @@ button.sumRow[aria-disabled='true'] {
 .retry:hover {
   border-color: color-mix(in oklab, var(--primary) 40%, var(--border));
 }
+
+/* A fingertip needs 44px. The row holding a date or note field gives its
+   padding to the field, so the row keeps its height and the whole row takes
+   the tap. */
+@media (max-width: 768px), (pointer: coarse) {
+  .close {
+    min-width: 44px;
+    min-height: 44px;
+    top: 6px;
+    right: 6px;
+  }
+  .typeToggle button,
+  .navNext {
+    min-height: 44px;
+  }
+  .navBack {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .sumRow:has(> .dateInput, > .noteInput) {
+    padding-block: 0;
+  }
+  .dateInput,
+  .noteInput {
+    min-height: 46px;
+  }
+}
