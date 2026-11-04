@@ -13,9 +13,7 @@
 import { render } from 'solid-js/web'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SIGN_IN_MESSAGES as SAY } from '../../../../shared/signInSchema'
-import screenStyles from '../LoginScreen.module.css'
 import screenCss from '../LoginScreen.module.css?raw'
-import stepStyles from '../SignInSteps.module.css'
 import stepCss from '../SignInSteps.module.css?raw'
 import { historySettled } from './historySettled'
 import type * as TurnstileModule from '../Turnstile'
@@ -487,40 +485,28 @@ describe('creating an account', () => {
   })
 })
 
-describe('Check your inbox on a phone', () => {
+describe('every sign-in step on a phone', () => {
   /** The rules a phone gets: those inside `@media (max-width: 768px), (pointer: coarse)`. */
   const phoneRules = (css: string) => {
     const at = css.indexOf('@media (max-width: 768px), (pointer: coarse) {')
     return at < 0 ? '' : css.slice(at, css.indexOf('\n}', at))
   }
 
-  // Review D6, this screen only: its button was 300x37, "Back to sign in" 90x20, and the
-  // footer's Privacy and Terms 38x17 and 32x17.
-  it("gives the screen's button and links a fingertip's height, and only this screen", async () => {
-    answers['/api/auth/register'] = () => json({ ok: true })
-    await mount()
-    const footer = () => host.querySelector('[data-test-id="sign-in-footer"]')!
-    expect(footer().classList.contains(screenStyles.footerRoomy)).toBe(false)
-    button('Create one').click()
-    await settle()
-    type(email(), 'name@example.com')
-    type(password(), 'a-new-password')
-    await submit()
-
-    const inbox = host.querySelector('[data-test-id="check-inbox"]')!
-    expect(inbox.classList.contains(stepStyles.inbox)).toBe(true)
-    expect(footer().classList.contains(screenStyles.footerRoomy)).toBe(true)
-
+  // Review D6: the buttons were 300x37, "Create one" 70x22, "Forgot password?" 113x20, "Back to
+  // sign in" 90x20, and the footer's Privacy and Terms 38x17 and 32x17. Check your inbox had them
+  // first; every stage has them now, so no stage sets a class of its own for it.
+  // tests/a11y-phone.spec.ts measures them on the screen.
+  it("gives every step's buttons and links a fingertip's height", () => {
     const steps = phoneRules(stepCss)
-    expect(steps).toMatch(/\.inbox \.submit\s*\{\s*min-height:\s*44px/)
-    expect(steps).toMatch(/\.inbox \.link\s*\{\s*min-height:\s*44px/)
+    expect(steps).toMatch(/\n\s*\.submit\s*\{\s*min-height:\s*44px/)
+    expect(steps).toMatch(/\n\s*\.link\s*\{\s*min-height:\s*44px/)
     const screen = phoneRules(screenCss)
-    expect(screen).toMatch(/\.footerRoomy > a,\s*\.footerRoomy nav a\s*\{[^}]*min-height:\s*44px/)
-    expect(screen).toMatch(/\.footerRoomy nav a\s*\{[^}]*min-width:\s*44px/)
-
-    host.querySelector<HTMLButtonElement>('[data-test-id="check-inbox-back"]')!.click()
-    await settle()
-    expect(footer().classList.contains(screenStyles.footerRoomy)).toBe(false)
+    expect(screen).toMatch(/\.submit,\s*\.altBtn\s*\{\s*min-height:\s*44px/)
+    expect(screen).toMatch(/\.accountLink\s*\{[^}]*min-height:\s*44px/)
+    expect(screen).toMatch(/\.footer > a,\s*\.footer nav a\s*\{[^}]*min-height:\s*44px/)
+    expect(screen).toMatch(/\.footer nav a\s*\{[^}]*min-width:\s*44px/)
+    expect(stepCss).not.toMatch(/\.inbox\b/)
+    expect(screenCss).not.toMatch(/footerRoomy/)
   })
 })
 

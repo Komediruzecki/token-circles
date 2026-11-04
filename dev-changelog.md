@@ -2566,6 +2566,23 @@ check')` first, as the cushion and debt cases do.
   checkbox cells 44x44, and no sample cell's content wider than the cell. Test:
   `tests/a11y-phone.spec.ts` (`@smoke`).
 
+- **Every sign-in step is a fingertip on a phone** (D6, the stages after Check your inbox, which
+  PR A did first). At 390 the buttons were 300x37, "Create one" 70x22, "Continue with no account"
+  162x22, "Forgot password?" 113x20, "Back to sign in" 90x20, and the footer's Privacy and Terms
+  38x17 and 32x17. Under `@media (max-width: 768px), (pointer: coarse)` the form's button and the
+  other ways in (Continue with Google, Email me a sign-in code, a passkey) take a 44px minimum
+  height, the links in and under the form 44x44 at least (`LoginScreen.module.css`), and the
+  footer's links 44 tall, with Privacy and Terms as wide, on every stage: the footer no longer
+  needs Check your inbox's `footerRoomy`, and `SignInSteps.module.css` sets its `.submit` and
+  `.link` for every step that uses them (email code, two-step, finish sign-up), not only inside
+  `.inbox`. Measured at 390 on sign in, forgot password, create account and email code: buttons
+  300x44, Create one 70x44, Continue with no account 162x44, Forgot password? 113x44, Back to sign
+  in 90x44, Privacy and Terms 44x44, Contact support 121x44. The footer's version stays on one
+  line. The screens stay dark whatever the system theme, which is decided; why they are dark is a
+  rule in `frontend/src/styles/themes/README.md`. Tests: `tests/a11y-phone.spec.ts` (`@smoke`)
+  measures each stage; `loginScreen.refusals.test.tsx` reads the phone rules and fails if a stage
+  class comes back.
+
 ### Found in the first-week test run (3 Nov)
 
 What the 3 Nov test run and the functionality review after it found in the first week's changes,

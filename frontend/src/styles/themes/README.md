@@ -17,6 +17,11 @@ so adding a theme means adding one file here, importing it from
 (`.instrument-deck` on a page container, dark theme only) that re-grounds
 analytics/portfolio surfaces in graphite terminal colors.
 
+**Signed out is dark.** The sign-in screens stay dark whatever the system theme (the brand's
+choice: keep it), because `App.tsx`'s `onMount` sets `data-theme` to `dark` over the system theme
+`public/theme-init.js` stamped, unless this browser stored `finance-theme` = `light`, and
+`core/theme.ts`, which follows the system, loads only with the first page behind sign-in.
+
 ## Token contract
 
 Grounds: `--bg --bg-secondary --surface --surface-hover --card-bg --stat-bg
