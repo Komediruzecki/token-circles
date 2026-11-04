@@ -2718,6 +2718,47 @@ check')` first, as the cushion and debt cases do.
   visitor, plus a signed-in first visit since the record began, and requires one theme from the
   first stamp on (on the old code the two system-light, no-choice cases fail).
 
+- **Words on any fill read 4.5:1, whatever colour the fill names** (round 3, item 1). White on
+  the legacy indigo #6366f1 was 4.47:1 on the tag filter's count (`TagFilter.module.css`
+  `.filterCount`, now `--info-fill` under `--on-fill`) and on the bulk modals' confirm button
+  (`.confirmButton` in `BulkTypeModal.module.css` and `BulkCategoryModal.module.css`, now
+  `--primary` under `--on-primary` with `--primary-hover` hovered: 4.63:1 light, 7.14:1 dark).
+  The widened guard found seven more, all fixed:
+  - `--danger` words on `--bg`, 4.13:1 in light, on Reset on the tour menu (`.resetBtn:hover`),
+    the filter bar's Clear (`.clearBtn:hover`) and the bulk bar's danger button
+    (`.btnDanger`). They now take `--danger-text`, 5.38:1.
+  - The legacy hex hovers in `BulkActions/BulkActionBar.module.css` and `TagFilter.module.css`
+    (indigo on #f5f3ff 4.07:1, red on #fef2f2 3.44:1, both on the dark-mode grey 2.31:1 and
+    2.74:1). They now take #4f46e5, #b91c1c, #a5b4fc and #fca5a5, 5.17:1 to 5.91:1.
+  `components/BulkActions/` and `components/Tags/TagFilter.tsx` are imported by nothing in `src/`.
+  Test: `brandTextContrast.test.ts` resolves the background and the text colour of every
+  stylesheet rule that sets both: hex, `white`, `black`, or `var()` through each theme with its
+  fallback. It requires 4.5:1 in all three themes, and checks that the resolver measured more than
+  200 pairs. With `.filterCount` back on #6366f1 it fails in all three themes at 4.47:1.
+
+- **The guided sheet's date and note fields are named** (round 3, item 2). The words "Date" and
+  "Note" sat beside the fields as plain text. Each summary row is now the field's `<label>`, so
+  the field is named by its word and a tap anywhere on the row lands in it (`GuidedOrbit.tsx`).
+  Test: `tests/a11y-phone.spec.ts` finds both fields with `getByLabel` and measures them. On the
+  old markup it fails ("the sheet's date": element not found).
+
+- **An OS theme change keeps a signed-out screen dark** (round 3, item 3). `core/theme.ts`
+  followed a system change with the raw system theme, so after a sign-out in the same tab the
+  sign-in screen turned light when the OS did. Its resolution and its listener now go through
+  `themeFor` with the screen App last recorded (`recordedScreen` in `core/screenTheme.ts`; no
+  record there means the app, since `core/theme.ts` loads behind sign-in). Tests:
+  `core/__tests__/theme.test.ts` checks three things: signed out, the OS turning light leaves
+  the screen dark; signed back in, the app follows the system again; and a chosen light theme
+  holds on the sign-in screen. With the old `theme.ts`, the first fails.
+
+- **Why theme-init.js is a separate file** (round 3, item 4). Its header and the comment beside
+  its `<script>` in `index.html` gave the deleted Express server's helmet `script-src 'self'` as
+  the reason. Nothing requires it today: the enforcing `Content-Security-Policy` in
+  `public/_headers` sets no `script-src`, the report-only policy allows `'unsafe-inline'`, and the
+  Worker's own CSP covers only API responses. Both comments now say it is external by choice:
+  a strict `script-src 'self'` can be enforced without moving it, the service worker precaches
+  it, and tests run it as the browser does.
+
 ### Found in the first-week test run (3 Nov)
 
 What the 3 Nov test run and the functionality review after it found in the first week's changes,
