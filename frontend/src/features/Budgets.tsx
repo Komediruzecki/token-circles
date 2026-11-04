@@ -1206,12 +1206,15 @@ export default function Budgets() {
           <div
             data-test-id="budgets-allocate-modal"
             class={`${styles.modal} ${styles.modalSmall}`}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="budgets-allocate-heading"
             onClick={(e) => {
               e.stopPropagation()
             }}
           >
             <div class={styles.modalHeader}>
-              <h3>Allocate Budget</h3>
+              <h3 id="budgets-allocate-heading">Allocate Budget</h3>
               <button
                 class={styles.modalClose}
                 onClick={() => setShowAllocateModal(false)}
@@ -1317,12 +1320,17 @@ export default function Budgets() {
         >
           <div
             class={styles.modal}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="budgets-category-heading"
             onClick={(e) => {
               e.stopPropagation()
             }}
           >
             <div class={styles.modalHeader}>
-              <h3>{editingCategory() ? 'Edit Category' : 'Add Category'}</h3>
+              <h3 id="budgets-category-heading">
+                {editingCategory() ? 'Edit Category' : 'Add Category'}
+              </h3>
               <button class={styles.modalClose} onClick={closeCatModal}>
                 <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path d="M6 18L18 6M6 6l12 12" />
@@ -1462,12 +1470,15 @@ export default function Budgets() {
         >
           <div
             class={styles.modal}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="budgets-category-budget-heading"
             onClick={(e) => {
               e.stopPropagation()
             }}
           >
             <div class={styles.modalHeader}>
-              <h3>Set Budget</h3>
+              <h3 id="budgets-category-budget-heading">Set Budget</h3>
               <button class={styles.modalClose} onClick={closeCatBudgetModal}>
                 <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path d="M6 18L18 6M6 6l12 12" />

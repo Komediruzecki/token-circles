@@ -397,7 +397,13 @@ export function SubscriptionCatalogModal(props: SubscriptionCatalogModalProps) {
         if (e.target === e.currentTarget) props.onClose()
       }}
     >
-      <div class={styles.modal} role="dialog" aria-modal="true" aria-label="Subscription catalog">
+      {/* Modal only while open: it stays in the page when closed. */}
+      <div
+        class={styles.modal}
+        role="dialog"
+        aria-modal={props.isOpen() ? 'true' : undefined}
+        aria-label="Subscription catalog"
+      >
         <div class={styles.head}>
           <div>
             <h2 class={styles.title}>Add subscriptions</h2>

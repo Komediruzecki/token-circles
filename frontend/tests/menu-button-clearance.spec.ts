@@ -206,6 +206,276 @@ test("at 390, a badge toast and the history toast cover none of the app's own co
   ).toEqual([])
 })
 
+type ToastStore = {
+  toasts: () => { id: number; message: string }[]
+  addToast: (message: string, type: string, opts: unknown) => void
+  removeToast: (id: number) => void
+}
+
+/** The quick add sheet, opened from the floating button, its keypad settled where it rests. */
+async function openTheSheet(page: Page): Promise<Locator> {
+  await page.getByRole('button', { name: 'Quick add entry' }).click()
+  const sheet = page.getByRole('dialog', { name: 'Add transaction' })
+  await settledBox(sheet.getByRole('button', { name: '0', exact: true }))
+  return sheet
+}
+
+/** The sheet's last step for 42.00 in its first category, settled: its Add button. */
+async function toTheLastStep(sheet: Locator): Promise<Locator> {
+  for (const key of ['4', '2']) await sheet.getByRole('button', { name: key, exact: true }).click()
+  await sheet.getByRole('button', { name: 'Next', exact: true }).click()
+  await sheet.getByTestId('orbit-category').first().click()
+  const add = sheet.getByRole('button', { name: /^Add / })
+  await settledBox(add)
+  return add
+}
+
+/** A tap at the middle of `target`, on whatever lies there, the way a finger lands. */
+async function tapTheMiddleOf(page: Page, target: Locator): Promise<void> {
+  const b = (await target.boundingBox())!
+  await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2)
+}
+
+test.describe('at 390, the toasts while the quick add sheet or a form is open', () => {
+  // Above the quick add button the toasts lay over the lower half of whatever was open: the
+  // sheet's keypad and its Add button, a form's last fields. While a dialog is open they show at
+  // the top of the screen instead, above its overlay (Toast.module.css), and back above the
+  // button once it closes.
+  test.beforeEach(async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.goto(`${E2E_BASE}/#transactions`, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+    await expect(page.getByTestId('transactions-header')).toBeVisible({ timeout: 60_000 })
+    // The demo's first run says what it earned from its history. Let it, then take it down, so
+    // only the toasts each check raises are up.
+    const toasts = page.getByRole('region', { name: 'Notifications' })
+    await expect(
+      toasts.locator(':scope > *').filter({ hasText: 'from your history so far.' })
+    ).toBeVisible({ timeout: 30_000 })
+    await page.evaluate(async () => {
+      const store = (await import('/src/core/toastStore.ts' as string)) as ToastStore
+      for (const shown of store.toasts()) store.removeToast(shown.id)
+    })
+    await expect(toasts.locator(':scope > *')).toHaveCount(0)
+    // The sheet, the command bar and this page's form stay in the page while closed: none of them
+    // may say it is open now, or the toasts would leave the quick add button for good.
+    await expect(page.locator('[aria-modal="true"]'), 'no dialog open at rest').toHaveCount(0)
+  })
+
+  test('with "Entry added" up, the sheet opened again takes 1, 8, 0 as 180.00', async ({
+    page,
+  }) => {
+    test.setTimeout(120_000)
+    const toasts = page.getByRole('region', { name: 'Notifications' })
+    let sheet = await openTheSheet(page)
+    await (await toTheLastStep(sheet)).click()
+    const added = toasts.locator(':scope > *').filter({ hasText: 'Entry added' })
+    await expect(added).toBeVisible()
+    // The app takes it down after 5 s. Hold the same toast up for the whole check, so a slow run
+    // cannot pass because it had already gone.
+    await page.evaluate(async () => {
+      const store = (await import('/src/core/toastStore.ts' as string)) as ToastStore
+      for (const shown of store.toasts()) {
+        if (shown.message === 'Entry added') store.removeToast(shown.id)
+      }
+      store.addToast('Entry added', 'success', { durationMs: 120_000 })
+    })
+    await expect(added).toHaveCount(1)
+
+    // The next entry straight away, each key tapped at its middle.
+    sheet = await openTheSheet(page)
+    for (const key of ['1', '8', '0']) {
+      await tapTheMiddleOf(page, sheet.getByRole('button', { name: key, exact: true }))
+    }
+    await expect(added, 'still up after the taps').toBeVisible()
+    await expect(sheet.getByText(/^€180\.00$/), 'the amount the keys spell').toBeVisible()
+    expect(
+      await underAToast(page, ['[role="dialog"][aria-label="Add transaction"] button']),
+      "the sheet's buttons"
+    ).toEqual([])
+
+    // Closed again, the toast goes back down to just above the quick add button.
+    await sheet.getByRole('button', { name: 'Close' }).click()
+    const fab = (await page.getByRole('button', { name: 'Quick add entry' }).boundingBox())!
+    await expect
+      .poll(async () => {
+        const b = (await added.boundingBox())!
+        return b.y > 844 / 2 && b.y + b.height <= fab.y
+      })
+      .toBe(true)
+  })
+
+  test("the sheet's own failed-save toast covers none of its last step's buttons", async ({
+    page,
+  }) => {
+    test.setTimeout(120_000)
+    const sheet = await openTheSheet(page)
+    const add = await toTheLastStep(sheet)
+    // Local-first keeps the entry in IndexedDB: the write is refused, as a full disk refuses it.
+    await page.evaluate(() => {
+      const refuse = () => {
+        throw new DOMException('The disk is full.', 'QuotaExceededError')
+      }
+      IDBObjectStore.prototype.add = refuse
+      IDBObjectStore.prototype.put = refuse
+    })
+    await add.click()
+    const failed = page.getByRole('region', { name: 'Notifications' }).getByRole('alert')
+    await expect(failed.first()).toBeVisible()
+    await settledBox(failed.first())
+    await expect(add, 'the sheet stays on its last step').toBeVisible()
+    expect(await toastsOnTop(page), 'the toast on top').toBeGreaterThanOrEqual(1)
+    expect(
+      await underAToast(page, [
+        '[role="dialog"][aria-label="Add transaction"] button',
+        '[role="dialog"][aria-label="Add transaction"] input',
+      ]),
+      "the last step's buttons and fields"
+    ).toEqual([])
+  })
+
+  test('with the Add transaction form open, two toasts cover none of its lower controls', async ({
+    page,
+  }) => {
+    test.setTimeout(120_000)
+    await page.getByTestId('add-transaction-btn').click()
+    await settledBox(page.getByTestId('tx-save-btn'))
+    await page.evaluate(async () => {
+      const store = (await import('/src/core/toastStore.ts' as string)) as ToastStore
+      store.addToast('Could not save: the amount must be a number above zero.', 'error', {
+        durationMs: 120_000,
+      })
+      store.addToast('Badge unlocked: First budget.', 'success', {
+        durationMs: 120_000,
+        action: { label: 'See badges', onClick: () => {} },
+      })
+    })
+    const toasts = page.getByRole('region', { name: 'Notifications' })
+    await expect(toasts.locator(':scope > *')).toHaveCount(2)
+    await settledBox(toasts.locator(':scope > *').last())
+    expect(await toastsOnTop(page), 'both toasts on top').toBe(2)
+    // What the stack lay over above the quick add button: the account, the advanced options, the
+    // form's own buttons.
+    const lower = ['tx-account', 'tx-advanced-toggle', 'tx-cancel-btn', 'tx-save-btn']
+    expect(
+      await underAToast(
+        page,
+        lower.map((id) => `[data-test-id="${id}"]`)
+      ),
+      'the lower half of the form'
+    ).toEqual([])
+  })
+})
+
+test('at rest, no page holds a dialog that says it is open or that an update waits for', async ({
+  page,
+}) => {
+  // Some dialogs stay in the page while closed (the quick add sheet, the command bar, Bills'
+  // subscription catalog and scan, Transactions' form, Auto Categorize, Reconciliation). One that
+  // said aria-modal="true" while closed would keep the toasts at the top for good, on its page and,
+  // as pages stay mounted, on every page after it.
+  //
+  // The update reload waits while a dialog is open (appVersion.ts `userIsMidEntry`), and it reads
+  // a dialog's own computed style. One given role="dialog" that is hidden only by its parent's
+  // display: none reads as open, and the update would wait for good the same way.
+  test.setTimeout(150_000)
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto(`${E2E_BASE}/#dashboard`, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+  await expect(page.getByTestId('dashboard-header')).toBeVisible({ timeout: 60_000 })
+  const pages = [
+    'dashboard',
+    'transactions',
+    'budgets',
+    'loans',
+    'goals',
+    'bills',
+    'progress',
+    'rentBuy',
+    'compound',
+    'emergency',
+    'import',
+    'accounts',
+    'categories',
+    'settings',
+    'retirement',
+    'housing',
+    'analytics',
+    'counterparties',
+    'portfolio',
+    'tags',
+  ]
+  const open: string[] = []
+  const waiting: string[] = []
+  for (const name of pages) {
+    await page.evaluate((hash) => {
+      window.location.hash = hash
+    }, name)
+    // Mounted, its reads landed and its dialogs rendered.
+    await page.waitForTimeout(1500)
+    const labels = await page
+      .locator('[aria-modal="true"]')
+      .evaluateAll((els) =>
+        els.map(
+          (el) =>
+            el.getAttribute('aria-label') ||
+            document
+              .getElementById(el.getAttribute('aria-labelledby') ?? '')
+              ?.textContent?.trim() ||
+            el.tagName
+        )
+      )
+    for (const label of labels) open.push(`#${name}: ${label}`)
+    // Asked with nothing focused: a focused field is the other thing it waits for.
+    const waits = await page.evaluate(async () => {
+      ;(document.activeElement as HTMLElement | null)?.blur()
+      const version = (await import('/src/core/appVersion.ts' as string)) as {
+        userIsMidEntry: () => boolean
+      }
+      return version.userIsMidEntry()
+    })
+    if (waits) waiting.push(`#${name}`)
+  }
+  expect.soft(open, 'dialogs that say they are open, with every page mounted').toEqual([])
+  expect(waiting, 'pages where an update waits for a dialog nobody opened').toEqual([])
+})
+
+// The forms each page opens over itself, by the button a person taps and the heading that names
+// the form. Every one of them sends the toasts to the top while it is open, the same way.
+const FORMS = [
+  { hash: 'accounts', opener: 'add-account-btn', name: 'Add Account' },
+  { hash: 'bills', opener: 'add-bill-btn', name: 'Add Bill' },
+  { hash: 'categories', opener: 'add-category-btn', name: 'Add Category' },
+  { hash: 'portfolio', opener: 'add-holding-btn', name: 'Add Holding' },
+  { hash: 'dashboard', opener: 'dashboard-views', name: 'Dashboard Views' },
+] as const
+
+for (const form of FORMS) {
+  test(`at 390, ${form.name} on #${form.hash} sends a toast to the top while it is open`, async ({
+    page,
+  }) => {
+    test.setTimeout(90_000)
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.goto(`${E2E_BASE}/#${form.hash}`, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+    await expect(page.getByTestId(`${form.hash}-header`)).toBeVisible({ timeout: 60_000 })
+    await expect(page.locator('[aria-modal="true"]'), 'no dialog open at rest').toHaveCount(0)
+
+    await page.getByTestId(form.opener).click()
+    const dialog = page.getByRole('dialog', { name: form.name })
+    await expect(dialog).toHaveAttribute('aria-modal', 'true')
+    await page.evaluate(async () => {
+      const store = (await import('/src/core/toastStore.ts' as string)) as ToastStore
+      store.addToast('Could not save: the amount must be a number above zero.', 'error', {
+        durationMs: 120_000,
+      })
+    })
+    const toasts = page.getByRole('region', { name: 'Notifications' })
+    const region = await settledBox(toasts)
+    expect(region.y, 'the toasts at the top of the screen').toBeLessThan(60)
+    expect(await toastsOnTop(page), 'every toast on top').toBe(
+      await toasts.locator(':scope > *').count()
+    )
+  })
+}
+
 /** The visible text and controls in the page whose boxes overlap the button named `label`. */
 async function under(page: Page, label: string): Promise<string[]> {
   return page.evaluate((name) => {

@@ -272,7 +272,14 @@ export function GuidedOrbit(props: GuidedOrbitProps) {
         if (e.target === e.currentTarget) props.onClose()
       }}
     >
-      <div class={styles.sheet} role="dialog" aria-modal="true" aria-label="Add transaction">
+      {/* Modal only while open: the sheet stays in the page when closed, and an open dialog is
+          what sends a phone's toasts to the top, clear of the keypad (Toast.module.css). */}
+      <div
+        class={styles.sheet}
+        role="dialog"
+        aria-modal={props.isOpen() ? 'true' : undefined}
+        aria-label="Add transaction"
+      >
         <h2 class={styles.heading}>Add transaction</h2>
         <button class={styles.close} onClick={props.onClose} aria-label="Close" type="button">
           <svg

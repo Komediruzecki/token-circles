@@ -196,9 +196,17 @@ export function AutoCategorizeModal(props: AutoCategorizeModalProps) {
       class={autoCategorizeModalStyles.overlay}
       classList={{ [autoCategorizeModalStyles.isOpen]: props.isOpen() }}
     >
-      <div class={autoCategorizeModalStyles.modal}>
+      {/* Modal only while open: it stays in the page when closed. */}
+      <div
+        class={autoCategorizeModalStyles.modal}
+        role="dialog"
+        aria-modal={props.isOpen() ? 'true' : undefined}
+        aria-labelledby="auto-categorize-heading"
+      >
         <div class={autoCategorizeModalStyles.header}>
-          <h2 class={autoCategorizeModalStyles.title}>Auto Categorize</h2>
+          <h2 class={autoCategorizeModalStyles.title} id="auto-categorize-heading">
+            Auto Categorize
+          </h2>
           <button
             class={autoCategorizeModalStyles.closeButton}
             onClick={props.onClose}

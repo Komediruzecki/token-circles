@@ -487,12 +487,19 @@ export default function Categories() {
         >
           <div
             class={styles.modal}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="category-modal-heading"
             onclick={(e) => {
               e.stopPropagation()
             }}
           >
             <div class={styles.modalHeader}>
-              <h3 class={styles.modalTitle} data-test-id="category-modal-title">
+              <h3
+                id="category-modal-heading"
+                class={styles.modalTitle}
+                data-test-id="category-modal-title"
+              >
                 {editingCategory() ? 'Edit Category' : 'Add Category'}
               </h3>
               <button class={styles.modalClose} onClick={closeCategoryModal}>
@@ -729,12 +736,17 @@ export default function Categories() {
         >
           <div
             class={styles.modal}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="category-budget-modal-heading"
             onclick={(e) => {
               e.stopPropagation()
             }}
           >
             <div class={styles.modalHeader}>
-              <h3 class={styles.modalTitle}>Set Budget</h3>
+              <h3 id="category-budget-modal-heading" class={styles.modalTitle}>
+                Set Budget
+              </h3>
               <button class={styles.modalClose} onClick={closeBudgetModal}>
                 <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path d="M6 18L18 6M6 6l12 12" />

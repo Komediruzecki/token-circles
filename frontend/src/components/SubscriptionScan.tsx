@@ -500,10 +500,11 @@ export function SubscriptionScanModal(props: SubscriptionScanModalProps) {
         if (e.target === e.currentTarget) props.onClose()
       }}
     >
+      {/* Modal only while open: it stays in the page when closed. */}
       <div
         class={styles.modal}
         role="dialog"
-        aria-modal="true"
+        aria-modal={props.isOpen() ? 'true' : undefined}
         aria-label="Detected subscriptions"
         data-test-id="sub-scan-modal"
       >

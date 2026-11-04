@@ -1,5 +1,6 @@
 /* Toasts: a plain rounded rectangle, one row, stacked in the top-right corner.
-   Phones get banners across the screen above the quick add button, safe-area aware.
+   Phones get banners across the screen above the quick add button, safe-area aware,
+   and across the top while a dialog is open.
 
    Deliberately plain — the icon, the message and a border tinted by severity are
    what carry information; the surface and shadow come from the app's own theme
@@ -181,6 +182,18 @@
      lies over its links or its toggle. */
   .toastContainer.underDrawer {
     z-index: 98;
+  }
+
+  /* A dialog open, the quick add sheet among them: then the bottom of the screen is its own, the
+     sheet's keypad and Add button, a form's last fields, and the toasts show across the top
+     instead, above its overlay, with the drawer open too. A dialog says it is open with
+     aria-modal="true"; the seven that stay in the page while closed (GuidedOrbit, CommandBar,
+     Transactions' form, Auto Categorize, Reconciliation, Bills' subscription catalog and scan)
+     carry it only while open. */
+  html:has([aria-modal='true']) .toastContainer {
+    top: calc(env(safe-area-inset-top, 0px) + 0.5rem);
+    bottom: auto;
+    z-index: 10000;
   }
 
   .toast {

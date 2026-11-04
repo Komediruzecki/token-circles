@@ -864,12 +864,17 @@ export default function Dashboard() {
             <div class={styles.modalOverlay} onClick={() => setShowSettingsModal(false)}>
               <div
                 class={`${styles.modal} ${styles.modalMd}`}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="dashboard-views-heading"
                 onClick={(e) => {
                   e.stopPropagation()
                 }}
               >
                 <div class={styles.modalHeader}>
-                  <div class={styles.modalTitle}>Dashboard Views</div>
+                  <div id="dashboard-views-heading" class={styles.modalTitle}>
+                    Dashboard Views
+                  </div>
                   <div class={styles.modalHeaderActions}>
                     <button class={styles.headerResetBtn} onClick={() => resetViews()?.()}>
                       Reset Default

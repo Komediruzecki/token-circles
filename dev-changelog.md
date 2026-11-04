@@ -198,8 +198,44 @@ All notable changes to Token Circles are documented here. The format is based on
     button does.
   - Not changed: while it shows, the stack still lies over whatever page content is under it,
     which scrolls; at rest on the demo that is a control on 8 of the 18 pages, such as a bill's
-    Mark paid and Edit. A modal open on a phone still has the toasts over it, as at the top: over
-    two of Add account's fields instead of its close button and one field.
+    Mark paid and Edit. With a dialog open the toasts go back to the top: the next entry.
+- **On a phone, toasts go to the top while a dialog is open.** Above the quick add button they lay
+  over the lower half of whatever was open over the page (PR #695 review). On the quick add sheet
+  one toast covered ".", "0" and Delete and two covered 7, 8 and 9 as well, so 1, 8, 0 tapped just
+  after a save read €18.00; the sheet's own failed-save toast covered "Add €42.00", at 360 too; on
+  the Add transaction form a toast covered the account and "Show advanced options". While a dialog
+  is open the stack now runs across the top again, under the safe-area inset and above the
+  dialog's overlay, and goes back above the quick add button when it closes. One signal decides
+  it, `aria-modal="true"`: `html:has([aria-modal='true'])` in `Toast.module.css`.
+  - Every dialog laid over the app now says it is a modal dialog. 22 overlays had no `aria-modal`
+    (Add account, Bills' bill and category forms, Budgets' three, Categories' two, Dashboard
+    Views, Add holding, the receipt viewer, Recurring, the three bulk dialogs, Auto Categorize,
+    Reconciliation, Changelog, Sign in, Keyboard shortcuts, the period picker, Contact support);
+    each has `role="dialog"`, `aria-modal` and a name, 20 of them from their heading (Keyboard
+    shortcuts and the period picker kept their label). Seven stay in the page while closed (the
+    quick add sheet, the command bar, Transactions' form, Auto Categorize, Reconciliation, Bills'
+    subscription catalog and scan) and say it only while open; five of them said it while closed.
+    A screen reader now keeps to an open dialog, and the update reload (`userIsMidEntry`) waits
+    while one of them is open, as it did for the others. It reads a dialog's own computed style,
+    and a closed Reconciliation is hidden by its parent's `display: none`, which does not reach
+    the dialog: with the role alone, an update waited for good once Transactions had been opened.
+    The parent now sets `visibility: hidden` as well, which does.
+  - Measured at 390x844 on the demo, main / 02690f8a / now: with the Add transaction form open one
+    toast covers its close button, two cover it and the Expense type button / the account and
+    Show advanced options / as on main. The sheet's keypad and last step: nothing / up to six keys
+    and Add / nothing. The setup wizard: 2 of 5 points of Leave setup / nothing / as on main.
+  - Test: in `menu-button-clearance.spec.ts`, with "Entry added" up the sheet opened again takes
+    1, 8, 0 as €180.00 (€18.00 on 02690f8a), its failed-save toast (IndexedDB refusing the write)
+    covers none of its last step's buttons and fields, and two toasts cover none of the Add
+    transaction form's lower controls; five forms on five pages send a toast to the top; and with
+    all 20 pages mounted none holds an `aria-modal="true"` at rest, and on none does an update
+    wait. Without the CSS rule the first three and the five fail; with the sheet, the command bar,
+    the Transactions form, Reconciliation or the subscription scan saying it while closed, an
+    at-rest check fails; without Reconciliation's `visibility: hidden` an update waits on 19 of
+    the 20 pages. `dialogsSayTheyAreModal.test.ts` reads the source for an overlay with no
+    `aria-modal` before its heading: on 02690f8a's source it lists the 22.
+  - Left alone: the Tours menu, which #694 makes a modal dialog; until both are merged it keeps
+    the toasts above the quick add button.
 - **Views on Dashboard reorders from the keyboard.** A drag was the only way to move a widget under
   Show more. Each of those rows now has Move up and Move down after its toggle, named for the
   widget ("Move Budget Alerts up"). Up is off on the first row and down on the last, and focus

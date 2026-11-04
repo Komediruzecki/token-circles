@@ -457,12 +457,15 @@ export default function Accounts() {
         >
           <div
             class={styles.modal}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="account-modal-heading"
             onclick={(e) => {
               e.stopPropagation()
             }}
           >
             <div class={styles.modalHeader}>
-              <h3 class={styles.modalTitle}>
+              <h3 id="account-modal-heading" class={styles.modalTitle}>
                 {modalMode() === 'edit' ? 'Edit Account' : 'Add Account'}
               </h3>
               <button class={styles.modalClose} onClick={closeModal}>

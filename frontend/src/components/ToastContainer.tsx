@@ -1,6 +1,7 @@
 /**
  * Toast notification container — renders signal-driven toasts, top-right; on a phone, across the
- * screen above the quick add button, and under the drawer while it is open.
+ * screen above the quick add button, under the drawer while it is open, and across the top while
+ * a dialog is open (Toast.module.css, read from aria-modal).
  *
  * Deliberately plain: the icon, the message, and a border tinted by severity are what carry
  * information. A `title` renders as a coloured prefix on the message (not a heading above it),

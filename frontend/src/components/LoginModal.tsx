@@ -137,8 +137,15 @@ export default function LoginModal(props: LoginModalProps) {
         if (e.target === e.currentTarget) close()
       }}
     >
-      <div class={styles.modal}>
-        <h3 class={styles.title}>{mode() === 'register' ? 'Create account' : 'Sign In'}</h3>
+      <div
+        class={styles.modal}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="login-modal-heading"
+      >
+        <h3 class={styles.title} id="login-modal-heading">
+          {mode() === 'register' ? 'Create account' : 'Sign In'}
+        </h3>
         <p style={{ 'margin-bottom': '16px', color: 'var(--text-secondary)', 'font-size': '14px' }}>
           {stage() === 'inbox'
             ? 'Check your inbox.'

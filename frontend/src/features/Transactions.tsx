@@ -1516,12 +1516,13 @@ export default function Transactions() {
       {/* Recurring Transactions */}
       <RecurringSection categories={activeCategories()} accounts={activeAccounts()} />
 
-      {/* Transaction Modal */}
+      {/* Transaction Modal. It stays in the page when closed, so it is modal only while open: an
+          open dialog sends a phone's toasts to the top (Toast.module.css). */}
       <div
         class={`${styles.modalOverlay} ${isTransactionModalOpen() ? styles.show : ''}`}
         data-test-id="tx-modal"
         role="dialog"
-        aria-modal="true"
+        aria-modal={isTransactionModalOpen() ? 'true' : undefined}
         onclick={() => {
           _closeModals()
         }}
@@ -2264,12 +2265,17 @@ export default function Transactions() {
         >
           <div
             class={`${styles.modal} ${styles.receiptModal}`}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="receipt-modal-heading"
             onclick={(e) => {
               e.stopPropagation()
             }}
           >
             <div class={styles.modalHeader}>
-              <div class={styles.modalTitle}>Receipt</div>
+              <div id="receipt-modal-heading" class={styles.modalTitle}>
+                Receipt
+              </div>
               <button class={styles.btnGhost} onclick={closeReceiptModal} aria-label="Close modal">
                 <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path d="M6 18L18 6M6 6l12 12" />

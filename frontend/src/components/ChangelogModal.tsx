@@ -110,12 +110,15 @@ export default function ChangelogModal(props: { onClose: () => void }) {
     <div class={styles.overlay} onClick={props.onClose}>
       <div
         class={styles.modal}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="changelog-heading"
         onClick={(e) => {
           e.stopPropagation()
         }}
       >
         <div class={styles.header}>
-          <h2>Changelog</h2>
+          <h2 id="changelog-heading">Changelog</h2>
           <button class={styles.closeBtn} onClick={props.onClose} aria-label="Close changelog">
             <svg
               width="20"

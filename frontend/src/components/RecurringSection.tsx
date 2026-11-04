@@ -285,13 +285,18 @@ export default function RecurringSection(props: RecurringSectionProps) {
         >
           <div
             class={styles.modal}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="recurring-modal-heading"
             data-test-id="recurring-modal"
             onClick={(e) => {
               e.stopPropagation()
             }}
           >
             <div class={styles.modalHeader}>
-              <h3>{ruleForm.editing() ? 'Edit Recurring' : 'Add Recurring'}</h3>
+              <h3 id="recurring-modal-heading">
+                {ruleForm.editing() ? 'Edit Recurring' : 'Add Recurring'}
+              </h3>
               <button
                 type="button"
                 class={styles.closeBtn}

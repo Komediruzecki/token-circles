@@ -86,6 +86,7 @@ export default function KeyboardShortcutsModal(props: { onClose: () => void }) {
       <div
         class={styles.modal}
         role="dialog"
+        aria-modal="true"
         aria-label="Keyboard shortcuts"
         data-test-id="shortcuts-modal"
         onClick={(e) => {

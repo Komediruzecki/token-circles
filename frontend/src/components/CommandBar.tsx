@@ -270,7 +270,14 @@ export function CommandBar(props: CommandBarProps) {
         if (e.target === e.currentTarget) props.onClose()
       }}
     >
-      <div class={styles.bar} role="dialog" aria-modal="true" aria-label="Quick entry command bar">
+      {/* Modal only while open: the bar stays in the page when closed, and an open dialog sends
+          a phone's toasts to the top (Toast.module.css). */}
+      <div
+        class={styles.bar}
+        role="dialog"
+        aria-modal={props.isOpen() ? 'true' : undefined}
+        aria-label="Quick entry command bar"
+      >
         <div class={styles.inputRow}>
           <span class={styles.caret}>›</span>
           <input
