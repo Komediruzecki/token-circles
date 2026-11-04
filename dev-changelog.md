@@ -2730,6 +2730,7 @@ check')` first, as the cushion and debt cases do.
   - The legacy hex hovers in `BulkActions/BulkActionBar.module.css` and `TagFilter.module.css`
     (indigo on #f5f3ff 4.07:1, red on #fef2f2 3.44:1, both on the dark-mode grey 2.31:1 and
     2.74:1). They now take #4f46e5, #b91c1c, #a5b4fc and #fca5a5, 5.17:1 to 5.91:1.
+
   `components/BulkActions/` and `components/Tags/TagFilter.tsx` are imported by nothing in `src/`.
   Test: `brandTextContrast.test.ts` resolves the background and the text colour of every
   stylesheet rule that sets both: hex, `white`, `black`, or `var()` through each theme with its
@@ -2760,19 +2761,22 @@ check')` first, as the cushion and debt cases do.
   it, and tests run it as the browser does.
 
 - **Red words take `--danger-text`** (round 4). 24 stylesheet rules set words in `--danger`
-  (some with a hex fallback): form and dialog errors (`ConfirmDialog .error`, `ImportBalances
-  .error`, `Import .resultMessage.error` and `.statValue.invalid`, `SubscriptionCatalogModal
-  .priceError`, `SpaceQuestions .problem`, Settings' unsubscribe alert), overdue and over-budget
-  amounts (Bills, the bill calendar, subscriptions, Budgets, Categories, the Dashboard's budget
-  alerts), Bills' Unpaid tag, API access's Revoked and Revoke, Tags' delete and negative, the
-  overflow menu's danger item, and two hovered remove buttons. Before and after:
-  | Where | Before | After |
-  | --- | --- | --- |
-  | Light, on `--bg` | 4.13:1 | 5.38:1 |
-  | Light, on white | 4.35:1 | 5.66:1 |
-  | Dark, on `--surface` | 4.45:1 | 8.43:1 |
+  (some with a hex fallback): form and dialog errors (`ConfirmDialog .error`,
+  `ImportBalances .error`, `Import .resultMessage.error` and `.statValue.invalid`,
+  `SubscriptionCatalogModal .priceError`, `SpaceQuestions .problem`, Settings' unsubscribe
+  alert), overdue and over-budget amounts (Bills, the bill calendar, subscriptions, Budgets,
+  Categories, the Dashboard's budget alerts), Bills' Unpaid tag, API access's Revoked and
+  Revoke, Tags' delete and negative, the overflow menu's danger item, and two hovered remove
+  buttons. Before and after:
+
+  | Where                              | Before | After  |
+  | ---------------------------------- | ------ | ------ |
+  | Light, on `--bg`                   | 4.13:1 | 5.38:1 |
+  | Light, on white                    | 4.35:1 | 5.66:1 |
+  | Dark, on `--surface`               | 4.45:1 | 8.43:1 |
   | Unpaid tag on its pink tint, light | 3.89:1 | 5.06:1 |
-  | Unpaid tag on its pink tint, dark | 3.72:1 | 7.04:1 |
+  | Unpaid tag on its pink tint, dark  | 3.72:1 | 7.04:1 |
+
   No stylesheet sets text in `--info`, so `--info-text` was not added. `BulkActions/` and
   `TagFilter` are left as they are. Test: `brandTextContrast.test.ts`'s stylesheet scan now
   covers every semantic colour (primary, income, expense, success, warning, danger and info).
