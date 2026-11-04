@@ -3236,6 +3236,22 @@ true, or is too small for one.
   logged poll call started at three rows as the card changed and ended 29,085 ms later. `stepsIn`
   in `orientation.spec.ts` now reads every row in one `evaluateAll`. Test change only: all four
   cushion cases, 8 repeats each on one core, 32 passed.
+- **An imported row files under a category of its own type.** Every new profile now starts with
+  the income categories Gifts and Investments (94586cf6), and an import matched a row's category
+  by name alone, so an expense row under "Gifts" (a present bought) went into the income Gifts and
+  no expense category was made for it. Before, it got an expense Gifts with the kind gifts. Both
+  runtimes now match by name and type, with one rule in `shared/importCategories.ts`: an expense
+  row files under the expense category of its name, made if there is none; an income row under
+  the income one, and with none under the expense category of that name, as money back (a refund
+  in Groceries stays Groceries', as `shared/guidance/facts.ts` reads it); a transfer row by name
+  alone, as before. An income category is made only when no category of either type has the
+  name, so an income row and an expense row of a new name share the one expense category, in
+  whatever order they come. The preview lists each name once. On the Worker a new category now
+  takes its row's type, as it already did in local-first, instead of the type set for its name or
+  a guess from words in it (the guess, `INCOME_KEYWORDS`, is gone). Test: the contract scenario "a
+  new profile's import files each row under a category of its own type", on D1 and IndexedDB.
+  With the old matching it fails in both, at the preview (`new_categories` empty); without the
+  money-back rule it fails at the preview too, offering an income Groceries.
 
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 

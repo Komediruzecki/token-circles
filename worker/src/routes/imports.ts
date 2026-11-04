@@ -4,6 +4,7 @@ import { transactionInvariantError } from '../../../shared/transactionInvariant'
 import { calendarDateIn } from '../../../shared/calendarDate';
 import { parseImportCsv } from '../../../shared/importCsv';
 import { kindForName } from '../../../shared/guidance/kinds';
+import { categoriesToMake, categoryForImportRow } from '../../../shared/importCategories';
 import { MIN_YEAR, MAX_YEAR } from '../import-gate';
 import { importRowLabel } from '../../../shared/importRowLabel';
 import type { AppEnv } from '../index';
@@ -223,25 +224,6 @@ const NEW_CATEGORY_COLORS = [
   '#f43f5e',
   '#64748b',
   '#78716c',
-];
-
-const INCOME_KEYWORDS = [
-  'salary',
-  'income',
-  'wages',
-  'wage',
-  'payroll',
-  'revenue',
-  'dividend',
-  'refund',
-  'bonus',
-  'paycheck',
-  'pay cheque',
-  'interest',
-  'credit',
-  'received',
-  'royalt',
-  'reimbursement',
 ];
 
 // ── POST /api/import/upload — parse an xlsx/csv FILE and return a preview ──────
@@ -678,15 +660,43 @@ export async function executeImport(
     }
   }
 
-  // Existing categories -> map, then batch-create the DISTINCT new, non-account names.
-  const categoryMap = new Map<string, number>();
+  // A row's type (mirrors the Express precedence exactly): its Type column, then the type the
+  // import set for its category, then the sign of its amount.
+  const typeOfRow = (row: Record<string, any>, amountRaw: number): string => {
+    const catRaw = pick(row, mapping, 'category');
+    const catName = catRaw ? String(catRaw).trim() : '';
+    const catType = catName ? categoryTypes && categoryTypes[catName] : null;
+    if (mapping.type !== undefined) {
+      const rawType = String(pick(row, mapping, 'type') || '')
+        .trim()
+        .toLowerCase();
+      if (['income', 'expense', 'transfer'].includes(rawType)) return rawType;
+      if (catType && (catType === 'income' || catType === 'expense')) return catType;
+      return amountRaw < 0 ||
+        rawType.includes('expense') ||
+        rawType.includes('debit') ||
+        rawType.includes('spent')
+        ? 'expense'
+        : amountRaw > 0 ||
+            rawType.includes('income') ||
+            rawType.includes('credit') ||
+            rawType.includes('received')
+          ? 'income'
+          : 'expense';
+    }
+    if (catType && (catType === 'income' || catType === 'expense')) return catType;
+    return amountRaw < 0 ? 'expense' : amountRaw > 0 ? 'income' : 'expense';
+  };
+
+  // Existing categories, then the new ones this import makes. A row files under a category of
+  // its name and its type (shared/importCategories.ts).
+  let existingCategories: Array<{ id: number; name: string; type: string | null }> = [];
   const loadCategories = async () => {
-    const cats = await db.all<{ id: number; name: string }>(
+    existingCategories = await db.all<{ id: number; name: string; type: string | null }>(
       DB,
-      'SELECT id, name FROM categories WHERE profile_id = ?',
+      'SELECT id, name, type FROM categories WHERE profile_id = ?',
       pid
     );
-    for (const cat of cats) categoryMap.set(cat.name.toLowerCase(), cat.id);
   };
   await loadCategories();
 
@@ -730,9 +740,8 @@ export async function executeImport(
     String(pick(row, mapping, 'means_of_payment') || '').trim() !== '';
 
   let colorIndex = 0;
-  const newCats: string[] = [];
-  const seenNew = new Set<string>();
-  for (const row of validRows) {
+  const categoryValues: Array<{ name: string; type: string }> = [];
+  for (const { row, amountRaw } of validatedRows) {
     const raw = pick(row, mapping, 'category');
     if (!raw || !String(raw).trim()) continue;
     const name = String(raw).trim();
@@ -741,10 +750,14 @@ export async function executeImport(
     // Means of Payment it is one, even when an account has that name or the import sets it to
     // Account. On a row without one it is left out, as before, when it names an account.
     if (rowIsTransfer(row)) continue;
-    if (categoryMap.has(lower) || seenNew.has(lower)) continue;
     if (!rowHasMeansOfPayment(row) && accountIdMap.has(lower)) continue;
-    seenNew.add(lower);
-    newCats.push(name);
+    categoryValues.push({ name, type: typeOfRow(row, amountRaw) });
+  }
+  const catsToMake = categoriesToMake(existingCategories, categoryValues);
+  // Each name once: the preview asks about a name, and approving it approves either type.
+  const newCats: string[] = [];
+  for (const { name } of catsToMake) {
+    if (!newCats.some((seen) => seen.toLowerCase() === name.toLowerCase())) newCats.push(name);
   }
 
   for (const row of validRows) {
@@ -758,23 +771,15 @@ export async function executeImport(
   }
   // Only create approved names when gating is on; unapproved values import uncategorized
   // (category_id resolves to null below). Absent → create every new name (backward-compat).
-  const catsToCreate = gateCategories
-    ? newCats.filter((name) => approvedCats.has(name.toLowerCase()))
-    : newCats;
-  if (!dryRun && catsToCreate.length) {
+  const catsApproved = gateCategories
+    ? catsToMake.filter(({ name }) => approvedCats.has(name.toLowerCase()))
+    : catsToMake;
+  const catsToCreate = catsApproved.map(({ name }) => name);
+  if (!dryRun && catsApproved.length) {
     await DB.batch(
-      catsToCreate.map((name) => {
+      catsApproved.map(({ name, type: catType }) => {
         const color = NEW_CATEGORY_COLORS[colorIndex % NEW_CATEGORY_COLORS.length];
         colorIndex++;
-        // A name marked as an account is created as a category only for rows paid from another
-        // account; 'account' is no category type, so it takes the keyword guess.
-        const marked = categoryTypes && categoryTypes[name];
-        const catType =
-          marked === 'income' || marked === 'expense'
-            ? marked
-            : INCOME_KEYWORDS.some((kw) => name.toLowerCase().includes(kw))
-              ? 'income'
-              : 'expense';
         // An expense category takes the kind its name suggests, as in local-first: "Restaurant"
         // is eating out (shared/guidance/kinds.ts). In the cloud, where a new account starts with
         // no categories, this is how most categories get one.
@@ -860,37 +865,7 @@ export async function executeImport(
 
     const dateRaw = pick(row, mapping, 'date') ?? today();
     const currency = normalizeCurrencyCode(pick(row, mapping, 'currency'), defaultCurrency);
-    const catType = catName ? categoryTypes && categoryTypes[catName] : null;
-
-    // Determine transaction type (mirrors the Express precedence exactly).
-    let validatedType: string;
-    if (mapping.type !== undefined) {
-      const rawType = String(pick(row, mapping, 'type') || '')
-        .trim()
-        .toLowerCase();
-      if (['income', 'expense', 'transfer'].includes(rawType)) {
-        validatedType = rawType;
-      } else if (catType && (catType === 'income' || catType === 'expense')) {
-        validatedType = catType;
-      } else {
-        validatedType =
-          amountRaw < 0 ||
-          rawType.includes('expense') ||
-          rawType.includes('debit') ||
-          rawType.includes('spent')
-            ? 'expense'
-            : amountRaw > 0 ||
-                rawType.includes('income') ||
-                rawType.includes('credit') ||
-                rawType.includes('received')
-              ? 'income'
-              : 'expense';
-      }
-    } else if (catType && (catType === 'income' || catType === 'expense')) {
-      validatedType = catType;
-    } else {
-      validatedType = amountRaw < 0 ? 'expense' : amountRaw > 0 ? 'income' : 'expense';
-    }
+    const validatedType = typeOfRow(row, amountRaw);
 
     // account_id from Means of Payment (FROM), transfer_account_id from Category (TO). A row with
     // a Means of Payment reads its Category as an account only when it is a transfer. On any other
@@ -908,7 +883,9 @@ export async function executeImport(
       (validatedType === 'transfer' || !hasMeansOfPayment) && catLower
         ? accountIdMap.get(catLower) || null
         : null;
-    const categoryId = catLower && categoryMap.has(catLower) ? categoryMap.get(catLower)! : null;
+    const categoryId = catLower
+      ? (categoryForImportRow(existingCategories, catName, validatedType)?.id ?? null)
+      : null;
 
     const description = pick(row, mapping, 'description') || '';
     const parsedDate = parseDateString(dateRaw, todayStr);
