@@ -3220,6 +3220,11 @@ true, or is too small for one.
   `ynabExportFlow.test.tsx` (a register cancelled on Bank Imports, then another) and
   `onboardingFirstImport.test.tsx` (a register removed in setup, then another). Without the
   balances cleared both fail; without the dates the first does, on the starting date.
+- **The phone-width setup walk measures Done's next steps once they are in.** It read their
+  heights as soon as Done had settled, but the steps follow the badge evaluation, which can finish
+  later: one full run failed there on "the panel stays on a 390x844 screen on every step, light",
+  with no steps to measure (`Expected: > 0, Received: 0`). The walk now waits for the first step
+  link to show before it measures them. Test change only, in `onboarding.spec.ts`.
 
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
