@@ -3099,6 +3099,14 @@ true, or is too small for one.
   from `App.tsx` too, so a rename there (B2 in the next PR) fails it until both change. Tests:
   `onboardingDoneStep.test.tsx`; the old words, or another label in the sidebar, fail it.
 
+- **A print says a tie as one** (M17). Two months that spent the same each said they "spent the
+  least of these 12 months", and on another print four months each "spent the sixth most", which
+  read as contradictions. A tapped petal that ties now says "October and November 2025 tied for
+  the least spent. October 2025 kept money.", the year once when the months share it and both
+  across a year end ("December 2025 and January 2026"); the print's text alternative names its
+  ties the same way ("November and December 2026 the least"). A month with no tie reads as
+  before. Tests: `printsSeal.test.ts`; without the tie, or with the year said twice, it fails.
+
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
 The production build holds back the benchmarks and the questions that choose their figures
