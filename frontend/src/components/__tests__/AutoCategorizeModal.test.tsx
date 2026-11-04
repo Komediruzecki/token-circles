@@ -41,7 +41,7 @@ const TXS: AutoCategorizeTransaction[] = [
   {
     id: 11,
     description: 'Netflix',
-    date: '22 Jul 2026',
+    date: '2026-07-22',
     amount: 12.99,
     currency: 'EUR',
     type: 'expense',

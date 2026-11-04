@@ -100,6 +100,9 @@ All notable changes to Token Circles are documented here. The format is based on
     loansPage, subscriptionCard, AutoCategorizeModal, moneyFollowsBaseCurrency, oldCopyRewrites,
     `TransactionTable.dates.test.tsx`, and the release cases s05 (the goal card, "23 May 2027") and
     s12.
+  - `AutoCategorizeModal.test.tsx` keeps the row's date as stored, '2026-07-22', and expects
+    "22 Jul 2026"; with the row's date shown as stored it fails. Its fixture had held "22 Jul 2026"
+    itself, which `formatDate` passes through as it is, so it passed either way (PR #695 review).
   - On the demo at 1280, across 18 pages, dates written month first went from 10 to none (the
     bill calendar's "Nov 1, 2026", Housing's "Nov 5") and numeric dates from 3 to none (Accounts'
     "11/26/2026"); day-first dates went from 13 to 26.
