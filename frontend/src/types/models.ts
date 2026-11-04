@@ -440,10 +440,10 @@ export interface DashboardMetrics {
   expenseByCategory: CategoryBalance[]
   recentTransactions: Transaction[]
   upcomingBills: Bill[]
-  // MoM delta fields
-  momIncomeDelta?: number
-  momExpenseDelta?: number
-  momBalanceDelta?: number
+  // Month-over-month deltas: null for a range or all time, which are compared with nothing.
+  momIncomeDelta?: number | null
+  momExpenseDelta?: number | null
+  momBalanceDelta?: number | null
 }
 
 export interface DashboardMonthMetrics {

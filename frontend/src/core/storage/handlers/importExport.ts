@@ -246,6 +246,11 @@ export async function dashboardMain(query: URLSearchParams): Promise<Response> {
       endDate = monthEnd(year, month)
     }
 
+    // A month is compared with the month before it. A range or all time is not compared with
+    // anything: its totals cover the window, and the month before the window's first month is no
+    // measure of change for them, so the deltas come back null and the Dashboard shows none.
+    const windowed = allTime || Boolean(dateFrom && dateTo)
+
     // Previous period (for MoM delta)
     const pm = prevMonth(year, month)
     const prevStart = monthStart(pm.year, pm.month)
@@ -320,9 +325,11 @@ export async function dashboardMain(query: URLSearchParams): Promise<Response> {
       expenseByCategory,
       recentTransactions: recent,
       upcomingBills,
-      momIncomeDelta: currentIncome - prevIncome,
-      momExpenseDelta: currentExpense - prevExpense,
-      momBalanceDelta: currentIncome - currentExpense - (prevIncome - prevExpense),
+      momIncomeDelta: windowed ? null : currentIncome - prevIncome,
+      momExpenseDelta: windowed ? null : currentExpense - prevExpense,
+      momBalanceDelta: windowed
+        ? null
+        : currentIncome - currentExpense - (prevIncome - prevExpense),
     })
   } catch (err) {
     return json({ error: (err as Error).message }, 500)

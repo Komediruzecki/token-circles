@@ -106,13 +106,22 @@ export const dashboard = [
     // The bills due in the next 30 days.
     expect(march.upcomingBills.map((b: Json) => b.name)).toEqual(['Water']);
 
-    // A range, and all time.
+    // A range, and all time. Their totals cover the window, and no window before it is summed,
+    // so there is no change to report: the month before the window's first month is not one.
+    // The Dashboard sends its focus month along with a range, and shows a delta only when one
+    // comes back.
+    const noChange = { momIncomeDelta: null, momExpenseDelta: null, momBalanceDelta: null };
     expect(
-      await read(api, expect, '/api/dashboard?date_from=2025-03-10&date_to=2025-03-22')
-    ).toMatchObject({ totalIncome: 0, totalExpenses: 100.5 });
-    expect(await read(api, expect, '/api/dashboard?all=true')).toMatchObject({
+      await read(
+        api,
+        expect,
+        '/api/dashboard?month=3&year=2025&date_from=2025-03-10&date_to=2025-03-22'
+      )
+    ).toMatchObject({ totalIncome: 0, totalExpenses: 100.5, ...noChange });
+    expect(await read(api, expect, '/api/dashboard?month=1&year=1970&all=true')).toMatchObject({
       totalIncome: 4900,
       totalExpenses: 1600.5,
+      ...noChange,
     });
 
     // The other profile sees its own; both profiles selected, both.

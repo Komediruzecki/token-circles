@@ -104,6 +104,18 @@ All notable changes to Token Circles are documented here. The format is based on
     saved with a Show more widget at the top, a drop on a fixed row (refused, order unchanged), a
     drop among the Show more rows, and that the page's ordered tail renders exactly the widgets
     without a fixed spot. `dashboard.spec.ts` counts the draggable rows in the real dialog.
+- **The Dashboard shows no month-over-month change for a range, a year or All time.** The cards
+  show the window's totals there, but the change under them was those totals minus the month before
+  the window's first month, labelled "vs last month": for Last 90 days on 4 Nov, 90 days of income
+  minus July's; for a year, the year minus the December before; for All time, the whole total
+  against December 1969, so all of it read as a rise. Both runtimes now return the three deltas as
+  null when the request names a window (`date_from` and `date_to`, or `all`), and skip the previous
+  month's query; the Dashboard already shows a change only when one comes back. A month is still
+  compared with the month before it.
+  - Test: the contract scenario "the dashboard of a month, of a range and of all time"
+    (`shared/contract/scenarios/dashboard.ts`, run on the Worker and on local-first) expects null
+    deltas for the range and for all time; before the fix the range came back -2400 for income
+    and all time 1600.5 for expenses. Dropping either half of the window rule fails it on both.
 
 ### Deploy notes
 

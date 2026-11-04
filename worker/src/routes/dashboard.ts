@@ -66,6 +66,11 @@ dashboardRoutes.get('/api/dashboard', requireAuth, async (c) => {
     endDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
   }
 
+  // A month is compared with the month before it. A range or all time is not compared with
+  // anything: its totals cover the window, and the month before the window's first month is no
+  // measure of change for them, so the deltas come back null and the Dashboard shows none.
+  const windowed = allTime || Boolean(dateFrom && dateTo);
+
   // Previous month calculation.
   const prevMonth = month === 1 ? 12 : month - 1;
   const prevYear = month === 1 ? year - 1 : year;
@@ -89,13 +94,15 @@ dashboardRoutes.get('/api/dashboard', requireAuth, async (c) => {
   }
 
   // Previous month summary for MoM deltas.
-  const prevMonthly = await db.all<TypeTotalRow>(
-    c.env.DB,
-    `SELECT type, SUM(COALESCE(amount_local, amount)) as total FROM transactions WHERE profile_id IN (${inClause}) AND date >= ? AND date <= ? GROUP BY type`,
-    ...pids,
-    prevStartDate,
-    prevEndDate
-  );
+  const prevMonthly = windowed
+    ? []
+    : await db.all<TypeTotalRow>(
+        c.env.DB,
+        `SELECT type, SUM(COALESCE(amount_local, amount)) as total FROM transactions WHERE profile_id IN (${inClause}) AND date >= ? AND date <= ? GROUP BY type`,
+        ...pids,
+        prevStartDate,
+        prevEndDate
+      );
 
   const prevSummary = { income: 0, expense: 0, balance: 0 };
   for (const r of prevMonthly) {
@@ -104,10 +111,11 @@ dashboardRoutes.get('/api/dashboard', requireAuth, async (c) => {
     else if (r.type === 'transfer') prevSummary.balance += r.total ?? 0;
   }
 
-  const momIncomeDelta = summary.income - prevSummary.income;
-  const momExpenseDelta = summary.expense - prevSummary.expense;
-  const momBalanceDelta =
-    summary.income - summary.expense - (prevSummary.income - prevSummary.expense);
+  const momIncomeDelta = windowed ? null : summary.income - prevSummary.income;
+  const momExpenseDelta = windowed ? null : summary.expense - prevSummary.expense;
+  const momBalanceDelta = windowed
+    ? null
+    : summary.income - summary.expense - (prevSummary.income - prevSummary.expense);
 
   const recent = await db.all(
     c.env.DB,
