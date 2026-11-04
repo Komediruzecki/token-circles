@@ -9,7 +9,7 @@
  */
 import { env } from 'cloudflare:test';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { renderWeekOneDay2, renderWeekOneDay7 } from '../src/emailTemplates';
+import { renderWeekOneDay2, renderWeekOneDay7, renderWelcome } from '../src/emailTemplates';
 import { runWeekOneMails, WEEK_ONE, WEEK_ONE_CRON } from '../src/weekOne';
 import { offOrigins } from './helpers/mail-links';
 
@@ -534,15 +534,16 @@ describe('the batch', () => {
 });
 
 describe('the day-2 mail itself', () => {
-  it('names the YNAB file that imports, as the welcome does', () => {
-    // A register export imports with its accounts and transfers; the plan file beside it in the
-    // same download does not. "YNAB exports" sent people to either.
+  // Review M14: the welcome and day 2 said the same two YNAB sentences word for word. The welcome
+  // names the file that imports (a register export, not the plan file beside it in the same
+  // download); day 2 is about getting a year out of a bank.
+  it('leaves the YNAB file to the welcome, which names it', () => {
     const { html, text } = renderWeekOneDay2();
-    const ynab =
-      'So does the Register file in a YNAB plan export, with its accounts and transfers. Its starting balances go to accounts that are new or still empty.';
-    expect(text).toContain(`Sparkasse import as they are. ${ynab} Any other CSV`);
-    expect(html).toContain(ynab);
-    expect(text).not.toContain('YNAB exports');
+    expect(text).toMatch(/Sparkasse import as they are\. Any other CSV or Excel file works/);
+    expect(html + text).not.toContain('YNAB');
+    expect(renderWelcome().text).toContain(
+      'So does the Register file in a YNAB plan export, with its accounts and transfers.'
+    );
   });
 });
 

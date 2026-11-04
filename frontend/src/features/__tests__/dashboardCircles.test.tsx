@@ -12,7 +12,7 @@ import { render } from 'solid-js/web'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { placeCircle } from '../../../../shared/guidance/circles'
 import { ledgerRows, ledgerStatus } from '../../../../shared/guidance/ledger'
-import { nextStepOf } from '../../../../shared/guidance/nextStep'
+import { nextStepOf, nextStepOnceHidden } from '../../../../shared/guidance/nextStep'
 import { facts, words } from '../../core/__tests__/guidanceFixtures'
 import { bumpProfileVersion, setPage, setProfiles } from '../../core/appStore'
 import { ALL_WIDGET_IDS, WIDGET_STORAGE_KEY } from '../../core/dashboardWidgets'
@@ -71,6 +71,7 @@ const VIEW: GuidanceView = (() => {
     rows: ledgerRows(placement, f, words),
     status: ledgerStatus(placement, f, words),
     next: nextStepOf({ placement, facts: f, orientation: [], words }),
+    nextOnceHidden: nextStepOnceHidden({ placement, facts: f, orientation: [], words }),
     words,
   }
 })()

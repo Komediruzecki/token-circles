@@ -3068,6 +3068,22 @@ true, or is too small for one.
   `onboarding-server.spec.ts`. Dropping "To" without its space, or the statement's name shown
   where it says nothing more, fails a test each.
 
+- **Hide brings the next different step, and setup and Getting started stop repeating each
+  other** (M14). After the review's Revolut statement, setup's done step and Dashboard's Getting
+  started listed the same three steps word for word (3 of 3), and Hide put Your next step in the
+  card's place leading with the step the hidden card had just shown, "Import the rest of your
+  year". Your next step now leads with the next step on Getting started's list once the card is
+  hidden ("Review the subscription we spotted", then "set a budget for Eating out"), while there
+  is one; with one step left that is the step, and an account that never had the card is not
+  affected (`nextStepOnceHidden` in `shared/guidance/nextStep.ts`). The done step lists each
+  step's title and page (0 of 3 the same); Getting started, a click on, says why. The day-2 mail
+  drops the YNAB sentences the welcome already says word for word. Captures at 1280 and 390,
+  light and dark: `m14-done-*`, `m14-getting-started-*` and `m14-after-hide-*`, with the lists in
+  `m14-repeat-before.json` and `m14-repeat-after.json`. Tests: `guidanceNextStep.test.ts`,
+  `DashboardNextStep.test.tsx`, `onboardingDoneStep.test.tsx` and `week-one-mails.test.ts`.
+  Skipping the first step with one on the list, skipping it for an account without the card, or
+  never skipping it fails a test each.
+
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
 The production build holds back the benchmarks and the questions that choose their figures

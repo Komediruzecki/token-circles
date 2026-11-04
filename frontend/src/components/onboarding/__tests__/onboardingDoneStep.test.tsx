@@ -102,7 +102,8 @@ afterEach(() => {
 const steps = () =>
   Array.from(host.querySelectorAll<HTMLElement>('[data-test-id="next-step"]')).map((step) => ({
     id: step.dataset.step,
-    reason: step.querySelector('[data-test-id="next-step-reason"]')?.textContent,
+    title: step.querySelector('[data-test-id="next-step-link"]')?.firstElementChild?.textContent,
+    reason: step.querySelector('[data-test-id="next-step-reason"]')?.textContent ?? null,
   }))
 
 it('lists the next steps from what the profile holds, and a step finishes setup on its way', async () => {
@@ -116,16 +117,16 @@ it('lists the next steps from what the profile holds, and a step finishes setup 
     },
     { timeout: 10_000 }
   )
+  // Review M14: Getting started on Dashboard, a click on, listed the same steps with the same
+  // reasons word for word. Here each step is its title and page; Getting started says why.
   expect(steps()).toEqual([
+    { id: 'import-year', title: 'Import the rest of your year', reason: null },
     {
-      id: 'import-year',
-      reason: '4 of 12 months tracked. A month counts once it holds 3 entries.',
+      id: 'review-subscriptions',
+      title: 'Review the subscription we spotted',
+      reason: null,
     },
-    { id: 'review-subscriptions', reason: "It's in your statements but not on Bills yet." },
-    {
-      id: 'sort-uncategorised',
-      reason: "That's 33% of your entries. Budgets and Analytics group spending by category.",
-    },
+    { id: 'sort-uncategorised', title: 'Sort the 4 entries without a category', reason: null },
   ])
 
   const scan = host.querySelector<HTMLAnchorElement>(

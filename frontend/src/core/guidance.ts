@@ -31,7 +31,7 @@ import { factsAnswersOf } from '../../../shared/guidance/answers'
 import { placeCircle } from '../../../shared/guidance/circles'
 import { guidanceFacts } from '../../../shared/guidance/facts'
 import { ledgerRows, ledgerStatus } from '../../../shared/guidance/ledger'
-import { nextStepOf } from '../../../shared/guidance/nextStep'
+import { nextStepOf, nextStepOnceHidden } from '../../../shared/guidance/nextStep'
 import { chooseRegion } from '../../../shared/guidance/region'
 import { orientationSteps } from '../../../shared/orientation'
 import { normalizeSettings } from '../../../shared/retirementSettings'
@@ -84,6 +84,8 @@ export interface GuidanceView {
   status: LedgerStatus
   /** Your next step: Getting started's first while less than a year is on file. */
   next: NextStep
+  /** Dashboard's Your next step once Getting started is hidden: the next different step. */
+  nextOnceHidden: NextStep
   /** Money in whole units of the base currency, as the rows write it. */
   words: LedgerWords
 }
@@ -217,6 +219,7 @@ export function workOut(
     rows: ledgerRows(placement, facts, words),
     status: ledgerStatus(placement, facts, words),
     next: nextStepOf({ placement, facts, orientation, words }),
+    nextOnceHidden: nextStepOnceHidden({ placement, facts, orientation, words }),
     words,
   }
 }

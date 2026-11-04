@@ -590,6 +590,18 @@ export function nextStepOf({ placement, facts, orientation, words }: NextStepInp
   };
 }
 
+/**
+ * Your next step on Dashboard once Getting started is hidden (review M14). The card it replaces led
+ * with Getting started's first step, and Hide brought the same step straight back; it leads with
+ * the next one on that list while there is one. With one step left that is the step, and with a
+ * year on file Getting started is not shown, so nothing is skipped.
+ */
+export function nextStepOnceHidden(input: NextStepInput): NextStep {
+  const { facts, orientation } = input;
+  if (facts.firm || !orientation || orientation.length < 2) return nextStepOf(input);
+  return nextStepOf({ ...input, orientation: orientation.slice(1) });
+}
+
 /** The circle's name for the step's chip. */
 export const stepCircleName = (step: NextStep): string | null =>
   step.circle === null ? null : CIRCLE_NAMES[step.circle];

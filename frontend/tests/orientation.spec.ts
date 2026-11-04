@@ -72,9 +72,11 @@ async function stepsIn(page: Page, list: string) {
   const out: Array<{ title: string; reason: string; href: string }> = []
   for (const step of await steps.all()) {
     const link = step.getByTestId('next-step-link')
+    // Setup's done step lists titles only (review M14): no reason to read there.
+    const reason = step.getByTestId('next-step-reason')
     out.push({
       title: (await link.locator('span').first().textContent()) ?? '',
-      reason: (await step.getByTestId('next-step-reason').textContent()) ?? '',
+      reason: (await reason.count()) > 0 ? ((await reason.textContent()) ?? '') : '',
       href: (await link.getAttribute('href')) ?? '',
     })
   }
@@ -190,7 +192,7 @@ test.describe('Getting started @smoke', () => {
     await expect(page.getByTestId('onboarding-step-done')).toBeVisible()
     await expect
       .poll(() => stepsIn(page, 'onboarding-next-steps'), { timeout: 30_000 })
-      .toEqual([NOTHING_YET])
+      .toEqual([{ ...NOTHING_YET, reason: '' }])
 
     await page.getByTestId('onboarding-next-steps').getByText(NOTHING_YET.title).click()
     await expect(page.getByTestId('onboarding-wizard')).toHaveCount(0)

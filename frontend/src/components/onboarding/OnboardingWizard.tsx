@@ -1067,8 +1067,10 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
         <section class={styles.nextSteps} data-test-id="onboarding-next-steps">
           <h3 class={styles.nextStepsTitle}>Next steps</h3>
           {/* A step's link leaves setup the way Go to my dashboard does, for the step's page. */}
+          {/* Titles only: Getting started on Dashboard lists the same steps with why. */}
           <NextSteps
             steps={nextUp()}
+            titlesOnly
             onFollow={() => {
               completeOnboarding()
             }}

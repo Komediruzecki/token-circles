@@ -8,7 +8,12 @@ import { describe, expect, it } from 'vitest'
 import { regionName } from '../../../../shared/guidance/cards'
 import { placeCircle } from '../../../../shared/guidance/circles'
 import { EXPENSIVE_DEBT_NOTE, guidanceFacts } from '../../../../shared/guidance/facts'
-import { nextStepOf, stepCircleName, thenLine } from '../../../../shared/guidance/nextStep'
+import {
+  nextStepOf,
+  nextStepOnceHidden,
+  stepCircleName,
+  thenLine,
+} from '../../../../shared/guidance/nextStep'
 import { ASKED_ONCE } from '../../../../shared/guidance/questions'
 import { REGIONS } from '../../../../shared/guidance/region'
 import { orientationSteps } from '../../../../shared/orientation'
@@ -72,6 +77,34 @@ describe('before a year is on file', () => {
       article: 'bank-year',
     })
     expect(stepCircleName(next)).toBe('Clear picture')
+  })
+
+  // Review M14: Hide on Getting started put Your next step in its place, leading with the step the
+  // hidden card had just led with.
+  it("takes Getting started's next step once the card is hidden, while it has one", () => {
+    const seven = facts({ monthsInYear: 7, firm: false })
+    const input = { placement: placeCircle(seven), facts: seven, words }
+    const hidden = nextStepOnceHidden({ ...input, orientation: orientationSteps(ORIENTATION) })
+    expect(hidden).toMatchObject({
+      id: 'sort-uncategorised',
+      title: 'Sort the 30 entries without a category',
+      then: 'Then: build a one-month cushion.',
+    })
+    // One step on the list: it is the step, since there is no other to take.
+    const [year] = orientationSteps(ORIENTATION)
+    expect(nextStepOnceHidden({ ...input, orientation: [year] }).id).toBe('import-year')
+    // A year on file: Getting started is not shown, so nothing is skipped.
+    const year12 = facts()
+    expect(
+      nextStepOnceHidden({
+        placement: placeCircle(year12),
+        facts: year12,
+        words,
+        orientation: null,
+      })
+    ).toEqual(
+      nextStepOf({ placement: placeCircle(year12), facts: year12, words, orientation: null })
+    )
   })
 
   it('reads the circles when Getting started has no steps to give', () => {
