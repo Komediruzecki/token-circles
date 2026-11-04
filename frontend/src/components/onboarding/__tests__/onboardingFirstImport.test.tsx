@@ -540,6 +540,38 @@ const REGISTER = [
 ].join('\n')
 const REGISTER_NAME = 'Test Plan as of 2026-01-31 Register.csv'
 
+/** A later export of the same plan: Test Checking opens at 1,500.00, Test Savings at nothing. */
+const LATER_REGISTER = [
+  REGISTER.split('\n')[0],
+  registerRow(
+    'Test Checking',
+    '01/13/2026',
+    'Starting Balance',
+    TO_ASSIGN,
+    '',
+    '$0.00',
+    '$1,500.00'
+  ),
+  registerRow(
+    'Test Checking',
+    '01/15/2026',
+    'Example Employer',
+    TO_ASSIGN,
+    'Pay',
+    '$0.00',
+    '$100.00'
+  ),
+  registerRow(
+    'Test Savings',
+    '01/16/2026',
+    'Example Bank',
+    TO_ASSIGN,
+    'Interest',
+    '$0.00',
+    '$5.00'
+  ),
+].join('\n')
+
 describe('a YNAB Register file', () => {
   it('says on the picker which YNAB file to bring', async () => {
     await openAt('import')
@@ -620,6 +652,26 @@ describe('a YNAB Register file', () => {
     expect(byTestId('onboarding-import-done')?.textContent).toBe(
       'Imported 3 transactions into Test Checking and Test Savings.'
     )
+  })
+
+  it('forgets the starting balances with the file: the next one opens its accounts on its own', async () => {
+    await openAt('import')
+    choose(REGISTER_NAME, REGISTER)
+    await readUntil('ready')
+    // Removed, and another export chosen. The step shows no starting balance to check.
+    byTestId('onboarding-import-remove')!.click()
+    await settle()
+    choose('Test Plan as of 2026-02-28 Register.csv', LATER_REGISTER)
+    await readUntil('ready')
+    byTestId('onboarding-import-selected')!.click()
+    await vi.waitFor(() => {
+      expect(onboardingStep()).toBe('subscriptions')
+    }, waitLong)
+
+    const opened = Object.fromEntries(
+      (await accounts()).map((a) => [a.name as string, [a.starting_balance, a.balance]])
+    )
+    expect(opened).toEqual({ 'Test Checking': [1500, 1600], 'Test Savings': [0, 5] })
   })
 })
 

@@ -786,6 +786,11 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     setError(null)
     setResultMessage(null)
     setImportId('')
+    // The starting balances and dates belong to the file they were offered or typed for. Kept,
+    // they went to the next file's accounts of the same name, and blocked that file's own offer
+    // (offerStartingBalances fills only empty fields), where setup shows no field to check.
+    setAccountBalances({})
+    setAccountBalanceDates({})
     // Clear Bank Imports state so a fresh import doesn't inherit stale files/warnings
     // and the preview's rules editor is gated correctly by bankFiles().length.
     setBankFiles([])

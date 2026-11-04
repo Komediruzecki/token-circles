@@ -3205,6 +3205,21 @@ true, or is too small for one.
   the behaviour was already there (`importRulesFollowProfile.test.tsx`, the wizard relaunched
   after a profile switch). Whether a space made over an example should take over the example's
   edited rules is left as it is, a question for maff.
+- **A file set aside leaves its starting balances behind.** The import flow kept each account's
+  starting balance and date through Cancel, setup's Remove and choosing another file: `resetForm`
+  cleared neither. They went to the next file's accounts of the same name, and because a YNAB
+  register's own Starting Balance only fills an empty field, they kept that file's own out too. A
+  register removed in setup's statement step, then a later export of the same plan, opened Test
+  Checking at the first file's 1,250.00 instead of its own 1,500.00, and Test Savings, which the
+  later file gives none, at 3,000.00. Setup shows no starting balance to check, and neither does
+  the Import page's bank summary (a register without an Account column opens on it); a register
+  that names its accounts goes through the columns step, whose account row shows the old figure.
+  M2 does not undo it: setup works back only the balances typed in it, and the list after an
+  import reads the accounts as stored, so it shows the wrong balance beside its field to set it.
+  `resetForm` now clears both, in the Import page's flow and setup's. Tests:
+  `ynabExportFlow.test.tsx` (a register cancelled on Bank Imports, then another) and
+  `onboardingFirstImport.test.tsx` (a register removed in setup, then another). Without the
+  balances cleared both fail; without the dates the first does, on the starting date.
 
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
