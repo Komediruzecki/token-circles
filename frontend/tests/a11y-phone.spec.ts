@@ -16,6 +16,7 @@
  * - Quick entry: the bar's fields were 19 to 24 tall and its toggles 28; the guided sheet a tap
  *   opens had Close 30x30, Cancel, Back and Next 35 to 40, and its date and note fields 20.
  * - The profile menu's checkboxes were 16x16 with no name; the Import preview's had no name.
+ * - The guided sheet's date and note fields had no name: the words beside them were plain text.
  *
  * A target is measured by its hit area, not its box: the pixels across its middle where a tap
  * lands on it (elementFromPoint), so a ring drawn by ::before counts and a neighbour on top does
@@ -219,8 +220,9 @@ test.describe('the phone Dashboard @smoke', () => {
     await sheet.locator('[class*="catChip"]').first().click()
     const next = sheetButton('Next')
     if (await next.isVisible()) await next.click()
-    await expectFingertip(sheet.locator('input[type="date"]'), "the sheet's date")
-    await expectFingertip(sheet.locator('input[type="text"]'), "the sheet's note")
+    // Found by their labels: each field is named by the word beside it.
+    await expectFingertip(sheet.getByLabel('Date', { exact: true }), "the sheet's date")
+    await expectFingertip(sheet.getByLabel('Note', { exact: true }), "the sheet's note")
     await expectFingertip(sheetButton('Back'), "the sheet's Back")
     await sheetButton('Close').click()
     await expect(
@@ -244,7 +246,8 @@ test.describe('the phone Dashboard @smoke', () => {
     await expectFingertip(bar, 'the bar')
     for (const name of ['Category', 'Account'])
       await expectFingertip(page.getByRole('combobox', { name }), `the bar's ${name}`)
-    await expectFingertip(page.getByLabel('Date', { exact: true }), "the bar's date")
+    const commandBar = page.getByRole('dialog', { name: 'Quick entry command bar' })
+    await expectFingertip(commandBar.getByLabel('Date', { exact: true }), "the bar's date")
     for (const name of ['Expense', 'Income', 'Add entry'])
       await expectFingertip(page.getByRole('button', { name, exact: true }), `the bar's ${name}`)
   })
