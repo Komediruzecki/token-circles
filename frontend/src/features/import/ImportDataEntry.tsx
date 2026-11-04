@@ -144,8 +144,8 @@ export function ImportDataEntry(props: { flow: ImportFlow; compact?: boolean }) 
                 This table is the import's contract, so it has to tell the truth. Date is marked
                 required because Map columns stars it (decided 4 Nov 2026); only Amount
                 hard-fails a row, so Date's sample says what a blank cell does: it imports as
-                today and is flagged. Description stays optional although Map columns stars it,
-                because a blank Description imports (bank exports are full of them; a rule that
+                today and is flagged. Description is optional here and in Map columns, because a
+                blank Description imports (bank exports are full of them; a rule that
                 rejected blanks once silently dropped 291 rows). Everything else is optional with
                 the default shown beside the sample, so "optional" never reads as "mysterious".
               */}

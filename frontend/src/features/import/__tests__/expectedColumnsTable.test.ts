@@ -6,7 +6,7 @@
  *
  * Date is marked required again, by decision (4 Nov 2026), because Map columns stars it: a sheet
  * without dates would put every row on today. Its row still says what a blank date cell does.
- * Description stays optional here although Map columns stars it too, because a blank one imports.
+ * Description is optional in both places: Map columns starred it although a blank one imports.
  *
  * This reads the rendered claims out of the source and holds them to that, and keeps the table's
  * column list in step with the downloadable template so the two cannot drift apart.
@@ -41,14 +41,14 @@ describe('the Expected columns table', () => {
     expect(required).toEqual(['Date', 'Amount'])
   })
 
-  it('requires only columns Map columns stars, Date among them', async () => {
+  it('requires exactly the columns Map columns stars', async () => {
     const { FIELD_NAMES } = await import('../../../../../shared/importMapping')
-    const starred = new Set(FIELD_NAMES.filter((f) => f.required).map((f) => f.label))
+    const starred = FIELD_NAMES.filter((f) => f.required).map((f) => f.label)
     const required = tableClaims()
       .filter(([, req]) => req === 'Yes')
       .map(([col]) => col)
-    for (const col of required) expect(starred, col).toContain(col)
-    expect(starred).toContain('Date')
+    // Both ways: a starred Description told people to map a column whose blanks import.
+    expect(starred).toEqual(required)
   })
 
   it("says what a blank date cell does, in Date's row", () => {

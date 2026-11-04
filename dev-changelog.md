@@ -136,6 +136,12 @@ All notable changes to Token Circles are documented here. The format is based on
     change the third.
   - Not changed: content a person scrolls up under the menu button on a phone still passes under
     it, as under any floating button.
+- **Map columns no longer stars Description.** A blank description imports (the Worker pins that
+  in `import-blank-description.test.ts`), and the Expected columns table already said No, so the
+  star asked people to map a column they can leave out. Date and Amount keep theirs
+  (`shared/importMapping.ts`; the star is all `required` drives).
+  - Test: `expectedColumnsTable.test.ts` now holds the table's required columns and the starred
+    fields to the same list both ways. With Description starred again it fails.
 
 ### Deploy notes
 
