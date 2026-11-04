@@ -42,8 +42,8 @@
 }
 
 .filterCount {
-  background: #6366f1;
-  color: white;
+  background: var(--info-fill);
+  color: var(--on-fill);
   font-size: 0.75rem;
   padding: 2px 8px;
   border-radius: 9999px;
@@ -255,7 +255,7 @@
 
 .clearButton:hover {
   border-color: #ef4444;
-  color: #ef4444;
+  color: #b91c1c;
   background: #fef2f2;
 }
 
@@ -267,6 +267,6 @@
 
 .dark-mode .clearButton:hover {
   border-color: #ef4444;
-  color: #ef4444;
+  color: #fca5a5;
   background: #374151;
 }

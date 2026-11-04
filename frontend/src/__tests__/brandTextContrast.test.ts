@@ -396,6 +396,64 @@ describe('fills that carry words', () => {
   })
 })
 
+/**
+ * A colour as written in a stylesheet, as hex in `theme`: a hex literal, `white` or `black`, or a
+ * `var(--token, fallback)` followed through the theme. Anything else (a mix, a gradient, an alpha,
+ * inherit) is undefined: this check cannot measure it.
+ */
+function resolveColour(raw: string, t: Tokens, depth = 0): string | undefined {
+  const v = raw.replace('!important', '').trim()
+  if (v === 'white') return '#ffffff'
+  if (v === 'black') return '#000000'
+  if (/^#[0-9a-f]{6}$/i.test(v)) return v.toLowerCase()
+  if (/^#[0-9a-f]{3}$/i.test(v)) return `#${v.slice(1).replace(/./g, '$&$&')}`.toLowerCase()
+  if (!v.startsWith('var(') || !v.endsWith(')') || depth > 5) return undefined
+  const inner = v.slice(4, -1)
+  const comma = inner.indexOf(',')
+  const name = (comma < 0 ? inner : inner.slice(0, comma)).trim()
+  if (name in t) return resolveColour(t[name], t, depth + 1)
+  return comma < 0 ? undefined : resolveColour(inner.slice(comma + 1), t, depth + 1)
+}
+
+/** Every rule that paints a background and sets the words on it, as `file:selector`. */
+function fillsUnderWords(): { at: string; bg: string; color: string }[] {
+  const out: { at: string; bg: string; color: string }[] = []
+  for (const file of walk(SRC)) {
+    if (file.startsWith(THEMES)) continue
+    const css = readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+    for (const m of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const bg = /(?<![-\w])background(?:-color)?:\s*([^;]+)/.exec(m[2])?.[1]
+      const color = /(?<![-\w])color:\s*([^;]+)/.exec(m[2])?.[1]
+      if (bg && color)
+        out.push({ at: `${relative(SRC, file)}:${m[1].trim().replace(/\s+/g, ' ')}`, bg, color })
+    }
+  }
+  return out
+}
+
+describe('words on any fill a rule paints', () => {
+  const rules = fillsUnderWords()
+
+  // Whatever colour the fill names: a semantic token, a surface, a legacy hex. White on the
+  // tag filter's indigo #6366f1 was 4.47:1.
+  it('read 4.5:1 in every theme, where both colours resolve', () => {
+    const low: string[] = []
+    let measured = 0
+    for (const { at, bg, color } of rules) {
+      for (const [theme, t] of themes) {
+        const [b, c] = [resolveColour(bg, t), resolveColour(color, t)]
+        if (!b || !c) continue
+        measured += 1
+        const ratio = contrast(b, c)
+        if (ratio < 4.5) low.push(`${at} in ${theme}: ${c} on ${b}, ${ratio.toFixed(2)}:1`)
+      }
+    }
+    expect(low).toEqual([])
+    // A resolver that resolved nothing would pass; it measures hundreds of pairs.
+    expect(measured).toBeGreaterThan(200)
+  })
+})
+
 describe('the primary button, hovered', () => {
   const rule = ruleIn(resolve(SRC, 'styles/index.css'), ':root')
   const alpha =
