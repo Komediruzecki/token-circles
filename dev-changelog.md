@@ -121,12 +121,13 @@ All notable changes to Token Circles are documented here. The format is based on
   the bottom right at every width, and pages ended 12 to 24 px below their last line, so whatever
   sat at the bottom right of a page's end stayed under it: Import's "No saved sheets yet" note at
   1280 and 390, Settings' last line, Accounts' "View All", a bill's Edit, Portfolio's last value.
-  Pages now end `--fab-clearance` (96 px: the button, its ring and 12 px) below their last line,
-  and the root keeps the same strip as `scroll-padding-bottom`, so anything scrolled into view from
+  Pages now end `--fab-clearance` (96 px: the button, its ring and 12 px) below their last line, and
+  the root keeps the same strip as `scroll-padding-bottom`, so anything scrolled into view from
   below stops above the button. The Spotlight counts that strip as no room, as it already did the
-  menu button's. On the demo, across 15 pages at 1280 and 390, the button covered text or a
-  control at a page's end 14 times before and none after. At the top of every page nothing sits
-  under the menu button.
+  menu button's. On the demo, across 15 pages at 1280 and 390, the button covered text or a control
+  at a page's end 14 times before (on 13 of the 30 page and width pairs) and none after. At the top
+  of a page the menu button covers nothing but the history toast ("20 badges and 26 prints from your
+  history ..."), on four pages at 390 while it shows; that toast is not part of this.
   - Test: `menu-button-clearance.spec.ts` scrolls Import and Settings to their end at 390 and 1280
     and expects nothing under the quick add button, and brings Settings' last control into view
     from below and expects it above the button; `spotlightTipWiring.test.tsx` opens a target that
