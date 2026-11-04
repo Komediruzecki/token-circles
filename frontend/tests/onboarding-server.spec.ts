@@ -13,6 +13,7 @@
  */
 import { expect, test } from '@playwright/test'
 import { sqlRows } from './db'
+import { viaApp } from './form-errors-helpers'
 import { bootSignedIn, deleteAccount, signIn, signUpAndIn } from './own-account'
 import { paintedContrast } from './painted-contrast'
 import { E2E_BASE } from './test-helpers'
@@ -547,6 +548,45 @@ test.describe('the setup wizard on the account @smoke', () => {
       } finally {
         await elsewhere.close()
       }
+    } finally {
+      await deleteAccount(ctx, email)
+    }
+  })
+
+  // Keeping the data in this browser leaves the account's data on the Worker, out of sight until
+  // Settings switches back, so "Run setup again" over an account with data does not offer it.
+  test('run again over an account that holds data, setup leaves out keeping it in this browser', async ({
+    page,
+  }) => {
+    const ctx = page.context()
+    const { email } = await signUpAndIn(ctx)
+    try {
+      await bootSignedIn(ctx)
+      await page.goto(`${E2E_BASE}/#dashboard`, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+      await expect(page.getByTestId('onboarding-step-space')).toBeVisible({ timeout: 30_000 })
+      // A new account, with nothing in it, is offered the choice.
+      await expect(page.getByTestId('onboarding-local-only')).toBeVisible()
+      await page.getByTestId('onboarding-skip').click()
+      await page.getByTestId('confirm-accept').click()
+      await expect(page.getByTestId('onboarding-wizard')).toHaveCount(0)
+      await viaApp(page, 'POST', '/api/accounts', {
+        name: 'zz-main',
+        type: 'checking',
+        starting_balance: 1200,
+      })
+
+      await page.getByTestId('whats-new-btn').click()
+      const asked = page.waitForResponse(
+        (res) =>
+          new URL(res.url()).pathname === '/api/profiles' && res.request().method() === 'GET',
+        { timeout: 30_000 }
+      )
+      await page.getByTestId('tour-open-onboarding').click()
+      await expect(page.getByTestId('onboarding-step-space')).toBeVisible({ timeout: 30_000 })
+      await asked
+      // Nothing says "not offered" on screen, so give the answer time to show before looking.
+      await page.waitForTimeout(1000)
+      await expect(page.getByTestId('onboarding-local-only')).toHaveCount(0)
     } finally {
       await deleteAccount(ctx, email)
     }

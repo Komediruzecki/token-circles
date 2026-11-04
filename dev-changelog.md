@@ -3179,6 +3179,22 @@ true, or is too small for one.
   control a keyboard or a screen reader meets. ToggleField does this for a row that asks for it
   (`wholeRow`); its other rows (Bills, Housing, the retirement planner) are as they were. Tests:
   `settingsWeekOne.test.tsx`; without `wholeRow` a tap on the words saves nothing.
+- **Setup run again over an account that holds data no longer offers to keep it in this
+  browser.** "Keep my data in this browser only" leaves the account's data on the Worker and
+  reloads into a local workspace that shows none of it. Run again from the tour menu over an
+  account with one account in it, setup offered the switch; after it the app opened setup over an
+  empty local workspace and Accounts listed nothing, while the Worker still held the account (1
+  before and after) and the session stayed signed in. Only Settings, Storage, Server brought it
+  back. Setup now asks the Worker what the account holds each time the space step opens
+  (`accountHoldsData` in `localOnly.ts`: an account, a transaction or a budget in any profile, as
+  GET /api/profiles counts them) and offers the switch only on a fresh "nothing", which a new
+  account's first setup still gets. Tests: `localOnly.test.ts`, `localOnlyAccount.test.tsx` (data
+  in a second profile, a reload mid-setup after an account was made, asked again on each visit
+  with nothing offered until the Worker answers, the latest answer kept, a Worker that cannot
+  answer), `onboardingOverExamples.test.tsx`, and in e2e `onboarding-server.spec.ts` (run again
+  over an account with an account in it). With the old rule four fail, and the e2e case; counting
+  an unanswered ask as nothing, keeping the earlier answer while asking, asking once, or taking
+  every answer fails one or two each.
 
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 

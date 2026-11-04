@@ -13,6 +13,7 @@ import { IDBFactory } from 'fake-indexeddb'
 import { describe, expect, it } from 'vitest'
 import { EXAMPLE_PROFILE_NAMES } from '../../../core/demoMode'
 import {
+  accountHoldsData,
   classifyLocalProfiles,
   examplesChoiceNote,
   LOCAL_DATABASE,
@@ -202,6 +203,26 @@ describe('what the switch asks', () => {
         expect(said(found, empty)).not.toMatch(/—/)
       }
     }
+  })
+})
+
+// The switch leaves a signed-in account's data on the Worker and opens a local workspace that
+// shows none of it, so setup offers it only over an account that holds nothing (3 Nov, round 2).
+describe('whether the account holds anything the switch would leave behind', () => {
+  const empty = { transaction_count: 0, account_count: 0, budget_count: 0 }
+
+  it('holds nothing with every profile empty, or no profile listed', () => {
+    expect(accountHoldsData([empty])).toBe(false)
+    expect(accountHoldsData([empty, { ...empty }])).toBe(false)
+    expect(accountHoldsData([])).toBe(false)
+    expect(accountHoldsData([{}])).toBe(false)
+  })
+
+  it('holds data with an account, a transaction or a budget in any profile', () => {
+    expect(accountHoldsData([{ ...empty, account_count: 1 }])).toBe(true)
+    expect(accountHoldsData([{ ...empty, transaction_count: 3 }])).toBe(true)
+    expect(accountHoldsData([{ ...empty, budget_count: 1 }])).toBe(true)
+    expect(accountHoldsData([empty, { ...empty, transaction_count: 40 }])).toBe(true)
   })
 })
 
