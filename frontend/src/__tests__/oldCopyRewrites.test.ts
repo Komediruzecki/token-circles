@@ -8,6 +8,8 @@
  * strings with a rendered test of their own are checked there too: the prints readout in
  * printsShelf.test.tsx, and the transfer note in core/bankImport/__tests__/bankImport.test.ts.
  */
+/* eslint-disable security/detect-non-literal-fs-filename -- the paths are the source files named
+   in REWRITES below, not anything supplied from outside this file. */
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
