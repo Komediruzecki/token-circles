@@ -138,6 +138,26 @@ function ownProfiles(names: readonly string[]): string {
   return `your profiles ${names.slice(0, 3).map(quoted).join(', ')} and ${String(more)} more`
 }
 
+/** A profile as GET /api/profiles counts what is in it, in both runtimes. */
+export interface ProfileCounts {
+  transaction_count?: number | null
+  account_count?: number | null
+  budget_count?: number | null
+}
+
+/**
+ * Whether a signed-in account holds anything of the person's: an account, a transaction or a
+ * budget in any of its profiles. The switch to local-only leaves all of it on the Worker and
+ * reloads into a local workspace that shows none of it, until Settings switches back to the cloud.
+ * "Run setup again" over an account with data offered the switch all the same, so setup now
+ * offers it only to an account that holds nothing yet.
+ */
+export function accountHoldsData(profiles: readonly ProfileCounts[]): boolean {
+  return profiles.some(
+    (p) => (p.transaction_count ?? 0) > 0 || (p.account_count ?? 0) > 0 || (p.budget_count ?? 0) > 0
+  )
+}
+
 /** The local-only confirm: the question as its heading, and a short line each for the rest. */
 export interface LocalOnlyQuestion {
   title: string
@@ -146,11 +166,11 @@ export interface LocalOnlyQuestion {
 
 /**
  * What the switch asks, for what this browser's local workspace holds. Only a signed-in account is
- * asked, and the account stays: the switch turns its first-week mails off (stopFirstWeekMails), so
- * the question says both (3 Nov review A3). `accountEmpty` is whether the account holds nothing
- * of the person's yet, as on its first setup; run again over an account with data, it stays as it
- * is. On a phone it was one paragraph of six lines (review D5): the question heads the dialog, and
- * over a fresh workspace two short lines say the rest.
+ * asked, and only while it holds nothing (accountHoldsData), and the account stays: the switch
+ * turns its first-week mails off (stopFirstWeekMails), so the question says both (3 Nov review
+ * A3). `accountEmpty` is whether this is the account's first setup with nothing made yet; run again,
+ * it stays as it is. On a phone it was one paragraph of six lines (review D5): the question heads
+ * the dialog, and over a fresh workspace two short lines say the rest.
  */
 export function localOnlyQuestion(found: LocalWorkspace, accountEmpty: boolean): LocalOnlyQuestion {
   const title = 'Keep your data in this browser only?'

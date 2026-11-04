@@ -540,3 +540,59 @@ describe('review round 3: the import log', () => {
     expect(JSON.parse(logs[0]!.details!)).toMatchObject({ rows_with_warnings: 0 })
   })
 })
+
+describe('first-week review: a file set aside, then another', () => {
+  it("opens the next file's accounts on its own starting balances", async () => {
+    await dropText(REGISTER, 'First Register.csv')
+    await flow.processBankFiles()
+    await waitUntil(() => !flow.loading(), 'the first file to be read')
+    // On offer in the columns step's account row.
+    expect(flow.accountBalances()['Test Checking']).toBe('1250.00')
+    // Cancel, as the columns step, the preview and the bank summary do.
+    flow.resetForm()
+
+    await dropText(
+      [
+        HEADER_ROW,
+        row(
+          'Test Checking',
+          '01/13/2026',
+          'Starting Balance',
+          '$0.00',
+          '$1,500.00',
+          'Inflow',
+          'Ready to Assign'
+        ),
+        row(
+          'Test Checking',
+          '01/15/2026',
+          'Example Employer',
+          '$0.00',
+          '$100.00',
+          'Inflow',
+          'Ready to Assign'
+        ),
+        row(
+          'Test Savings',
+          '01/16/2026',
+          'Example Bank',
+          '$0.00',
+          '$5.00',
+          'Inflow',
+          'Ready to Assign'
+        ),
+      ].join('\n'),
+      'Second Register.csv'
+    )
+    await importAll()
+
+    const { accounts } = await stored()
+    expect(accounts['Test Checking']).toMatchObject({
+      starting_balance: 1500,
+      starting_date: '2026-01-13',
+      balance: 1600,
+    })
+    // This file gives Test Savings no starting balance; the first file's 3,000.00 is not its.
+    expect(accounts['Test Savings']).toMatchObject({ starting_balance: 0, balance: 5 })
+  })
+})

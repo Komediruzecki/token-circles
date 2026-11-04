@@ -48,6 +48,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **A first bank import files restaurants, cafes and takeaways under Eating out**, instead of a new Restaurant or Dining category. If you already have one of those, its rows keep going there.
 - **Setup after the demo makes a space of your own.** Keeping your data in this browser after running the demo opened Example Low Income's dashboard, and running setup again in the demo renamed that example. Setup now makes your space a new profile and lets you remove the three example profiles or keep them. Where the browser already has a profile of yours beside the examples, the switch opens on yours.
 - **New accounts and profiles start with the default categories.** They started empty, so a quick add like "coffee 4.50" was saved without a category.
+- **Starting balances stay with their file.** Cancel an import or remove a file in setup, and the next file's accounts could open on the starting balances of the one you set aside, like a YNAB register's, instead of their own.
 
 ## [5.17.6] — 2026-11-01
 

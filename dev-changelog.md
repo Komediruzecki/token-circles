@@ -3494,6 +3494,63 @@ true, or is too small for one.
   control a keyboard or a screen reader meets. ToggleField does this for a row that asks for it
   (`wholeRow`); its other rows (Bills, Housing, the retirement planner) are as they were. Tests:
   `settingsWeekOne.test.tsx`; without `wholeRow` a tap on the words saves nothing.
+- **Setup run again over an account that holds data no longer offers to keep it in this
+  browser.** "Keep my data in this browser only" leaves the account's data on the Worker and
+  reloads into a local workspace that shows none of it. Run again from the tour menu over an
+  account with one account in it, setup offered the switch; after it the app opened setup over an
+  empty local workspace and Accounts listed nothing, while the Worker still held the account (1
+  before and after) and the session stayed signed in. Only Settings, Storage, Server brought it
+  back. Setup now asks the Worker what the account holds each time the space step opens
+  (`accountHoldsData` in `localOnly.ts`: an account, a transaction or a budget in any profile, as
+  GET /api/profiles counts them) and offers the switch only on a fresh "nothing", which a new
+  account's first setup still gets. Tests: `localOnly.test.ts`, `localOnlyAccount.test.tsx` (data
+  in a second profile, a reload mid-setup after an account was made, asked again on each visit
+  with nothing offered until the Worker answers, the latest answer kept, a Worker that cannot
+  answer), `onboardingOverExamples.test.tsx`, and in e2e `onboarding-server.spec.ts` (run again
+  over an account with an account in it). With the old rule four fail, and the e2e case; counting
+  an unanswered ask as nothing, keeping the earlier answer while asking, asking once, or taking
+  every answer fails one or two each.
+- **Release case 4.7 runs its local pass on profiles of the person's own.** It failed in
+  local-first, at 70a3431d too, and was read as setup ignoring the profile's import rules. It is
+  not: the local pass runs over the demo, whose two profiles are examples, and setup over an
+  example makes a space of its own (removing the examples) and reads the statement with that new
+  profile's rules, none stored, so the default ones. A probe logged the read on profile 4 with
+  rules stored for 1 and 2 only. With both profiles renamed first, so neither is an example, the
+  case passes in both runtimes: each read files under its own profile's rules. The unit guard for
+  the behaviour was already there (`importRulesFollowProfile.test.tsx`, the wizard relaunched
+  after a profile switch). Whether a space made over an example should take over the example's
+  edited rules is left as it is, a question for maff.
+- **A file set aside leaves its starting balances behind.** The import flow kept each account's
+  starting balance and date through Cancel, setup's Remove and choosing another file: `resetForm`
+  cleared neither. They went to the next file's accounts of the same name, and because a YNAB
+  register's own Starting Balance only fills an empty field, they kept that file's own out too. A
+  register removed in setup's statement step, then a later export of the same plan, opened Test
+  Checking at the first file's 1,250.00 instead of its own 1,500.00, and Test Savings, which the
+  later file gives none, at 3,000.00. Setup shows no starting balance to check, and neither does
+  the Import page's bank summary (a register without an Account column opens on it); a register
+  that names its accounts goes through the columns step, whose account row shows the old figure.
+  M2 does not undo it: setup works back only the balances typed in it, and the list after an
+  import reads the accounts as stored, so it shows the wrong balance beside its field to set it.
+  `resetForm` now clears both, in the Import page's flow and setup's. Tests:
+  `ynabExportFlow.test.tsx` (a register cancelled on Bank Imports, then another) and
+  `onboardingFirstImport.test.tsx` (a register removed in setup, then another). Without the
+  balances cleared both fail; without the dates the first does, on the starting date.
+- **The phone-width setup walk measures Done's next steps once they are in.** It read their
+  heights as soon as Done had settled, but the steps follow the badge evaluation, which can finish
+  later: one full run failed there on "the panel stays on a 390x844 screen on every step, light",
+  with no steps to measure (`Expected: > 0, Received: 0`). The walk now waits for the first step
+  link to show before it measures them. Test change only, in `onboarding.spec.ts`.
+- **Getting started's cushion case reads the card in one pass.** In CI it failed in both runtimes
+  on #693 and #694: after the second savings account the card kept "covers 18 days" for 30 s. The
+  app was not stuck. A probe showed the evaluation after the second account holding both accounts,
+  the card working its steps out again 10 to 30 ms later without the cushion, and the page showing
+  those two steps when the wait gave up. The test read the card row by row: one poll counted three
+  rows, the card dropped the third, and the read of the third row waited for it. With no action
+  timeout that read never returned, so the poll failed on the last list it had, three rows. On one
+  core (`taskset -c 0`) the local-first case failed 10 of 12 and 6 of 6 repeats that way; the
+  logged poll call started at three rows as the card changed and ended 29,085 ms later. `stepsIn`
+  in `orientation.spec.ts` now reads every row in one `evaluateAll`. Test change only: all four
+  cushion cases, 8 repeats each on one core, 32 passed.
 
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 

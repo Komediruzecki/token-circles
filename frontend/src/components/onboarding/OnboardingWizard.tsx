@@ -69,6 +69,7 @@ import { SubscriptionScanPanel } from '../SubscriptionScan'
 import { doneLine, holdsOf } from './doneLine'
 import { counted, createFirstImport, FirstImportPanel } from './FirstImport'
 import {
+  accountHoldsData,
   EXAMPLES_CHOICE_LEGEND,
   EXAMPLES_NOT_REMOVED,
   examplesChoiceNote,
@@ -91,7 +92,7 @@ import type { AchievementsSnapshot } from '../../core/achievementsStore'
 import type { ImportSummary } from '../../features/import/importFlow'
 import type { AccountType } from '../../types/models'
 import type { ProfileHolds } from './doneLine'
-import type { LocalWorkspace } from './localOnly'
+import type { LocalWorkspace, ProfileCounts } from './localOnly'
 import type { CreatedAccount } from './onboardingForms'
 
 /** The counted steps: Space, Account, Statement. Done is not one of them. */
@@ -377,6 +378,31 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
     }
   }
 
+  /**
+   * Whether the signed-in account holds an account, a transaction or a budget in any profile, as
+   * the Worker counts them each time the space step opens (accountHoldsData). The switch leaves
+   * that data on the Worker and reloads into a local workspace that shows none of it, until
+   * Settings switches back, so it is offered only while the account holds nothing: not on "Run
+   * setup again" over an account with data, nor once setup has put something in it. Null from the
+   * moment it is asked until the Worker answers, and while it cannot; the latest answer counts.
+   */
+  const [accountHolds, setAccountHolds] = createSignal<boolean | null>(null)
+  let holdsAsked = 0
+  const readAccountHolds = async () => {
+    const asked = ++holdsAsked
+    setAccountHolds(null)
+    let holds: boolean | null
+    try {
+      const list = await apiGet<ProfileCounts[]>('/api/profiles')
+      holds = Array.isArray(list) ? accountHoldsData(list) : null
+    } catch {
+      holds = null
+    }
+    if (asked === holdsAsked) setAccountHolds(holds)
+  }
+  /** Offered signed in, over an account the Worker has just said holds nothing. */
+  const offerLocalOnly = () => getStorageMode() === 'self-hosted' && accountHolds() === false
+
   // What it checks and says is onboardingForms.ts; a refusal is said under its field, or in the
   // step's notice when no field is the reason. Adding the account is the step's one action: the
   // next screen says it worked, so there is no toast.
@@ -528,6 +554,8 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
     // rename that re-ran this reset the form while it saved, and the step never moved on; the
     // name typed in reset the currency chosen.
     if (step === 'space') {
+      // Signed in, whether the account holds anything decides whether local-only is offered.
+      if (getStorageMode() === 'self-hosted') void readAccountHolds()
       untrack(() => {
         // An example's name is not offered for the person's space.
         const named = overExample() ? undefined : state.currentProfile?.name
@@ -707,8 +735,8 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
   //
   // The account stays, so its first-week mails are turned off before the switch, while the app
   // still talks to the Worker (3 Nov review A3); the switch goes ahead whatever the answer. The
-  // question calls the account empty on its first setup before setup made or found an account on
-  // it, and says it stays as it is otherwise ("Run setup again" over one with data).
+  // question calls the account empty on its first setup, and says it stays as it is on "Run setup
+  // again" (over an account that holds nothing, the only one it is offered to).
   const chooseLocalOnly = async () => {
     const found = await readLocalWorkspace().catch((): LocalWorkspace => ({ kind: 'unknown' }))
     const accountEmpty =
@@ -843,7 +871,7 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
             </p>
           </fieldset>
         </Show>
-        <Show when={getStorageMode() === 'self-hosted'}>
+        <Show when={offerLocalOnly()}>
           <button
             type="button"
             class={styles.linkBtn}

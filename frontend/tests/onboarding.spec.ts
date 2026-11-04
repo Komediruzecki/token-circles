@@ -1149,7 +1149,9 @@ test.describe('onboarding wizard at phone width', () => {
           await page.getByTestId('onboarding-subs-skip').click()
           await expect(page.getByTestId('onboarding-step-done')).toBeVisible()
           await check('done')
-          // Each next step on Done takes a finger: 44 px tall at least.
+          // Each next step on Done takes a finger: 44 px tall at least. The steps follow the
+          // badge evaluation, which can finish after Done shows: measure once the first is in.
+          await expect(page.getByTestId('next-step-link').first()).toBeVisible()
           const heights = await page
             .getByTestId('next-step-link')
             .evaluateAll((links) => links.map((a) => a.getBoundingClientRect().height))

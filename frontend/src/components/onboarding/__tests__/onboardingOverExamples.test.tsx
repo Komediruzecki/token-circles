@@ -105,6 +105,35 @@ async function openSpaceStep() {
   })
 }
 
+/**
+ * Signed in, the account answers GET /api/profiles with its one profile, empty: local-only is
+ * offered only over an account that holds nothing (localOnly.ts, accountHoldsData). Every other
+ * request goes on as before.
+ */
+function anEmptyAccount() {
+  const sent = globalThis.fetch
+  vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+    if (new URL(url, 'http://localhost').pathname !== '/api/profiles') return sent(input, init)
+    const empty = { id: 77, name: 'Personal Profile', transaction_count: 0, account_count: 0 }
+    return Promise.resolve(
+      new Response(JSON.stringify([{ ...empty, budget_count: 0 }]), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    )
+  })
+}
+
+/** The local-only button, once the account has said it holds nothing. */
+function localOnlyButton(): Promise<HTMLButtonElement> {
+  return vi.waitFor(() => {
+    const found = host.querySelector<HTMLButtonElement>('[data-test-id="onboarding-local-only"]')
+    expect(found).not.toBeNull()
+    return found!
+  })
+}
+
 function nameAndContinue(input: HTMLInputElement, name: string) {
   input.value = name
   input.dispatchEvent(new Event('input', { bubbles: true }))
@@ -282,8 +311,9 @@ it('says on the switch that the examples are here, before anything changes', asy
   setOnboardingOwner(accountOnboardingOwner(1))
   setCurrentProfile(null)
   setProfiles([])
+  anEmptyAccount()
   await openSpaceStep()
-  host.querySelector<HTMLButtonElement>('[data-test-id="onboarding-local-only"]')!.click()
+  ;(await localOnlyButton()).click()
   await vi.waitFor(() => {
     expect(confirmRequests()).toHaveLength(1)
   })
@@ -316,8 +346,9 @@ async function switchToLocalOnly(): Promise<{ question: string; reloads: () => n
   // What the account's session left: its own profile selected.
   localStorage.setItem('currentProfileId', '77')
   localStorage.setItem('selectedProfileIds', '[77]')
+  anEmptyAccount()
   await openSpaceStep()
-  host.querySelector<HTMLButtonElement>('[data-test-id="onboarding-local-only"]')!.click()
+  ;(await localOnlyButton()).click()
   await vi.waitFor(() => {
     expect(confirmRequests()).toHaveLength(1)
   })
