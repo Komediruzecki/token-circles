@@ -443,7 +443,7 @@ describe('Budgets, when an action fails', () => {
     await confirm()
   }
   const deleteCategory = async () => {
-    await click(() => button('button[aria-label="Delete category"]'))
+    await click(() => button('button[aria-label^="Delete the "][aria-label$=" category"]'))
     await confirm()
   }
 
@@ -488,7 +488,7 @@ describe('Budgets, when an action fails', () => {
 
     await toldOnly('That category was already deleted.')
     await vi.waitFor(() => {
-      expect(button('button[aria-label="Delete category"]')).toBeNull()
+      expect(button('button[aria-label^="Delete the "][aria-label$=" category"]')).toBeNull()
     })
   })
 
@@ -512,7 +512,7 @@ describe('Budgets, when an action fails', () => {
 describe('Categories, when deleting one fails', () => {
   const categoriesShown = () => host.textContent.includes('Groceries')
   const deleteCategory = async () => {
-    await click(() => button('button[aria-label="Delete category"]'))
+    await click(() => button('button[aria-label^="Delete the "][aria-label$=" category"]'))
     await confirm()
   }
 
@@ -523,7 +523,7 @@ describe('Categories, when deleting one fails', () => {
 
     await toldOnly('That category was already deleted.')
     await vi.waitFor(() => {
-      expect(button('button[aria-label="Delete category"]')).toBeNull()
+      expect(button('button[aria-label^="Delete the "][aria-label$=" category"]')).toBeNull()
     })
   })
 
