@@ -570,8 +570,11 @@ export function nextStepOf({ placement, facts, orientation, words }: NextStepInp
   // it reads.
   if (!first) return circleStep(current, placement);
   // Checks that wait on the same thing (accounts that didn't load, an account to add) are one step.
+  // The withdrawal rate is said from Work optional only, where it is the step itself: as a then,
+  // three circles off, it followed a savings point as if it came next (review M15).
   const later: string[] = [];
   for (const step of rest) {
+    if (step.check.id === 'work-optional') continue;
     const text = step.words.thenText;
     if (text !== first.words.thenText && !later.includes(text)) later.push(text);
     if (later.length === 2) break;

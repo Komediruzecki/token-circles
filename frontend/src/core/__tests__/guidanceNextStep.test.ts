@@ -291,7 +291,8 @@ describe('once a year is on file', () => {
       id: 'first-cushion',
       title: 'Add the accounts your money is in',
       action: { kind: 'open', hash: '#accounts', label: 'Open Accounts' },
-      then: 'Then: raise your savings rate by one point, and check the withdrawal rate you plan with.',
+      // The withdrawal rate is Work optional's to raise (review M15), not a then three circles off.
+      then: 'Then: raise your savings rate by one point.',
     })
   })
 
@@ -452,7 +453,8 @@ describe('once a year is on file', () => {
       why: 'One more point is €30 a month. €50,000 to two years of spending.',
       whyHere: 'One more point is €30 a month. €50,000 to two years of spending.',
       meter: { kind: 'bar', left: '€10,000', right: '€60,000' },
-      then: 'Then: check the withdrawal rate you plan with.',
+      // Review M15: "Then: check the withdrawal rate you plan with." a circle before Work optional.
+      then: null,
     })
   })
 

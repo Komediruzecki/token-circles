@@ -3084,6 +3084,15 @@ true, or is too small for one.
   Skipping the first step with one on the list, skipping it for an account without the card, or
   never skipping it fails a test each.
 
+- **The withdrawal rate is said from Work optional only** (M15). "Raise your savings rate by one
+  point" was followed by "Then: check the withdrawal rate you plan with.", and Breathing room's
+  first step by "Then: raise your savings rate by one point, and check the withdrawal rate you plan
+  with.": a check three circles off, read as if it came next. Your next step leaves it out of the
+  Then line; from Work optional it is the step itself, as before. The button "Open Goals" stays:
+  it opens Goals and nothing more, so "Set a savings goal" would promise what it does not do. The
+  review's case came from the circles M1 inflated. Tests: `guidanceNextStep.test.ts`; listing it
+  again fails both of its cases.
+
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
 The production build holds back the benchmarks and the questions that choose their figures
