@@ -2778,6 +2778,26 @@ check')` first, as the cushion and debt cases do.
   covers every semantic colour (primary, income, expense, success, warning, danger and info).
   With `ConfirmDialog .error` back on `--danger` it fails.
 
+- **A category card's buttons name their category** (round 5, item 1). On a Budgets card, Set
+  Budget and Edit were icons named only by their `title`, and the delete button said "Delete
+  category" on every card. On Categories every delete said the same. Each now names the category
+  it acts on: "Set budget for Groceries", "Edit Groceries", "Delete the Groceries category"
+  (`Budgets.tsx`, `Categories.tsx`). A Budgets card's delete removes the category, the same call
+  as on Categories, so it is named for the category, not the budget. Categories' edit button is
+  left to fix/older-papercuts, which names it "Edit <name>". Test: `tests/icon-button-names.spec.ts`
+  (`@smoke`), at 390 and 1280, requires every visible button on Budgets and Categories to have an
+  accessible name (Categories' edit button excepted until that branch lands) and no "Delete
+  category" anywhere, and finds the first card's buttons by their category names. With the
+  Budgets delete back on "Delete category", both Budgets cases fail. `actionFailureToasts` and
+  `pagesFollowWrites` find the delete button by the new name.
+
+- **The Tours menu is a dialog named by its heading** (round 5, item 2). `TourSelectionModal` had
+  no role and no name, and its close button was an icon with no name. The panel is now
+  `role="dialog"` and `aria-modal="true"`, labelled by its heading (`aria-labelledby`), and the
+  close button is "Close". The heading's text is unchanged. Test:
+  `TourSelectionModal.dialog.test.tsx` checks the role, the modal flag, the label pointing at the
+  heading's id, and the close button's name; both cases fail on the old component.
+
 ### Found in the first-week test run (3 Nov)
 
 What the 3 Nov test run and the functionality review after it found in the first week's changes,
