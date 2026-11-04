@@ -384,8 +384,11 @@ test.describe('onboarding wizard', () => {
     await page.waitForTimeout(1200)
     await expect(page.getByTestId('onboarding-wizard')).toHaveCount(0)
 
-    // ...but the tour menu relaunches it on demand, on its first screen.
+    // ...but the tour menu relaunches it on demand, on its first screen. The sidebar's button and
+    // the menu it opens name one thing (B2): they said What's New and Take a Tour.
+    await expect(page.getByTestId('whats-new-btn')).toHaveText('Tours')
     await page.getByTestId('whats-new-btn').click()
+    await expect(page.getByRole('heading', { level: 2, name: 'Tours', exact: true })).toBeVisible()
     await page.getByTestId('tour-open-onboarding').click()
     await expect(page.getByTestId('onboarding-wizard')).toBeVisible()
     await expect(page.getByTestId('onboarding-step-space')).toBeVisible()

@@ -62,3 +62,11 @@ it("marks the account's finished tours Done once its list arrives", async () => 
   expect(badge('Budgets')).not.toBe('Done')
   expect(host.textContent).toContain('2/16 tours completed')
 })
+
+// B2: the sidebar's button and this menu name one thing (onboardingDoneStep.test.tsx reads the
+// button's label in App.tsx). The menu said Take a Tour under a button that said What's New.
+it('is titled Tours, as the sidebar button that opens it', () => {
+  dispose = render(() => <TourSelectionModal />, host)
+
+  expect(host.querySelector('h2')?.textContent).toBe('Tours')
+})

@@ -5,6 +5,9 @@
  *
  * Run against the real local-first router on fake-indexeddb.
  */
+/* eslint-disable security/detect-non-literal-fs-filename -- App.tsx, named below */
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { render } from 'solid-js/web'
 import { afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest'
 import { setCurrentProfile, setProfiles } from '../../../core/appStore'
@@ -157,4 +160,22 @@ it('Escape on Done finishes setup without asking, and records it completed', asy
   expect(confirmRequests()).toEqual([])
   expect(onboardingOpen()).toBe(false)
   expect(localStorage.getItem('finance_onboarding:local')).toBe('completed')
+})
+
+// B2: the tip sent people to "the sidebar" for a tour. The button there said What's New and
+// opened a menu titled Take a Tour; both are Tours now, and the tip names it as the sidebar does.
+it('names the sidebar button a tour starts from, as the sidebar labels it', async () => {
+  startOnboarding('done')
+  const { OnboardingWizard } = await import('../OnboardingWizard')
+  dispose = render(() => <OnboardingWizard selectProfiles={() => {}} />, host)
+
+  await vi.waitFor(() => {
+    expect(host.querySelector('[data-test-id="onboarding-done-tip"]')).not.toBeNull()
+  })
+  expect(host.querySelector('[data-test-id="onboarding-done-tip"]')!.textContent).toBe(
+    'Press Ctrl+K anywhere to add a transaction, and take a page tour any time from Tours in the sidebar.'
+  )
+  const app = readFileSync(resolve(__dirname, '../../../App.tsx'), 'utf8')
+  expect(app).toContain('data-test-id="whats-new-btn"')
+  expect(app).toContain('<span>Tours</span>')
 })

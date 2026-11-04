@@ -50,6 +50,16 @@ All notable changes to Token Circles are documented here. The format is based on
     `settings-email-change.spec.ts` now expect the new words. Other em dashes in older UI copy
     remain (Connected sources' "Nothing new — ...", Recent Imports' delete question, the preview's
     duplicate notes, "No new transactions — ...", "No date in this row — ..."): not in this list.
+- **The sidebar's tour button and the menu it opens are both "Tours"** (B2). The button said
+  "What's New" and opened a menu titled "Take a Tour", while the changelog, which "What's New"
+  suggests, is "Changelog" under Settings' "View Changelog". The menu holds the page tours, their
+  count and Run setup again, so both are named for it. Setup's last step names the button too:
+  "take a page tour any time from Tours in the sidebar." The button keeps its
+  `data-test-id="whats-new-btn"`. Files: `App.tsx`, `TourSelectionModal.tsx`,
+  `OnboardingWizard.tsx` (the tip gains `data-test-id="onboarding-done-tip"`), and two comments in
+  `scripts/walk-tours.mjs`. Tests: `TourSelectionModal.account.test.tsx` (the menu's heading),
+  `onboardingDoneStep.test.tsx` (the tip, and the label in `App.tsx`), and in e2e
+  `onboarding.spec.ts` (the button reads Tours and opens a menu headed Tours).
 
 ### Deploy notes
 
