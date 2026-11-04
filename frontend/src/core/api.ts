@@ -1355,9 +1355,10 @@ export const formatWholeCurrency = (
 }
 
 /**
- * A date as the app writes it: day first, with the month's name ("4 Nov 2026"), as setup, the
- * import summary and the prints do. It was month first ("Nov 4, 2026"), and the Transactions list
- * used the browser's own numeric form (first-week test run, B6).
+ * A date day first, with the month's name ("4 Nov 2026"), as setup's import summary writes it. It
+ * was month first ("Nov 4, 2026"), and the Transactions list used the browser's own numeric form
+ * (first-week test run, B6). Its callers are the Transactions list and the Dashboard's transaction
+ * lines; Goals, the bill calendar and other pages format their own dates.
  */
 export const formatDate = (dateStr: string): string => {
   let date = new Date(dateStr)

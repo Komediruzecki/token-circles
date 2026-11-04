@@ -1,8 +1,9 @@
 /**
- * The Transactions list writes each date as the app does elsewhere, day first with the month's
- * name ("4 Nov 2026"), as setup, the import summary and the prints do (first-week test run, B6).
- * It wrote `toLocaleDateString()` with the browser's own locale, so an English (US) browser showed
- * "11/4/2026" beside a Dashboard that said "Nov 4, 2026".
+ * The Transactions list writes each date day first with the month's name ("4 Nov 2026"), as
+ * setup's import summary does (first-week test run, B6). It wrote
+ * `toLocaleDateString()` with the browser's own locale, so an English (US) browser showed
+ * "11/4/2026" for 4 November. Pages with an en-US formatter of their own (Goals, the bill
+ * calendar, recurring payments and others) still put the month first; they are not part of this.
  *
  * The date fields are the browser's own control (`<input type="date">`): their order follows the
  * browser's language, and the app cannot set it. That is reported, not changed.
@@ -40,7 +41,7 @@ const row = (date: string): Transaction =>
   }) as unknown as Transaction
 
 describe('dates on the Transactions list', () => {
-  it('reads day, month name and year, as the rest of the app writes a date', () => {
+  it('reads day, month name and year, as setup writes a date', () => {
     host = document.createElement('div')
     document.body.appendChild(host)
     dispose = render(
@@ -58,7 +59,7 @@ describe('dates on the Transactions list', () => {
   })
 })
 
-describe('formatDate, the app-wide way to write a date', () => {
+describe('formatDate, shared by the list and the transaction lines on the Dashboard', () => {
   it.each([
     ['2026-11-04', '4 Nov 2026'],
     ['2026-01-31', '31 Jan 2026'],

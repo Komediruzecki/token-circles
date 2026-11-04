@@ -74,17 +74,17 @@ All notable changes to Token Circles are documented here. The format is based on
 - **Transactions writes dates day first, with the month's name** (B6). The list printed
   `new Date(date).toLocaleDateString()`, the browser's own numeric form, so an English (US) browser
   showed "11/4/2026" for 4 November. The list now goes through `formatDate`
-  (`frontend/src/core/api.ts`), and `formatDate` writes "4 Nov 2026", as setup, the import summary
-  and the prints already do (they format with `en-GB`). The only other callers of `formatDate`, the
-  Dashboard's recent transactions and the overview deck's transactions panel, read the same way now
-  (they said "Nov 4, 2026"). The date fields are the browser's own control (`<input type="date">`):
-  their order follows the browser's language, which the page cannot set, so they are left as they
-  are. Most other pages format dates themselves with `en-US` and still put the month first ("Nov 4,
-  2026"), among them Goals, the bill calendar, recurring payments, Retirement, Analytics, Budgets
-  and Loans; Accounts' activity list uses the browser's own form. They are not in this item, and the
-  release case s05 still expects the goal card's own format. Tests: `TransactionTable.dates.test.tsx`
-  (the list's cell and `formatDate`; the cell read "11/4/2026" and `formatDate` "Nov 4, 2026"
-  before), and the release case s12 now expects the new form in the list.
+  (`frontend/src/core/api.ts`), and `formatDate` writes "4 Nov 2026", as setup's import summary
+  already does (it formats with `en-GB`, as the prints do). The only other callers of `formatDate`,
+  the Dashboard's recent transactions and the overview deck's transactions panel, read the same way
+  now (they said "Nov 4, 2026"). The date fields are the browser's own control
+  (`<input type="date">`): their order follows the browser's language, which the page cannot set, so
+  they are left as they are. Most other pages format dates themselves with `en-US` and still put the
+  month first ("Nov 4, 2026"), among them Goals, the bill calendar, recurring payments, Retirement,
+  Analytics, Budgets and Loans; Accounts' activity list uses the browser's own form. They are not in
+  this item, and the release case s05 still expects the goal card's own format. Tests:
+  `TransactionTable.dates.test.tsx` (the list's cell and `formatDate`; the cell read "11/4/2026" and
+  `formatDate` "Nov 4, 2026" before), and the release case s12 now expects the new form in the list.
 - **llms.txt names the banks as the importer does.** It listed "ING" among the eight native
   importers; the Bank Imports tab and the mails call it "ING NL" (`shared/bankImport/adapters/ing.ts`),
   the Dutch bank's export. DKB was already there. Test: `ynabRegister.test.ts` now reads the list
