@@ -2552,7 +2552,8 @@ check')` first, as the cushion and debt cases do.
   tap lands): Toggle sidebar 46x46, Views 98x44, Refresh 107x44, arrows 44x44, the month 193x44,
   pills 52-57x44, See all 66x44, info buttons 44x44, card links 44 tall, Show more 138x44.
   Test: `tests/a11y-phone.spec.ts` (`@smoke`) measures each of them at 390x844 and checks the six
-  pills share one row.
+  pills share one row; `sticky-period-bar.spec.ts`, which asserted "All" beside the steppers, now
+  expects it in the pill row, below them.
 
 - **The Import page's columns view is a fingertip on a phone** (D3, the part PR A's summary left).
   At 390 the mapping selects were 370x38, the Expense, Income and Account toggles 28 tall and the
