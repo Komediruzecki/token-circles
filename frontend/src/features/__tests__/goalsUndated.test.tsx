@@ -13,20 +13,12 @@
  */
 import { render } from 'solid-js/web'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { formatDate } from '../../../../shared/dateFormat'
 import { setPage } from '../../core/appStore'
 import { getDB } from '../../core/storage/idb'
 
-const TODAY = new Date().toLocaleDateString('en-US', {
-  year: 'numeric',
-  month: 'short',
-  day: 'numeric',
-})
-
-/** How the page prints a date, so the expectation holds in any time zone. */
-const shown = (date: string) =>
-  new Date(date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
-const ringMonth = (date: string) =>
-  new Date(date).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })
+// Today as the page would write it: a date that defaulted to now would read like this.
+const TODAY = formatDate(new Date())
 
 const GOALS = [
   // Exactly what the local-first demo seed writes: no date under either name.
@@ -182,9 +174,9 @@ describe('a goal without a target date', () => {
       expect(dateLine(name)).toBe('No target date')
       expect(dateLine(name)).not.toContain(TODAY)
     }
-    expect(dateLine('New Car')?.startsWith(`${shown('2030-06-30')} • `)).toBe(true)
+    expect(dateLine('New Car')?.startsWith('30 Jun 2030 • ')).toBe(true)
     expect(dateLine('New Car')).toMatch(/ • Due in \d+ days$/)
-    expect(dateLine('House')?.startsWith(`${shown('2031-01-15')} • `)).toBe(true)
+    expect(dateLine('House')?.startsWith('15 Jan 2031 • ')).toBe(true)
     expect(dateLine('House')).toMatch(/ • Due in \d+ days$/)
   })
 
@@ -193,8 +185,8 @@ describe('a goal without a target date', () => {
 
     expect(ringLine('Emergency Fund')).not.toContain('· by')
     expect(ringLine('Rainy Day')).not.toContain('· by')
-    expect(ringLine('New Car')).toContain(`· by ${ringMonth('2030-06-30')}`)
-    expect(ringLine('House')).toContain(`· by ${ringMonth('2031-01-15')}`)
+    expect(ringLine('New Car')).toContain('· by Jun 2030')
+    expect(ringLine('House')).toContain('· by Jan 2031')
   })
 
   it('opens for editing with an empty date field, and stays undated when saved', async () => {
@@ -290,7 +282,7 @@ describe('in cloud mode', () => {
 
     expect(dateLine('Emergency Fund')).toBe('No target date')
     expect(dateLine('Rainy Day')).toBe('No target date')
-    expect(dateLine('House')?.startsWith(`${shown('2031-01-15')} • `)).toBe(true)
+    expect(dateLine('House')?.startsWith('15 Jan 2031 • ')).toBe(true)
   })
 
   it('does not send a date when an undated goal is renamed', async () => {

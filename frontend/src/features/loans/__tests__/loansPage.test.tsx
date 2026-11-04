@@ -525,7 +525,7 @@ describe('the loan page', () => {
     await settle()
 
     // Nothing reloaded by hand: the write bumped `loans`, the list came back with the payment.
-    expect(text(root, 'loans-extra-item')).toBe('Payment 12, Dec 1, 2026€10,000.00')
+    expect(text(root, 'loans-extra-item')).toBe('Payment 12, 1 Dec 2026€10,000.00')
 
     await click(root, 'loans-tab-compare')
     expect(text(root, 'loans-compare-a-payoff')).toBe('Oct 2034')
@@ -642,7 +642,7 @@ describe('the loan page', () => {
     })
     // The form closed, and the list came back from the store with the change.
     expect(el(root, 'loans-extra-edit-form')).toBeNull()
-    expect(text(root, 'loans-extra-item')).toBe('Payment 24, Dec 1, 2027Bonus€5,000.00')
+    expect(text(root, 'loans-extra-item')).toBe('Payment 24, 1 Dec 2027Bonus€5,000.00')
   })
 
   it('says a refused change in plain words in the form, and keeps it open', async () => {
@@ -690,7 +690,7 @@ describe('the loan page', () => {
     amount.dispatchEvent(new Event('input', { bubbles: true }))
     await click(root, 'loans-extra-cancel')
     expect(el(root, 'loans-extra-edit-form')).toBeNull()
-    expect(text(root, 'loans-extra-item')).toBe('Payment 12, Dec 1, 2026€10,000.00')
+    expect(text(root, 'loans-extra-item')).toBe('Payment 12, 1 Dec 2026€10,000.00')
     expect(document.activeElement).toBe(el(root, 'loans-extra-edit'))
 
     // Opened again, it starts from what is saved, not from what was typed before Cancel.

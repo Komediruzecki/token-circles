@@ -15,6 +15,7 @@ import { getProfileId, getProfileIds } from '../profile';
 import { accept, HttpError, refuse } from '../http';
 import * as db from '../db';
 import { localNow, localToday } from '../local-date';
+import { formatDate } from '../../../shared/dateFormat';
 
 // Port of backend/routes/bills.js + backend/repositories/billsRepo.js.
 // Table: bills, LEFT JOINed to categories for name/color. Response shapes are
@@ -148,10 +149,7 @@ billsRoutes.get('/api/bills/calendar', requireAuth, async (c) => {
 
   const year = yearParam;
   const month = monthParam;
-  const monthLabel = new Date(year, month - 1, 1).toLocaleString('default', {
-    month: 'long',
-    year: 'numeric',
-  });
+  const monthLabel = formatDate(new Date(year, month - 1, 1), 'monthLong');
   const firstDow = new Date(year, month - 1, 1).getDay();
   const lastDay = new Date(year, month, 0).getDate();
 

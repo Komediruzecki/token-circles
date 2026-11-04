@@ -126,14 +126,14 @@ describe('the bill cards', () => {
   it('say when an unpaid bill falls due this month, not the date it was first due', async () => {
     await mountPage()
 
-    expect(details('Power')).toBe('Oct 20, 2026 • Due in 12 days • Monthly')
+    expect(details('Power')).toBe('20 Oct 2026 • Due in 12 days • Monthly')
     expect(card('Power').classList.contains(styles.overdue)).toBe(false)
   })
 
   it('call an unpaid bill whose day has passed overdue, by that day', async () => {
     await mountPage()
 
-    expect(details('Phone')).toBe('Oct 2, 2026 • 6 days overdue • Monthly')
+    expect(details('Phone')).toBe('2 Oct 2026 • 6 days overdue • Monthly')
     expect(card('Phone').classList.contains(styles.overdue)).toBe(true)
   })
 
@@ -141,6 +141,6 @@ describe('the bill cards', () => {
     await mountPage()
 
     expect(card('Water').closest('[data-test-id="bills-paid-section"]')).not.toBeNull()
-    expect(details('Water')).toBe('Next due Nov 5, 2026 • Monthly • Utilities')
+    expect(details('Water')).toBe('Next due 5 Nov 2026 • Monthly • Utilities')
   })
 })

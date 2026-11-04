@@ -10,6 +10,7 @@ import {
   nextDueDate,
 } from '../../../../../shared/billSchedule'
 import { BILL_MESSAGES, checkBillCreate, checkBillEdit } from '../../../../../shared/billSchema'
+import { formatDate } from '../../../../../shared/dateFormat'
 import { isoDate, localToday } from '../../../utils/period'
 import { getLocalCurrency } from '../../api'
 import { getDB } from '../idb'
@@ -108,10 +109,7 @@ export async function billsCalendar(query?: URLSearchParams): Promise<Response> 
 
   const year = yearParam
   const month = monthParam
-  const monthLabel = new Date(year, month - 1, 1).toLocaleString('default', {
-    month: 'long',
-    year: 'numeric',
-  })
+  const monthLabel = formatDate(new Date(year, month - 1, 1), 'monthLong')
   const firstDow = new Date(year, month - 1, 1).getDay()
   const lastDay = new Date(year, month, 0).getDate()
 

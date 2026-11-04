@@ -186,13 +186,7 @@ export default function Dashboard() {
           return tDate >= fromKey && tDate <= toKey
         })
       }
-      const fmtMonth = (month: string) => {
-        const [y, m] = month.split('-')
-        return new Date(parseInt(y), parseInt(m) - 1).toLocaleDateString('en-US', {
-          month: 'short',
-          year: 'numeric',
-        })
-      }
+      const fmtMonth = (month: string) => formatDate(month, 'month')
       const labels = timeline.map((t) => fmtMonth(t.month))
       const netWorth = timeline.map((t) => t.balance)
       // Real monthly income/expense stats (the net-worth timeline only knows

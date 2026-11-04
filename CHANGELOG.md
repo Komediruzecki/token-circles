@@ -35,6 +35,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **A deduction lowers income** instead of counting as spending, in the rainy-day badge, the year in review and the advice about a month in the red.
 - **The savings rate covers your last 12 months** and sits under the totals. A goal you set stays with the profile instead of the browser.
 - **Each advice card on Progress says which circle it counts toward**, and that line opens the circle.
+- **Dates read day first on every page**, with the month's name: "4 Nov 2026", whatever language your browser is set to. Pages wrote "Nov 4, 2026" or "11/4/2026" before, and in time zones behind UTC, such as the Americas, several showed each date a day early.
 
 ### Fixed
 

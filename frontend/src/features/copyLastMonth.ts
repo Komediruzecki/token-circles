@@ -1,3 +1,4 @@
+import { formatDate } from '../../../shared/dateFormat'
 /**
  * What the Budgets page says after "Copy last month". The copy leaves every budget the month
  * already has as it is, so the toast says how many of last month's budgets it copied and how many
@@ -13,11 +14,7 @@ export interface CopyLastMonthAnswer {
 /** "April 2026" for `2026-04`, or for a month `offset` months from it. */
 function monthLabel(month: string, offset = 0): string {
   const [year, mon] = month.split('-').map(Number)
-  return new Date(Date.UTC(year, mon - 1 + offset, 1)).toLocaleDateString('en-US', {
-    month: 'long',
-    year: 'numeric',
-    timeZone: 'UTC',
-  })
+  return formatDate(new Date(year, mon - 1 + offset, 1), 'monthLong')
 }
 
 const budgets = (n: number) => `${n} ${n === 1 ? 'budget' : 'budgets'}`

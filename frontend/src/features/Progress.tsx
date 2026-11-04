@@ -7,6 +7,7 @@
  * part 2); the list stays mounted under it, hidden, so going back puts focus on that circle's row.
  */
 import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from 'solid-js'
+import { formatDate, monthName } from '../../../shared/dateFormat'
 import BadgeMedallion from '../components/BadgeMedallion'
 import { streakLabel } from '../components/BadgeRail'
 import BadgeTimeline from '../components/BadgeTimeline'
@@ -59,15 +60,9 @@ const STREAK_TARGET: Partial<Record<AchievementId, number>> = {
   'two-years': 24,
 }
 
-const monthLabel = (ym: string): string =>
-  new Date(`${ym}-15T00:00:00Z`).toLocaleDateString(undefined, {
-    month: 'long',
-    year: 'numeric',
-    timeZone: 'UTC',
-  })
+const monthLabel = (ym: string): string => formatDate(ym, 'monthLong')
 
-const monthInitial = (ym: string): string =>
-  new Date(`${ym}-15T00:00:00Z`).toLocaleDateString(undefined, { month: 'narrow', timeZone: 'UTC' })
+const monthInitial = (ym: string): string => monthName(ym).charAt(0)
 
 /** The `#...` part of a URL a hashchange names; empty when there is none to read. */
 const hashOf = (url: string): string => {

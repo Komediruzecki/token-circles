@@ -20,6 +20,7 @@
  * turned up uncategorized again.
  */
 import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from 'solid-js'
+import { formatDate } from '../../../shared/dateFormat'
 import { api, getLocalCurrency, toast } from '../core/api'
 import { asOneWrite } from '../core/dataVersions'
 import autoCategorizeModalStyles from './AutoCategorizeModal.module.css'
@@ -272,7 +273,7 @@ export function AutoCategorizeModal(props: AutoCategorizeModalProps) {
                             much, and which account it touched. */}
                         <p class={autoCategorizeModalStyles.txMeta} data-test-id="auto-cat-meta">
                           <Show when={tx.date}>
-                            <span>{tx.date}</span>
+                            <span>{formatDate(tx.date)}</span>
                           </Show>
                           <Show when={money(tx)}>
                             <span

@@ -179,14 +179,14 @@ describe('Loans page figures', () => {
     expect(expected.next_payment_date).toBe('2026-01-01')
     dispose?.()
     const page = await mount('#loans/1/schedule')
-    expect(text(page, 'loans-detail-next-payment')).toBe('Next payment Jan 1, 2026')
+    expect(text(page, 'loans-detail-next-payment')).toBe('Next payment 1 Jan 2026')
   })
 
   it('shows when the next payment is due, on its own date west of UTC', async () => {
-    // A bare 2026-01-01 is midnight UTC; formatted in New York's zone it would read Dec 31, 2025.
+    // A bare 2026-01-01 is midnight UTC; formatted in New York's zone it would read 31 Dec 2025.
     listed = [LISTED]
     const root = await mount('#loans/1/schedule')
-    expect(text(root, 'loans-detail-next-payment')).toBe('Next payment Jan 1, 2026')
+    expect(text(root, 'loans-detail-next-payment')).toBe('Next payment 1 Jan 2026')
   })
 
   it('says when a loan was paid off, and that one with no start date has no due dates', async () => {

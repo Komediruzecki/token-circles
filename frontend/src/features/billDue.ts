@@ -10,7 +10,8 @@
  * anywhere west of Greenwich.
  */
 import { daysFrom } from '../../../shared/billSchedule'
-import { localToday, parseLocalDate } from '../utils/period'
+import { formatDate } from '../../../shared/dateFormat'
+import { localToday } from '../utils/period'
 
 /** What a page holds of a bill's dates. */
 export interface DueBill {
@@ -36,14 +37,7 @@ export function dueInWords(days: number): string {
   return `Due in ${days} days`
 }
 
-/** "Oct 20, 2026", or "Oct 20" without the year, read on this calendar. */
+/** "20 Oct 2026", or "20 Oct" without the year, read without a clock. */
 export function dueDateLabel(date: string, withYear = true): string {
-  const day = parseLocalDate(date)
-  if (Number.isNaN(day.getTime())) return date
-  return day.toLocaleDateString(
-    'en-US',
-    withYear
-      ? { month: 'short', day: 'numeric', year: 'numeric' }
-      : { month: 'short', day: 'numeric' }
-  )
+  return formatDate(date, withYear ? 'day' : 'dayMonth')
 }

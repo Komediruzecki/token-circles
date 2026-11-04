@@ -3,6 +3,7 @@
  * the page renders it and the tests pin it. Every card names the figure it was built from and
  * points at the page that shows it; none of it is computed anywhere but on this device.
  */
+import { formatDate } from '../../../../shared/dateFormat'
 import { isTrackedMonth, TRACKED_MONTH_MIN_TRANSACTIONS } from '../../../../shared/trackedMonths'
 import { budgetsForMonth } from './budgets'
 import { bucketByMonth, sumTypes } from './evaluate'
@@ -66,12 +67,7 @@ export interface AdviceInput extends EvaluateInput {
   money?: (amount: number) => string
 }
 
-const MONTH_NAME = (month: string): string =>
-  new Date(`${month}-15T00:00:00Z`).toLocaleDateString('en-GB', {
-    month: 'long',
-    year: 'numeric',
-    timeZone: 'UTC',
-  })
+const MONTH_NAME = (month: string): string => formatDate(month, 'monthLong')
 
 const round = (n: number): string => n.toFixed(n % 1 === 0 ? 0 : 2)
 const plural = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`

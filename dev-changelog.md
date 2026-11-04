@@ -71,20 +71,41 @@ All notable changes to Token Circles are documented here. The format is based on
   `accountsPageTypes.test.tsx`, `accountForm.test.tsx`, `transactionsAccountTypeWord.test.tsx`,
   and in e2e `accounts-crud.spec.ts` (every badge is one of the form's names). With the badge back
   on the raw id, 5 unit tests fail.
-- **Transactions writes dates day first, with the month's name** (B6). The list printed
-  `new Date(date).toLocaleDateString()`, the browser's own numeric form, so an English (US) browser
-  showed "11/4/2026" for 4 November. The list now goes through `formatDate`
-  (`frontend/src/core/api.ts`), and `formatDate` writes "4 Nov 2026", as setup's import summary
-  already does (it formats with `en-GB`, as the prints do). The only other callers of `formatDate`,
-  the Dashboard's recent transactions and the overview deck's transactions panel, read the same way
-  now (they said "Nov 4, 2026"). The date fields are the browser's own control
-  (`<input type="date">`): their order follows the browser's language, which the page cannot set, so
-  they are left as they are. Most other pages format dates themselves with `en-US` and still put the
-  month first ("Nov 4, 2026"), among them Goals, the bill calendar, recurring payments, Retirement,
-  Analytics, Budgets and Loans; Accounts' activity list uses the browser's own form. They are not in
-  this item, and the release case s05 still expects the goal card's own format. Tests:
-  `TransactionTable.dates.test.tsx` (the list's cell and `formatDate`; the cell read "11/4/2026" and
-  `formatDate` "Nov 4, 2026" before), and the release case s12 now expects the new form in the list.
+- **Every page writes dates day first, with the month's name** (B6). The Transactions list printed
+  `new Date(date).toLocaleDateString()`, the browser's own numeric form ("11/4/2026" for 4 November
+  in an English (US) browser), and the other pages each had a formatter of their own: Goals, the
+  bill calendar, recurring payments, Retirement, Analytics, Budgets, Loans, Housing and Tags wrote
+  the month first in `en-US` ("Nov 4, 2026", Tags "Nov 26" for November 2026); Accounts, Analytics'
+  transaction lines, the API tokens and the PDF reports used the browser's own form; Housing's and
+  Settings' month lists, the badges, Progress and the billing dates followed the browser's
+  language. They all go through `shared/dateFormat.ts` now, which the Worker's month labels (the
+  bill calendar, budget history and forecast) use too: "4 Nov 2026", in the styles the pages need
+  ("4 November 2026", "4 Nov", "Nov 2026", "November 2026", the month's name alone), and moments
+  with their time on a 24-hour clock ("4 Nov 2026, 15:30": Recent Imports, a receipt's upload).
+  Month names are written out, so September is "Sep" in every browser (`en-GB` writes "Sept"), as
+  the period bar and the charts already wrote it. `core/api.ts` `formatDate` is the shared one.
+  - A stored 'YYYY-MM-DD' is read without a clock. `new Date('2026-11-04')` is midnight UTC,
+    which west of Greenwich is still 3 November, so Goals, the bill calendar, recurring payments,
+    Retirement, Accounts, Housing's due dates, Analytics' heatmap and transaction lines, and its
+    by-month chart (a 'YYYY-MM', 31 October there) were a day or a month early in the Americas. A
+    stamp with no zone, as D1 writes `datetime('now')`, is read as UTC.
+  - `formatDate` no longer guesses. Its dd/mm branch never ran for a slash date
+    (`new Date('04/11/2026')` had already read 11 April, US order), and Google Sheets'
+    `Date(2026,10,4)` never reaches a page (both imports turn such values into 'YYYY-MM-DD'
+    before they are stored), so both branches are gone and such a value shows as stored.
+  - Test: `core/__tests__/dateFormat.test.ts` runs under `TZ=America/Los_Angeles`; on the old
+    `formatDate` 9 of its cases fail ("3 Nov 2026" for 2026-11-04, "3 Sept 2026", "31 Oct 2026"
+    for 2026-11, "11 Apr 2026" for 04/11/2026). The tests that held a page's old form now hold the
+    new one: billCards, billDue, dashboardUpcomingBills, goalsUndated, loansFigures, loanDates,
+    loansPage, subscriptionCard, AutoCategorizeModal, moneyFollowsBaseCurrency, oldCopyRewrites,
+    `TransactionTable.dates.test.tsx`, and the release cases s05 (the goal card, "23 May 2027") and
+    s12.
+  - On the demo at 1280, across 18 pages, dates written month first went from 10 to none (the
+    bill calendar's "Nov 1, 2026", Housing's "Nov 5") and numeric dates from 3 to none (Accounts'
+    "11/26/2026"); day-first dates went from 13 to 26.
+  - Not changed: the date fields are the browser's own control (`<input type="date">`), whose order
+    follows the browser's language. The mails keep their formats (`worker/src/reminders.ts`,
+    `emailTemplates.ts`), and the log viewer keeps the browser's time of day beside its date.
 - **llms.txt names the banks as the importer does.** It listed "ING" among the eight native
   importers; the Bank Imports tab and the mails call it "ING NL" (`shared/bankImport/adapters/ing.ts`),
   the Dutch bank's export. DKB was already there. Test: `ynabRegister.test.ts` now reads the list
@@ -92,8 +113,8 @@ All notable changes to Token Circles are documented here. The format is based on
   count in words, so a bank added to the importer has to be added there too.
 - **Import's Google Sheets "Expected columns" table marks Date as required, as Map columns does.** It
   said No while the next step starred it. Date's sample still says what a blank cell does: the row
-  imports as today and is flagged. Description stays optional there, though Map columns stars it,
-  because a blank one imports.
+  imports as today and is flagged. Description stays optional there, because a blank one imports
+  (Map columns no longer stars it either; see below).
   - Test: `expectedColumnsTable.test.ts` expects Date and Amount as the required columns, every
     required column to be one Map columns stars, and Date's row to name the blank-cell rule.
 - **Dashboard Views gives drag handles only to the widgets under Show more.** The badge rail, the

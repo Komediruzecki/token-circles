@@ -36,6 +36,7 @@
  * Retirement goals, and the planner that projects what they add up to.
  */
 import { createSignal, For, Show } from 'solid-js'
+import { formatDate } from '../../../shared/dateFormat'
 import Badge from '../components/Badge'
 import ConfirmButton from '../components/ConfirmButton'
 import { Field, FormNotice, SubmitButton } from '../components/form'
@@ -130,15 +131,6 @@ export default function Retirement() {
   const getProgress = (goal: RetirementGoal): number => {
     if (goal.target_amount === 0) return 0
     return Math.min(100, Math.round((goal.current_amount / goal.target_amount) * 100))
-  }
-
-  // Format date
-  const formatDate = (dateStr: string): string => {
-    return new Date(dateStr).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    })
   }
 
   // Format age
@@ -354,7 +346,9 @@ export default function Retirement() {
                         <div data-test-id="retirement-detail-item" class={styles.detailItem}>
                           <span class={styles.detailLabel}>Target Date</span>
                           <span data-test-id="retirement-target-date" class={styles.detailValue}>
-                            {goal.deadline ? formatDate(goal.deadline) : 'No target date'}
+                            {goal.deadline
+                              ? formatDate(goal.deadline, 'dayLong')
+                              : 'No target date'}
                           </span>
                         </div>
                       </div>

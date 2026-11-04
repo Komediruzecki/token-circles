@@ -58,7 +58,7 @@ describe('loan dates', () => {
     const dates = [...root.querySelectorAll('[data-test-id="loans-schedule-row"]')]
       .slice(0, 3)
       .map((tr) => tr.querySelectorAll('td')[1]?.textContent)
-    expect(dates).toEqual(['Jan 31, 2026', 'Feb 28, 2026', 'Mar 31, 2026'])
+    expect(dates).toEqual(['31 Jan 2026', '28 Feb 2026', '31 Mar 2026'])
   })
 
   it('dates an extra payment in month 2 of a loan starting 31 January on 28 February', () => {
@@ -82,12 +82,12 @@ describe('loan dates', () => {
       />
     ))
     const item = root.querySelector('[data-test-id="loans-extra-item"]')!
-    expect(item.textContent).toContain('Payment 2, Feb 28, 2026')
+    expect(item.textContent).toContain('Payment 2, 28 Feb 2026')
     expect(item.textContent).toContain('bonus')
     expect(item.textContent).toContain('€500.00')
     // A rate period from month 4 starts on 30 April.
     expect(root.querySelector('[data-test-id="loans-rate-period"]')!.textContent).toBe(
-      'From payment 4 (from Apr 30, 2026)6%'
+      'From payment 4 (from 30 Apr 2026)6%'
     )
   })
 

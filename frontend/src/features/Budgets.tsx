@@ -31,6 +31,7 @@
  * Includes traditional budgeting view, zero-based budgeting (envelope-style), and forecasting
  */
 import { createMemo, createResource, createSignal, For } from 'solid-js'
+import { formatDate } from '../../../shared/dateFormat'
 import Badge from '../components/Badge'
 import Button from '../components/Button'
 import CategoryIcon, { getCategorySvg } from '../components/CategoryIcon'
@@ -257,14 +258,10 @@ export default function Budgets() {
   const prevMonthLabel = () => {
     const d = new Date(`${month()}-01T00:00:00`)
     d.setMonth(d.getMonth() - 1)
-    return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+    return formatDate(d, 'monthLong')
   }
   // The month being viewed, in the same words, e.g. "July 2026".
-  const monthLabel = () =>
-    new Date(`${month()}-01T00:00:00`).toLocaleDateString('en-US', {
-      month: 'long',
-      year: 'numeric',
-    })
+  const monthLabel = () => formatDate(month(), 'monthLong')
 
   // Load historical improvements data for trend chart
   const loadImprovements = async () => {

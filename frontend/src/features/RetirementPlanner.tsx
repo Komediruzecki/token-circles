@@ -18,6 +18,7 @@
  * was a toast that said only that it failed.
  */
 import { createMemo, createSignal, For, Index, Show } from 'solid-js'
+import { formatDate } from '../../../shared/dateFormat'
 import { fieldErrorsOf } from '../../../shared/refusal'
 import { projectRetirement, yearsOfWithdrawals } from '../../../shared/retirement'
 import { checkRetirementPlan } from '../../../shared/retirementPlanSchema'
@@ -362,11 +363,7 @@ export default function RetirementPlanner() {
 
   const crossingText = (crossing: { month: string; age: number | null } | null): string => {
     if (!crossing) return 'Not within this projection'
-    const [year, month] = crossing.month.split('-')
-    const when = new Date(Number(year), Number(month) - 1, 1).toLocaleDateString('en-US', {
-      month: 'long',
-      year: 'numeric',
-    })
+    const when = formatDate(crossing.month, 'monthLong')
     return crossing.age === null ? when : `Age ${crossing.age}, ${when}`
   }
 

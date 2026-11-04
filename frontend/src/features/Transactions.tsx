@@ -44,6 +44,7 @@ import {
   Switch,
   untrack,
 } from 'solid-js'
+import { formatMoment } from '../../../shared/dateFormat'
 import AutoCategorizeModal from '../components/AutoCategorizeModal'
 import BulkActionBar from '../components/BulkActionBar'
 import FilterBar from '../components/FilterBar'
@@ -2315,7 +2316,7 @@ export default function Transactions() {
                 </div>
                 <div class={styles.receiptMetaItem} data-test-id="receipt-meta-item">
                   <span class={styles.receiptMetaLabel}>Uploaded</span>
-                  <span>{new Date(selectedReceipt()!.uploaded_at).toLocaleString()}</span>
+                  <span>{formatMoment(selectedReceipt()!.uploaded_at)}</span>
                 </div>
               </div>
             </div>

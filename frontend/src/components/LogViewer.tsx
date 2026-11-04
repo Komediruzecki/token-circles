@@ -5,6 +5,7 @@
  */
 
 import { createMemo, createSignal, For, onMount, Show } from 'solid-js'
+import { formatDate } from '../../../shared/dateFormat'
 import { toast } from '../core/api'
 import { logger } from '../core/logger'
 import { localToday } from '../utils/period'
@@ -317,7 +318,7 @@ export function LogViewer() {
                 <div class={`${css.row} ${log.level}`}>
                   <div class={css.colTime}>
                     <div class={css.timeText}>{new Date(log.timestamp).toLocaleTimeString()}</div>
-                    <div class={css.dateText}>{new Date(log.timestamp).toLocaleDateString()}</div>
+                    <div class={css.dateText}>{formatDate(new Date(log.timestamp))}</div>
                   </div>
                   <div class={css.colLevel}>
                     <span

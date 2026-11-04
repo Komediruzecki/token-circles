@@ -33,6 +33,7 @@
 
 import { createEffect, createMemo, createResource, createSignal, For, Show } from 'solid-js'
 import { takesCreditLine } from '../../../shared/accountSchema'
+import { formatDate } from '../../../shared/dateFormat'
 import AccountConstellation from '../components/AccountConstellation'
 import Badge from '../components/Badge'
 import ConfirmButton from '../components/ConfirmButton'
@@ -419,7 +420,7 @@ export default function Accounts() {
                                         {tx.description}
                                       </div>
                                       <div data-test-id="activity-date" class={styles.activityDate}>
-                                        {new Date(tx.date).toLocaleDateString()}
+                                        {formatDate(tx.date)}
                                       </div>
                                     </div>
                                     <div

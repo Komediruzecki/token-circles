@@ -41,7 +41,7 @@ const TXS: AutoCategorizeTransaction[] = [
   {
     id: 11,
     description: 'Netflix',
-    date: '2026-07-22',
+    date: '22 Jul 2026',
     amount: 12.99,
     currency: 'EUR',
     type: 'expense',
@@ -102,7 +102,7 @@ describe('identifying an imported row', () => {
     const metas = host.querySelectorAll('[data-test-id="auto-cat-meta"]')
     expect(metas).toHaveLength(2)
     const first = metas[0]!.textContent!
-    expect(first).toContain('2026-07-22')
+    expect(first).toContain('22 Jul 2026')
     expect(first).toContain('12.99')
     expect(first).toContain('−') // an expense is signed, not a bare number
     expect(first).toContain('Erste Current')

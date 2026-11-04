@@ -30,7 +30,7 @@ const REWRITES: { where: string; file: string; old: string; now: string }[] = [
     where: 'a line in Recent Imports',
     file: 'features/Import.tsx',
     old: '{new Date(log.created_at).toLocaleString()} — {log.imported} imported',
-    now: '{new Date(log.created_at).toLocaleString()} · {log.imported} imported',
+    now: '{formatMoment(log.created_at)} · {log.imported} imported',
   },
   {
     where: 'the Paste CSV tab',

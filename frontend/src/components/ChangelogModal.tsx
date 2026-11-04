@@ -8,6 +8,7 @@
  */
 import { For, Show } from 'solid-js'
 import rawChangelog from '../../../CHANGELOG.md?raw'
+import { formatDate } from '../../../shared/dateFormat'
 import styles from './ChangelogModal.module.css'
 import type { JSX } from 'solid-js'
 
@@ -140,7 +141,7 @@ export default function ChangelogModal(props: { onClose: () => void }) {
                     </Show>
                   </div>
                   <Show when={entry.date}>
-                    <span class={styles.date}>{entry.date}</span>
+                    <span class={styles.date}>{formatDate(entry.date)}</span>
                   </Show>
                 </div>
                 <For each={entry.sections}>

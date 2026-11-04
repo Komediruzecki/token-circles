@@ -40,9 +40,9 @@ describe('dueInWords', () => {
 
 describe('dueDateLabel', () => {
   it('writes the date as it is on the calendar, with or without the year', () => {
-    expect(dueDateLabel('2026-10-20')).toBe('Oct 20, 2026')
-    expect(dueDateLabel('2026-10-20', false)).toBe('Oct 20')
-    expect(dueDateLabel('2026-01-01')).toBe('Jan 1, 2026')
+    expect(dueDateLabel('2026-10-20')).toBe('20 Oct 2026')
+    expect(dueDateLabel('2026-10-20', false)).toBe('20 Oct')
+    expect(dueDateLabel('2026-01-01')).toBe('1 Jan 2026')
   })
 
   it('gives back what it cannot read', () => {

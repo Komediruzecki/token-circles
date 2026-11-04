@@ -27,6 +27,7 @@
  * Visualizes financial data with charts and insights
  */
 import { createEffect, createMemo, createResource, createSignal, For, Show } from 'solid-js'
+import { formatDate, monthName, MONTHS_LONG } from '../../../shared/dateFormat'
 import CalcTracer, { isCalcTracerEnabled } from '../components/CalcTracer'
 import Chart from '../components/Chart'
 import { compactLegendLabels, mobileXTicks } from '../components/chartMobile'
@@ -393,10 +394,7 @@ export default function Analytics() {
 
   // Month/year the Sankey is showing, e.g. "April 2026".
   const sankeyMonthLabel = () =>
-    new Date(sankeyYear(), sankeyMonth() - 1, 1).toLocaleDateString('en-US', {
-      month: 'long',
-      year: 'numeric',
-    })
+    formatDate(new Date(sankeyYear(), sankeyMonth() - 1, 1), 'monthLong')
 
   // Send the user to the Budgets page to set budgets for the flow diagram.
   const goToBudgets = () => {
@@ -684,11 +682,7 @@ export default function Analytics() {
             >
               <div class={styles.statLabel}>
                 Monthly Savings (
-                {new Date(stackedYear(), monthlyMonth() - 1).toLocaleDateString('en-US', {
-                  month: 'long',
-                  year: 'numeric',
-                })}
-                )
+                {formatDate(new Date(stackedYear(), monthlyMonth() - 1), 'monthLong')})
               </div>
               <div class={styles.heatmapControls} style="justify-content:flex-start;margin-top:8px">
                 <select
@@ -698,9 +692,7 @@ export default function Analytics() {
                   data-test-id="analytics-monthly-month"
                 >
                   {Array.from({ length: 12 }, (_, i) => (
-                    <option value={i + 1}>
-                      {new Date(2024, i, 1).toLocaleDateString('en-US', { month: 'long' })}
-                    </option>
+                    <option value={i + 1}>{MONTHS_LONG[i]}</option>
                   ))}
                 </select>
               </div>
@@ -709,10 +701,7 @@ export default function Analytics() {
               <>
                 {(() => {
                   const monthLabel = () =>
-                    new Date(stackedYear(), monthlyMonth() - 1).toLocaleDateString('en-US', {
-                      month: 'long',
-                      year: 'numeric',
-                    })
+                    formatDate(new Date(stackedYear(), monthlyMonth() - 1), 'monthLong')
                   const monthTrace = (title: string, formulaLine: string): CalcTrace => ({
                     title,
                     formula: formulaLine,
@@ -817,15 +806,12 @@ export default function Analytics() {
               meta={`${
                 stackedView() === 'year'
                   ? stackedYear()
-                  : new Date(stackedYear(), stackedMonth() - 1).toLocaleDateString('en-US', {
-                      month: 'long',
-                      year: 'numeric',
-                    })
+                  : formatDate(new Date(stackedYear(), stackedMonth() - 1), 'monthLong')
               }${
                 compareEnabled()
                   ? stackedView() === 'year'
                     ? ` vs ${compareYear()}`
-                    : ` vs ${new Date(stackedYear(), compareMonth() - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`
+                    : ` vs ${formatDate(new Date(stackedYear(), compareMonth() - 1), 'monthLong')}`
                   : ''
               }`}
             />
@@ -908,9 +894,7 @@ export default function Analytics() {
                         }}
                       >
                         {Array.from({ length: 12 }, (_, i) => (
-                          <option value={i + 1}>
-                            {new Date(2024, i, 1).toLocaleDateString('en-US', { month: 'long' })}
-                          </option>
+                          <option value={i + 1}>{MONTHS_LONG[i]}</option>
                         ))}
                       </select>
                       {weeks().length > 0 && (
@@ -975,9 +959,7 @@ export default function Analytics() {
                       title="Select month to compare against"
                     >
                       {Array.from({ length: 12 }, (_, i) => (
-                        <option value={i + 1}>
-                          {new Date(2024, i, 1).toLocaleDateString('en-US', { month: 'long' })}
-                        </option>
+                        <option value={i + 1}>{MONTHS_LONG[i]}</option>
                       ))}
                     </select>
                   )}
@@ -988,10 +970,7 @@ export default function Analytics() {
                   Dashed outlines show{' '}
                   {stackedView() === 'year'
                     ? compareYear()
-                    : new Date(stackedYear(), compareMonth() - 1).toLocaleDateString('en-US', {
-                        month: 'long',
-                        year: 'numeric',
-                      })}{' '}
+                    : formatDate(new Date(stackedYear(), compareMonth() - 1), 'monthLong')}{' '}
                   data for comparison
                 </div>
               )}
@@ -1013,7 +992,7 @@ export default function Analytics() {
                             compareEnabled() && stackedView() === 'year'
                               ? `${ds.category} (${stackedYear()})`
                               : compareEnabled()
-                                ? `${ds.category} (${new Date(stackedYear(), stackedMonth() - 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })})`
+                                ? `${ds.category} (${formatDate(new Date(stackedYear(), stackedMonth() - 1), 'month')})`
                                 : ds.category,
                           data: ds.data,
                           backgroundColor: ds.color || '#6366f1',
@@ -1024,7 +1003,7 @@ export default function Analytics() {
                               label:
                                 stackedView() === 'year'
                                   ? `${ds.category} (${compareYear()})`
-                                  : `${ds.category} (${new Date(stackedYear(), compareMonth() - 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })})`,
+                                  : `${ds.category} (${formatDate(new Date(stackedYear(), compareMonth() - 1), 'month')})`,
                               data: ds.data,
                               backgroundColor: ds.color ? `${ds.color}66` : '#6366f166',
                               borderColor: ds.color || '#6366f1',
@@ -1200,9 +1179,7 @@ export default function Analytics() {
                       type="line"
                       onReady={setMonthlyChart}
                       data={{
-                        labels: data()!.byMonth.map((item) =>
-                          new Date(item.month).toLocaleDateString('en-US', { month: 'short' })
-                        ),
+                        labels: data()!.byMonth.map((item) => monthName(item.month)),
                         datasets: [
                           {
                             label: 'Income',
@@ -1348,12 +1325,8 @@ export default function Analytics() {
                 ) : (
                   <>
                     <div style="font-weight:600;font-size:14px;margin-bottom:10px;border-bottom:1px solid var(--border);padding-bottom:8px;color:var(--text);">
-                      {new Date(heatmapModal()!.dateStr).toLocaleDateString('en-US', {
-                        month: 'long',
-                        day: 'numeric',
-                        year: 'numeric',
-                      })}{' '}
-                      &mdash; {formatAmount(heatmapModal()!.amount)}
+                      {formatDate(heatmapModal()!.dateStr, 'dayLong')} &mdash;{' '}
+                      {formatAmount(heatmapModal()!.amount)}
                     </div>
                     {heatmapModal()!.transactions.length === 0 ? (
                       <p style="color:var(--text-secondary);font-size:13px;">
@@ -1444,9 +1417,7 @@ export default function Analytics() {
                     }}
                   >
                     {Array.from({ length: 12 }, (_, i) => (
-                      <option value={i + 1}>
-                        {new Date(2024, i, 1).toLocaleDateString('en-US', { month: 'long' })}
-                      </option>
+                      <option value={i + 1}>{MONTHS_LONG[i]}</option>
                     ))}
                   </select>
                 </div>
@@ -1730,8 +1701,7 @@ export default function Analytics() {
                     <div class={styles.transactionDetails}>
                       <div class={styles.transactionName}>{tx.description}</div>
                       <div class={styles.transactionMeta}>
-                        {new Date(tx.date).toLocaleDateString()} •{' '}
-                        {tx.category_name || 'No category'}
+                        {formatDate(tx.date)} • {tx.category_name || 'No category'}
                       </div>
                     </div>
                     <div

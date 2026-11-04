@@ -11,6 +11,7 @@
  */
 import { createEffect, createSignal, For, onMount, Show, untrack } from 'solid-js'
 import { Portal } from 'solid-js/web'
+import { formatMoment } from '../../../shared/dateFormat'
 import { toast } from '../core/api'
 import { API_ORIGIN, apiFetch } from '../core/apiFetch'
 import { activeProfileId } from '../core/apiProfileScope'
@@ -53,8 +54,7 @@ interface MintedToken {
 /** Dates arrive as SQLite `datetime('now')` strings; show the day, not the second. */
 function shortDate(value: string | null): string {
   if (!value) return ''
-  const d = new Date(value.includes('T') ? value : `${value.replace(' ', 'T')}Z`)
-  return isNaN(d.getTime()) ? value : d.toLocaleDateString()
+  return formatMoment(value, { time: false })
 }
 
 function ListLoadFailed(props: { onRetry: () => void }) {

@@ -2,8 +2,8 @@
  * The Transactions list writes each date day first with the month's name ("4 Nov 2026"), as
  * setup's import summary does (first-week test run, B6). It wrote
  * `toLocaleDateString()` with the browser's own locale, so an English (US) browser showed
- * "11/4/2026" for 4 November. Pages with an en-US formatter of their own (Goals, the bill
- * calendar, recurring payments and others) still put the month first; they are not part of this.
+ * "11/4/2026" for 4 November. Every other page now writes its dates the same way
+ * (shared/dateFormat.ts; core/__tests__/dateFormat.test.ts holds the styles and the zones).
  *
  * The date fields are the browser's own control (`<input type="date">`): their order follows the
  * browser's language, and the app cannot set it. That is reported, not changed.
@@ -63,8 +63,6 @@ describe('formatDate, shared by the list and the transaction lines on the Dashbo
   it.each([
     ['2026-11-04', '4 Nov 2026'],
     ['2026-01-31', '31 Jan 2026'],
-    // Google Sheets' Date(Y,M,D), with its month counted from 0.
-    ['Date(2026,10,4)', '4 Nov 2026'],
   ])('%s reads %s', (stored, shown) => {
     expect(formatDate(stored)).toBe(shown)
   })

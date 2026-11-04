@@ -32,6 +32,7 @@ import {
   Show,
 } from 'solid-js'
 import { checkBillCreate } from '../../../shared/billSchema'
+import { formatDate } from '../../../shared/dateFormat'
 import { apiGet, apiPost, getLocalCurrency, listRows, showToast } from '../core/api'
 import { ApiError } from '../core/apiError'
 import { parseDecimalInput } from '../core/decimalInput'
@@ -357,8 +358,8 @@ export function SubscriptionScanPanel(props: SubscriptionScanPanelProps) {
               </Show>
             </span>
             <span class={styles.meta}>
-              {d.occurrences} charge{d.occurrences === 1 ? '' : 's'} · last {d.lastDate} ·{' '}
-              {isTracked() ? 'Already tracked' : confidenceLabel[d.confidence]}
+              {d.occurrences} charge{d.occurrences === 1 ? '' : 's'} · last {formatDate(d.lastDate)}{' '}
+              · {isTracked() ? 'Already tracked' : confidenceLabel[d.confidence]}
             </span>
           </span>
         </label>

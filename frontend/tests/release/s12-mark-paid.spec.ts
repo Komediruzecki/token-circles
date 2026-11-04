@@ -62,13 +62,9 @@ async function today(page: Page): Promise<{ iso: string; shown: string }> {
   return page.evaluate(() => {
     const d = new Date()
     const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-    // The list's own formatting (TransactionTable, through formatDate): "4 Nov 2026".
-    const shown = new Date(iso).toLocaleDateString('en-GB', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    })
-    return { iso, shown }
+    // The list writes a date day first with the month's name, September as Sep: "4 Nov 2026".
+    const months = 'Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec'.split(' ')
+    return { iso, shown: `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}` }
   })
 }
 
