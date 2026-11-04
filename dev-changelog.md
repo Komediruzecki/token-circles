@@ -3136,6 +3136,15 @@ true, or is too small for one.
   Tests: `AboutThisSpace.test.tsx`; without the clearing, the hiding or the profile check, one of
   them fails.
 
+- **The stop page's buttons are on the app's blue, and a badge toast's button on the text green**
+  (D1, first-week parts). The page a mail's stop link opens set Unsubscribe and Back to the app in
+  white on #4f6ef7, 4.28:1, under the 4.5:1 their 14px text needs; they are now on the app's blue,
+  #3b6fe0, 4.63:1. In the light theme, a badge toast's "See badges" or "See my prints" was 12px
+  #14985a on the toast, 3.70:1; it now takes `--success-text`, the green "Met" has, 5.39:1. The
+  icon and the border keep `--success`, and the dark theme reads as before (7.36:1). Tests:
+  `week-one-unsubscribe.test.ts` measures the page's button and link, and
+  `successTextContrast.test.ts` reads the toast's rule; on the old colours both fail.
+
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
 The production build holds back the benchmarks and the questions that choose their figures

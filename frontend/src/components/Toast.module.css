@@ -106,6 +106,13 @@
   background: color-mix(in srgb, var(--toast-accent) 14%, transparent);
 }
 
+/* The button's label is small text: in a success toast ("See badges", "See my prints") it takes
+   --success-text, which reads 4.5:1 on the surface where --success, kept for the icon and the
+   border, does not. */
+.toast.success .actionBtn {
+  color: var(--success-text);
+}
+
 .closeBtn {
   display: grid;
   flex-shrink: 0;

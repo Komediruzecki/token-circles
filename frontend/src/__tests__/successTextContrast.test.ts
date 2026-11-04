@@ -7,6 +7,10 @@
  * which needs 3:1; the word takes `--success-text`. This reads the theme files and measures
  * `--success-text` on the grounds a check sits on, and reads CircleView.module.css for the rule
  * that sets the word, so a retuned token or a rule back on `--success` fails here.
+ *
+ * A badge's toast has the same small green text: its "See badges" or "See my prints" button, 12px
+ * on the toast's surface, was 3.7:1 in `--success` (review D1). Toast.module.css sets it in
+ * `--success-text` too.
  */
 /* eslint-disable security/detect-non-literal-fs-filename -- the paths are the theme files and the
    one stylesheet named below, not anything supplied from outside this file. */
@@ -16,6 +20,7 @@ import { describe, expect, it } from 'vitest'
 
 const THEMES = resolve(__dirname, '../styles/themes')
 const CIRCLE_VIEW_CSS = resolve(__dirname, '../components/guidance/CircleView.module.css')
+const TOAST_CSS = resolve(__dirname, '../components/Toast.module.css')
 
 type Tokens = Record<string, string>
 
@@ -70,15 +75,25 @@ describe('--success-text', () => {
   }
 })
 
+/** The declarations of the rule in `file` whose selector is exactly `selector`, or '' when none is. */
+function ruleIn(file: string, selector: string): string {
+  const css = readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+  const at = css.indexOf(`${selector} {`)
+  return at < 0 ? '' : css.slice(css.indexOf('{', at) + 1, css.indexOf('}', at))
+}
+
 describe("a met circle check's word", () => {
   it('is set in --success-text, and the mark beside it in --success', () => {
-    const css = readFileSync(CIRCLE_VIEW_CSS, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
-    /** The declarations of the rule whose selector is exactly `selector`, or '' when none is. */
-    const rule = (selector: string) => {
-      const at = css.indexOf(`${selector} {`)
-      return at < 0 ? '' : css.slice(css.indexOf('{', at) + 1, css.indexOf('}', at))
-    }
+    const rule = (selector: string) => ruleIn(CIRCLE_VIEW_CSS, selector)
     expect(rule(".check[data-state='met'] .check-state")).toMatch(/color:\s*var\(--success-text\)/)
     expect(rule(".check[data-state='met'] .mark")).toMatch(/color:\s*var\(--success\)/)
+  })
+})
+
+describe("a success toast's button", () => {
+  it('is set in --success-text, and the icon and border keep --success', () => {
+    const rule = (selector: string) => ruleIn(TOAST_CSS, selector)
+    expect(rule('.toast.success .actionBtn')).toMatch(/color:\s*var\(--success-text\)/)
+    expect(rule('.toast.success')).toMatch(/--toast-accent:\s*var\(--success\)/)
   })
 })
