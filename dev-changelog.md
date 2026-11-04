@@ -156,6 +156,15 @@ All notable changes to Token Circles are documented here. The format is based on
     safe-area padding already lifts it.
   - On such a phone a page now ends 96 px plus twice the inset below its last line (the body's
     padding and the clearance each add one), 34 px more than it needs.
+- **On a phone a toast no longer covers the menu button.** Up to 768 px toasts ran from edge to
+  edge across the top, so while one showed (the history toast, "20 badges and 26 prints from your
+  history so far", among them) it hid the menu button and took its tap. They now start 8 px right
+  of it (`Toast.module.css`). At 390 a toast covered the whole 36 by 36 px button before and none
+  of it after.
+  - Test: `menu-button-clearance.spec.ts` adds an account at 390 and expects its toast clear of the
+    menu button. On the old rule it fails: the toast spans x 8 to 382, over the button at 12 to 48.
+  - Not changed: with the sidebar open the button moves to the sidebar's top right, and a toast
+    that shows then still covers it; a tap outside the sidebar closes it as before.
 
 ### Deploy notes
 

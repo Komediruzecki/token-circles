@@ -83,6 +83,34 @@ for (const width of [390, 700]) {
   })
 }
 
+test('at 390, a toast leaves the menu button uncovered', async ({ page }) => {
+  // Phones stretched toasts from edge to edge at the top, over the menu button: the history toast
+  // ("20 badges and 26 prints from your history so far") hid it while it showed, and a tap there
+  // went to the toast.
+  test.setTimeout(90_000)
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto(`${E2E_BASE}/#accounts`, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+  await expect(page.getByTestId('accounts-header')).toBeVisible({ timeout: 30_000 })
+  await page.getByTestId('add-account-btn').click()
+  await page.getByTestId('add-account-modal').getByLabel('Account Name').fill('Toast check')
+  await page.getByTestId('add-account-modal').locator('button[type="submit"]').click()
+  const toasts = page.getByRole('region', { name: 'Notifications' })
+  await expect(toasts.getByText('Added "Toast check" to your accounts.')).toBeVisible()
+  // Settled: the toast slides in.
+  const toast = await settledBox(toasts.locator(':scope > *').first())
+  const menu = (await page.getByRole('button', { name: 'Toggle sidebar' }).boundingBox())!
+  const overlap = {
+    x: Math.min(toast.x + toast.width, menu.x + menu.width) - Math.max(toast.x, menu.x),
+    y: Math.min(toast.y + toast.height, menu.y + menu.height) - Math.max(toast.y, menu.y),
+  }
+  expect(
+    overlap.x <= 0 || overlap.y <= 0,
+    `the toast ${JSON.stringify(toast)} and the menu button ${JSON.stringify(menu)}`
+  ).toBe(true)
+  // Beside it, not pushed off the screen.
+  expect(toast.x + toast.width).toBeLessThanOrEqual(390)
+})
+
 /** The visible text and controls in the page whose boxes overlap the button named `label`. */
 async function under(page: Page, label: string): Promise<string[]> {
   return page.evaluate((name) => {

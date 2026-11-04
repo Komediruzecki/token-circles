@@ -1,5 +1,5 @@
 /* Toasts: a plain rounded rectangle, one row, stacked in the top-right corner.
-   Phones get edge-to-edge banners at the top, safe-area aware.
+   Phones get banners across the top, beside the menu button, safe-area aware.
 
    Deliberately plain — the icon, the message and a border tinted by severity are
    what carry information; the surface and shadow come from the app's own theme
@@ -166,7 +166,9 @@
   .toastContainer {
     top: calc(env(safe-area-inset-top) + 0.5rem);
     right: 0.5rem;
-    left: 0.5rem;
+    /* Right of the menu button (Layout.module.css .mobile-toggle: 36 px at 12 px from the left),
+       with 8 px between them, so a toast never hides it or takes its tap. */
+    left: calc(env(safe-area-inset-left, 0px) + 56px);
     width: auto;
     gap: 0.35rem;
   }
