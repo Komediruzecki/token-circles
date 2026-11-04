@@ -3252,6 +3252,14 @@ true, or is too small for one.
   new profile's import files each row under a category of its own type", on D1 and IndexedDB.
   With the old matching it fails in both, at the preview (`new_categories` empty); without the
   money-back rule it fails at the preview too, offering an income Groceries.
+- **A file set aside takes all its preview options with it.** `resetForm` cleared the starting
+  balances and dates (2ae16fd0) but kept the date range (`importStartDate`, `importEndDate`), the
+  budgets from spending, the account types and the tracking start date. The bank summary
+  (89b13585) goes from a file straight to its import without the preview step that shows them,
+  so a second file was imported with the first one's date range or budget backfill where nobody
+  could see it. `resetForm` now clears all five, on the Import page and in setup. Tests:
+  `resetFormOptions.test.ts`, one per option; leaving out any one of the five resets fails its
+  test.
 
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
