@@ -2535,6 +2535,25 @@ check')` first, as the cushion and debt cases do.
   rule is gone. With the light `--primary-text` back at #3b6fe0, three of its cases fail; with the
   avatar letter back on the brand colour, its rule check fails.
 
+- **The phone Dashboard's controls are a fingertip** (D2). At 390 they were under 44px: Toggle
+  sidebar 36x36, Views and Refresh 98x39 and 107x39, the period arrows 34x34 and the month 193x34,
+  the period pills 65x33 with "All" (33x33) lifted alone onto the month row, "See all" 58x25, the
+  info buttons 24x24, the card links ("November 2026 →", "View all →") 18 tall and Show more 36.
+  Under `@media (max-width: 768px), (pointer: coarse)` they are 44px: Views, Refresh and Show more
+  take a 44px minimum height (`DashboardPage.module.css`); the arrows are 44x44 and the month and
+  pills 44 tall (`PeriodBar.module.css`); "See all" is 44 tall (`BadgeRail.module.css`); a card
+  link keeps its place in the header line and takes a 44px box with negative margins
+  (`OverviewDeck.module.css`); an info button keeps its 24px look and its hit area grows to 44px
+  through a `::before` ring (`InfoTip.module.css`). Toggle sidebar stays 36px, so `.main`'s top
+  padding and the period bar's pinned offset are unchanged, and a `::before` gives it a 46px hit
+  area on every page (`Layout.module.css`). "All" stays in the pill row at 640 and under: the
+  steppers take a row of their own and the six pills share the next, each 52 to 57px wide.
+  Desktop sizes are unchanged. Measured at 390 by hit-testing (pixels across the middle where a
+  tap lands): Toggle sidebar 46x46, Views 98x44, Refresh 107x44, arrows 44x44, the month 193x44,
+  pills 52-57x44, See all 66x44, info buttons 44x44, card links 44 tall, Show more 138x44.
+  Test: `tests/a11y-phone.spec.ts` (`@smoke`) measures each of them at 390x844 and checks the six
+  pills share one row.
+
 ### Found in the first-week test run (3 Nov)
 
 What the 3 Nov test run and the functionality review after it found in the first week's changes,

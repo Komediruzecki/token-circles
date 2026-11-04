@@ -388,3 +388,14 @@
   font-size: 12.5px;
   white-space: nowrap;
 }
+
+/* A card's link ("November 2026 →", "View all →") was 18px tall on a phone (review D2). It keeps
+   its place in the header line and takes a 44px row of its own height to be tapped by. */
+@media (max-width: 768px), (pointer: coarse) {
+  .panelMore {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    margin: -13px 0;
+  }
+}

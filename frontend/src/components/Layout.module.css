@@ -411,6 +411,14 @@
     display: flex;
   }
 
+  /* The button stays 36px, so nothing below it moves, and the tap lands on a 46px square around
+     it (review D2). */
+  .mobile-toggle::before {
+    content: '';
+    position: absolute;
+    inset: -5px;
+  }
+
   /* Whatever the page scrolls into view stops below the toggle, not under it: a section scrolled
      to the top (Tags' rules), a fragment, or an element taking focus. `.main`'s top padding
      clears the toggle only at the top of the page. A section's own scroll margin adds to this,

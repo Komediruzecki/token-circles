@@ -79,3 +79,12 @@
   font-size: 12px;
   color: var(--text-secondary);
 }
+
+/* "See all" was 58x25 on a phone (review D2). */
+@media (max-width: 768px), (pointer: coarse) {
+  .see-all {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 0 14px;
+  }
+}

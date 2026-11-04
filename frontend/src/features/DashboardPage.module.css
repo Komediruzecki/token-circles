@@ -646,3 +646,12 @@
   line-height: 1.5;
   color: var(--text-secondary);
 }
+
+/* A fingertip on a phone (review D2): Views, Refresh and Show more were 39px and 36px tall. */
+@media (max-width: 768px), (pointer: coarse) {
+  .btn-primary,
+  .btn-secondary,
+  .showMoreToggle {
+    min-height: 44px;
+  }
+}
