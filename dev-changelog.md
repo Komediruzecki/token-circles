@@ -3260,6 +3260,22 @@ true, or is too small for one.
   could see it. `resetForm` now clears all five, on the Import page and in setup. Tests:
   `resetFormOptions.test.ts`, one per option; leaving out any one of the five resets fails its
   test.
+- **A loan adds back only the principal its own payments spent.** The savings rate counts loan
+  principal repaid as kept where its payments were spending (review A5). The add-back was pooled:
+  every expense under the Debt payments kind counted, plus any other expense within 1% of a
+  payment due, and the cap was on the total. So a mortgage paid by transfer, beside a card paid as
+  a Debt payments expense of the same 1,000, or a 995 childcare fee, still counted its principal
+  as kept on top of `cash` (the review's probe: 0 added for the transfer alone, 1,000 and 995 with
+  the other expense). `principalKeptIn` now works loan by loan: a loan's payments are the entries
+  the size of a payment its schedule has due that month, a transfer first, then a Debt payments
+  expense (within 5%, since the kind says it is a loan's: Jordan's personal loan is due 103.57 and
+  paid at 105), then an expense under Housing, Other, no kind or no category (within 1%). A
+  payment found as a transfer was never spending and adds nothing; each loan adds its principal
+  in the window up to what its own payments spent. Childcare, groceries and the other kinds are
+  never taken for a payment. Tests in `guidanceFacts.test.ts` ("a loan paid by transfer, beside an
+  expense of its payment size"): all three fail on the old code; looking for transfers last fails
+  the Debt payments case; taking any kind fails the childcare case with no transfer; a 1% leeway
+  for Debt payments fails the Jordan example in `guidanceExamples.test.ts`.
 
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 

@@ -455,8 +455,16 @@ interface WindowSums {
   byKind: Map<Kind, number>;
   /** What each catch-all spent, and of it what counted as needed only because nothing said. */
   catchAll: Map<number, { name: string; spent: number; unsure: number }>;
-  /** Each month's expenses not filed under the Debt payments kind, one amount each. */
-  otherExpenses: Map<string, number[]>;
+  /** Each month's expenses filed under the Debt payments kind, one amount each. */
+  debtExpenses: Map<string, number[]>;
+  /**
+   * Each month's other expenses that could be a loan's payment, one amount each: those filed under
+   * Housing (a mortgage), Other or no kind, or under no category. Childcare or groceries of a
+   * payment's size are not one.
+   */
+  loanExpenses: Map<string, number[]>;
+  /** Each month's transfers, one amount each: a loan paid by transfer was never spending. */
+  transfers: Map<string, number[]>;
 }
 
 /** The window's money, added up, without the expenses that only moved money (`holdsTransfers`). */
@@ -505,7 +513,14 @@ function sumWindow(
     byMonth: new Map(),
     byKind: new Map(),
     catchAll: new Map(),
-    otherExpenses: new Map(),
+    debtExpenses: new Map(),
+    loanExpenses: new Map(),
+    transfers: new Map(),
+  };
+  const list = (lists: Map<string, number[]>, month: string, value: number) => {
+    const held = lists.get(month);
+    if (held) held.push(value);
+    else lists.set(month, [value]);
   };
   const add = (totals: Map<number, number>, id: number, value: number) => {
     totals.set(id, (totals.get(id) ?? 0) + value);
@@ -517,6 +532,8 @@ function sumWindow(
       if (isId(id) && support.has(id)) sums.support += Math.abs(amount(entry));
       continue;
     }
+    if (entry.type === 'transfer')
+      list(sums.transfers, monthOf(entry.date), Math.abs(amount(entry)));
     if (entry.type !== 'expense') continue;
     const spent = Math.abs(amount(entry));
     // Filed under a category the profile no longer has: no category, as every count of them reads
@@ -530,13 +547,8 @@ function sumWindow(
     const key = filed ? id : 0;
     month.byCategory.set(key, (month.byCategory.get(key) ?? 0) + spent);
     sums.byMonth.set(monthOf(entry.date), month);
-    const other = () => {
-      const others = sums.otherExpenses.get(monthOf(entry.date));
-      if (others) others.push(spent);
-      else sums.otherExpenses.set(monthOf(entry.date), [spent]);
-    };
     if (!filed) {
-      other();
+      list(sums.loanExpenses, monthOf(entry.date), spent);
       sums.uncategorisedEntries += 1;
       sums.uncategorised += spent;
       sums.essentials += spent;
@@ -557,7 +569,10 @@ function sumWindow(
     }
     const kind = kinds.get(id);
     if (kind) sums.byKind.set(kind, (sums.byKind.get(kind) ?? 0) + spent);
-    if (kind !== 'debt') other();
+    if (kind === 'debt') list(sums.debtExpenses, monthOf(entry.date), spent);
+    else if (kind === null || kind === undefined || LOAN_PAYMENT_KINDS.has(kind)) {
+      list(sums.loanExpenses, monthOf(entry.date), spent);
+    }
     const verdict = verdicts.get(id)!;
     // Filed under a category that can take no kind, an income category: spending, but nothing
     // can mark it needed and the essentials question does not list it, so it counts neither as
@@ -913,62 +928,81 @@ export function debtsOf(
   return debts;
 }
 
-/** Loan principal repaid in the window's months: the installments' principal and extra payments. */
-function principalIn(loans: readonly FactsLoan[], months: readonly string[]): number {
-  const inWindow = new Set(months);
-  let repaid = 0;
-  for (const loan of loans) {
-    for (const row of amortize(loan)) {
-      if (inWindow.has(monthOf(row.date))) repaid += row.principal + row.prepayment;
-    }
-  }
-  return repaid;
-}
-
-/** How far a booked payment may be from the schedule's and still be that payment. */
-const paymentLeeway = (due: number): number => Math.max(1, due * 0.01);
+/** The kinds besides Debt payments a loan's payment can be filed under: Housing (a mortgage), Other. */
+const LOAN_PAYMENT_KINDS: ReadonlySet<Kind> = new Set<Kind>(['housing', 'other']);
 
 /**
- * What the window's entries spent paying loans: the expenses filed under the Debt payments kind,
- * and any other expense the size of a payment a loan's schedule has due that month, as a mortgage
- * filed under Housing is (the bank rules file one there). A loan's payments count only when they
- * recur, in at least half its months in the window: an expense of about its size once is chance.
- * Its extra payments are then looked for too. Each expense counts once. A loan paid by transfer,
- * or from an account the app does not hold, shows none: its payments were never spending, so
- * `cash` has them as kept already (3 Nov review A5).
+ * How far a booked payment may be from the schedule's and still be that payment: 1%, or 5% for
+ * one filed under Debt payments, which says it is a loan's. A loan entered in the app is often a
+ * little off the bank's installment: Jordan's personal loan is due 103.57 and paid at 105.
  */
-function loanPaymentsSpent(
+const paymentLeeway = (due: number, debt: boolean): number =>
+  Math.max(1, due * (debt ? 0.05 : 0.01));
+
+/**
+ * Loan principal repaid in the window that its payments spent, loan by loan (D6). A loan's
+ * payments are the entries the size of a payment its schedule has due that month: a transfer
+ * first, then an expense that could be one (`loanExpenses`). They count only when they recur, in
+ * at least half its due months in the window: an entry of about its size once is chance. Its
+ * extra payments are then looked for the same way. Each entry is one loan's payment at most.
+ *
+ * What a loan adds back is its principal in the window, at most what its own payments spent. A
+ * loan paid by transfer, or from an account the app does not hold, adds none: its payments were
+ * never spending, so `cash` has them as kept already (3 Nov review A5). Pooled across loans, as it
+ * was, any Debt payments expense, or a childcare fee within 1% of a payment, let a loan paid by
+ * transfer count its principal twice (3 Nov review, round 3).
+ */
+function principalKeptIn(
   sums: WindowSums,
   loans: readonly FactsLoan[],
   months: readonly string[]
 ): number {
-  let spent = sums.byKind.get('debt') ?? 0;
   const inWindow = new Set(months);
-  const left = new Map([...sums.otherExpenses].map(([month, list]) => [month, [...list]]));
-  /** Take an expense the size of `due` from `month`'s, and answer its amount. */
-  const take = (month: string, due: number): number | null => {
-    const pool = left.get(month);
-    const at = pool ? pool.findIndex((amount) => Math.abs(amount - due) <= paymentLeeway(due)) : -1;
-    return pool && at >= 0 ? pool.splice(at, 1)[0] : null;
+  const copy = (lists: Map<string, number[]>) =>
+    new Map([...lists].map(([month, amounts]) => [month, [...amounts]]));
+  type Pool = 'transfer' | 'debt' | 'expense';
+  const pools: Record<Pool, Map<string, number[]>> = {
+    transfer: copy(sums.transfers),
+    debt: copy(sums.debtExpenses),
+    expense: copy(sums.loanExpenses),
   };
+  type Found = { month: string; amount: number; pool: Pool };
+  /** Take an entry the size of `due` from `month`'s: a transfer, then Debt payments, then others. */
+  const take = (month: string, due: number): Found | null => {
+    for (const pool of ['transfer', 'debt', 'expense'] as const) {
+      const amounts = pools[pool].get(month);
+      const leeway = paymentLeeway(due, pool === 'debt');
+      const at = amounts ? amounts.findIndex((amount) => Math.abs(amount - due) <= leeway) : -1;
+      if (amounts && at >= 0) return { month, amount: amounts.splice(at, 1)[0], pool };
+    }
+    return null;
+  };
+  const giveBack = (found: Found) => pools[found.pool].get(found.month)?.push(found.amount);
+  let kept = 0;
   for (const loan of loans) {
-    const due = amortize(loan).filter((row) => row.payment > 0 && inWindow.has(monthOf(row.date)));
-    const found: Array<{ month: string; amount: number }> = [];
+    const rows = amortize(loan).filter((row) => inWindow.has(monthOf(row.date)));
+    const due = rows.filter((row) => row.payment > 0);
+    const found: Found[] = [];
     for (const row of due) {
-      const amount = take(monthOf(row.date), row.payment);
-      if (amount !== null) found.push({ month: monthOf(row.date), amount });
+      const payment = take(monthOf(row.date), row.payment);
+      if (payment !== null) found.push(payment);
     }
     if (found.length * 2 < due.length) {
-      for (const { month, amount } of found) left.get(month)?.push(amount);
+      found.forEach(giveBack);
       continue;
     }
-    for (const { amount } of found) spent += amount;
-    for (const row of due) {
-      const amount = row.prepayment > 0 ? take(monthOf(row.date), row.prepayment) : null;
-      if (amount !== null) spent += amount;
+    for (const row of rows) {
+      const extra = row.prepayment > 0 ? take(monthOf(row.date), row.prepayment) : null;
+      if (extra !== null) found.push(extra);
     }
+    const spent = found.reduce(
+      (sum, payment) => sum + (payment.pool === 'transfer' ? 0 : payment.amount),
+      0
+    );
+    const principal = rows.reduce((sum, row) => sum + row.principal + row.prepayment, 0);
+    kept += Math.min(principal, spent);
   }
-  return spent;
+  return kept;
 }
 
 const percentOf = (part: number, whole: number): number | null =>
@@ -989,12 +1023,9 @@ export function guidanceFacts(input: GuidanceInput): GuidanceFacts {
   const spending = perMonth(sums.spending);
   const essentials = perMonth(sums.essentials);
   const liquid = liquidOf(input.accounts, input.transactions, today);
-  // D6 counts principal repaid as kept where its payments were spent: no more than the entries
-  // spent paying loans, or a loan paid by transfer would count twice.
-  const loans = input.loans ?? [];
-  const principalRepaid = perMonth(
-    Math.min(principalIn(loans, months), loanPaymentsSpent(sums, loans, months))
-  );
+  // D6 counts principal repaid as kept where its payments were spent, loan by loan: no more than
+  // each loan's own payments spent, or a loan paid by transfer would count twice.
+  const principalRepaid = perMonth(principalKeptIn(sums, input.loans ?? [], months));
   const kept = income !== null && spending !== null ? income - spending : null;
   const cash = kept === null || income === null ? null : percentOf(kept, income);
   const withPrincipal =

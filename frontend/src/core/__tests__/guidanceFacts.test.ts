@@ -1139,6 +1139,46 @@ describe('the savings rate (D6)', () => {
     expect(facts.savings.rate).toBeCloseTo(43.33, 1)
   })
 
+  // 3 Nov review, round 3: the add-back was pooled across loans, so any Debt payments expense, or
+  // a recurring expense within 1% of a payment, let a loan paid by transfer count twice.
+  describe('a loan paid by transfer, beside an expense of its payment size', () => {
+    const childcare = { id: 5, name: 'Childcare', type: 'expense', kind: 'childcare' }
+    const big = { ...interestFree, principal: 120000 }
+    const byTransfer = (ym: string) =>
+      entry(`${ym}-20`, { type: 'transfer', amount: 1000, account_id: 1, transfer_account_id: 7 })
+    const factsFor = (extra: (ym: string) => FactsEntry[]) =>
+      guidanceFacts(
+        input({
+          transactions: booked(extra),
+          categories: [...withCategories, childcare],
+          loans: [big],
+        })
+      )
+
+    it('adds nothing for a card paid under Debt payments', () => {
+      const facts = factsFor((ym) => [
+        byTransfer(ym),
+        entry(`${ym}-21`, { amount: 1000, category_id: 3 }),
+      ])
+      expect(facts.principalRepaid).toBe(0)
+      expect(facts.savings.rate).toBe(facts.savings.cash)
+    })
+
+    it('adds nothing for a childcare fee within 1% of the payment', () => {
+      const facts = factsFor((ym) => [
+        byTransfer(ym),
+        entry(`${ym}-21`, { amount: 995, category_id: 5 }),
+      ])
+      expect(facts.principalRepaid).toBe(0)
+      expect(facts.savings.rate).toBe(facts.savings.cash)
+    })
+
+    it('takes no childcare fee for a payment, even with no transfer to find', () => {
+      const facts = factsFor((ym) => [entry(`${ym}-21`, { amount: 1000, category_id: 5 })])
+      expect(facts.principalRepaid).toBe(0)
+    })
+  })
+
   it('adds back at most what the entries spent on debt payments', () => {
     // Two of the four months' payments booked: 200 spent, of 400 principal.
     const half = booked((ym) =>
