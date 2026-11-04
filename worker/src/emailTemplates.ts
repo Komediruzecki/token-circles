@@ -180,7 +180,7 @@ const AUTO_LINK_STYLE = `<style>a[x-apple-data-detectors]{color:inherit!importan
  * The light scheme and the phone width: the only rules that cannot be inline. `tables` adds the
  * rules only a mail with a table needs, so a mail without one carries none of them.
  */
-const mailStyle = (tables: boolean) => `<style>
+const mailStyle = (tables: boolean, steps: boolean) => `<style>
 :root { color-scheme: light only; supported-color-schemes: light only; }
 @media (prefers-color-scheme: light) {
   .tc-page { background:#eeeae1 !important; }
@@ -204,8 +204,15 @@ ${tables ? TABLE_STYLE.light : ''}}
   .tc-btn-table td { display:block !important; width:auto !important; }
   .tc-btn-gap { height:10px !important; }
   .tc-btn, .tc-btn2 { display:block !important; text-align:center !important; }
-${tables ? TABLE_STYLE.phone : ''}}
+${tables ? TABLE_STYLE.phone : ''}${steps ? STEP_STYLE_PHONE : ''}}
 </style>`;
+
+/**
+ * A step's link on a phone: 44 px tall, 20 px of line and 12 px above and below, where the line
+ * alone was 16 px (review D10). Only a mail with steps carries it.
+ */
+const STEP_STYLE_PHONE = `  .tc-step-link { display:inline-block !important; padding:12px 0 !important; line-height:20px !important; }
+`;
 
 /** A table's rules: its status colours on paper, and a smaller figure and gap on a phone. */
 const TABLE_STYLE = {
@@ -337,8 +344,8 @@ const mailParagraph = (html: string) =>
 const mailSmall = (html: string, top = 14) =>
   `<p class="tc-muted" style="margin:${top}px 0 0;font:14px/1.6 ${FONT};color:${INK.muted}">${keepTogether(html)}</p>`;
 
-const mailLink = ({ label, href }: MailLink) =>
-  `<a class="tc-link" href="${escapeHtml(href)}" style="color:${INK.link};text-decoration:none;font-weight:600">${escapeHtml(label)}</a>`;
+const mailLink = ({ label, href }: MailLink, cls = 'tc-link') =>
+  `<a class="${cls}" href="${escapeHtml(href)}" style="color:${INK.link};text-decoration:none;font-weight:600">${escapeHtml(label)}</a>`;
 
 /** The button, solid in the brand blue; a second one, outlined, sits beside it. */
 function mailButtons([first, second]: [MailLink] | [MailLink, MailLink]): string {
@@ -356,7 +363,7 @@ function mailSteps({ title, items }: NonNullable<MailSpec['steps']>, bottom: num
   const rows = items
     .map(
       (step, i) =>
-        `<tr><td class="tc-rule" style="border-top:1px solid ${INK.rule};padding:16px 0"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td width="34" valign="top" class="tc-muted" style="font:600 14px/1.5 ${FONT};color:${INK.muted}">${i + 1}</td><td valign="top"><div class="tc-text" style="font:600 16px/1.4 ${FONT};color:${INK.text}">${escapeHtml(step.title)}</div><div class="tc-soft" style="margin:4px 0 0;font:14px/1.6 ${FONT};color:${INK.soft}">${escapeHtml(step.text)}</div>${step.link ? `<div style="margin:8px 0 0;font:14px/1.4 ${FONT}">${mailLink({ label: `${step.link.label} →`, href: step.link.href })}</div>` : ''}</td></tr></table></td></tr>`
+        `<tr><td class="tc-rule" style="border-top:1px solid ${INK.rule};padding:16px 0"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td width="34" valign="top" class="tc-muted" style="font:600 14px/1.5 ${FONT};color:${INK.muted}">${i + 1}</td><td valign="top"><div class="tc-text" style="font:600 16px/1.4 ${FONT};color:${INK.text}">${escapeHtml(step.title)}</div><div class="tc-soft" style="margin:4px 0 0;font:14px/1.6 ${FONT};color:${INK.soft}">${escapeHtml(step.text)}</div>${step.link ? `<div style="margin:8px 0 0;font:14px/1.4 ${FONT}">${mailLink({ label: `${step.link.label} →`, href: step.link.href }, 'tc-link tc-step-link')}</div>` : ''}</td></tr></table></td></tr>`
     )
     .join('');
   return `<tr><td class="tc-pad" style="padding:26px 36px ${bottom}px"><div class="tc-muted" style="font:600 14px/1.4 ${FONT};letter-spacing:0.2px;color:${INK.muted};margin:0 0 6px">${escapeHtml(title)}</div><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${rows}</table></td></tr>`;
@@ -534,7 +541,7 @@ export function renderMail(spec: MailSpec): RenderedEmail {
 ${COLOR_SCHEME_META}
 <title>${escapeHtml(spec.subject)}</title>
 ${AUTO_LINK_STYLE}
-${mailStyle(!!spec.tables)}
+${mailStyle(!!spec.tables, !!spec.steps)}
 </head>
 <body id="body" class="tc-page" bgcolor="${INK.page}" style="margin:0;padding:0;background:${INK.page};-webkit-text-size-adjust:100%">
 <div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;color:${INK.page}">${escapeHtml(spec.preheader)}&#8199;&#847;&#8199;&#847;&#8199;&#847;&#8199;&#847;&#8199;&#847;&#8199;&#847;</div>

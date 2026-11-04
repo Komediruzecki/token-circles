@@ -112,6 +112,29 @@ describe('the mail catalogue', () => {
     }
   });
 
+  // Review D10: a step's link ("Open Import →", "Open Bills →", "Open Progress →") was 16 px tall
+  // on a phone. The phone rule makes it 44 px tall (20 px of line and 12 px above and below), in
+  // the mails with steps alone, so no other mail's output moves.
+  it("gives every step's link a 44 px hit area on a phone, in the mails with steps alone", () => {
+    const RULE =
+      '.tc-step-link { display:inline-block !important; padding:12px 0 !important; line-height:20px !important; }';
+    let withSteps = 0;
+    for (const sample of samples) {
+      const { html } = sample.render();
+      const at = html.indexOf('@media (max-width: 480px) {');
+      const phone = html.slice(at, html.indexOf('</style>', at));
+      const links = [...html.matchAll(/<a [^>]*>[^<]* →<\/a>/g)].map((m) => m[0]);
+      if (links.length === 0) {
+        expect(html, sample.name).not.toContain('tc-step-link');
+        continue;
+      }
+      withSteps += 1;
+      for (const link of links) expect(link, sample.name).toContain('class="tc-link tc-step-link"');
+      expect(phone, sample.name).toContain(RULE);
+    }
+    expect(withSteps).toBeGreaterThanOrEqual(2);
+  });
+
   it('keeps the last two words of every headline on the layout on one line', () => {
     // On a phone, "One link, one sign-in, and you're in." left "in." alone on the last line.
     for (const sample of samples) {

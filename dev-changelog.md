@@ -3164,6 +3164,13 @@ true, or is too small for one.
   `loginScreen.refusals.test.tsx` (the classes on this stage alone, and the phone rules) and
   `check-inbox-layout.spec.ts`, which measures each target at 390 and fails on the old styles.
 
+- **A mail's step links are a fingertip tall on a phone** (D10). The welcome's "Open Import →",
+  "Open Bills →" and "Open Progress →", and the day-7 mail's next step, were 16 px tall at 390.
+  A phone rule in the mails with steps makes each 44 px tall (20 px of line, 12 px above and
+  below); a wider screen draws them as before, and no other mail's output moves (the four mails
+  that show an amount keep their pinned digests). No words changed. Tests:
+  `mail-catalogue.test.ts` checks every step link and the rule, in the mails with steps alone.
+
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
 The production build holds back the benchmarks and the questions that choose their figures
