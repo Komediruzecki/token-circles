@@ -146,6 +146,45 @@ describe('the week-one switch', () => {
     expect(toasts().at(-1)).toMatchObject({ type: 'success', message: 'First-week mails are off.' })
   })
 
+  // Review D11: the switch alone took a tap, 44x26 on a phone. Its whole row does now: the title,
+  // the description and the space around them, once per tap, and the switch itself still once.
+  it('flips from anywhere on its row, once per tap', async () => {
+    await openSettings()
+    const words = (text: string) =>
+      [...row()!.querySelectorAll('span')].find((span) => span.textContent === text)!
+
+    words(WEEK_ONE_DESCRIPTION).click()
+    await settle()
+    expect(puts().map((c) => c.body)).toEqual([{ weekOneMails: false }])
+    expect(toggle()!.getAttribute('aria-checked')).toBe('false')
+
+    words('First-week mails').click()
+    await settle()
+    toggle()!.closest('label')!.click()
+    await settle()
+    toggle()!.click()
+    await settle()
+    expect(puts().map((c) => c.body)).toEqual([
+      { weekOneMails: false },
+      { weekOneMails: true },
+      { weekOneMails: false },
+      { weekOneMails: true },
+    ])
+    expect(toggle()!.getAttribute('aria-checked')).toBe('true')
+  })
+
+  it('takes no tap on its row while it is fixed off after an unsubscribe', async () => {
+    server.unsubscribed = true
+    await openSettings()
+    const words = [...row()!.querySelectorAll('span')].find(
+      (span) => span.textContent === WEEK_ONE_UNSUBSCRIBED
+    )!
+    words.click()
+    await settle()
+    expect(puts()).toEqual([])
+    expect(toggle()!.getAttribute('aria-checked')).toBe('false')
+  })
+
   it('stays as it was when the save fails', async () => {
     server.putStatus = 500
     await openSettings()

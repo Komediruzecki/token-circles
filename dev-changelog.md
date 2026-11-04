@@ -3171,6 +3171,14 @@ true, or is too small for one.
   that show an amount keep their pinned digests). No words changed. Tests:
   `mail-catalogue.test.ts` checks every step link and the rule, in the mails with steps alone.
 
+- **The first-week switch takes a tap anywhere on its row** (D11). Only the switch did, which is
+  44x26 at 390. Its row, 312x77 there and 786x77 at 1280, is now the switch's label: a tap on
+  "First-week mails", on the line under it or in the space around them flips it once, and while it
+  is fixed off after an unsubscribe the row takes no tap. Nothing moves on screen, and the switch stays the one
+  control a keyboard or a screen reader meets. ToggleField does this for a row that asks for it
+  (`wholeRow`); its other rows (Bills, Housing, the retirement planner) are as they were. Tests:
+  `settingsWeekOne.test.tsx`; without `wholeRow` a tap on the words saves nothing.
+
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
 The production build holds back the benchmarks and the questions that choose their figures
