@@ -155,11 +155,13 @@ test.describe('the phone Dashboard @smoke', () => {
 
     const pills = page.locator('[data-test-id^="period-pill-"]')
     await expect(pills).toHaveCount(6)
-    const tops: number[] = []
-    for (const pill of await pills.all()) {
+    for (const pill of await pills.all())
       await expectFingertip(pill, `pill ${await pill.innerText()}`)
-      tops.push(Math.round((await pill.boundingBox())!.y))
-    }
+    // Read in one pass: the bar can re-render between two separate reads, and a pill read on its
+    // own then had no box.
+    const tops = await pills.evaluateAll((els) =>
+      els.map((el) => Math.round(el.getBoundingClientRect().y))
+    )
     expect(new Set(tops).size, `the six pills share one row: ${tops.join(', ')}`).toBe(1)
 
     await expectFingertip(page.getByTestId('badges-see-all'), 'See all')
