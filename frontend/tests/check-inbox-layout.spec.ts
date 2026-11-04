@@ -4,6 +4,9 @@
  * own. The 3 Nov test run found "uat-j01-" at the end of one line and the rest of the address on
  * the next, and "Contact support" and the build's version ("v5.17.6-2-g70a3431d") each on two.
  *
+ * At 390 its button, its link and the footer's links are a fingertip tall, and Privacy and Terms
+ * as wide (review D6): they were 300x37, 90x20, 121x20, 38x17 and 32x17.
+ *
  * The local Worker's sign-up, booted as dev boots (account mode). Each case signs up an account
  * made for the run; it stays unconfirmed in the local throwaway database.
  */
@@ -39,7 +42,7 @@ for (const size of [
   { width: 1280, height: 800 },
   { width: 390, height: 844 },
 ]) {
-  test(`Check your inbox at ${size.width}: the address and each footer item on one line`, async ({
+  test(`Check your inbox at ${size.width}: the address and each footer item on one line, and a phone's targets 44px`, async ({
     page,
     context,
   }) => {
@@ -67,6 +70,21 @@ for (const size of [
         await linesOf(page, `[data-test-id="sign-in-footer"] > :nth-child(${i + 1})`),
         text
       ).toBe(1)
+    }
+
+    if (size.width < 768) {
+      const targets = [
+        page.getByTestId('check-inbox-resend'),
+        page.getByTestId('check-inbox-back'),
+        ...(await footer.locator('a').all()),
+      ]
+      expect(targets).toHaveLength(5)
+      for (const target of targets) {
+        const box = await target.boundingBox()
+        const name = (await target.innerText()).trim()
+        expect(Math.round(box?.height ?? 0), `${name} tall`).toBeGreaterThanOrEqual(44)
+        expect(Math.round(box?.width ?? 0), `${name} wide`).toBeGreaterThanOrEqual(44)
+      }
     }
   })
 }

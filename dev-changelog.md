@@ -3156,6 +3156,14 @@ true, or is too small for one.
   confirm's buttons are 44 px tall on a phone. Tests: `ConfirmDialog.test.tsx` (heading, name,
   lines, the phone rule), `localOnly.test.ts`, and the setup tests that read the confirm.
 
+- **Check your inbox gives a phone 44px targets** (D6, this screen only). At 390, Send the link
+  again was 300x37, Back to sign in 90x20, and the footer's Contact support, Privacy and Terms
+  121x20, 38x17 and 32x17. On a phone they are now 300x44, 90x44, 121x44, 44x44 and 44x44; the
+  card grows from 490 to 546 px, and the desktop is as it was. The sign-in and create stages keep
+  their footer until the accessibility pass, so only this stage sets the taller one. Tests:
+  `loginScreen.refusals.test.tsx` (the classes on this stage alone, and the phone rules) and
+  `check-inbox-layout.spec.ts`, which measures each target at 390 and fails on the old styles.
+
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
 The production build holds back the benchmarks and the questions that choose their figures

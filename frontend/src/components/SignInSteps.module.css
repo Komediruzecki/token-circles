@@ -95,3 +95,15 @@
 .linkQuiet {
   color: var(--text-secondary);
 }
+
+/* Check your inbox on a phone: its button and its link a fingertip tall (review D6). This screen
+   first: the other sign-in steps follow with the accessibility pass. */
+@media (max-width: 768px), (pointer: coarse) {
+  .inbox .submit {
+    min-height: 44px;
+  }
+
+  .inbox .link {
+    min-height: 44px;
+  }
+}

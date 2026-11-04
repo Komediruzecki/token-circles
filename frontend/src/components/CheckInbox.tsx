@@ -27,7 +27,7 @@ import styles from './SignInSteps.module.css'
  *
  * With no mail after a few minutes, it says to look in spam or to send the link again: the button
  * above. It said to create the account again with the same password, which a few tries took into
- * the sign-up limit (review M18).
+ * the sign-up limit (review M18). On a phone its button and its link are 44px tall (review D6).
  */
 export default function CheckInbox(props: { email: string; onBack: () => void }) {
   // Its own widget: the form that sent the address is gone, and its token with it.
@@ -53,7 +53,7 @@ export default function CheckInbox(props: { email: string; onBack: () => void })
   })
 
   return (
-    <div data-test-id="check-inbox">
+    <div class={styles.inbox} data-test-id="check-inbox">
       <p class={styles.lead} data-test-id="check-inbox-lead">
         We sent a link to{' '}
         <span class={styles.address}>

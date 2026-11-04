@@ -277,6 +277,23 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Check your inbox on a phone: each footer link a fingertip tall, and Privacy and Terms as wide,
+   as the screen's own button and link are (review D6). The sign-in and create stages follow with
+   the accessibility pass, so only that stage sets the class. */
+@media (max-width: 768px), (pointer: coarse) {
+  .footerRoomy > a,
+  .footerRoomy nav a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+
+  .footerRoomy nav a {
+    justify-content: center;
+    min-width: 44px;
+  }
+}
+
 @media (max-width: 420px) {
   .card {
     padding: 24px 20px;
