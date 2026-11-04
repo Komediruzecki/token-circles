@@ -66,21 +66,27 @@ const NOTHING_YET = {
   href: '#import/bank',
 }
 
-/** The steps a list shows, read off the page. */
+/**
+ * The steps a list shows, read off the page in one pass. Row by row, a read that counted three rows
+ * waited for a third the card had just taken away: with no action timeout that read never
+ * returned, and the poll failed on the last list it saw, 30 s after the card had changed.
+ */
 async function stepsIn(page: Page, list: string) {
-  const steps = page.getByTestId(list).getByTestId('next-step')
-  const out: Array<{ title: string; reason: string; href: string }> = []
-  for (const step of await steps.all()) {
-    const link = step.getByTestId('next-step-link')
-    // Setup's done step lists titles only (review M14): no reason to read there.
-    const reason = step.getByTestId('next-step-reason')
-    out.push({
-      title: (await link.locator('span').first().textContent()) ?? '',
-      reason: (await reason.count()) > 0 ? ((await reason.textContent()) ?? '') : '',
-      href: (await link.getAttribute('href')) ?? '',
-    })
-  }
-  return out
+  return page
+    .getByTestId(list)
+    .getByTestId('next-step')
+    .evaluateAll((steps) =>
+      steps.map((step) => {
+        const link = step.querySelector('[data-test-id="next-step-link"]')
+        // Setup's done step lists titles only (review M14): no reason to read there.
+        const reason = step.querySelector('[data-test-id="next-step-reason"]')
+        return {
+          title: link?.querySelector('span')?.textContent ?? '',
+          reason: reason?.textContent ?? '',
+          href: link?.getAttribute('href') ?? '',
+        }
+      })
+    )
 }
 
 /** The card's steps once they say what `expected` says, failing with what they say otherwise. */

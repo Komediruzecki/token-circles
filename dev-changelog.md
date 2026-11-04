@@ -3225,6 +3225,17 @@ true, or is too small for one.
   later: one full run failed there on "the panel stays on a 390x844 screen on every step, light",
   with no steps to measure (`Expected: > 0, Received: 0`). The walk now waits for the first step
   link to show before it measures them. Test change only, in `onboarding.spec.ts`.
+- **Getting started's cushion case reads the card in one pass.** In CI it failed in both runtimes
+  on #693 and #694: after the second savings account the card kept "covers 18 days" for 30 s. The
+  app was not stuck. A probe showed the evaluation after the second account holding both accounts,
+  the card working its steps out again 10 to 30 ms later without the cushion, and the page showing
+  those two steps when the wait gave up. The test read the card row by row: one poll counted three
+  rows, the card dropped the third, and the read of the third row waited for it. With no action
+  timeout that read never returned, so the poll failed on the last list it had, three rows. On one
+  core (`taskset -c 0`) the local-first case failed 10 of 12 and 6 of 6 repeats that way; the
+  logged poll call started at three rows as the card changed and ended 29,085 ms later. `stepsIn`
+  in `orientation.spec.ts` now reads every row in one `evaluateAll`. Test change only: all four
+  cushion cases, 8 repeats each on one core, 32 passed.
 
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
