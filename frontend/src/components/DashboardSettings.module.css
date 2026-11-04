@@ -174,3 +174,32 @@
 .btn-primary:hover {
   background: var(--primary-hover);
 }
+
+/* A phone: the arrows stack in a 28 px column and the handle's picture goes (the row still drags),
+   so the toggles keep the width they had before the arrows and their names one line. */
+@media (max-width: 480px) {
+  .drag-handle,
+  .handle-space {
+    display: none;
+  }
+
+  .move-buttons {
+    flex-direction: column;
+    gap: 2px;
+    margin-left: 4px;
+  }
+
+  .move-btn {
+    width: 24px;
+    height: 24px;
+  }
+
+  .move-space {
+    width: 28px;
+  }
+
+  /* The 4 px the column takes beyond the handle's 24, back from the toggle's own padding. */
+  .widget-toggle {
+    padding: 12px 14px;
+  }
+}

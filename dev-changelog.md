@@ -192,12 +192,17 @@ All notable changes to Token Circles are documented here. The format is based on
   stays on the button pressed, or goes to the row's other one when the row reaches an end. The
   hint reads "Drag a handle or use the arrows to reorder the widgets under Show more. The others
   have a fixed spot." Rows with a fixed spot keep a blank of the same width, so every toggle ends
-  at one edge.
+  at one edge. Up to 480 px the two stack in a 28 px column and the handle's picture goes (the row
+  still drags): side by side they took 68 px from every toggle, and at 390 twelve of the fifteen
+  names went onto a second line and the other three onto a third. Stacked, the rows are as tall as before the arrows (twelve at 52
+  px, three at 68).
   - Test: `dashboardViewsMoveButtons.test.tsx` checks the twelve names, the ends, two moves and the
     saved order, and the focus; `dashboard.spec.ts` tabs from Budget Alerts' toggle to its Move up
     and presses Enter twice in Chromium. Without the line that puts focus back, both fail
     (Chromium reports the button no longer focused); with the buttons never off, the ends test;
-    with the move dropped, the order test.
+    with the move dropped, the order test. `dashboard.spec.ts` also opens Views at 390 and expects
+    the arrows to take at most 28 px across a row and stay 24 px each way; without the phone rules
+    they take 92.
 - **The change under Net Worth is how far the balances moved that month.** It was the month's
   income less spending set against the month before's, a change of a change, so a month that grew
   the balances could read as a fall: on the demo this month the card read "↓772.00 vs last month"
