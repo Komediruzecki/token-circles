@@ -55,10 +55,11 @@ async function expectUndated(page: Page, name: string): Promise<void> {
 async function expectDated(page: Page, name: string, iso: string): Promise<void> {
   const shown = await page.evaluate(
     (d) => ({
-      card: new Date(d).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
+      // formatDate: day first, with the month's name ("4 Nov 2026").
+      card: new Date(d).toLocaleDateString('en-GB', {
         day: 'numeric',
+        month: 'short',
+        year: 'numeric',
       }),
       ring: new Date(d).toLocaleDateString(undefined, { month: 'short', year: 'numeric' }),
     }),

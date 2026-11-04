@@ -3,7 +3,7 @@
  * Renders transaction list with sorting, filtering, and pagination
  */
 import { createMemo, For } from 'solid-js'
-import { formatCurrency } from '../core/api'
+import { formatCurrency, formatDate } from '../core/api'
 import { isEstimatedBaseValue, originalAmountLabel, txBaseValue } from '../core/currency'
 import { fromToLabels } from '../core/transactionFlow'
 import styles from './TransactionTable.module.css'
@@ -178,7 +178,7 @@ export default function TransactionTable(props: TransactionTableProps) {
                       <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                   )}
-                  {new Date(transaction.date).toLocaleDateString()}
+                  {formatDate(transaction.date)}
                 </td>
                 <td class={styles.descriptionCol} data-test-id="transactions-cell-description">
                   <div class={styles.description}>

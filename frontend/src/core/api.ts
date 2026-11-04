@@ -1354,6 +1354,11 @@ export const formatWholeCurrency = (
   }).format(whole)
 }
 
+/**
+ * A date as the app writes it: day first, with the month's name ("4 Nov 2026"), as setup, the
+ * import summary and the prints do. It was month first ("Nov 4, 2026"), and the Transactions list
+ * used the browser's own numeric form (first-week test run, B6).
+ */
 export const formatDate = (dateStr: string): string => {
   let date = new Date(dateStr)
   // Handle Google Viz Date(Y,M,D) format where month is 0-indexed
@@ -1371,9 +1376,9 @@ export const formatDate = (dateStr: string): string => {
     }
   }
   if (isNaN(date.getTime())) return dateStr
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
+  return date.toLocaleDateString('en-GB', {
     day: 'numeric',
+    month: 'short',
     year: 'numeric',
   })
 }
