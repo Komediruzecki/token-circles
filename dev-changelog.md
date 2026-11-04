@@ -44,12 +44,13 @@ All notable changes to Token Circles are documented here. The format is based on
   - Prints: "Choose a petal to see its month." (was "Tap a petal ...").
   - Add subscriptions: "Pick the ones you have · choose a plan or type your price" (was "Tap the
     ones you have · pick a plan ...").
-    Test: `frontend/src/__tests__/oldCopyRewrites.test.ts` reads each file with its line breaks
+  - Tests: `frontend/src/__tests__/oldCopyRewrites.test.ts` reads each file with its line breaks
     collapsed and checks the new wording is there and the old is gone (all ten fail before the
     change); `bankImport.test.ts`, `printsShelf.test.tsx`, `prints.spec.ts` and
-    `settings-email-change.spec.ts` now expect the new words. Other em dashes in older UI copy
-    remain (Connected sources' "Nothing new — ...", Recent Imports' delete question, the preview's
-    duplicate notes, "No new transactions — ...", "No date in this row — ..."): not in this list.
+    `settings-email-change.spec.ts` now expect the new words.
+  - Not in this list, so left: other em dashes in older UI copy (Connected sources' "Nothing new
+    — ...", Recent Imports' delete question, the preview's duplicate notes, "No new transactions —
+    ...", "No date in this row — ...").
 - **The sidebar's tour button and the menu it opens are both "Tours"** (B2). The button said
   "What's New" and opened a menu titled "Take a Tour", while the changelog, which "What's New"
   suggests, is "Changelog" under Settings' "View Changelog". The menu holds the page tours, their
