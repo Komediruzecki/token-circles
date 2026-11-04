@@ -325,6 +325,18 @@ for (const [pass, test] of both) {
       // page: a statement it reads goes through the active profile's stored rules, which name its
       // categories.
       const { page } = m
+      // Local-first runs over the demo, whose two profiles are examples, and setup over an example
+      // makes a space of its own (and removes the examples), so it reads with the new space's
+      // rules. The case is setup on profiles of the person's own: in local-first both are made so
+      // first, by name, which is all that tells an example from one of the person's.
+      if (m.kind === 'local') {
+        for (const [profile, name] of [
+          [m.a, 'zz-own-a'],
+          [m.b, 'zz-own-b'],
+        ] as const) {
+          await m.api(`/api/profiles/${String(profile.id)}`, { method: 'PUT', body: { name } })
+        }
+      }
       await arrangeImportRules(page, m.a.id, RULES_A)
       await arrangeImportRules(page, m.b.id, RULES_B)
       await reloadOn(page, 'settings', 'settings-header')

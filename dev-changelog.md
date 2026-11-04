@@ -3195,6 +3195,16 @@ true, or is too small for one.
   over an account with an account in it). With the old rule four fail, and the e2e case; counting
   an unanswered ask as nothing, keeping the earlier answer while asking, asking once, or taking
   every answer fails one or two each.
+- **Release case 4.7 runs its local pass on profiles of the person's own.** It failed in
+  local-first, at 70a3431d too, and was read as setup ignoring the profile's import rules. It is
+  not: the local pass runs over the demo, whose two profiles are examples, and setup over an
+  example makes a space of its own (removing the examples) and reads the statement with that new
+  profile's rules, none stored, so the default ones. A probe logged the read on profile 4 with
+  rules stored for 1 and 2 only. With both profiles renamed first, so neither is an example, the
+  case passes in both runtimes: each read files under its own profile's rules. The unit guard for
+  the behaviour was already there (`importRulesFollowProfile.test.tsx`, the wizard relaunched
+  after a profile switch). Whether a space made over an example should take over the example's
+  edited rules is left as it is, a question for maff.
 
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
