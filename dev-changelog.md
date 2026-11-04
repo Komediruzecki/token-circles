@@ -165,6 +165,18 @@ All notable changes to Token Circles are documented here. The format is based on
     menu button. On the old rule it fails: the toast spans x 8 to 382, over the button at 12 to 48.
   - Not changed: with the sidebar open the button moves to the sidebar's top right, and a toast
     that shows then still covers it; a tap outside the sidebar closes it as before.
+- **Views on Dashboard reorders from the keyboard.** A drag was the only way to move a widget under
+  Show more. Each of those rows now has Move up and Move down after its toggle, named for the
+  widget ("Move Budget Alerts up"). Up is off on the first row and down on the last, and focus
+  stays on the button pressed, or goes to the row's other one when the row reaches an end. The
+  hint reads "Drag a handle or use the arrows to reorder the widgets under Show more. The others
+  have a fixed spot." Rows with a fixed spot keep a blank of the same width, so every toggle ends
+  at one edge.
+  - Test: `dashboardViewsMoveButtons.test.tsx` checks the twelve names, the ends, two moves and the
+    saved order, and the focus; `dashboard.spec.ts` tabs from Budget Alerts' toggle to its Move up
+    and presses Enter twice in Chromium. Without the line that puts focus back, both fail
+    (Chromium reports the button no longer focused); with the buttons never off, the ends test;
+    with the move dropped, the order test.
 
 ### Deploy notes
 

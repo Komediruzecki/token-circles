@@ -42,6 +42,48 @@
   flex-shrink: 0;
 }
 
+/* Move up and Move down, after the toggle: reordering from the keyboard, or with a tap. */
+.move-buttons {
+  display: flex;
+  gap: 4px;
+  margin-left: 8px;
+  flex-shrink: 0;
+}
+
+/* Where a fixed-spot widget would have them, so every row's toggle ends at one edge. */
+.move-space {
+  width: 68px;
+  flex-shrink: 0;
+}
+
+.move-btn {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.move-btn:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--primary);
+}
+
+.move-btn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.move-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
 .dragging {
   opacity: 0.5;
 }

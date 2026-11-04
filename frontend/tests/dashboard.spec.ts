@@ -69,6 +69,36 @@ test.describe('Dashboard @smoke', () => {
     )
   })
 
+  test('reorders the widgets under Show more from the keyboard', async ({ page }) => {
+    // A drag was the only way, so they could not be reordered from the keyboard.
+    await page.getByTestId('dashboard-views').click()
+    const row = page.getByTestId('dashboard-views-row-budget-alerts')
+    await row.locator('button').first().focus()
+    await page.keyboard.press('Tab')
+    const up = page.getByRole('button', { name: 'Move Budget Alerts up' })
+    await expect(up).toBeFocused()
+    await page.keyboard.press('Enter')
+    const movable = page.locator('[data-test-id^="dashboard-views-row-"][draggable="true"]')
+    const ids = async () =>
+      movable.evaluateAll((els) =>
+        els.map((el) => el.getAttribute('data-test-id')!.replace('dashboard-views-row-', ''))
+      )
+    await expect
+      .poll(ids)
+      .toEqual([
+        'category-chart',
+        'recent-transactions',
+        'budget-alerts',
+        'upcoming-bills',
+        'recurring-insights',
+        'income-vs-expenses',
+      ])
+    // Still on the button, so a second Enter moves it again.
+    await expect(up).toBeFocused()
+    await page.keyboard.press('Enter')
+    await expect.poll(async () => (await ids())[1]).toBe('budget-alerts')
+  })
+
   test('has navigation links to the key pages', async ({ page }) => {
     // Attached rather than visible: the links always exist in the nav, but the sidebar may be
     // collapsed depending on viewport/state, which is orthogonal to "the routes are wired up".

@@ -112,7 +112,7 @@ describe('Dashboard Views', () => {
   it('says which rows move, and that the others have a fixed spot', () => {
     mount()
     expect(host.textContent).toContain(
-      'Drag a handle to reorder the widgets under Show more. The others have a fixed spot.'
+      'Drag a handle or use the arrows to reorder the widgets under Show more. The others have a fixed spot.'
     )
   })
 

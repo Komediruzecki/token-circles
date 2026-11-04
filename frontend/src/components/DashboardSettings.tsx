@@ -369,6 +369,36 @@ export const DashboardSettings: Component<DashboardSettingsProps> = (props) => {
     return result.length > 0 ? result : widgets
   }
 
+  // Move up and Move down: reordering from the keyboard, or with a tap instead of a drag. A
+  // widget swaps places with its neighbour among the ones under Show more, as listed; the fixed
+  // ones keep their places in the order.
+  const movableIds = () =>
+    orderedWidgets()
+      .filter((w) => !hasFixedSpot(w.id))
+      .map((w) => w.id)
+
+  let listRef: HTMLDivElement | undefined
+
+  const moveWidget = (id: string, step: -1 | 1) => {
+    const shown = movableIds()
+    const at = shown.indexOf(id)
+    const neighbour = at < 0 ? undefined : shown[at + step]
+    if (neighbour === undefined) return
+    const order = [...widgetOrder()]
+    const i = order.indexOf(id)
+    const j = order.indexOf(neighbour)
+    if (i < 0 || j < 0) return
+    order[i] = neighbour
+    order[j] = id
+    setWidgetOrder(order)
+    // The row's element moves, which can drop focus: put it back on the button pressed, or on
+    // the row's other one when this move took the row to an end and turned the pressed one off.
+    const pick = (dir: 'up' | 'down') =>
+      listRef?.querySelector<HTMLButtonElement>(`[data-move="${id}:${dir}"]`)
+    const pressed = pick(step < 0 ? 'up' : 'down')
+    ;(pressed && !pressed.disabled ? pressed : pick(step < 0 ? 'down' : 'up'))?.focus()
+  }
+
   const saveSettings = () => {
     const current = selectedWidget()
     const ids = current ? current.split(',').filter(Boolean) : []
@@ -390,9 +420,10 @@ export const DashboardSettings: Component<DashboardSettingsProps> = (props) => {
   return (
     <div class={styles.dashboardSettings}>
       <p class={styles.dragHint}>
-        Drag a handle to reorder the widgets under Show more. The others have a fixed spot.
+        Drag a handle or use the arrows to reorder the widgets under Show more. The others have a
+        fixed spot.
       </p>
-      <div class={styles.settingsList}>
+      <div class={styles.settingsList} ref={listRef}>
         <For each={orderedWidgets()}>
           {(widget) => (
             <div
@@ -438,6 +469,63 @@ export const DashboardSettings: Component<DashboardSettingsProps> = (props) => {
                   {isVisible(widget.id) ? 'Visible' : 'Hidden'}
                 </span>
               </button>
+              <Show
+                when={!hasFixedSpot(widget.id)}
+                fallback={<span class={styles.moveSpace} aria-hidden="true" />}
+              >
+                <span class={styles.moveButtons}>
+                  <button
+                    type="button"
+                    class={styles.moveBtn}
+                    data-move={`${widget.id}:up`}
+                    aria-label={`Move ${widget.name} up`}
+                    title="Move up"
+                    disabled={movableIds()[0] === widget.id}
+                    onClick={() => {
+                      moveWidget(widget.id, -1)
+                    }}
+                  >
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2.4"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M6 15l6-6 6 6" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    class={styles.moveBtn}
+                    data-move={`${widget.id}:down`}
+                    aria-label={`Move ${widget.name} down`}
+                    title="Move down"
+                    disabled={movableIds().at(-1) === widget.id}
+                    onClick={() => {
+                      moveWidget(widget.id, 1)
+                    }}
+                  >
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2.4"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M6 9l6 6 6-6" />
+                    </svg>
+                  </button>
+                </span>
+              </Show>
             </div>
           )}
         </For>
