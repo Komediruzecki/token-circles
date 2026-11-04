@@ -2933,6 +2933,25 @@ true, or is too small for one.
   kept after the import (a second tap imports again), with entries here already counted, with a
   YNAB file summarised, and with the mail's button or picture on `#import`, one fails each.
 
+- **The first Dashboard after an import opens on a month with entries** (M6). Setup that imported
+  the review's made-up Revolut statement (August to October) on 4 November finished on November:
+  "INCOME €0.00", "↓2350.00 vs last month" beside last month's €2,350.00, and "No flows for
+  November 2026 yet." While Getting started shows, a Dashboard opened on this month with nothing
+  in it now opens on the latest month that has entries and says so under the period bar:
+  "November has no entries yet. Showing October." It decides once a session, only on the month
+  the app opened on (a month the person chose stays), and not before some month has an entry, so a
+  statement imported later on the Import page opens its month too. The period is the app's, so the
+  other pages follow. A card's change against the month before now names its currency and that
+  month: "→€0.00 vs September", "↑€41.31 vs September" (`MonthChangeLine` in `Dashboard.tsx`,
+  `dashboardMonth.ts`); a range or a year keeps "vs last month". Money that rounds to no cents
+  reads "€0.00" everywhere, never "-€0.00" (`formatCurrency`). Captures at 1280 and 390, light
+  and dark: `m06-dashboard-*`, numbers in `m06-dashboard-before.json` and
+  `m06-dashboard-after.json`; the note reads 5.35:1 in light and 8.84:1 in dark. Tests:
+  `src/core/__tests__/currencies.test.ts`, `src/features/__tests__/dashboardMonth.test.ts`, and in
+  e2e `dashboard-first-month.spec.ts`. Without the move, with it made more than once a session,
+  with it made while Getting started is hidden, with it decided before any month has an entry, and
+  with the old "vs last month" for a month, one fails each.
+
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
 The production build holds back the benchmarks and the questions that choose their figures

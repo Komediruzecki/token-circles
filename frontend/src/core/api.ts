@@ -1332,7 +1332,10 @@ export const formatCurrency = (
   amount: number,
   currency: Models.Currency = getLocalCurrency()
 ): string => {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(amount)
+  // What rounds to no cents is "€0.00", never "-€0.00": Intl keeps the sign of a negative that
+  // rounds to zero, and of -0 (review M6, an account whose entries net to nothing).
+  const cents = Math.abs(amount) < 0.005 ? 0 : amount
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(cents)
 }
 
 /**
