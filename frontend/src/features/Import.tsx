@@ -39,6 +39,7 @@
 
 import { createEffect, createSignal, For, on, onCleanup, onMount, Show, untrack } from 'solid-js'
 import { importTabFromHash } from '../../../shared/importRoute'
+import { workBackTypedBalances } from '../components/onboarding/setupBalances'
 import { OrbitSpinner } from '../components/OrbitSpinner'
 import { SubscriptionScanModal } from '../components/SubscriptionScan'
 import { useAppState } from '../core/appStore'
@@ -58,6 +59,7 @@ import { handedImportFile, takeHandedImportFile } from './import/importHandoff'
 import { ImportMappingStep } from './import/ImportMappingStep'
 import { ImportPreviewStep } from './import/ImportPreviewStep'
 import type { StoredAccount } from '../core/balanceToday'
+import type { TypedBalance } from '../core/setupTypedBalances'
 
 export default function Import() {
   // After a successful import, offer a subscription scan over the fresh data.
@@ -67,6 +69,8 @@ export default function Import() {
   // The accounts an import touched, each with its balance today (review M2): read what they held
   // just before it ran, and again once it is in.
   let heldBefore: Map<number, number> | null = null
+  // The balances typed in setup, for the import of the file it handed over (importHandoff.ts).
+  let handedTyped: readonly TypedBalance[] = []
   const [touched, setTouched] = createSignal<StoredAccount[]>([])
 
   // A statement whose every file is from a bank the app knows opens on a summary with one button,
@@ -89,8 +93,20 @@ export default function Import() {
       if (summary.imported > 0) setScanOfferCount(summary.imported)
       const before = heldBefore
       heldBefore = null
+      // A file setup handed over is worked back from the balances typed there (review M2), once,
+      // before the balances below are read.
+      const typed = handedTyped
+      handedTyped = []
+      const workedBack =
+        summary.imported > 0 && typed.length > 0
+          ? workBackTypedBalances(typed).catch((err: unknown) => {
+              console.error('Could not set the balance today after the statement:', err)
+              addToast("Couldn't set your account's balance today. Accounts can set it.", 'warning')
+            })
+          : Promise.resolve()
       if (summary.imported > 0 && before !== null) {
-        storedAccounts()
+        workedBack
+          .then(() => storedAccounts())
           .then((after) => setTouched(touchedSince(before, after)))
           .catch((err: unknown) => {
             console.error('Reading the balances after the import:', err)
@@ -163,6 +179,7 @@ export default function Import() {
       const handed = takeHandedImportFile()
       if (!handed) return
       flow.resetForm()
+      handedTyped = handed.typed
       flow.setActiveImportTab(handed.tab)
       if (handed.tab === 'bank-imports') void flow.addBankFiles([handed.file])
       else void flow.readFile(handed.file)

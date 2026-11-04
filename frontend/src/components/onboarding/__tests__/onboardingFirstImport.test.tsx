@@ -393,7 +393,7 @@ describe('a file the step cannot import', () => {
     expect(getOnboardingStatus('local')).toBe('completed')
     expect(window.location.hash).toBe('#import')
     // File Upload reads any table, and goes on to matching its columns.
-    expect(handedImportFile()).toEqual({ file, tab: 'file-upload' })
+    expect(handedImportFile()).toEqual({ file, tab: 'file-upload', typed: [] })
     expect(await transactions()).toEqual([])
   })
 
@@ -407,7 +407,7 @@ describe('a file the step cannot import', () => {
     )
     byTestId('onboarding-import-open')!.click()
 
-    expect(handedImportFile()).toEqual({ file, tab: 'bank-imports' })
+    expect(handedImportFile()).toEqual({ file, tab: 'bank-imports', typed: [] })
   })
 
   it('goes on without it: Skip asks nothing, hands nothing over, and goes to Done', async () => {
@@ -905,6 +905,21 @@ describe('the balance setup was given (review M2)', () => {
       const [main] = await accounts()
       expect(main.balance).toBeCloseTo(1240.5, 6)
     }, waitLong)
+  })
+
+  it('goes with a file handed to the Import page, for its import to work back from', async () => {
+    await makeAccount('1240.50')
+    const [main] = await accounts()
+    const file = choose('export.csv', UNKNOWN_TABLE)
+    await readUntil('unreadable')
+    byTestId('onboarding-import-open')!.click()
+
+    expect(handedImportFile()?.typed).toEqual([
+      { id: main.id, figure: 1240.5, asOf: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) },
+    ])
+    expect(handedImportFile()?.file).toBe(file)
+    // Setup is finished, so its own copy is gone: only the handed file carries them.
+    expect(localStorage.getItem('finance_setup_balances')).toBeNull()
   })
 
   it('is forgotten once setup is left, so a later import adds up as it comes', async () => {

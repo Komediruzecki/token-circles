@@ -3284,6 +3284,16 @@ true, or is too small for one.
   from the account as stored at Save, not as the list read it", which fails without the read. The
   test that reads the figure back now has the stored account change when the figure is set, as it
   does, rather than before Save.
+- **A file setup hands to the Import page keeps the balance typed in setup.** "Open in Import"
+  finishes setup, and finishing forgot setup's "Balance today" figures (`forgetTypedBalances`)
+  before the handed file was imported, so that import added up on top of the typed balance, the
+  double count M2 removed. The figures now go with the file (`HandedImportFile.typed`), and the
+  Import page works the file's import back from them, once, before it lists the balances. Setup
+  left any other way still forgets them, and the Import page drops them after the next import
+  finishes. Tests: `onboardingFirstImport.test.tsx` ("goes with a file handed to the Import page")
+  fails without the figures in the hand-off; `importOpensHandedFile.test.tsx` ("works the handed
+  file's import back from the balance typed in setup") fails without the page taking them, the
+  account reading 1,228.00 instead of 1,240.50.
 
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 

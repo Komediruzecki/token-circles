@@ -87,7 +87,7 @@ it('waits for the page to show before it takes the file', async () => {
   const file = new File([UNKNOWN_TABLE], 'export.csv', { type: 'text/csv' })
   handFileToImport(file, 'file-upload')
   await new Promise((resolve) => setTimeout(resolve, 50))
-  expect(handedImportFile()).toEqual({ file, tab: 'file-upload' })
+  expect(handedImportFile()).toEqual({ file, tab: 'file-upload', typed: [] })
 
   setPage('import')
 
@@ -96,3 +96,48 @@ it('waits for the page to show before it takes the file', async () => {
   })
   expect(handedImportFile()).toBeNull()
 })
+
+// Review M2, round 3: setup forgot its "Balance today" figures as it finished, before the file it
+// handed over was imported here, so that import added up on top of the typed balance.
+it("works the handed file's import back from the balance typed in setup", async () => {
+  const db = await getDB()
+  const id = (await db.add('accounts', {
+    name: 'Main checking',
+    type: 'giro',
+    currency: 'EUR',
+    balance: 1240.5,
+    starting_balance: 1240.5,
+    profile_id: 1,
+  })) as number
+  const statement =
+    'Date,Description,Amount,Means of Payment\n' +
+    '2026-06-01,Groceries,-10.00,Main checking\n' +
+    '2026-06-02,Bus,-2.50,Main checking\n'
+  handFileToImport(new File([statement], 'export.csv', { type: 'text/csv' }), 'file-upload', [
+    { id, figure: 1240.5, asOf: '2026-07-01' },
+  ])
+  setPage('import')
+  await mountImport()
+
+  await vi.waitFor(() => {
+    expect(byTestId('import-continue-preview')).not.toBeNull()
+  })
+  byTestId('import-continue-preview')!.click()
+  await vi.waitFor(() => {
+    expect(byTestId('import-execute-all')).not.toBeNull()
+  })
+  byTestId('import-execute-all')!.click()
+
+  // Both entries are dated before the day the figure was typed: the account still reads it.
+  await vi.waitFor(
+    async () => {
+      const account = (await db.get('accounts', id)) as {
+        balance: number
+        starting_balance: number
+      }
+      expect(account.balance).toBeCloseTo(1240.5, 6)
+      expect(account.starting_balance).toBeCloseTo(1253, 6)
+    },
+    { timeout: 8_000 }
+  )
+}, 20_000)
