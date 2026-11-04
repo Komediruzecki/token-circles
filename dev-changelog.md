@@ -2596,6 +2596,15 @@ check')` first, as the cushion and debt cases do.
   with a title, one without, and one without and with several lines gets; without the change, the
   last two fail.
 
+- **Every ToggleField row flips its switch** (PR A's hand-back; `03f7c60f` made it the first-week
+  switch's opt-in `wholeRow`). The row is always the switch's `<label>` now, so a tap on its
+  title, its description or the space around them flips it once, and a disabled switch takes no
+  tap anywhere on the row. The `wholeRow` prop is gone, and with it `WeekOneMails.tsx`'s use of
+  it; the other rows are Autopay on Bills and Housing, and Adjust for inflation and the
+  allocation switch on Retirement. Tests: `ToggleField.test.tsx` taps the title, the description,
+  the row and the switch and expects four flips, one each, and none on a disabled row; the first
+  fails on the old opt-in row.
+
 ### Found in the first-week test run (3 Nov)
 
 What the 3 Nov test run and the functionality review after it found in the first week's changes,
