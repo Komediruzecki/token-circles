@@ -15,6 +15,9 @@
  * under it: Import's "No saved sheets yet" note, the last line of Settings. The page now ends far
  * enough below its last line, and the root's `scroll-padding-bottom` keeps whatever is scrolled
  * into view at the bottom, a control taking focus among them, above the button.
+ *
+ * On a phone with a home indicator the page runs under it (viewport-fit=cover), so the button
+ * stands on the safe-area inset and the strip grows by the same amount.
  */
 import { expect, test } from '@playwright/test'
 import { E2E_BASE } from './test-helpers'
@@ -177,3 +180,61 @@ for (const width of [390, 1280]) {
     ).toBeLessThanOrEqual(fab.y)
   })
 }
+
+test.describe('on a phone with a home indicator (a 34 px bottom inset)', () => {
+  // viewport-fit=cover runs the page under an iPhone's home indicator, a strip the system keeps
+  // for its swipe home; controls belong above it. Chromium's inset override stands in for the phone.
+  test.beforeEach(async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    const cdp = await page.context().newCDPSession(page)
+    await cdp.send('Emulation.setSafeAreaInsetsOverride', {
+      insets: {
+        top: 47,
+        topMax: 47,
+        left: 0,
+        leftMax: 0,
+        bottom: 34,
+        bottomMax: 34,
+        right: 0,
+        rightMax: 0,
+      },
+    })
+  })
+
+  test('the quick add button stands above the inset', async ({ page }) => {
+    test.setTimeout(90_000)
+    await page.goto(`${E2E_BASE}/#settings`, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+    await expect(page.getByTestId('settings-header')).toBeVisible({ timeout: 30_000 })
+    const fab = await settledBox(page.getByRole('button', { name: 'Quick add entry' }))
+    // 16 px off the bottom on a phone, counted from the top of the inset.
+    expect(844 - (fab.y + fab.height)).toBeGreaterThanOrEqual(34 + 16)
+  })
+
+  test('a control scrolled into view from below, and the end of the page, stay clear of it', async ({
+    page,
+  }) => {
+    test.setTimeout(90_000)
+    await page.goto(`${E2E_BASE}/#settings`, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+    await expect(page.getByTestId('settings-header')).toBeVisible({ timeout: 30_000 })
+    await page.waitForTimeout(1000)
+    const fab = await settledBox(page.getByRole('button', { name: 'Quick add entry' }))
+    await page.evaluate(() => window.scrollTo(0, 0))
+    const box = await page.evaluate(async () => {
+      const visible = Array.from(
+        document.querySelectorAll<HTMLElement>('main button, main a[href], main input, main select')
+      ).filter((el) => el.getBoundingClientRect().height > 0)
+      const last = visible[visible.length - 1]
+      last.scrollIntoView({ block: 'nearest' })
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+      const r = last.getBoundingClientRect()
+      return { top: Math.round(r.top), bottom: Math.round(r.bottom), scrolled: window.scrollY }
+    })
+    expect(box.scrolled, 'it was below the screen').toBeGreaterThan(0)
+    expect(
+      box.bottom,
+      `the control ${JSON.stringify(box)} and the button at ${fab.y}`
+    ).toBeLessThanOrEqual(fab.y)
+    await toTheEnd(page)
+    expect(await under(page, 'Quick add entry'), '#settings at its end').toEqual([])
+  })
+})

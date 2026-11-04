@@ -251,11 +251,12 @@
 }
 
 /* Room under the last line of every page for the quick add button (.fab: 56 px at 22 px from the
-   bottom, its 6 px ring, and 12 px to spare). With less, the end of a page could never be
-   scrolled out from under it. The root keeps the same strip for anything scrolled into view from
-   below. */
+   bottom, its 6 px ring, and 12 px to spare), above a phone's home indicator when it has one: the
+   button stands on the safe-area inset, so the strip grows with it. With less, the end of a page
+   could never be scrolled out from under it. The root keeps the same strip for anything scrolled
+   into view from below. */
 :global(:root) {
-  --fab-clearance: 96px;
+  --fab-clearance: calc(96px + env(safe-area-inset-bottom, 0px));
 }
 
 :global(html) {
@@ -500,7 +501,8 @@
 .fab {
   position: fixed;
   right: 22px;
-  bottom: 22px;
+  /* Above the home indicator on a phone with one (viewport-fit=cover lets the page run under it). */
+  bottom: calc(22px + env(safe-area-inset-bottom, 0px));
   z-index: 1400;
   width: 56px;
   height: 56px;
@@ -550,7 +552,7 @@
 @media (max-width: 620px) {
   .fab {
     right: 16px;
-    bottom: 16px;
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
     width: 52px;
     height: 52px;
   }

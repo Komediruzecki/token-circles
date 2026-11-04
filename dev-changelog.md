@@ -142,6 +142,20 @@ All notable changes to Token Circles are documented here. The format is based on
   (`shared/importMapping.ts`; the star is all `required` drives).
   - Test: `expectedColumnsTable.test.ts` now holds the table's required columns and the starred
     fields to the same list both ways. With Description starred again it fails.
+- **The quick add button stands above a phone's home indicator.** The page runs under the
+  indicator (`viewport-fit=cover`), and the button sat 16 px from the screen's bottom edge, inside
+  the 34 px strip an iPhone keeps for its swipe home. It now stands on the safe-area inset, and
+  `--fab-clearance` grows by the same amount, so whatever is scrolled into view from below still
+  stops above the button. At 390 with a 34 px inset the button's bottom edge was 16 px above the
+  screen's and is 50 px now.
+  - Test: `menu-button-clearance.spec.ts` sets a 34 px bottom inset through Chromium's safe-area
+    override and expects the button at least 50 px up, Settings' last control brought into view
+    from below above it, and nothing under it at the page's end. Without the inset on the button
+    the first fails (16 px); without it in `--fab-clearance` the second (the control's bottom at
+    748, the button's top at 742). The page's end stays clear either way, since the body's own
+    safe-area padding already lifts it.
+  - On such a phone a page now ends 96 px plus twice the inset below its last line (the body's
+    padding and the clearance each add one), 34 px more than it needs.
 
 ### Deploy notes
 
