@@ -93,10 +93,19 @@ interface PayeeCharge extends GroupTxn {
   categoryId: number | null
 }
 
-/** The text that names who an expense paid: the beneficiary, else the description, else the payor. */
-function payeeText(txn: DetectableTransaction): string {
+/**
+ * The "To " Revolut writes before a transfer's payee, "To Example Landlord" (review M13): only
+ * that word and its space, so "Tomasz" and "TOTAL" keep their names.
+ */
+const REVOLUT_TO = /^To\s+(?=\p{L})/u
+
+/**
+ * The text that names who an expense paid: the beneficiary, else the description, else the payor,
+ * without the "To " a Revolut transfer starts with.
+ */
+export function payeeText(txn: DetectableTransaction): string {
   for (const text of [txn.beneficiary, txn.description, txn.payor]) {
-    if (typeof text === 'string' && text.trim() !== '') return text.trim()
+    if (typeof text === 'string' && text.trim() !== '') return text.trim().replace(REVOLUT_TO, '')
   }
   return ''
 }

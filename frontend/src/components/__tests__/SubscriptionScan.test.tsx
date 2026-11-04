@@ -13,7 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { BILL_MESSAGES } from '../../../../shared/billSchema'
 import { ApiError } from '../../core/apiError'
 import { orientationFacts } from '../../core/orientation'
-import { dueDateLabel } from '../../features/billDue'
+import { dayText } from '../../utils/dayText'
 import { localToday } from '../../utils/period'
 import { SubscriptionScanPanel } from '../SubscriptionScan'
 
@@ -410,6 +410,23 @@ describe('in the setup wizard', () => {
   })
 })
 
+/** `css` without its media queries: what is left applies to every pointer and screen. */
+function withoutMediaQueries(css: string): string {
+  let out = ''
+  let at = 0
+  for (let start = css.indexOf('@media'); start >= 0; start = css.indexOf('@media', at)) {
+    out += css.slice(at, start)
+    let depth = 0
+    let i = css.indexOf('{', start)
+    for (; i < css.length; i++) {
+      if (css[i] === '{') depth++
+      else if (css[i] === '}' && --depth === 0) break
+    }
+    at = i + 1
+  }
+  return out + css.slice(at)
+}
+
 describe('what a row says', () => {
   // 3 Nov test run: "4.5" and "48.1" in the price fields, "last 2026-10-18", and at 1280 the
   // confidence cut to "High con...".
@@ -431,12 +448,34 @@ describe('what a row says', () => {
     expect(price('Spotify').value).toBe('48.10')
   })
 
-  it("says the last charge's date as the app does, never as an ISO date", async () => {
+  // Review M13 and D4: "3 charges · last 2026-10-15" here, and "1 Aug to 28 Oct" on the step
+  // before. One way to write a day: "3 charges, last 15 Oct".
+  it("says the charges and the last one's day as setup's import step writes a day", async () => {
     await mountScan()
     const last = new Date(Date.now() - 5 * 86_400_000).toISOString().slice(0, 10)
     const meta = host.querySelector('[data-name="Netflix"] [data-test-id="sub-scan-meta"]')!
-    expect(meta.textContent).toBe(`4 charges · last ${dueDateLabel(last)} · High confidence`)
-    expect(meta.textContent).not.toMatch(/\d{4}-\d{2}-\d{2}/)
+    expect(meta.textContent).toBe(`4 charges, last ${dayText(last)} · High confidence`)
+    expect(meta.textContent).not.toMatch(/\d{4}-\d{2}-\d{2}|[A-Z][a-z]{2} \d{1,2},/)
+  })
+
+  // Review D4: at 1280 the ticks were 16 x 16 and the price fields 64 x 20; a phone's rows were
+  // already 44 px. With a mouse too, a row's tick and name, its price and its period are 44 px tall.
+  it('makes a row 44 px tall to tick, price and time with a mouse too', () => {
+    const css = withoutMediaQueries(
+      readFileSync(resolve(__dirname, '../SubscriptionScan.module.css'), 'utf8').replace(
+        /\/\*[\s\S]*?\*\//g,
+        ''
+      )
+    )
+    /** The declarations of the first rule for `selector` alone. */
+    const rule = (selector: string) => {
+      const at = css.indexOf(`\n${selector} {`)
+      return at < 0 ? '' : css.slice(at, css.indexOf('}', at))
+    }
+    expect(rule('.row-main')).toMatch(/min-height:\s*44px/)
+    expect(rule('.price-wrap')).toMatch(/min-height:\s*44px/)
+    expect(rule('.price')).toMatch(/min-height:\s*42px/)
+    expect(rule('.freq')).toMatch(/min-height:\s*44px/)
   })
 
   it('wraps the line instead of cutting it short, keeping each part whole', () => {
@@ -447,5 +486,52 @@ describe('what a row says', () => {
     const meta = /\.meta\s*\{([^}]*)\}/.exec(css)?.[1] ?? ''
     expect(meta).not.toMatch(/white-space:\s*nowrap|text-overflow|overflow:\s*hidden/)
     expect(/\.meta-part\s*\{([^}]*)\}/.exec(css)?.[1] ?? '').toMatch(/white-space:\s*nowrap/)
+  })
+})
+
+// Review M13: a catalogue name stood alone ("Gym membership" for a statement's "Example Gym"), and
+// a Revolut transfer read "Regular payment to To Example Landlord".
+describe("a row's name", () => {
+  beforeEach(() => {
+    apiMocks.apiGet.mockImplementation(async (url: string) => {
+      if (url === '/api/transactions') {
+        return [
+          ...[95, 65, 35, 5].map((days) => charge('Example Gym', 29, days)),
+          ...[95, 65, 35, 5].map((days) => charge('NETFLIX.COM AMSTERDAM', 13.99, days)),
+          ...[94, 64, 34, 4].map((days) => charge('To Example Landlord', 650, days)),
+        ]
+      }
+      return []
+    })
+  })
+
+  async function mountRows(): Promise<void> {
+    host = document.createElement('div')
+    document.body.appendChild(host)
+    dispose = render(() => <SubscriptionScanPanel active={() => true} />, host)
+    await vi.waitFor(() => {
+      expect(host.querySelectorAll('[data-test-id="sub-scan-row"]').length).toBe(3)
+    })
+  }
+
+  const nameOf = (name: string) =>
+    host
+      .querySelector(`[data-name="${name}"] [data-test-id="sub-scan-name"]`)
+      ?.textContent?.replace(/\s+/g, ' ')
+      .trim()
+
+  it("keeps the statement's name beside a catalogue name, only where it says more", async () => {
+    await mountRows()
+    expect(nameOf('Gym membership')).toBe('Gym membership (Example Gym)')
+    // "NETFLIX.COM AMSTERDAM" says nothing "Netflix" does not.
+    expect(nameOf('Netflix')).toMatch(/^Netflix(?! \()/)
+    expect(
+      host.querySelector('[data-name="Netflix"] [data-test-id="sub-scan-statement-name"]')
+    ).toBeNull()
+  })
+
+  it('names a Revolut transfer by its payee, without the "To "', async () => {
+    await mountRows()
+    expect(nameOf('Example Landlord')).toBe('Regular payment to Example Landlord')
   })
 })

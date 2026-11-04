@@ -381,7 +381,7 @@ test.describe('the setup wizard on the account @smoke', () => {
         timeout: 30_000,
       })
       const track = page.getByTestId('onboarding-subs-add-continue')
-      await expect(track).toHaveText('Track 2 subscriptions', { timeout: 15_000 })
+      await expect(track).toHaveText('Track 2 on Bills', { timeout: 15_000 })
       await track.click()
       await expect(page.getByTestId('onboarding-done-summary')).toHaveText(
         'Personal Profile has 1 account, 7 transactions and 2 regular payments tracked on Bills.',

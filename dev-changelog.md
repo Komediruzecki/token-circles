@@ -3050,6 +3050,24 @@ true, or is too small for one.
   `onboarding.spec.ts` and `onboarding-server.spec.ts`. Counting paused ones, or only one kind, in
   the mail fails its test.
 
+- **Setup's "Regular payments we spotted": each row says who and when, and is 44 px with a
+  mouse too** (M13, with A5 and D4). The step was headed "Subscriptions we spotted" over a rent, a
+  phone and a transit pass, and its button said "Track 2 subscriptions"; it is headed "Regular
+  payments we spotted" and the button says "Track 2 on Bills". A Revolut transfer read "Regular
+  payment to To Example Landlord": the finder drops the "To " Revolut writes before a payee (only
+  that word, so "Tomasz" and "TOTAL" keep their names), and a bill under the payee's own name
+  tracks it. A catalogue name keeps the statement's beside it where that says more: "Gym
+  membership (Example Gym)", while "NETFLIX.COM AMSTERDAM" adds nothing to "Netflix"; the bill is
+  still saved as "Gym membership". The meta line reads "3 charges, last 15 Oct", a day written as
+  the import step before it writes one (`utils/dayText.ts`, shared with `dateRangeText`), and it
+  wraps (A5). At 1280 the price field went from 64 x 20 inside a 30 px border to 44 px, the period
+  from 32 to 44 px, and the tick's label from 59 to 64 px; a phone was 44 px already. Captures at
+  1280 and 390, light and dark: `m13-step-*`, `m13-done-*` and `m13-bills-*`, with every row's
+  sizes in `m13-bills-before.json` and `m13-bills-after.json`. Tests: `SubscriptionScan.test.tsx`,
+  `recurringPayments.test.ts`, `onboardingForms.test.tsx`, and in e2e `onboarding.spec.ts` and
+  `onboarding-server.spec.ts`. Dropping "To" without its space, or the statement's name shown
+  where it says nothing more, fails a test each.
+
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
 The production build holds back the benchmarks and the questions that choose their figures

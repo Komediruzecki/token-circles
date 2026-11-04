@@ -279,7 +279,7 @@ test.describe('onboarding wizard', () => {
     await expect(page.getByTestId('sub-scan-add-btn')).toHaveCount(0)
     await expect(page.getByRole('button', { name: 'Rescan' })).toHaveCount(0)
     const track = page.getByTestId('onboarding-subs-add-continue')
-    await expect(track).toHaveText('Track 2 subscriptions')
+    await expect(track).toHaveText('Track 2 on Bills')
     await track.click()
 
     // Done says what went in, and no toast covered the wizard on the way.

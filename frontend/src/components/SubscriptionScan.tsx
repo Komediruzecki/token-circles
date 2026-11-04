@@ -36,13 +36,13 @@ import { apiGet, apiPost, getLocalCurrency, listRows, showToast } from '../core/
 import { ApiError } from '../core/apiError'
 import { parseDecimalInput } from '../core/decimalInput'
 import { monthlyEquivalent } from '../core/subscriptionMath'
-import { dueDateLabel } from '../features/billDue'
 import { matchBrand } from '../features/subscriptionBrands'
 import {
   detectSubscriptions,
   recentForScan,
   worthTracking,
 } from '../features/subscriptionDetection'
+import { dayText } from '../utils/dayText'
 import { createForm, FormNotice, SubmitButton } from './form'
 import { OrbitSpinner } from './OrbitSpinner'
 import { refusedMessages } from './refusedSubscriptions'
@@ -352,19 +352,26 @@ export function SubscriptionScanPanel(props: SubscriptionScanPanelProps) {
             </Show>
           </span>
           <span class={styles.info}>
-            <span class={styles.name}>
+            <span class={styles.name} data-test-id="sub-scan-name">
               {recurring ? `Regular payment to ${d.name}` : d.name}
+              {/* The statement's own name for a catalogue match: "Gym membership (Example Gym)". */}
+              <Show when={d.statementName}>
+                {' '}
+                <span class={styles.statementName} data-test-id="sub-scan-statement-name">
+                  ({d.statementName})
+                </span>
+              </Show>
               <Show when={d.matchedPlan}>
                 <span class={styles.plan}>{d.matchedPlan!.label}</span>
               </Show>
             </span>
-            {/* Each part keeps its words together, so a narrow row breaks between them. */}
+            {/* "3 charges, last 15 Oct": a day as the import step before writes one. Each part
+                keeps its words together, so a narrow row breaks between them. */}
             <span class={styles.meta} data-test-id="sub-scan-meta">
               <span class={styles.metaPart}>
-                {d.occurrences} charge{d.occurrences === 1 ? '' : 's'}
-              </span>
-              {' · '}
-              <span class={styles.metaPart}>last {dueDateLabel(d.lastDate)}</span>
+                {d.occurrences} charge{d.occurrences === 1 ? '' : 's'},
+              </span>{' '}
+              <span class={styles.metaPart}>last {dayText(d.lastDate)}</span>
               {' · '}
               <span class={styles.metaPart}>
                 {isTracked() ? 'Already tracked' : confidenceLabel[d.confidence]}

@@ -58,6 +58,7 @@
   opacity: 0.55;
 }
 
+/* 44 px to tick with a mouse too (review D4): the label is the tick's target. */
 .row-main {
   display: flex;
   align-items: center;
@@ -65,6 +66,7 @@
   flex: 1 1 220px;
   cursor: pointer;
   min-width: 0;
+  min-height: 44px;
 }
 
 .row-tracked .row-main {
@@ -106,8 +108,15 @@
   font-weight: 600;
   color: var(--text);
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 2px 8px;
+}
+
+/* The statement's own name beside a catalogue match, under the name's weight. */
+.statement-name {
+  font-weight: 400;
+  color: var(--text-secondary);
 }
 
 .plan {
@@ -139,18 +148,23 @@
   flex: none;
 }
 
+/* The price and the period are 44 px tall with a mouse too (review D4): 64 x 20 was the price. */
 .price-wrap {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 4px 8px;
+  padding: 0 8px;
+  min-height: 44px;
+  box-sizing: border-box;
   background: var(--bg);
 }
 
 .price {
   width: 64px;
+  min-height: 42px;
+  padding: 0;
   border: 0;
   background: transparent;
   color: var(--text);
@@ -169,6 +183,7 @@
 }
 
 .freq {
+  min-height: 44px;
   padding: 6px 8px;
   border: 1px solid var(--border);
   border-radius: 8px;

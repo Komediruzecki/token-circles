@@ -425,7 +425,7 @@ describe('adding the subscriptions the scan found', () => {
     await openAt('subscriptions')
     const addContinue = () => byTestId('onboarding-subs-add-continue') as HTMLButtonElement | null
     await vi.waitFor(() => {
-      expect(addContinue()?.textContent).toBe('Track 2 subscriptions')
+      expect(addContinue()?.textContent).toBe('Track 2 on Bills')
     })
     const netflixPrice = host.querySelector<HTMLInputElement>(
       '[data-name="Netflix"] [data-test-id="sub-scan-price"]'
@@ -451,8 +451,12 @@ describe('adding the subscriptions the scan found', () => {
     await openAt('subscriptions')
     const addContinue = () => byTestId('onboarding-subs-add-continue') as HTMLButtonElement | null
     await vi.waitFor(() => {
-      expect(addContinue()?.textContent).toBe('Track 2 subscriptions')
+      expect(addContinue()?.textContent).toBe('Track 2 on Bills')
     })
+    // Review M13: the step lists rent and phone bills too, so it is not headed "Subscriptions".
+    expect(
+      byTestId('onboarding-step-subscriptions')?.querySelector('h2')?.textContent?.trim()
+    ).toBe('Regular payments we spotted')
     // The wizard scans once, after its import: no Rescan, and its own Add is the footer's.
     const buttons = [...host.querySelectorAll('button')].map((b) => b.textContent?.trim())
     expect(buttons).not.toContain('Rescan')

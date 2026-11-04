@@ -1028,7 +1028,7 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
   const subscriptionsStep = () => (
     <div class={styles.step} data-test-id="onboarding-step-subscriptions">
       <h2 class={styles.title} tabindex="-1" data-step-heading>
-        Subscriptions we spotted
+        Regular payments we spotted
       </h2>
       <p class={styles.lead}>
         Tick the ones to track. They go under Bills, where you can change them.
@@ -1156,7 +1156,8 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
         const picked = scan?.chosenCount() ?? 0
         if (scan && picked > 0) {
           return {
-            label: `Track ${counted(picked, 'subscription')}`,
+            // Where they go, in the done step's words (review M12): a rent is not a subscription.
+            label: `Track ${picked} on Bills`,
             run: () => {
               void scan.addSelected().then(() => {
                 // A subscription that was refused stays chosen, marked under its row or named in

@@ -18,6 +18,7 @@ import { createSignal, createUniqueId, For, onCleanup, Show } from 'solid-js'
 import { listAdapters } from '../../core/bankImport'
 import { IMPORT_ACCOUNT_TYPES } from '../../features/import/accountTypeChoices'
 import { createImportFlow, namesItsAccounts } from '../../features/import/importFlow'
+import { dayText } from '../../utils/dayText'
 import styles from './Onboarding.module.css'
 import type { BankId } from '../../core/bankImport'
 import type { BankFileRow, ImportSummary } from '../../features/import/importFlow'
@@ -74,15 +75,9 @@ export function dateRangeText(
   thisYear = new Date().getFullYear()
 ): string {
   const sameYear = from.slice(0, 4) === to.slice(0, 4) && Number(from.slice(0, 4)) === thisYear
-  const format = new Intl.DateTimeFormat('en-GB', {
-    day: 'numeric',
-    month: 'short',
-    ...(sameYear ? {} : { year: 'numeric' }),
-    timeZone: 'UTC',
-  })
   // Each date holds together (no-break spaces): a narrow card wraps between the dates, never
   // inside one.
-  const day = (iso: string) => format.format(new Date(`${iso}T00:00:00Z`)).replace(/ /g, '\u00a0')
+  const day = (iso: string) => dayText(iso, !sameYear)
   return from === to ? day(from) : `${day(from)} to ${day(to)}`
 }
 
