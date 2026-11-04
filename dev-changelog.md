@@ -3093,6 +3093,12 @@ true, or is too small for one.
   review's case came from the circles M1 inflated. Tests: `guidanceNextStep.test.ts`; listing it
   again fails both of its cases.
 
+- **Setup's done step names the button a tour starts from** (M16). It said "take a page tour any
+  time from the sidebar", where the button is What's New, which opens Take a Tour. It now says
+  "take a page tour any time from What's New in the sidebar." The test reads the sidebar's label
+  from `App.tsx` too, so a rename there (B2 in the next PR) fails it until both change. Tests:
+  `onboardingDoneStep.test.tsx`; the old words, or another label in the sidebar, fail it.
+
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
 The production build holds back the benchmarks and the questions that choose their figures

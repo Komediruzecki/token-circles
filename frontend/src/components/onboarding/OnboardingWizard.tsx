@@ -1078,9 +1078,10 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
         </section>
       </Show>
       {/* A keyboard shortcut, so only where there is a keyboard to press it: not on touch. */}
-      <p class={styles.tip}>
+      {/* The sidebar's button by its label (review M16): What's New opens Take a Tour. */}
+      <p class={styles.tip} data-test-id="onboarding-done-tip">
         Press <kbd>Ctrl</kbd>+<kbd>K</kbd> anywhere to add a transaction, and take a page tour any
-        time from the sidebar.
+        time from What's New in the sidebar.
       </p>
     </div>
   )
