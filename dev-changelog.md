@@ -84,6 +84,11 @@ All notable changes to Token Circles are documented here. The format is based on
   locale (Accounts' activity list) are not in this item. Tests: `TransactionTable.dates.test.tsx`
   (the list's cell and `formatDate`; the cell read "11/4/2026" and `formatDate` "Nov 4, 2026"
   before), and the release cases s05 and s12 now expect the new form.
+- **llms.txt names the banks as the importer does.** It listed "ING" among the eight native
+  importers; the Bank Imports tab and the mails call it "ING NL" (`shared/bankImport/adapters/ing.ts`),
+  the Dutch bank's export. DKB was already there. Test: `ynabRegister.test.ts` now reads the list
+  in `frontend/public/llms.txt` and checks it against every adapter's label except YNAB, and the
+  count in words, so a bank added to the importer has to be added there too.
 
 ### Deploy notes
 

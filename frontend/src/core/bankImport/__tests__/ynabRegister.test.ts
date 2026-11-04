@@ -715,4 +715,23 @@ describe('review round 2: llms.txt', () => {
     expect(bullet).toContain('the CSV YNAB imports')
     expect(bullet).not.toContain('\u2014')
   })
+
+  // The importers by the names the Bank Imports tab lists them under (each adapter's label):
+  // llms.txt said "ING" for the Dutch bank the importer calls "ING NL".
+  it('names every bank importer as the app does, and counts them', async () => {
+    const { readFileSync } = await import('node:fs')
+    const { resolve } = await import('node:path')
+    const { listAdapters } = await import('../../../../../shared/bankImport/registry')
+    const text = readFileSync(resolve(__dirname, '../../../../public/llms.txt'), 'utf-8')
+    const bullet = text
+      .split('\n- ')
+      .find((b) => b.includes('native importers'))!
+      .replace(/\s+/g, ' ')
+    const banks = listAdapters()
+      .filter((a) => a.id !== 'ynab')
+      .map((a) => a.label)
+    const listed = /native importers: (.+?)\. /.exec(bullet)![1].split(/, | and /)
+    expect([...listed].sort()).toEqual([...banks].sort())
+    expect(bullet).toContain(`${['Eight', 'Nine', 'Ten'][banks.length - 8] ?? banks.length} banks`)
+  })
 })
