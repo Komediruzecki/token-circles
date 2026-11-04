@@ -455,13 +455,15 @@ export function ImportPreviewStep(props: { flow: ImportFlow; embedded?: boolean 
           <thead>
             <tr>
               <th class={styles.selectCol}>
-                <input
-                  type="checkbox"
-                  checked={selectableTotal() > 0 && selected() === selectableTotal()}
-                  onChange={(e) => {
-                    flow.toggleAll(e.currentTarget.checked)
-                  }}
-                />
+                <label class={styles.selectHit}>
+                  <input
+                    type="checkbox"
+                    checked={selectableTotal() > 0 && selected() === selectableTotal()}
+                    onChange={(e) => {
+                      flow.toggleAll(e.currentTarget.checked)
+                    }}
+                  />
+                </label>
               </th>
               <For each={headers()}>{(h) => <th>{h}</th>}</For>
             </tr>
@@ -503,14 +505,16 @@ export function ImportPreviewStep(props: { flow: ImportFlow; embedded?: boolean 
                     title={validationIssue()?.reason || dupTitle()}
                   >
                     <td class={styles.selectCol}>
-                      <input
-                        type="checkbox"
-                        checked={flow.selectedRows().has(actualIndex)}
-                        disabled={Boolean(validationIssue())}
-                        onChange={() => {
-                          flow.toggleRow(actualIndex)
-                        }}
-                      />
+                      <label class={styles.selectHit}>
+                        <input
+                          type="checkbox"
+                          checked={flow.selectedRows().has(actualIndex)}
+                          disabled={Boolean(validationIssue())}
+                          onChange={() => {
+                            flow.toggleRow(actualIndex)
+                          }}
+                        />
+                      </label>
                       <Show when={isDuplicate()}>
                         <span class={styles.dupBadge}>dup</span>
                         <Show when={counterpart()}>

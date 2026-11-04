@@ -2554,6 +2554,18 @@ check')` first, as the cushion and debt cases do.
   Test: `tests/a11y-phone.spec.ts` (`@smoke`) measures each of them at 390x844 and checks the six
   pills share one row.
 
+- **The Import page's columns view is a fingertip on a phone** (D3, the part PR A's summary left).
+  At 390 the mapping selects were 370x38, the Expense, Income and Account toggles 28 tall and the
+  row checkboxes 13x13 in 30px rows. Under `@media (pointer: coarse), (max-width: 768px)` the
+  selects and toggles take a 44px minimum height, and a row's checkbox, and the select-all one,
+  sit in a label that fills their cell (`.selectHit`, 44x44), so a tap anywhere in the cell ticks
+  it; the label is in place at every width, with the cell's padding moved into it on a phone
+  (`ImportPreviewStep.tsx`). The expected-columns samples ("2024-01-15 (today's date, and the row
+  is flagged)") ended in an ellipsis at 200px; that table now wraps them in their cells
+  (`.expectedColumns` in `ImportDataEntry.tsx`). Measured at 390: selects 370x44, toggles 71-77x44,
+  checkbox cells 44x44, and no sample cell's content wider than the cell. Test:
+  `tests/a11y-phone.spec.ts` (`@smoke`).
+
 ### Found in the first-week test run (3 Nov)
 
 What the 3 Nov test run and the functionality review after it found in the first week's changes,
