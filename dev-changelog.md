@@ -2969,27 +2969,27 @@ true, or is too small for one.
   after a decision, with the switch's setup over a decided demo dropped, and with the marker
   cleared when the space is saved, one each.
 
-- **Setup's last line says what the profile holds, in both runtimes and after a reload** (M20).
-  The line under "Your orbit is set" counted what the visit made, in memory, so a reload lost it.
-  The cloud reopens setup at the step it reached, and a reload on the subscriptions step after the
+- **Setup's last line says what the profile holds, in both runtimes and after a reload** (M20). The
+  line under "Your orbit is set" counted what the visit made, in memory, so a reload lost it. The
+  cloud reopens setup at the step it reached, and a reload on the subscriptions step after the
   review's Revolut statement (69 rows) read "Personal Profile has 1 tracked subscription." where
   local-first read "Personal Profile has 1 account, 69 new transactions and 1 tracked
-  subscription.". The review's cloud line, "1 account and 2 tracked subscriptions", is what the
-  old line gives after that reload with two ticked. The line now counts the profile's own rows from the evaluation the step runs for its
-  next steps (`doneLine.ts`): "Personal Profile has 1 account, 69 transactions and 1 tracked
-  subscription." in both runtimes, reloaded or not. A paused bill is not counted, and when that
-  evaluation fails the line counts the visit's work, as before, not an earlier evaluation's. It
-  shows with the next steps, 1.3 s after the step in the local cloud stack. Setup keeps the word
-  "space", and the name field now says once how it meets the menu: "It shows as a profile in the
-  menu." (13 px, 5.35:1 light, 8.84:1 dark). Captures of the space step at 1280 and 390, light
-  and dark, `m20-space-*`, and of Done at 1280 in each runtime, `m20-done-local-*` and
-  `m20-done-cloud-*`; numbers in `m20-space-before.json`,
-  `m20-space-after.json`, `m20-done-*.json` and `m20-reload-*.json`. Tests:
-  `onboardingDoneStep.test.tsx`, `onboardingForms.test.tsx`, and in e2e `onboarding.spec.ts` and
-  `onboarding-server.spec.ts` (a reload on the subscriptions step, on the Worker). Counting the
-  visit, counting paused bills (0 or false), or reading an earlier evaluation when the step's
-  fails, one fails each; the cloud case then reads the review's "Personal Profile has 1 account
-  and 2 tracked subscriptions."
+  subscription.". The review's cloud line, "1 account and 2 tracked subscriptions", is what the old
+  line gives after that reload with two ticked. The line now counts the profile's own rows from the
+  evaluation the step runs for its next steps (`doneLine.ts`): "Personal Profile has 1 account, 69
+  transactions and 1 tracked subscription." in both runtimes, reloaded or not. A paused bill is not
+  counted, and when that evaluation fails the line counts the visit's work, as before, not an
+  earlier evaluation's. It shows with the next steps, 1.3 s after the step in the local cloud stack.
+  Setup keeps the word "space", and the name field now says once how it meets the menu: "It shows as
+  a profile in the menu." (13 px, 5.35:1 light, 8.84:1 dark). Captures of the space step at 1280 and
+  390, light and dark, `m20-space-*`, and of Done at 1280 in each runtime, `m20-done-local-*` and
+  `m20-done-cloud-*`; numbers in `m20-space-before.json`, `m20-space-after.json`, `m20-done-*.json`
+  and `m20-reload-*.json`. Tests: `onboardingDoneStep.test.tsx`, `onboardingForms.test.tsx`, and in
+  e2e `onboarding.spec.ts`, `onboarding-server.spec.ts` (a reload on the subscriptions step, on the
+  Worker) and `onboarding-form-errors.spec.ts` (the hint read after each refusal, in both runtimes).
+  Counting the visit, counting paused bills (0 or false), or reading an earlier evaluation when the
+  step's fails, one fails each; the cloud case then reads the review's "Personal Profile has 1
+  account and 2 tracked subscriptions."
 
 - **Months are counted one way, and a count of finished months says so** (M8, M10). Getting
   started said "2 of the last 13 months are tracked." beside "2 of 12 months on file", circle 1
@@ -3080,9 +3080,10 @@ true, or is too small for one.
   drops the YNAB sentences the welcome already says word for word. Captures at 1280 and 390,
   light and dark: `m14-done-*`, `m14-getting-started-*` and `m14-after-hide-*`, with the lists in
   `m14-repeat-before.json` and `m14-repeat-after.json`. Tests: `guidanceNextStep.test.ts`,
-  `DashboardNextStep.test.tsx`, `onboardingDoneStep.test.tsx` and `week-one-mails.test.ts`.
-  Skipping the first step with one on the list, skipping it for an account without the card, or
-  never skipping it fails a test each.
+  `DashboardNextStep.test.tsx`, `onboardingDoneStep.test.tsx`, `week-one-mails.test.ts`, and in
+  e2e the two Hide cases of `orientation.spec.ts` (local-first and signed in). Skipping the first
+  step with one on the list, skipping it for an account without the card, or never skipping it
+  fails a test each, and never skipping it fails both e2e cases.
 
 - **The withdrawal rate is said from Work optional only** (M15). "Raise your savings rate by one
   point" was followed by "Then: check the withdrawal rate you plan with.", and Breathing room's

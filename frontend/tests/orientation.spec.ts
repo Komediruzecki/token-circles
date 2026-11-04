@@ -159,9 +159,10 @@ test.describe('Getting started @smoke', () => {
     expect(await page.evaluate(() => localStorage.getItem('finance_getting_started:local'))).toBe(
       '{"hidden":true}'
     )
-    // Your next step takes its place: Getting started's first step, while less than a year is here.
+    // Your next step takes its place, and leads with the card's next different step: the card it
+    // replaces led with the first, and Hide brought that straight back (review M14).
     await expect(page.getByTestId('dashboard-container').getByTestId('next-step-title')).toHaveText(
-      AFTER_IMPORT[0].title,
+      AFTER_IMPORT[1].title,
       { timeout: 30_000 }
     )
 
@@ -249,9 +250,10 @@ test.describe('Getting started @smoke', () => {
       await page.getByTestId('getting-started-hide').click()
       expect((await hidden).request().postData()).toBe('{"hidden":true}')
       await expect(page.getByTestId('getting-started')).toHaveCount(0)
+      // The next different step on the card's list, as in local-first (review M14).
       await expect(
         page.getByTestId('dashboard-container').getByTestId('next-step-title')
-      ).toHaveText(AFTER_IMPORT[0].title, { timeout: 30_000 })
+      ).toHaveText(AFTER_IMPORT[1].title, { timeout: 30_000 })
 
       // Another device: nothing in its storage, the same account signed in.
       const elsewhere = await browser.newContext({ storageState: { cookies: [], origins: [] } })
