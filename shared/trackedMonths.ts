@@ -70,6 +70,27 @@ export function basedOnFinishedMonths(n: number): string {
   return `Based on ${n} finished ${n === 1 ? 'month' : 'months'}. It firms up at ${YEAR_ON_FILE_MONTHS} months tracked.`;
 }
 
+/** Tracked months in a row that make a print, as the app's shelf counts them (core/prints/windows.ts). */
+export const PRINT_RUN_MONTHS = 12;
+
+/**
+ * How many prints these tracked months ('YYYY-MM', any order) make: each run of months in a row
+ * makes one per twelve, and a gap starts the next run. The first comes with the "A year" badge.
+ * The day-7 mail counts them on the Worker (review M11); a test holds it to the app's shelf.
+ */
+export function printsOf(trackedMonths: Iterable<string>): number {
+  const months = [...new Set(trackedMonths)].sort();
+  let prints = 0;
+  let run = 0;
+  let last: string | null = null;
+  for (const month of months) {
+    run = last !== null && addCalendarMonths(`${last}-01`, 1).slice(0, 7) === month ? run + 1 : 1;
+    if (run % PRINT_RUN_MONTHS === 0) prints++;
+    last = month;
+  }
+  return prints;
+}
+
 /** How many of `trackedMonths` ('YYYY-MM') fall in the year window that ends with `today`'s month. */
 export function trackedMonthsInYearWindow(trackedMonths: Iterable<string>, today: string): number {
   const last = today.slice(0, 7);

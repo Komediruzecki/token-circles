@@ -1312,8 +1312,15 @@ export function renderWeekOneDay2(
 export interface WeekOneCounts {
   /** Transactions that came in by an import. */
   entriesImported: number;
+  /** Whether the first of them came in the last two days: then it is news (review M11). */
+  firstImportNew: boolean;
   /** Tracked months in the year window (shared/trackedMonths.ts trackedMonthsInYearWindow). */
   monthsTracked: number;
+  /**
+   * The prints the tracked months make (shared/trackedMonths.ts printsOf). The first comes with
+   * the "A year" badge.
+   */
+  prints: number;
   /** Active subscriptions on Bills. */
   subscriptions: number;
   /** Active bills on Bills. */
@@ -1333,6 +1340,10 @@ export interface WeekOneStep {
 }
 
 const count = (n: number) => n.toLocaleString('en-US');
+
+/** "a, b and c". */
+const andList = (items: readonly string[]): string =>
+  items.length <= 1 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`;
 
 /** Day 7: what the first week found, in counts, for an account with an import. */
 export function renderWeekOneDay7(
@@ -1355,6 +1366,23 @@ export function renderWeekOneDay7(
   if (c.subscriptions > 0) rows.push(['Subscriptions you track', count(c.subscriptions)]);
   if (c.bills > 0) rows.push(['Bills you track', count(c.bills)]);
   if (c.uncategorised > 0) rows.push(['Entries without a category', count(c.uncategorised)]);
+  // A year that came in says so, with what came with it that the Worker can count (review M11).
+  // The first import is said only while it is news: five days on, it read as late.
+  const entries = `${count(c.entriesImported)} ${plural(c.entriesImported, 'entry', 'entries')}`;
+  const came =
+    c.prints > 0
+      ? [
+          entries,
+          'the A year badge',
+          c.prints === 1 ? 'your first print' : `${count(c.prints)} prints`,
+        ]
+      : [entries];
+  const lead =
+    c.monthsTracked >= YEAR_ON_FILE_MONTHS
+      ? `You brought in a year: ${andList(came)}.`
+      : c.firstImportNew
+        ? 'Your first import is in.'
+        : '';
   const preheader =
     c.monthsTracked > 0
       ? `${monthsTrackedOfAYear(c.monthsTracked)}, from ${count(c.entriesImported)} imported ${plural(c.entriesImported, 'entry', 'entries')}.`
@@ -1367,7 +1395,7 @@ export function renderWeekOneDay7(
     eyebrow: 'Your first week',
     headline: "Here's what your first week found.",
     paragraphs: [
-      'Your first import is in. Here is the week in counts; the amounts stay in the app.',
+      [lead, 'Here is the week in counts; the amounts stay in the app.'].join(' ').trim(),
     ],
     tables: [
       {

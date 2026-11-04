@@ -3017,6 +3017,22 @@ true, or is too small for one.
   `src/__tests__/mailSamplesUnderNode.test.ts` loads and renders every sample that way, and fails
   with the import written without it.
 
+- **The day-7 mail says a year when one came in, and the first import only while it is news**
+  (M11). It opened "Your first import is in." for everyone, so an account that brought in a year
+  of statements on day 2, with the A year badge and its first print, read it five days late over
+  two counts. With a year on file it now opens "You brought in a year: 300 entries, the A year
+  badge and your first print." The badge and the print are said only when the Worker counts twelve
+  tracked months in a row itself (`printsOf` in `shared/trackedMonths.ts`, held to the app's shelf
+  by a test; a month that has not begun finishes no run); without them the line is "You brought in
+  a year: 300 entries." "Your first import is in." stays for a first import from the last two days,
+  and otherwise the mail opens on "Here is the week in counts; the amounts stay in the app."
+  Counts only, as before. A sample of the year's mail joins the catalogue (`week-one-day-7-year`).
+  Tests: `week-one-mails.test.ts` (a year in a row, a year with a gap, a month put in early, news
+  and five days on, and the render cases), `mail-catalogue.test.ts`, and
+  `src/core/__tests__/printsCounted.test.ts`. Saying the first import always, a news window of
+  six days, the badge without a run, counting a month that has not begun, or a run that a gap does
+  not end, one fails each.
+
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
 The production build holds back the benchmarks and the questions that choose their figures

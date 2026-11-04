@@ -114,6 +114,8 @@ interface Tx {
   type?: string;
   imported?: boolean;
   categoryId?: number | null;
+  /** How long before NOW the row was written; by default, long before. */
+  createdAgo?: number;
 }
 
 /** A category of the profile's, by its id. */
@@ -132,15 +134,16 @@ async function transactions(profileId: number, rows: Tx[]): Promise<void> {
   await env.DB.batch(
     rows.map((row) =>
       env.DB.prepare(
-        `INSERT INTO transactions (description, amount, date, type, category_id, currency, profile_id, import_id)
-         VALUES ('Sample entry', ?, ?, ?, ?, 'EUR', ?, ?)`
+        `INSERT INTO transactions (description, amount, date, type, category_id, currency, profile_id, import_id, created_at)
+         VALUES ('Sample entry', ?, ?, ?, ?, 'EUR', ?, ?, ?)`
       ).bind(
         row.amount ?? 12.5,
         row.date,
         row.type ?? 'expense',
         row.categoryId === undefined ? categoryOf.get(profileId)! : row.categoryId,
         profileId,
-        row.imported === false ? null : 'import-sample'
+        row.imported === false ? null : 'import-sample',
+        sqlite(NOW.getTime() - (row.createdAgo ?? 400 * DAY))
       )
     )
   );
@@ -592,14 +595,98 @@ describe('the entries without a category the day-7 mail counts', () => {
   });
 });
 
+// Review M11: the mail read "Your first import is in." to an account that brought in a year five
+// days before, with the A year badge and its first print. It says what came in, in counts the
+// Worker can make itself, and the first import only while that is news.
+describe('what the day-7 mail says came in', () => {
+  /** Three entries in each month from `from`, `n` months on, all imported `createdAgo` before NOW. */
+  const months = (from: string, n: number, createdAgo = 5 * DAY): Tx[] => {
+    const rows: Tx[] = [];
+    let [y, m] = from.split('-').map(Number);
+    for (let i = 0; i < n; i++) {
+      const month = `${y}-${String(m).padStart(2, '0')}`;
+      for (const day of ['02', '12', '22']) rows.push({ date: `${month}-${day}`, createdAgo });
+      if (++m > 12) [y, m] = [y + 1, 1];
+    }
+    return rows;
+  };
+
+  it('says a year that came in, with the badge and the print the app shows for it', async () => {
+    const a = await account({ confirmedAgo: 7 * DAY });
+    await transactions(a.id, months('2029-06', 12));
+    await run();
+    const [mail] = mailsTo(a.email);
+    expect(mail!.text).toContain(
+      'You brought in a year: 36 entries, the A year badge and your first print.'
+    );
+    expect(mail!.text).not.toContain('Your first import is in.');
+    expect(mail!.text).toContain('Months tracked: 12 of 12');
+  });
+
+  it('says a year without the badge when its twelve months are not in a row', async () => {
+    const a = await account({ confirmedAgo: 7 * DAY });
+    // June to November, then January to June: twelve of the last thirteen, December missing.
+    await transactions(a.id, [...months('2029-06', 6), ...months('2030-01', 6)]);
+    await run();
+    const [mail] = mailsTo(a.email);
+    expect(mail!.text).toContain('You brought in a year: 36 entries.');
+    expect(mail!.text).not.toMatch(/badge|print/);
+  });
+
+  it('counts no print a month that has not begun would finish', async () => {
+    const a = await account({ confirmedAgo: 7 * DAY });
+    // June 2029, then August to June: twelve of the last thirteen. July 2030 is put in early: it
+    // would make the run from August twelve, but it has not begun.
+    await transactions(a.id, [
+      ...months('2029-06', 1),
+      ...months('2029-08', 11),
+      ...months('2030-07', 1),
+    ]);
+    await run();
+    const [mail] = mailsTo(a.email);
+    expect(mail!.text).toContain('You brought in a year: 39 entries.');
+    expect(mail!.text).not.toMatch(/badge|print/);
+  });
+
+  it('says the first import is in while that is news, and not five days on', async () => {
+    const recent = await account({ confirmedAgo: 7 * DAY });
+    await transactions(recent.id, months('2030-04', 2, DAY));
+    const older = await account({ confirmedAgo: 7 * DAY });
+    await transactions(older.id, months('2030-04', 2, 5 * DAY));
+    await run();
+    expect(mailsTo(recent.email)[0]!.text).toContain('Your first import is in.');
+    expect(mailsTo(older.email)[0]!.text).not.toContain('Your first import is in.');
+    for (const a of [recent, older]) {
+      expect(mailsTo(a.email)[0]!.text).toContain(
+        'Here is the week in counts; the amounts stay in the app.'
+      );
+      expect(mailsTo(a.email)[0]!.text).not.toContain('brought in a year');
+    }
+  });
+});
+
 describe('the day-7 mail itself', () => {
   const counts = {
     entriesImported: 1284,
+    firstImportNew: false,
     monthsTracked: 12,
+    prints: 0,
     subscriptions: 0,
     bills: 0,
     uncategorised: 0,
   };
+
+  it('names the prints a longer run made, and keeps the year without one', () => {
+    expect(renderWeekOneDay7({ counts: { ...counts, prints: 2 }, step: null }).text).toContain(
+      'You brought in a year: 1,284 entries, the A year badge and 2 prints.'
+    );
+    expect(renderWeekOneDay7({ counts, step: null }).text).toContain(
+      'You brought in a year: 1,284 entries. Here is the week in counts'
+    );
+    const short = renderWeekOneDay7({ counts: { ...counts, monthsTracked: 4 }, step: null });
+    expect(short.text).toContain('Here is the week in counts; the amounts stay in the app.');
+    expect(short.text).not.toMatch(/brought in|first import is in/);
+  });
 
   it('leaves out a count of nothing, and the step when none applies', () => {
     const { text } = renderWeekOneDay7({ counts, step: null });

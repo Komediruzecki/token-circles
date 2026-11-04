@@ -262,7 +262,9 @@ export function mailSamples(opts: SampleOptions = {}): MailSample[] {
         renderWeekOneDay7({
           counts: {
             entriesImported: 1284,
+            firstImportNew: true,
             monthsTracked: 7,
+            prints: 0,
             subscriptions: 6,
             bills: 2,
             uncategorised: 38,
@@ -273,6 +275,26 @@ export function mailSamples(opts: SampleOptions = {}): MailSample[] {
             hash: '#import/bank',
             label: 'Import',
           },
+          ...origins,
+          unsubUrl: weekOneUnsubUrl,
+        }),
+    },
+    {
+      // A year that came in in setup, five days before: the badge and the print came with it.
+      name: 'week-one-day-7-year',
+      template: 'renderWeekOneDay7',
+      render: () =>
+        renderWeekOneDay7({
+          counts: {
+            entriesImported: 300,
+            firstImportNew: false,
+            monthsTracked: 12,
+            prints: 1,
+            subscriptions: 0,
+            bills: 0,
+            uncategorised: 0,
+          },
+          step: null,
           ...origins,
           unsubUrl: weekOneUnsubUrl,
         }),
