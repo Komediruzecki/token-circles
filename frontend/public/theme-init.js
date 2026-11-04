@@ -4,9 +4,12 @@
 //   2. A signed-out screen: dark
 //   3. System prefers-color-scheme media query
 //   4. Default: dark
-// Kept as an external file — not inline — because the self-hosted Express
-// deployment enforces `script-src 'self'` (helmet CSP), which blocks inline
-// scripts.
+// An external file by choice, not because a policy requires it today: the
+// enforcing Content-Security-Policy in public/_headers sets no script-src, and
+// the report-only one allows 'unsafe-inline'. Kept external so a stricter
+// script-src 'self' can be enforced without moving it, so the service worker
+// can precache it (vite.config.ts), and so tests can run it as the browser
+// does (themeFirstPaint.test.ts, statusBarColor.test.ts).
 //
 // It also stamps <meta name="theme-color">, which is what iOS paints the
 // standalone status bar with. That has to happen HERE rather than in the app:
