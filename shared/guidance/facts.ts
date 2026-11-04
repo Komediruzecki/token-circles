@@ -52,7 +52,7 @@ import {
   effectiveKind,
   essentialOf,
   holdsTransfers,
-  isCatchAll,
+  isCatchAllCategory,
   takesEssential,
 } from './kinds';
 import type { LoanInput } from '../loanSchedule';
@@ -565,7 +565,7 @@ function sumWindow(
       );
       const kind = effectiveKind(category, lookup);
       kinds.set(id, kind);
-      catchAll.set(id, isCatchAll(category.name) && (kind === null || kind === 'other'));
+      catchAll.set(id, isCatchAllCategory(category, lookup));
     }
     const kind = kinds.get(id);
     if (kind) sums.byKind.set(kind, (sums.byKind.get(kind) ?? 0) + spent);

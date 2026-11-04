@@ -3294,6 +3294,13 @@ true, or is too small for one.
   fails without the figures in the hand-off; `importOpensHandedFile.test.tsx` ("works the handed
   file's import back from the balance typed in setup") fails without the page taking them, the
   account reading 1,228.00 instead of 1,240.50.
+- **One rule says what a catch-all category is.** Getting started's "Set a budget for ..." step
+  (`biggestUnbudgeted` in `monthFacts.ts`) passed over any category named Other or Misc, by its
+  name alone, while the circles' facts take one as a catch-all only when nothing gives it a kind:
+  Other with a kind set on it, or under a parent with one, is that kind's. The rule is now one
+  function, `isCatchAllCategory` in `shared/guidance/kinds.ts`, read by both. Test:
+  `monthFacts.test.ts`, "is no catch-all once something gives it a kind, as the circles read it",
+  which fails with the name-only rule.
 
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
