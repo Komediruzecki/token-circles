@@ -35,6 +35,8 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **A deduction lowers income** instead of counting as spending, in the rainy-day badge, the year in review and the advice about a month in the red.
 - **The savings rate covers your last 12 months** and sits under the totals. A goal you set stays with the profile instead of the browser.
 - **Each advice card on Progress says which circle it counts toward**, and that line opens the circle.
+- **A statement from a bank the app knows opens on what it brings in.** Import shows the bank, how many entries and from when to when, the new categories and how many are already here, with one button to import them. Check the columns is still there for a closer look.
+- **After an import, Import lists each account it changed with its balance today**, and a field to set it to what your bank shows.
 
 ### Fixed
 
@@ -43,6 +45,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **The plan name on a subscription the scan finds is easier to read.** In the light theme, "Standard" beside Netflix was blue on a pale blue tint at 4.0:1. It's a darker blue now, on Bills and in setup.
 - **A first bank import files restaurants, cafes and takeaways under Eating out**, instead of a new Restaurant or Dining category. If you already have one of those, its rows keep going there.
 - **Setup after the demo makes a space of your own.** Keeping your data in this browser after running the demo opened Example Low Income's dashboard, and running setup again in the demo renamed that example. Setup now makes your space a new profile and lets you remove the three example profiles or keep them. Where the browser already has a profile of yours beside the examples, the switch opens on yours.
+- **New accounts and profiles start with the default categories.** They started empty, so a quick add like "coffee 4.50" was saved without a category.
 
 ## [5.17.6] — 2026-11-01
 
