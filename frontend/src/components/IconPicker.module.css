@@ -129,7 +129,7 @@
 
 .picker-item-active {
   border-color: var(--primary);
-  color: var(--primary);
+  color: var(--primary-text);
 }
 
 .picker-item-glyph {

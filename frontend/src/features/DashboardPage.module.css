@@ -190,7 +190,7 @@
 }
 
 .metric-value.positive {
-  color: var(--income);
+  color: var(--income-text);
 }
 
 .metricSpark {
@@ -263,7 +263,7 @@
 }
 
 .widgetLink {
-  color: var(--primary);
+  color: var(--primary-text);
   font-size: 12px;
   font-weight: 500;
   text-decoration: none;
@@ -406,11 +406,11 @@
 }
 
 .transaction-amount.income {
-  color: var(--income);
+  color: var(--income-text);
 }
 
 .transaction-amount.expense {
-  color: var(--expense);
+  color: var(--expense-text);
 }
 
 .empty-state {
@@ -424,7 +424,7 @@
 }
 
 .btn-link {
-  color: var(--primary);
+  color: var(--primary-text);
   font-size: 13px;
   font-weight: 500;
   text-decoration: none;

@@ -1016,15 +1016,7 @@ export function App() {
                                 {profile.name}
                               </span>
                               {currentProfile()?.id === profile.id && (
-                                <span
-                                  style={{
-                                    'font-size': '10px',
-                                    color: 'var(--primary)',
-                                    opacity: 0.7,
-                                  }}
-                                >
-                                  primary
-                                </span>
+                                <span class={profileStyles.primaryTag}>primary</span>
                               )}
                             </div>
                           )}

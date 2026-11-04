@@ -19,7 +19,7 @@
 }
 
 .stepLabel.active {
-  color: var(--primary);
+  color: var(--primary-text);
 }
 
 .stepLine {
@@ -52,7 +52,7 @@
 }
 
 .tab.active {
-  color: var(--primary);
+  color: var(--primary-text);
   border-bottom-color: var(--primary);
 }
 
@@ -335,7 +335,7 @@
 }
 
 .mappingLabel .required {
-  color: var(--danger);
+  color: var(--danger-text);
 }
 
 .mappingSelect {
@@ -466,19 +466,19 @@
 
 .pill.expenseActive {
   background: rgba(239, 68, 68, 0.12);
-  color: var(--danger);
+  color: var(--danger-text);
   font-weight: 600;
 }
 
 .pill.incomeActive {
   background: rgba(34, 197, 94, 0.12);
-  color: var(--success);
+  color: var(--success-text);
   font-weight: 600;
 }
 
 .pill.accountActive {
   background: color-mix(in oklab, var(--primary) 12%, transparent);
-  color: var(--primary);
+  color: var(--primary-text);
   font-weight: 600;
 }
 
@@ -560,7 +560,7 @@
 }
 
 .statValue.duplicate {
-  color: var(--warning);
+  color: var(--warning-text);
 }
 
 .statValue.invalid {
@@ -808,7 +808,7 @@
 .resultMessage.success {
   background: rgba(34, 197, 94, 0.1);
   border: 1px solid rgba(34, 197, 94, 0.3);
-  color: var(--success);
+  color: var(--success-text);
 }
 
 .resultMessage.error {
@@ -820,7 +820,7 @@
 .resultMessage.info {
   background: rgba(59, 130, 246, 0.1);
   border: 1px solid rgba(59, 130, 246, 0.3);
-  color: var(--primary);
+  color: var(--primary-text);
 }
 
 /* Loading */
@@ -1006,7 +1006,7 @@
 
 .btnOutline {
   background: transparent;
-  color: var(--primary);
+  color: var(--primary-text);
   border: 1px solid var(--primary);
 }
 
@@ -1060,5 +1060,5 @@
   gap: 5px;
   font-size: 12px;
   font-weight: 600;
-  color: var(--success);
+  color: var(--success-text);
 }

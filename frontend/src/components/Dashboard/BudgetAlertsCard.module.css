@@ -58,7 +58,7 @@
 .alertAmount {
   font-size: 13px;
   font-weight: 600;
-  color: var(--income);
+  color: var(--income-text);
   white-space: nowrap;
 }
 

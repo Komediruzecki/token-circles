@@ -39,8 +39,11 @@
   --text: #101830;
   --text-primary: #101830;
   --text-secondary: #5a6788;
-  --text-positive: #14985a;
-  --text-negative: #d64550;
+  /* A gain or a loss in words: trend percentages, signed amounts. The darker green and red of
+     --success-text and --danger-text, 5.1:1 and 5.4:1 on --bg; --success and --danger are 3.5:1
+     and 4.1:1 there. */
+  --text-positive: #0e7a47;
+  --text-negative: #b93842;
   --color: #101830;
   --sidebar-text: #9fb0d6;
   --sidebar-active-text: #eaf0ff;
@@ -57,6 +60,9 @@
   --on-primary: #ffffff;
   --primary-bg: rgba(59, 111, 224, 0.1);
   --primary-strong: #3b6fe0;
+  /* Text in the action hue: links, active tabs, a tinted button's label. --primary is 4.4:1 on --bg
+     and 3.8:1 on the button tint; this is 5.8:1 and 5.1:1. A --primary fill keeps --primary. */
+  --primary-text: #2f5bc4;
   --success: #14985a;
   /* Small text in the success hue, such as a circle check's "Met": 5.4:1 on --surface and 5.1:1 on
      --bg. --success itself is 3.7:1 on --surface, enough for a mark, not for text. */
@@ -69,12 +75,22 @@
      --danger itself is under 4.5:1 on --surface. */
   --danger-text: #b93842;
   --warning: #d97f2e;
+  /* Small text in the warning hue: 5.4:1 on --bg and 4.9:1 on its own 12% tint. --warning is
+     2.8:1 on --bg. */
+  --warning-text: #9c5416;
   --info: #3b6fe0;
 
   /* Semantic money */
   --income: #14985a;
   --expense: #d64550;
   --transfer: #5468d4;
+  /* An income or expense amount in words. --income and --expense stay for fills, bars and marks
+     (3:1 is enough for a graphic); on --bg they are 3.5:1 and 4.1:1, these 5.1:1 and 5.4:1. */
+  --income-text: #0e7a47;
+  --expense-text: #b93842;
+  /* The letter on a subscription's avatar when no brand matched: 5.3:1 on the avatar's indigo
+     tint, where the brand indigo #6366f1 is 3.7:1. */
+  --avatar-letter: #4f46e5;
 
   /* Badges */
   --badge-income-bg: #e2f7ec;
@@ -156,5 +172,4 @@
   --dropdown-border: #dde4f5;
   --dropdown-text: #3a4560;
   --income-bg: linear-gradient(135deg, #e2f7ec 0%, #d2f0e0 100%);
-  --income-text: #0e5c38;
 }

@@ -32,7 +32,7 @@
 
 .page-btn:hover:not(:disabled):not(.page-btn-active) {
   border-color: var(--primary);
-  color: var(--primary);
+  color: var(--primary-text);
 }
 
 .page-btn:disabled {

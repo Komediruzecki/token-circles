@@ -14,7 +14,7 @@
   border-radius: 999px;
   font: inherit;
   line-height: 1.2;
-  color: var(--primary);
+  color: var(--primary-text);
   cursor: pointer;
 
   /* Engraved, not drawn on top: a hairline ring plus an inner highlight below it and a soft

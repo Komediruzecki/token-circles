@@ -106,7 +106,7 @@
   text-transform: uppercase;
   padding: 2px 8px;
   border-radius: 999px;
-  color: var(--primary);
+  color: var(--primary-text);
   background: color-mix(in srgb, var(--primary) 14%, transparent);
   border: 1px solid color-mix(in srgb, var(--primary) 35%, transparent);
 }
@@ -213,7 +213,7 @@
   border-radius: 4px;
   background: color-mix(in srgb, var(--primary) 12%, transparent);
   border: 1px solid color-mix(in srgb, var(--primary) 22%, transparent);
-  color: var(--primary);
+  color: var(--primary-text);
   white-space: nowrap;
 }
 

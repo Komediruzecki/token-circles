@@ -23,7 +23,7 @@
 
 .button:hover:not(:disabled) {
   border-color: var(--primary);
-  color: var(--primary);
+  color: var(--primary-text);
   background: color-mix(in oklab, var(--primary) 12%, transparent);
 }
 
@@ -36,7 +36,7 @@
   padding: 0;
   border: 0;
   background: none;
-  color: var(--primary);
+  color: var(--primary-text);
   font: inherit;
   font-weight: 600;
   text-decoration: underline;
@@ -54,5 +54,5 @@
   flex: none;
   font-size: 13px;
   font-weight: 600;
-  color: var(--success);
+  color: var(--success-text);
 }

@@ -183,7 +183,7 @@
 }
 
 .positive {
-  color: var(--success, #59d2a2);
+  color: var(--success-text);
 }
 
 .negative {
@@ -585,7 +585,7 @@
 }
 
 .warning {
-  color: var(--warning, #f0a860);
+  color: var(--warning-text);
   font-size: 12px;
 }
 
@@ -686,7 +686,7 @@
 }
 
 .conditionZero {
-  color: var(--warning, #f0a860);
+  color: var(--warning-text);
   font-weight: 600;
 }
 

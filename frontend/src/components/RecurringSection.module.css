@@ -145,11 +145,11 @@
 }
 
 .itemAmount.income {
-  color: var(--income);
+  color: var(--income-text);
 }
 
 .itemAmount.expense {
-  color: var(--expense);
+  color: var(--expense-text);
 }
 
 .itemAmount.transfer {
@@ -177,7 +177,7 @@
 
 .itemAction:hover {
   background: var(--table-hover);
-  color: var(--primary);
+  color: var(--primary-text);
 }
 
 .itemActionDanger:hover {

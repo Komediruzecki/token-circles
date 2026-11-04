@@ -91,7 +91,7 @@
 .rail-btn-active,
 .rail-btn-active:hover {
   background: var(--primary-bg);
-  color: var(--primary);
+  color: var(--primary-text);
   border-color: color-mix(in oklab, var(--primary) 45%, transparent);
   box-shadow: var(--glow-primary);
 }
@@ -151,7 +151,7 @@
   margin-left: auto;
   align-self: flex-start;
   font-size: 11px;
-  color: var(--accent-warm);
+  color: var(--warning-text);
   background: color-mix(in oklab, var(--accent-warm) 14%, transparent);
   padding: 3px 9px;
   border-radius: 999px;
@@ -254,7 +254,7 @@
 .icon-action-primary {
   background: var(--primary-bg);
   border-color: color-mix(in oklab, var(--primary) 45%, transparent);
-  color: var(--primary);
+  color: var(--primary-text);
   box-shadow: var(--glow-primary);
   font-weight: 600;
 }
@@ -338,7 +338,7 @@
 }
 
 .warning-box strong {
-  color: var(--warning);
+  color: var(--warning-text);
 }
 
 /* ── Form primitives (used by cards + the Reports subcomponent) ── */

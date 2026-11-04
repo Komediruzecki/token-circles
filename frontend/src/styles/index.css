@@ -37,7 +37,7 @@
    what those primitives are used for, so a page never restates the recipe. */
 :root {
   --btn-primary-bg: var(--primary-bg);
-  --btn-primary-fg: var(--primary);
+  --btn-primary-fg: var(--primary-text);
   --btn-primary-border: 1px solid color-mix(in oklab, var(--primary) 45%, transparent);
   --btn-primary-shadow: var(--glow-primary, none);
   --btn-primary-bg-hover: color-mix(in oklab, var(--primary) 20%, transparent);

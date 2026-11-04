@@ -138,7 +138,7 @@
 .retry {
   border: 0;
   background: transparent;
-  color: var(--primary);
+  color: var(--primary-text);
   font-family: var(--font-mono, monospace);
   font-size: 12px;
   text-decoration: underline;
@@ -175,7 +175,7 @@
 }
 .toggle button.on {
   background: color-mix(in oklab, var(--primary) 20%, transparent);
-  color: var(--primary);
+  color: var(--primary-text);
 }
 
 .footer {

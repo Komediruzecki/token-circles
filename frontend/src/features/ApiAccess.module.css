@@ -144,7 +144,7 @@
   padding: 2px 7px;
   border-radius: 999px;
   background: color-mix(in oklab, var(--primary) 16%, transparent);
-  color: var(--primary);
+  color: var(--primary-text);
 }
 
 .badgeRevoked {
@@ -163,7 +163,7 @@
 }
 
 .neverUsed {
-  color: var(--warning, #f59e0b);
+  color: var(--warning-text);
 }
 
 .revokeBtn {

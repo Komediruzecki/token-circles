@@ -86,7 +86,7 @@
   border: none;
   background: none;
   cursor: pointer;
-  color: var(--primary);
+  color: var(--primary-text);
   font: inherit;
   font-weight: 600;
   text-align: left;

@@ -211,7 +211,7 @@
 
 .accountLink {
   cursor: pointer;
-  color: var(--primary);
+  color: var(--primary-text);
   font-weight: 600;
   background: none;
   border: none;
@@ -271,9 +271,10 @@
 }
 
 .version {
+  /* Full --text-secondary at 12px: at 11px and 0.7 opacity it was 4.5:1 only just, and under it on
+     some grounds (review D1). */
   color: var(--text-secondary);
-  font-size: 11px;
-  opacity: 0.7;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
 

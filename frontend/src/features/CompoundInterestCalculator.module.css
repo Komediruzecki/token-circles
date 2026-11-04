@@ -62,7 +62,7 @@
 }
 
 .form-value.success {
-  color: var(--success);
+  color: var(--success-text);
 }
 
 .chart-section {
@@ -159,7 +159,7 @@
 }
 
 .stat-value.success {
-  color: var(--success);
+  color: var(--success-text);
 }
 
 .loading {

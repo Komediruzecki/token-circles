@@ -2502,6 +2502,39 @@ check')` first, as the cushion and debt cases do.
     the two import cases for a space that has Restaurant pass before and after, as the guard that
     the fold keeps it. `categoryGroups.test.ts` expects Eating out for `UBER EATS`.
 
+### Accessibility pass from the 3 Nov design review
+
+- **Words in a brand colour take a text token** (D1). The light theme set text in the colours its
+  fills and marks use, and those fail 4.5:1 as small text: the azure #3b6fe0 was 4.40:1 on the page
+  (`--bg`) and 3.84:1 on a tinted button, the money green #14985a 3.52:1 on the page and 3.31:1 on
+  the Income chip, the red #d64550 4.13:1 on the page and 3.67:1 on the Expense chip, the warm
+  accent 2.58:1 on "PDF reports moved to Exports", and the indigo letter of a subscription with no
+  brand 3.75:1 on its tint. The theme files now carry a text token beside each:
+  `--primary-text` (#2f5bc4: 5.84:1 on the page, 5.11:1 on the button tint), `--income-text` and a
+  retuned `--text-positive` (#0e7a47: 5.12:1, 4.81:1 on the chip), `--expense-text` and a retuned
+  `--text-negative` (#b93842, the existing `--danger-text`: 5.38:1, 4.77:1 on the chip),
+  `--warning-text` (#9c5416: 4.90:1 on the tag) and `--avatar-letter` (#4f46e5: 5.29:1). Every
+  stylesheet rule that set `color:` from `--primary`, `--income`, `--expense`, `--success` or
+  `--warning` reads the text token now (133 rules, and the shared tinted button's
+  `--btn-primary-fg`), apart from 18 rules that colour an icon, a glyph or a mark, which keep the
+  brand colour. The Import page's required asterisk and Expense pill take `--danger-text`. In the
+  dark theme every new token equals the colour it replaces, so dark pages read as before, with two
+  exceptions that fail there today: the avatar letter (#6366f1, 3.23:1 on its tint, is #a5b4fc,
+  7.23:1) and the Expense pill and asterisk (#ef4444 to #ff9d9d). The `instrument-deck` variant
+  keeps its own azure as `--primary-text`. The light and dark themes' unused legacy
+  `--income-text` (#0e5c38 and #b8ffd6, read by nothing) is gone, since the new token has its
+  name.
+- **The sidebar's group labels are 5.4:1** (D1): `--sidebar-text` at 0.65 opacity was 4.30:1 on
+  the sidebar in both themes; at 0.75 it is 5.41:1 (light) and 5.46:1 (dark).
+- **"primary" in the profile menu is 12px in `--primary-text`**, at full opacity: it was 10px
+  `--primary` at 0.7, 2.58:1. **The sign-in footer's version** is 12px `--text-secondary` with no
+  fade: it was 11px at 0.7 opacity.
+- Tests: `brandTextContrast.test.ts` measures each token on the page grounds and the tints the
+  review found it on, in all three themes; reads the rules the review named; and fails when any
+  stylesheet sets `color:` from a brand colour outside its list of icon rules, or when a listed
+  rule is gone. With the light `--primary-text` back at #3b6fe0, three of its cases fail; with the
+  avatar letter back on the brand colour, its rule check fails.
+
 ### Found in the first-week test run (3 Nov)
 
 What the 3 Nov test run and the functionality review after it found in the first week's changes,

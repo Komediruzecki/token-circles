@@ -165,11 +165,11 @@
 }
 
 .coverage-item.complete .coverage-status {
-  color: var(--success);
+  color: var(--success-text);
 }
 
 .coverage-item.partial .coverage-status {
-  color: var(--warning);
+  color: var(--warning-text);
 }
 
 .loading {
