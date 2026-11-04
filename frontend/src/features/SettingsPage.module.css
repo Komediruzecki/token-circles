@@ -308,7 +308,7 @@
 
 .reminders-unsubscribed p[role='alert'] {
   margin-top: 8px;
-  color: var(--danger);
+  color: var(--danger-text);
 }
 
 .pending-email-actions {

@@ -249,7 +249,11 @@ function brandColourText(): string[] {
     if (file.startsWith(THEMES)) continue
     const css = readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
     for (const m of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
-      if (/(?<![-\w])color:\s*var\(--(primary|income|expense|success|warning)\s*[,)]/.test(m[2]))
+      if (
+        /(?<![-\w])color:\s*var\(--(primary|income|expense|success|warning|danger|info)\s*[,)]/.test(
+          m[2]
+        )
+      )
         found.push(`${relative(SRC, file)}:${m[1].trim().replace(/\s+/g, ' ')}`)
     }
   }

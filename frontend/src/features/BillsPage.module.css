@@ -82,7 +82,7 @@
   margin-left: 8px;
   font-size: 11px;
   font-weight: 600;
-  color: var(--danger, #ef4444);
+  color: var(--danger-text);
   background: rgba(255, 157, 157, 0.1);
   border-radius: 10px;
   text-transform: uppercase;
@@ -122,7 +122,7 @@
   color: var(--text);
 }
 .bills-page .bill-amount.overdue .amount-value {
-  color: var(--danger, #ef4444);
+  color: var(--danger-text);
 }
 .bills-page .bill-actions {
   display: flex;

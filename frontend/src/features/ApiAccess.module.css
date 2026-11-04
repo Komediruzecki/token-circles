@@ -153,7 +153,7 @@
   padding: 2px 7px;
   border-radius: 999px;
   background: color-mix(in oklab, var(--danger, #ef4444) 16%, transparent);
-  color: var(--danger, #ef4444);
+  color: var(--danger-text);
 }
 
 .rowMeta {
@@ -174,7 +174,7 @@
   border: 1px solid color-mix(in oklab, var(--danger, #ef4444) 40%, var(--border));
   border-radius: var(--radius-sm, 8px);
   background: transparent;
-  color: var(--danger, #ef4444);
+  color: var(--danger-text);
   font-size: 13px;
   cursor: pointer;
 }

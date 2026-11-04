@@ -319,7 +319,7 @@
   white-space: nowrap;
 }
 .amountOverdue {
-  color: var(--danger, #ef4444);
+  color: var(--danger-text);
 }
 .popoverMarkPaid {
   padding: 4px 10px;

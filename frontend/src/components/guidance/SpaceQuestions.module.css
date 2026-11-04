@@ -160,7 +160,7 @@
 .problem {
   margin: 12px 0 0;
   font-size: 13px;
-  color: var(--danger);
+  color: var(--danger-text);
 }
 
 /* Setup's About this space (the `compact` prop): the six regions in two columns, so the question

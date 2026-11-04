@@ -732,7 +732,7 @@
 
 .chart-status-over {
   background: rgba(255, 157, 157, 0.15);
-  color: var(--danger);
+  color: var(--danger-text);
 }
 
 .chart-status-warning {
@@ -971,7 +971,7 @@
 }
 
 .catOver {
-  color: var(--danger, #ef4444);
+  color: var(--danger-text);
 }
 
 .catProgressBar {
@@ -1009,7 +1009,7 @@
 }
 
 .catRemaining.catOver {
-  color: var(--danger, #ef4444);
+  color: var(--danger-text);
 }
 
 .catColorPicker {

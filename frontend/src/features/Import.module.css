@@ -564,7 +564,7 @@
 }
 
 .statValue.invalid {
-  color: var(--danger);
+  color: var(--danger-text);
 }
 
 .previewActions {
@@ -814,7 +814,7 @@
 .resultMessage.error {
   background: rgba(239, 68, 68, 0.1);
   border: 1px solid rgba(239, 68, 68, 0.3);
-  color: var(--danger);
+  color: var(--danger-text);
 }
 
 .resultMessage.info {

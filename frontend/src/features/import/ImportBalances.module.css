@@ -97,6 +97,6 @@
 .error {
   flex-basis: 100%;
   margin: 0;
-  color: var(--danger);
+  color: var(--danger-text);
   font-size: 13px;
 }
