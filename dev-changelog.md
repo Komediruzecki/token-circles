@@ -9,6 +9,13 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ## [Unreleased]
 
+### Older papercuts (found in the first-week test run, 3 Nov)
+
+- **The edit button on a category card says what it edits** (B4). It was an icon with no name,
+  so a screen reader announced only "button" between Budget and Delete category. It is now "Edit
+  Groceries", and so on for each card (`frontend/src/features/Categories.tsx`). Test:
+  `categoryForms.test.tsx`, which reads `aria-label` off the card's `edit-category-btn`.
+
 ### Deploy notes
 
 - `0033_welcome_once.sql` is data only: it adds a `reminder_dedup` row `(user_id, 'welcome')` for

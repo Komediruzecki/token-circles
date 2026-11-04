@@ -369,6 +369,7 @@ export default function Categories() {
                         <button
                           data-test-id="edit-category-btn"
                           class={`${styles.btnSm} ${styles.btnGhost}`}
+                          aria-label={`Edit ${category.name}`}
                           onClick={() => {
                             editCategory(category)
                           }}
