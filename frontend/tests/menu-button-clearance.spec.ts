@@ -9,10 +9,16 @@
  *
  * At 390, a phone, and at 700, where the button still shows: a 640 px breakpoint would miss it.
  * Local-first, so it needs no account; the tag is made in the page.
+ *
+ * The quick add button floats at the bottom right at every width (Layout.module.css `.fab`).
+ * `.main`'s bottom padding was 12 to 24 px, so the end of a page could never be scrolled out from
+ * under it: Import's "No saved sheets yet" note, the last line of Settings. The page now ends far
+ * enough below its last line, and the root's `scroll-padding-bottom` keeps whatever is scrolled
+ * into view at the bottom, a control taking focus among them, above the button.
  */
 import { expect, test } from '@playwright/test'
 import { E2E_BASE } from './test-helpers'
-import type { Locator } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
@@ -71,5 +77,103 @@ for (const width of [390, 700]) {
       overlap.x <= 0 || overlap.y <= 0,
       `the heading ${JSON.stringify(h)} and the menu button ${JSON.stringify(m)}`
     ).toBe(true)
+  })
+}
+
+/** The visible text and controls in the page whose boxes overlap the button named `label`. */
+async function under(page: Page, label: string): Promise<string[]> {
+  return page.evaluate((name) => {
+    const button = document.querySelector(`button[aria-label="${name}"]`)!
+    const b = button.getBoundingClientRect()
+    const hits: string[] = []
+    for (const el of Array.from(document.querySelectorAll<HTMLElement>('main *'))) {
+      const style = getComputedStyle(el)
+      if (style.visibility === 'hidden' || Number(style.opacity) === 0) continue
+      const control = el.matches('a, button, input, select, textarea')
+      const text = Array.from(el.childNodes).some(
+        (n) => n.nodeType === Node.TEXT_NODE && (n.textContent ?? '').trim() !== ''
+      )
+      if (!control && !text) continue
+      const r = el.getBoundingClientRect()
+      if (r.width === 0 || r.height === 0) continue
+      // Scrolled out of view inside an inner scroller is not under the button.
+      let clipped = false
+      for (let n = el.parentElement; n && !clipped; n = n.parentElement) {
+        if (getComputedStyle(n).overflow === 'visible') continue
+        const c = n.getBoundingClientRect()
+        clipped = r.bottom <= c.top || r.top >= c.bottom || r.right <= c.left || r.left >= c.right
+      }
+      if (clipped) continue
+      const x = Math.min(r.right, b.right) - Math.max(r.left, b.left)
+      const y = Math.min(r.bottom, b.bottom) - Math.max(r.top, b.top)
+      if (x > 0 && y > 0) hits.push(`${el.tagName} "${el.innerText.trim().slice(0, 40)}"`)
+    }
+    return hits
+  }, label)
+}
+
+/** Scrolled as far down as the page goes, and settled there. */
+async function toTheEnd(page: Page): Promise<void> {
+  await expect
+    .poll(
+      async () =>
+        page.evaluate(() => {
+          window.scrollTo(0, document.documentElement.scrollHeight)
+          return (
+            Math.ceil(window.scrollY + window.innerHeight) >= document.documentElement.scrollHeight
+          )
+        }),
+      { timeout: 10_000, intervals: [250] }
+    )
+    .toBe(true)
+}
+
+for (const width of [390, 1280]) {
+  test(`at ${width}, the end of a page scrolls out from under the quick add button`, async ({
+    page,
+  }) => {
+    test.setTimeout(90_000)
+    await page.setViewportSize({ width, height: width < 768 ? 844 : 800 })
+    for (const [hash, ready] of [
+      ['import', 'import-header'],
+      ['settings', 'settings-header'],
+    ] as const) {
+      await page.goto(`${E2E_BASE}/#${hash}`, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+      await expect(page.getByTestId(ready)).toBeVisible({ timeout: 30_000 })
+      // Sections below the header render as their reads land.
+      await page.waitForTimeout(1000)
+      await expect(page.getByRole('button', { name: 'Quick add entry' })).toBeVisible()
+      await toTheEnd(page)
+      expect(await under(page, 'Quick add entry'), `#${hash} at its end`).toEqual([])
+    }
+  })
+
+  test(`at ${width}, a control scrolled into view from below lands above the quick add button`, async ({
+    page,
+  }) => {
+    test.setTimeout(90_000)
+    await page.setViewportSize({ width, height: width < 768 ? 844 : 800 })
+    await page.goto(`${E2E_BASE}/#settings`, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+    await expect(page.getByTestId('settings-header')).toBeVisible({ timeout: 30_000 })
+    await page.waitForTimeout(1000)
+    const fab = (await page.getByRole('button', { name: 'Quick add entry' }).boundingBox())!
+    // The last control on the page, brought up from below the way the prints shelf brings a
+    // print into view ('nearest'): its bottom edge stops at the root's scroll-padding-bottom.
+    await page.evaluate(() => window.scrollTo(0, 0))
+    const box = await page.evaluate(async () => {
+      const visible = Array.from(
+        document.querySelectorAll<HTMLElement>('main button, main a[href], main input, main select')
+      ).filter((el) => el.getBoundingClientRect().height > 0)
+      const last = visible[visible.length - 1]
+      last.scrollIntoView({ block: 'nearest' })
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+      const r = last.getBoundingClientRect()
+      return { top: Math.round(r.top), bottom: Math.round(r.bottom), scrolled: window.scrollY }
+    })
+    expect(box.scrolled, 'it was below the screen').toBeGreaterThan(0)
+    expect(
+      box.bottom,
+      `the control ${JSON.stringify(box)} and the button at ${fab.y}`
+    ).toBeLessThanOrEqual(fab.y)
   })
 }
