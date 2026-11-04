@@ -63,6 +63,36 @@ describe('localHandlers - dashboard', () => {
     expect(data.balance).toBeDefined()
   })
 
+  it('counts in the change under Net Worth only the accounts Net Worth sums, in cents', async () => {
+    // An entry that names an account that is gone moved no balance still summed, so it moves no
+    // change either. The Worker keeps the same rule (worker/test/dashboard-net-worth-change).
+    const db = await getDB()
+    const [checking] = await db.getAll('accounts')
+    // 0.1 and 0.2 add up to 0.30000000000000004 in floating point.
+    for (const amount of [0.1, 0.2]) {
+      await transactionsCreate({
+        amount,
+        type: 'expense',
+        date: '2026-05-10',
+        description: 'Card',
+        account_id: checking.id,
+      })
+    }
+    await db.add('transactions', {
+      profile_id: 1,
+      amount: 50,
+      type: 'expense',
+      date: '2026-05-11',
+      description: 'Old card',
+      account_id: 99999,
+    })
+    const res = await dashboardMain(new URLSearchParams({ year: '2026', month: '5' }))
+    const data = await res.json()
+    // The seeded pay and groceries name no account, so only the card moved a balance. As text, so
+    // the cents are exact: unrounded it reads -0.30000000000000004.
+    expect(String(data.momBalanceDelta)).toBe('-0.3')
+  })
+
   it('gets main dashboard with all-time flag', async () => {
     const params = new URLSearchParams({ all: 'true' })
     const res = await dashboardMain(params)

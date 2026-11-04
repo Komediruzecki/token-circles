@@ -39,6 +39,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixed
 
 - **For a range, a year or All time, the Dashboard no longer compares its totals with a single month.** The change it showed under them set the whole period against the month before it began.
+- **The change under Net Worth on Dashboard is how far your balances moved that month.** It set the month's income less spending against the month before's, so a month that added to your accounts could show a fall. It now counts what the month's entries did to your accounts: a transfer between two of them changes nothing, and neither does an entry with no account.
 - **Views on Dashboard reorders from the keyboard.** Each widget under Show more has Move up and Move down buttons, so a drag is no longer the only way to change its place.
 - **A category called Groceries shows a shopping cart, and one named for a meal shows a knife and fork** (Eating out, Restaurant, Dining, Breakfast, Lunch, Dinner, Meals), and an import that creates one gives it the same icon. Before, they showed a coffee mug, and Eating out a plain tick. An icon you picked stays, and so does the mug an earlier import gave a category while you were signed in. Coffee and Cafe keep the mug.
 - **The subscription scan keeps up with a long history.** With a few thousand entries, Scan transactions on Bills and the setup wizard's subscriptions step held the page for over a second. They now find the same subscriptions in a small part of that time.

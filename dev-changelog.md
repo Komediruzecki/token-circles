@@ -177,6 +177,26 @@ All notable changes to Token Circles are documented here. The format is based on
     and presses Enter twice in Chromium. Without the line that puts focus back, both fail
     (Chromium reports the button no longer focused); with the buttons never off, the ends test;
     with the move dropped, the order test.
+- **The change under Net Worth is how far the balances moved that month.** It was the month's
+  income less spending set against the month before's, a change of a change, so a month that grew
+  the balances could read as a fall: on the demo this month the card read "↓772.00 vs last month"
+  while the month added 1,191.00 to the accounts, and now reads "↑1191.00". The figure is now what
+  that month's entries did to the accounts Net Worth sums, by each runtime's own balance rule
+  (`balanceDeltasFor` on the Worker, now exported, and `computeBalanceDeltas` in local-first),
+  counted on those accounts only and rounded to cents. A transfer between two of them moves
+  nothing, and neither does an entry that names no account. A range or all time still has none.
+  - Test: the contract scenario "the change under Net Worth is how far its balances moved that
+    month" (Worker and local-first) expects 1654.5 for a March with pay, spending from two
+    accounts, a transfer between them and an entry with no account, and checks February, April,
+    an empty May, the other profile and both profiles. Before the fix March came back -65.5 on
+    both runtimes. The first dashboard scenario's March now expects 0, since none of its entries
+    names an account (it was -100.5). `dashboard-net-worth-change.test.ts` (Worker) and
+    `localHandlers.dashboard.test.ts` add an entry whose account is gone and two of 0.1 and 0.2:
+    without the filter to the summed accounts both return -50.3, without the rounding
+    -0.30000000000000004.
+  - Not changed: the card's total is today's, so a past month shows today's balances beside that
+    month's change. The runtimes still differ on a transfer with no destination (the Worker takes
+    it off the account, local-first leaves the balance alone), and this figure follows each.
 
 ### Deploy notes
 

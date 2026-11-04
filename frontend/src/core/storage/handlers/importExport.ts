@@ -3,7 +3,7 @@
  */
 import { EXPORT_MESSAGES, exportFile, isExportKind } from '../../../../../shared/exportColumns'
 import { localToday } from '../../../utils/period'
-import { getDB, seedDemoProfiles } from '../idb'
+import { computeBalanceDeltas, getDB, seedDemoProfiles } from '../idb'
 import { dashboardUpcomingBills } from './bills'
 import {
   adapter,
@@ -315,6 +315,18 @@ export async function dashboardMain(query: URLSearchParams): Promise<Response> {
     const accts = await adapter.listAccounts()
     const balance = accts.reduce((s, a) => s + (a.balance || 0), 0)
 
+    // The change under Net Worth: how far the balances it sums moved in the month, by the rule
+    // that moves them (computeBalanceDeltas) and on these accounts only. A transfer between two
+    // of them moves nothing, and neither does an entry that names no account. It was the month's
+    // income less spending set against the month before's, which is not a change in the sum.
+    const owned = new Set(accts.map((a) => a.id))
+    let balanceMoved = 0
+    for (const t of currentTxns) {
+      for (const d of computeBalanceDeltas(t)) {
+        if (owned.has(d.accountId)) balanceMoved += d.delta
+      }
+    }
+
     const upcomingBills = await dashboardUpcomingBills()
 
     return json({
@@ -327,9 +339,7 @@ export async function dashboardMain(query: URLSearchParams): Promise<Response> {
       upcomingBills,
       momIncomeDelta: windowed ? null : currentIncome - prevIncome,
       momExpenseDelta: windowed ? null : currentExpense - prevExpense,
-      momBalanceDelta: windowed
-        ? null
-        : currentIncome - currentExpense - (prevIncome - prevExpense),
+      momBalanceDelta: windowed ? null : Math.round(balanceMoved * 100) / 100,
     })
   } catch (err) {
     return json({ error: (err as Error).message }, 500)

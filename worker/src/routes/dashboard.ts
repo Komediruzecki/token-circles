@@ -4,6 +4,7 @@ import { requireAuth } from '../auth';
 import { getProfileIds } from '../profile';
 import * as db from '../db';
 import { localNow, localToday } from '../local-date';
+import { balanceDeltasFor, baseAmount } from './transactions';
 import { dueWithin, type ScheduledBill } from '../../../shared/billSchedule';
 
 // Port of backend/routes/dashboard.js — read-only aggregations over
@@ -113,9 +114,6 @@ dashboardRoutes.get('/api/dashboard', requireAuth, async (c) => {
 
   const momIncomeDelta = windowed ? null : summary.income - prevSummary.income;
   const momExpenseDelta = windowed ? null : summary.expense - prevSummary.expense;
-  const momBalanceDelta = windowed
-    ? null
-    : summary.income - summary.expense - (prevSummary.income - prevSummary.expense);
 
   const recent = await db.all(
     c.env.DB,
@@ -141,6 +139,35 @@ dashboardRoutes.get('/api/dashboard', requireAuth, async (c) => {
     ...pids
   );
   const balance = accounts.reduce((sum, a) => sum + (a.balance || 0), 0);
+
+  // The change under Net Worth: how far the balances it sums moved in the month, by the rule that
+  // moves them (balanceDeltasFor) and on these accounts only. A transfer between two of them moves
+  // nothing, and neither does an entry that names no account. It was the month's income less
+  // spending set against the month before's, which is not a change in the sum.
+  let momBalanceDelta: number | null = null;
+  if (!windowed) {
+    const moved = await db.all<{
+      account_id: number | null;
+      transfer_account_id: number | null;
+      type: string | null;
+      amount: number;
+      amount_local: number | null;
+    }>(
+      c.env.DB,
+      `SELECT account_id, transfer_account_id, type, amount, amount_local FROM transactions WHERE profile_id IN (${inClause}) AND date >= ? AND date <= ? AND (account_id IS NOT NULL OR transfer_account_id IS NOT NULL)`,
+      ...pids,
+      startDate,
+      endDate
+    );
+    const owned = new Set(accounts.map((a) => a.id));
+    let sum = 0;
+    for (const row of moved) {
+      for (const [acc, d] of balanceDeltasFor(row, row.type, baseAmount(row))) {
+        if (owned.has(acc)) sum += d;
+      }
+    }
+    momBalanceDelta = Math.round(sum * 100) / 100;
+  }
 
   // Upcoming bills: the active ones that fall due from today through the next 30 days, by the one
   // rule for when a bill falls due next (shared/billSchedule.ts), five at most. It read the due date
