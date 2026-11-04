@@ -222,6 +222,10 @@ test.describe('onboarding wizard', () => {
 
     await page.reload({ waitUntil: 'domcontentloaded' })
     await expect(page.getByTestId('onboarding-step-done')).toBeVisible({ timeout: 30000 })
+    // What the profile holds, though the reload kept no count of the visit's (review M20).
+    await expect(page.getByTestId('onboarding-done-summary')).toHaveText(
+      'Personal Profile has 1 account and 7 transactions.'
+    )
     await page.getByTestId('onboarding-finish').click()
     await expect(page.getByTestId('onboarding-wizard')).toHaveCount(0)
     await expect(page.getByTestId('getting-started')).toBeVisible({ timeout: 30000 })
@@ -281,7 +285,7 @@ test.describe('onboarding wizard', () => {
     // Done says what went in, and no toast covered the wizard on the way.
     await expect(page.getByTestId('onboarding-step-done')).toBeVisible()
     await expect(page.getByTestId('onboarding-done-summary')).toHaveText(
-      'Personal Profile has 1 account, 7 new transactions and 2 tracked subscriptions.'
+      'Personal Profile has 1 account, 7 transactions and 2 tracked subscriptions.'
     )
     await expect(page.getByText('2 subscriptions added')).toHaveCount(0)
     await page.getByTestId('onboarding-finish').click()

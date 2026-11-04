@@ -93,6 +93,7 @@ const successToasts = () =>
     .map((t) => t.message)
 
 const nameField = () => byTestId('onboarding-profile-name') as HTMLInputElement
+const NAME_HINT = 'It shows as a profile in the menu.'
 const continueButton = () => byTestId('onboarding-next') as HTMLButtonElement
 const aboutScreen = () => byTestId('onboarding-step-about')
 
@@ -110,6 +111,15 @@ async function storedProfile(id: number): Promise<Row | undefined> {
 }
 
 describe('naming your space', () => {
+  // Review M20: setup says "space", the word it was given; the field, the default name and the
+  // menu say "profile". The field's hint says once how the two meet.
+  it('says under the name that the space shows as a profile in the menu', async () => {
+    await openAt('space')
+    expect(byTestId('onboarding-step-space')?.textContent).toContain('your space')
+    expect(host.querySelector(`label[for="${nameField().id}"]`)?.textContent).toBe('Profile name')
+    expect(describedBy(nameField())).toBe(NAME_HINT)
+  })
+
   it("marks a blank name in the rules' words, focuses it, and stays on the step", async () => {
     await openAt('space')
     type(nameField(), '  ')
@@ -118,7 +128,8 @@ describe('naming your space', () => {
     await settle()
 
     expect(nameField().getAttribute('aria-invalid')).toBe('true')
-    expect(describedBy(nameField())).toBe(PROFILE_MESSAGES.name)
+    // The message first, then the field's hint (Field.tsx).
+    expect(describedBy(nameField())).toBe(`${PROFILE_MESSAGES.name} | ${NAME_HINT}`)
     expect(document.activeElement).toBe(nameField())
     expect(onboardingStep()).toBe('space')
     expect(aboutScreen()).toBeNull()
@@ -133,7 +144,7 @@ describe('naming your space', () => {
     continueButton().click()
 
     await vi.waitFor(() => {
-      expect(describedBy(nameField())).toBe(profileNameTaken('Household').name)
+      expect(describedBy(nameField())).toBe(`${profileNameTaken('Household').name} | ${NAME_HINT}`)
     })
     expect(nameField().getAttribute('aria-invalid')).toBe('true')
     expect(onboardingStep()).toBe('space')

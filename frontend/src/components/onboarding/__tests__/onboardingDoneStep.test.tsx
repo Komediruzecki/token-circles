@@ -142,6 +142,88 @@ it('lists the next steps from what the profile holds, and a step finishes setup 
   })
 })
 
+// Review M20: the line under the heading counted what this visit made, held in memory. A reload
+// on the subscriptions step (the cloud reopens there, and local-first does too since M7) left
+// "Personal Profile has 1 tracked subscription." in one runtime and "1 account and 1 tracked
+// subscription" in the other, for the same statement. It counts what the profile holds now.
+it('says what the profile holds, though this visit counted nothing: as after a reload', async () => {
+  const db = await getDB()
+  await db.add('accounts', {
+    id: 11,
+    profile_id: 1,
+    name: 'Main',
+    balance: 1000,
+    starting_balance: 1000,
+  } as never)
+  const bill = {
+    profile_id: 1,
+    due_date: `${monthsAgo(0)}-14`,
+    category_id: null,
+    recurring: 1,
+    last_paid_date: null,
+    next_due_date: null,
+    frequency: 'monthly',
+    type: 'subscription',
+  }
+  await db.add('bills', { ...bill, id: 21, name: 'Netflix', amount: 15.99, is_active: 1 } as never)
+  // Paused: not tracked any more, as the week-one mail counts them.
+  await db.add('bills', { ...bill, id: 22, name: 'Gym', amount: 30, is_active: 0 } as never)
+  await db.add('bills', { ...bill, id: 24, name: 'Paper', amount: 9, is_active: false } as never)
+  // Another profile's: not this one's.
+  await db.add('accounts', {
+    id: 12,
+    profile_id: 2,
+    name: 'Shared',
+    balance: 5,
+    starting_balance: 5,
+  } as never)
+
+  startOnboarding('done')
+  const { OnboardingWizard } = await import('../OnboardingWizard')
+  dispose = render(() => <OnboardingWizard selectProfiles={() => {}} />, host)
+
+  await vi.waitFor(
+    () => {
+      expect(host.querySelector('[data-test-id="onboarding-next-steps"]')).not.toBeNull()
+    },
+    { timeout: 10_000 }
+  )
+  expect(host.querySelector('[data-test-id="onboarding-done-summary"]')?.textContent).toBe(
+    'Personal has 1 account, 12 transactions and 1 tracked subscription.'
+  )
+})
+
+it('reads no earlier evaluation as what the profile holds, when the done step cannot evaluate it', async () => {
+  // An evaluation from before the account: 12 transactions and no account.
+  const { refreshAchievements } = await import('../../../core/achievementsStore')
+  await refreshAchievements()
+  const db = await getDB()
+  await db.add('accounts', {
+    id: 11,
+    profile_id: 1,
+    name: 'Main',
+    balance: 1000,
+    starting_balance: 1000,
+  } as never)
+  // A row the bills list refuses: the done step's evaluation fails on it.
+  await db.add('bills', { id: 23, profile_id: 1, name: 'Unreadable' } as never)
+
+  startOnboarding('done')
+  const { OnboardingWizard } = await import('../OnboardingWizard')
+  dispose = render(() => <OnboardingWizard selectProfiles={() => {}} />, host)
+
+  // What this visit can count: the account the step reads itself. Not "Personal has 12
+  // transactions.", which is the earlier evaluation's, with no account.
+  await vi.waitFor(
+    () => {
+      expect(host.querySelector('[data-test-id="onboarding-done-summary"]')?.textContent).toBe(
+        'Personal has 1 account.'
+      )
+    },
+    { timeout: 10_000 }
+  )
+})
+
 // Done has nothing left to leave: Escape there finishes setup as Go to my dashboard does, and
 // records it completed. It used to ask "Leave setup?" and record a skip.
 it('Escape on Done finishes setup without asking, and records it completed', async () => {

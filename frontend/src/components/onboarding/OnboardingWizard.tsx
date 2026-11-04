@@ -28,7 +28,7 @@
  * new profile and selects it, and asks whether the example profiles stay (localOnly.ts).
  */
 import { createEffect, createMemo, createSignal, For, on, onCleanup, Show, untrack } from 'solid-js'
-import { refreshAchievements } from '../../core/achievementsStore'
+import { refreshAchievements, snapshot } from '../../core/achievementsStore'
 import { api, apiGet, getLocalCurrency, showToast } from '../../core/api'
 import {
   bumpProfileVersion,
@@ -66,7 +66,8 @@ import { SpaceQuestions } from '../guidance/SpaceQuestions'
 import choiceStyles from '../guidance/SpaceQuestions.module.css'
 import { LogoMark } from '../Logo'
 import { SubscriptionScanPanel } from '../SubscriptionScan'
-import { counted, createFirstImport, FirstImportPanel, listed } from './FirstImport'
+import { doneLine, holdsOf } from './doneLine'
+import { counted, createFirstImport, FirstImportPanel } from './FirstImport'
 import {
   EXAMPLES_CHOICE_LEGEND,
   EXAMPLES_NOT_REMOVED,
@@ -86,8 +87,10 @@ import {
 import { workBackTypedBalances } from './setupBalances'
 import type { AnswerChanges, Answers } from '../../../../shared/guidance/answers'
 import type { OrientationStep } from '../../../../shared/orientation'
+import type { AchievementsSnapshot } from '../../core/achievementsStore'
 import type { ImportSummary } from '../../features/import/importFlow'
 import type { AccountType } from '../../types/models'
+import type { ProfileHolds } from './doneLine'
 import type { LocalWorkspace } from './localOnly'
 import type { CreatedAccount } from './onboardingForms'
 
@@ -470,11 +473,25 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
 
   // ---- step: done, with the next steps from what the profile now holds ----
   const [nextUp, setNextUp] = createSignal<OrientationStep[]>([])
+  /**
+   * What the done line counts (doneLine.ts, review M20): the rows of the evaluation the step runs,
+   * which are the profile's as both runtimes hold them, or, when that evaluation fails, what this
+   * visit made. Nothing until the evaluation has answered.
+   */
+  const [counting, setCounting] = createSignal<AchievementsSnapshot | 'visit' | null>(null)
   const loadNextSteps = async () => {
     setNextUp([])
+    setCounting(null)
     // Evaluated now rather than after the usual pause, so the steps count what was just imported.
-    await refreshAchievements().catch(() => undefined)
-    if (onboardingOpen() && onboardingStep() === 'done') setNextUp(currentNextSteps())
+    const evaluated = await refreshAchievements().then(
+      () => true,
+      () => false
+    )
+    if (!onboardingOpen() || onboardingStep() !== 'done') return
+    setNextUp(currentNextSteps())
+    // A failed evaluation leaves an earlier one in place, from before this visit's import, say.
+    const snap = snapshot()
+    setCounting(evaluated && snap !== null ? snap : 'visit')
   }
 
   const accountsHeld = () =>
@@ -483,15 +500,19 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
       createdAccounts().length + (importSummary()?.createdAccounts.length ?? 0)
     )
 
-  /** "Personal has 1 account, 7 new transactions and 2 tracked subscriptions." */
+  /** "Personal Profile has 1 account, 69 transactions and 1 tracked subscription." */
   const doneSummary = () => {
-    const name = state.currentProfile?.name ?? 'Your space'
-    const parts: string[] = []
-    if (accountsHeld() > 0) parts.push(counted(accountsHeld(), 'account'))
-    const imported = importSummary()?.imported ?? 0
-    if (imported > 0) parts.push(counted(imported, 'new transaction'))
-    if (subsAdded() > 0) parts.push(counted(subsAdded(), 'tracked subscription'))
-    return parts.length > 0 ? `${name} has ${listed(parts)}.` : `${name} is ready.`
+    const from = counting()
+    if (from === null) return ''
+    const holds: ProfileHolds =
+      from === 'visit'
+        ? {
+            accounts: accountsHeld(),
+            transactions: importSummary()?.imported ?? 0,
+            bills: subsAdded(),
+          }
+        : holdsOf(from, accountsHeld())
+    return doneLine(state.currentProfile?.name ?? 'Your space', holds)
   }
 
   const finish = () => {
@@ -741,6 +762,9 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
           label="Profile name"
           class={styles.field}
           labelClass={styles.fieldLabel}
+          // Setup says "space"; the menu lists it as a profile (review M20).
+          hint="It shows as a profile in the menu."
+          hintClass={styles.hint}
         >
           {(control) => (
             <input

@@ -372,6 +372,21 @@ test.describe('the setup wizard on the account @smoke', () => {
           { timeout: 15000 }
         )
         .toEqual([[1500, -388.85]])
+
+      // A reload on the subscriptions step: setup reopens there, and Done says what the profile
+      // holds, word for word what local-first says for the statement (onboarding.spec.ts). It
+      // counted this visit's work, which a reload forgets (review M20).
+      await page.reload({ waitUntil: 'domcontentloaded' })
+      await expect(page.getByTestId('onboarding-step-subscriptions')).toBeVisible({
+        timeout: 30_000,
+      })
+      const track = page.getByTestId('onboarding-subs-add-continue')
+      await expect(track).toHaveText('Track 2 subscriptions', { timeout: 15_000 })
+      await track.click()
+      await expect(page.getByTestId('onboarding-done-summary')).toHaveText(
+        'Personal Profile has 1 account, 7 transactions and 2 tracked subscriptions.',
+        { timeout: 15_000 }
+      )
     } finally {
       await deleteAccount(ctx, email)
     }
