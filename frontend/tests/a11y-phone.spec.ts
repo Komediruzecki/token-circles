@@ -135,16 +135,53 @@ async function each(target: Locator, what: string): Promise<Locator[]> {
   return target.all()
 }
 
+/**
+ * The font size of every match, read in one pass: a badge list re-renders when an evaluation
+ * lands, and an element read on its own after that was detached (its size read NaN).
+ */
+async function sizesOf(target: Locator, what: string): Promise<{ text: string; size: number }[]> {
+  await expect(target.first(), what).toBeAttached({ timeout: 15_000 })
+  return target.evaluateAll((els) =>
+    els.map((el) => ({
+      text: (el.textContent ?? '').trim(),
+      size: parseFloat(getComputedStyle(el).fontSize),
+    }))
+  )
+}
+
 async function lightTheme(page: Page) {
   await page.addInitScript(() => {
     localStorage.setItem('finance-theme', 'light')
   })
 }
 
+/**
+ * Let the app's badge evaluation finish, then clear the toasts it raised. On a fresh database the
+ * fixture earns its badges on the first page it opens, and on a phone that toast is a banner across
+ * the top for 9 s, over Toggle sidebar and the period bar: CI on one core read "Toggle sidebar: hit
+ * area 0x0", and locally, with the badges cleared and the run on one core, a period pill read 0x0.
+ * Targets are measured with no toast up; a toast's own action is measured in its own test.
+ */
+async function noToasts(page: Page) {
+  await page.evaluate(
+    async ([badgesPath, toastsPath]) => {
+      type Badges = { refreshAchievements: () => Promise<unknown> }
+      type Toasts = { toasts: () => { id: number }[]; removeToast: (id: number) => void }
+      // Joins the evaluation the app started, and resolves once it has saved and announced.
+      await ((await import(/* @vite-ignore */ badgesPath)) as Badges).refreshAchievements()
+      const store = (await import(/* @vite-ignore */ toastsPath)) as Toasts
+      for (const item of store.toasts()) store.removeToast(item.id)
+    },
+    ['/src/core/achievementsStore.ts', '/src/core/toastStore.ts']
+  )
+  await expect(page.locator('[class*="toastContainer"] > *')).toHaveCount(0)
+}
+
 test.describe('the phone Dashboard @smoke', () => {
   test('every control is a fingertip, and "All" sits in the pill row', async ({ page }) => {
     await page.goto(`${E2E_BASE}/#dashboard`)
     await expect(page.getByTestId('dashboard-views')).toBeVisible({ timeout: 30_000 })
+    await noToasts(page)
 
     await expectFingertip(page.getByRole('button', { name: 'Toggle sidebar' }), 'Toggle sidebar')
     await expectFingertip(page.getByTestId('dashboard-views'), 'Views')
@@ -178,11 +215,12 @@ test.describe('the phone Dashboard @smoke', () => {
     await lightTheme(page)
     await page.goto(`${E2E_BASE}/#dashboard`)
     await expect(page.getByTestId('dashboard-views')).toBeVisible({ timeout: 30_000 })
+    await noToasts(page)
 
     const rail = page.getByTestId('badge-rail')
     await expect(rail.locator('li').first()).toBeVisible()
-    for (const item of await each(rail.locator('li span'), 'item'))
-      expect(await fontSize(item), `badge "${await item.innerText()}"`).toBeGreaterThanOrEqual(12)
+    for (const { text, size } of await sizesOf(rail.locator('li span'), 'item'))
+      expect(size, `badge "${text}"`).toBeGreaterThanOrEqual(12)
     expect(await fontSize(page.getByText('Your money, in clear orbit')), 'the tagline').toBe(12)
 
     for (const trend of await each(page.locator('[class*="trendDelta"]'), 'trend'))
@@ -208,6 +246,7 @@ test.describe('the phone Dashboard @smoke', () => {
   }) => {
     await page.goto(`${E2E_BASE}/#dashboard`)
     await expect(page.getByTestId('dashboard-views')).toBeVisible({ timeout: 30_000 })
+    await noToasts(page)
 
     // A tap on the plus opens the guided sheet: amount, then category, then the summary.
     await page.getByRole('button', { name: 'Quick add entry' }).click()
@@ -257,6 +296,7 @@ test.describe('the phone Dashboard @smoke', () => {
   test("the profile menu's checkboxes are fingertips and say which profile", async ({ page }) => {
     await page.goto(`${E2E_BASE}/#dashboard`)
     await expect(page.getByTestId('dashboard-views')).toBeVisible({ timeout: 30_000 })
+    await noToasts(page)
     await page.getByRole('button', { name: 'Toggle sidebar' }).click()
     await page.getByTestId('profile-dropdown-btn').click()
     const rows = await each(page.locator('[data-profile-id]'), 'profile rows')
@@ -271,6 +311,7 @@ test.describe('the phone Dashboard @smoke', () => {
   test("a toast's action is a fingertip", async ({ page }) => {
     await page.goto(`${E2E_BASE}/#dashboard`)
     await expect(page.getByTestId('dashboard-views')).toBeVisible({ timeout: 30_000 })
+    await noToasts(page)
     // The app's own toast store, through the dev server's module graph: the same instance the
     // app renders from.
     await page.evaluate(async (path) => {
@@ -291,11 +332,12 @@ test.describe('the phone Progress @smoke', () => {
   }) => {
     await page.goto(`${E2E_BASE}/#progress`)
     await expect(page.getByTestId('progress-header')).toBeVisible({ timeout: 30_000 })
+    await noToasts(page)
     await expectFingertip(page.getByRole('button', { name: 'Toggle sidebar' }), 'Toggle sidebar')
     const timeline = page.getByTestId('badge-timeline')
     const words = timeline.locator('li [class*="when"], li [class*="name"]')
-    for (const word of await each(words, 'timeline words'))
-      expect(await fontSize(word), `"${await word.innerText()}"`).toBeGreaterThanOrEqual(12)
+    for (const { text, size } of await sizesOf(words, 'timeline words'))
+      expect(size, `"${text}"`).toBeGreaterThanOrEqual(12)
   })
 })
 
@@ -306,6 +348,7 @@ test.describe('the phone Settings @smoke', () => {
     await lightTheme(page)
     await page.goto(`${E2E_BASE}/#settings`)
     await expect(page.getByTestId('settings-header')).toBeVisible({ timeout: 30_000 })
+    await noToasts(page)
     const tabs = page.locator('[data-test-id^="settings-tab-"] small')
     expect(await tabs.count()).toBeGreaterThan(0)
     for (const tab of await tabs.all())
@@ -326,6 +369,7 @@ test.describe('the phone Import columns view @smoke', () => {
   }) => {
     await lightTheme(page)
     await gotoServerless(page, 'import', 'import-header')
+    await noToasts(page)
 
     const samples = page.locator('[data-test-id="import-expected-columns"] td')
     expect(await samples.count()).toBeGreaterThan(0)

@@ -2798,6 +2798,18 @@ check')` first, as the cushion and debt cases do.
   `TourSelectionModal.dialog.test.tsx` checks the role, the modal flag, the label pointing at the
   heading's id, and the close button's name; both cases fail on the old component.
 
+- **The phone checks measure with no toast up** (round 5, CI). `a11y-phone.spec.ts:145` failed all
+  three tries in CI on #694 with "Toggle sidebar: hit area 0x0". The cover is the badge toast. On
+  a fresh database the fixture earns its badges on the first page it opens, and on a phone the
+  toast is a 9 s banner across the top, over Toggle sidebar and the period bar. Locally, with the
+  stored badges cleared and the run pinned to one core (`taskset -c 0`), the same test read "pill
+  Oct: hit area 0x0". Each signed-in and local-first test now waits for the app's badge
+  evaluation (`refreshAchievements`, which joins the run in flight) and clears its toasts before
+  it measures. The hit-area rule is unchanged, and a toast's own action is still measured in its
+  own test. The same runs found the badge rail's and the timeline's font-size reads failing with
+  NaN when the list re-rendered between the list and the read; both now read every size in one
+  pass. Three one-core runs with the badges cleared each passed 9 of 9.
+
 ### Found in the first-week test run (3 Nov)
 
 What the 3 Nov test run and the functionality review after it found in the first week's changes,
