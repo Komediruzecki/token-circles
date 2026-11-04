@@ -198,7 +198,7 @@ describe('the ledger', () => {
     )
     const c = mount(() => <Progress />)
     expect(q(c, '[data-test-id="circles-waiting"]').textContent).toBe(
-      'Your figures appear once 3 months are tracked. One is so far.'
+      'Your figures appear once 3 finished months are tracked. One is so far.'
     )
   })
 

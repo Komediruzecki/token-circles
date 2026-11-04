@@ -24,6 +24,7 @@
 
 import { articleUrl, DEFAULT_ABOUT_ORIGIN } from '../../shared/articles.ts';
 import { BANK_IMPORT_HASH } from '../../shared/importRoute.ts';
+import { monthsTrackedOfAYear, YEAR_ON_FILE_MONTHS } from '../../shared/trackedMonths.ts';
 import {
   CONFIRM_LINK_SIGN_IN,
   notYourSignUp,
@@ -1313,8 +1314,6 @@ export interface WeekOneCounts {
   entriesImported: number;
   /** Tracked months in the year window (shared/trackedMonths.ts trackedMonthsInYearWindow). */
   monthsTracked: number;
-  /** The year window's length in months, as that count reads it. */
-  windowMonths: number;
   /** Active subscriptions on Bills. */
   subscriptions: number;
   /** Active bills on Bills. */
@@ -1345,17 +1344,20 @@ export function renderWeekOneDay7(
 ): RenderedEmail {
   const app = appOf(opts);
   const c = opts.counts;
-  const monthsLabel = `Months tracked of the last ${c.windowMonths}`;
-  const rows: Array<[string, number]> = [
-    ['Entries imported', c.entriesImported],
-    [monthsLabel, c.monthsTracked],
+  const rows: Array<[string, string]> = [
+    ['Entries imported', count(c.entriesImported)],
+    // Of the twelve a year needs, as the app counts a year on file (review M8).
+    [
+      'Months tracked',
+      `${Math.min(c.monthsTracked, YEAR_ON_FILE_MONTHS)} of ${YEAR_ON_FILE_MONTHS}`,
+    ],
   ];
-  if (c.subscriptions > 0) rows.push(['Subscriptions you track', c.subscriptions]);
-  if (c.bills > 0) rows.push(['Bills you track', c.bills]);
-  if (c.uncategorised > 0) rows.push(['Entries without a category', c.uncategorised]);
+  if (c.subscriptions > 0) rows.push(['Subscriptions you track', count(c.subscriptions)]);
+  if (c.bills > 0) rows.push(['Bills you track', count(c.bills)]);
+  if (c.uncategorised > 0) rows.push(['Entries without a category', count(c.uncategorised)]);
   const preheader =
     c.monthsTracked > 0
-      ? `${count(c.monthsTracked)} of the last ${c.windowMonths} months ${plural(c.monthsTracked, 'is', 'are')} tracked, from ${count(c.entriesImported)} imported ${plural(c.entriesImported, 'entry', 'entries')}.`
+      ? `${monthsTrackedOfAYear(c.monthsTracked)}, from ${count(c.entriesImported)} imported ${plural(c.entriesImported, 'entry', 'entries')}.`
       : `Your first import brought in ${count(c.entriesImported)} ${plural(c.entriesImported, 'entry', 'entries')}.`;
   return renderMail({
     subject: `Your first week in ${BRAND}`,
@@ -1370,9 +1372,9 @@ export function renderWeekOneDay7(
     tables: [
       {
         // No title: the paragraph above introduces it, and the eyebrow already says "Your first week".
-        rows: rows.map(([label, n]) => ({
-          cells: [{ text: label }, { text: count(n), align: 'right', strong: true }],
-          text: `${label}: ${count(n)}`,
+        rows: rows.map(([label, value]) => ({
+          cells: [{ text: label }, { text: value, align: 'right', strong: true }],
+          text: `${label}: ${value}`,
         })),
       },
     ],

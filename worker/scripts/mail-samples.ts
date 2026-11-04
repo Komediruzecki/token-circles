@@ -263,15 +263,14 @@ export function mailSamples(opts: SampleOptions = {}): MailSample[] {
           counts: {
             entriesImported: 1284,
             monthsTracked: 7,
-            windowMonths: 13,
             subscriptions: 6,
             bills: 2,
             uncategorised: 38,
           },
           step: {
             title: 'Import the rest of your year',
-            reason: '7 of the last 13 months are tracked. A month counts once it holds 3 entries.',
-            hash: '#import',
+            reason: '7 of 12 months tracked. A month counts once it holds 3 entries.',
+            hash: '#import/bank',
             label: 'Import',
           },
           ...origins,

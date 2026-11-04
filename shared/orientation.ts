@@ -11,11 +11,7 @@
 import { addCalendarMonths } from './calendarMonths';
 import { FIRST_CUSHION_MONTHS } from './guidance/circles';
 import { BANK_IMPORT_HASH } from './importRoute';
-import {
-  TRACKED_MONTH_MIN_TRANSACTIONS,
-  YEAR_ON_FILE_MONTHS,
-  YEAR_WINDOW_MONTHS,
-} from './trackedMonths';
+import { A_MONTH_COUNTS, monthsTrackedOfAYear, YEAR_ON_FILE_MONTHS } from './trackedMonths';
 import type { ArticleId } from './articles';
 
 export type OrientationStepId =
@@ -122,30 +118,29 @@ interface Rule {
   step: (facts: OrientationFacts) => Omit<OrientationStep, 'id'> | null;
 }
 
+/**
+ * The import-year step's reason, which Your next step gives too (guidance/nextStep.ts): "3 of 12
+ * months tracked. A month counts once it holds 3 entries."
+ */
+export function importYearReason(trackedMonthsInYear: number): string {
+  return `${monthsTrackedOfAYear(trackedMonthsInYear)}. ${A_MONTH_COUNTS}`;
+}
+
 const RULES: Rule[] = [
   {
     id: 'import-year',
-    // A year on file (shared/trackedMonths.ts), and the reason names its window: the badges and
-    // the streak count months in a row, so "tracked months" alone would read as their number.
-    // The link opens the Bank Imports tab, where a statement from a bank the app knows is read as
-    // it is (review M4).
+    // A year on file (shared/trackedMonths.ts), counted of the twelve it needs as every surface
+    // counts it (review M8). "Of 12" keeps it apart from the badges' and the streak's months in a
+    // row. The link opens the Bank Imports tab, where a statement from a bank the app knows is
+    // read as it is (review M4).
     step: ({ trackedMonthsInYear: n }) => {
       if (n >= YEAR_ON_FILE_MONTHS) return null;
-      const counts = `A month counts once it holds ${TRACKED_MONTH_MIN_TRANSACTIONS} entries.`;
-      const window = `the last ${YEAR_WINDOW_MONTHS} months`;
-      return n === 0
-        ? {
-            title: 'Import a year of statements',
-            reason: `None of ${window} is tracked yet. ${counts}`,
-            link: { hash: BANK_IMPORT_HASH, label: 'Import' },
-            article: 'bank-year',
-          }
-        : {
-            title: 'Import the rest of your year',
-            reason: `${n} of ${window} ${n === 1 ? 'is' : 'are'} tracked. ${counts}`,
-            link: { hash: BANK_IMPORT_HASH, label: 'Import' },
-            article: 'bank-year',
-          };
+      return {
+        title: n === 0 ? 'Import a year of statements' : 'Import the rest of your year',
+        reason: importYearReason(n),
+        link: { hash: BANK_IMPORT_HASH, label: 'Import' },
+        article: 'bank-year',
+      };
     },
   },
   {

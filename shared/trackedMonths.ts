@@ -4,7 +4,9 @@
  * steps (shared/orientation.ts) and the circles that come after them, so no two of them can
  * disagree about a count.
  */
-import { addCalendarMonths } from './calendarMonths';
+// With its extension: worker/src/emailTemplates.ts reads this file, and the sample mails load it
+// under plain Node, which resolves no import for it (mailSamplesUnderNode.test.ts).
+import { addCalendarMonths } from './calendarMonths.ts';
 
 /** A month is tracked when it holds at least this many transactions dated inside it, any type. */
 export const TRACKED_MONTH_MIN_TRANSACTIONS = 3;
@@ -45,6 +47,28 @@ export function trackedMonthsOf(dates: Iterable<string>, today?: string): string
  */
 export const YEAR_ON_FILE_MONTHS = 12;
 export const YEAR_WINDOW_MONTHS = 13;
+
+/** How a month counts, said wherever months are counted. */
+export const A_MONTH_COUNTS = `A month counts once it holds ${TRACKED_MONTH_MIN_TRANSACTIONS} entries.`;
+
+/**
+ * A year on file's count, the same on every surface (review M8): "3 of 12 months tracked". It
+ * read "3 of the last 13 months are tracked" beside "3 of 12 months on file" on one card, and
+ * "Months tracked of the last 13: 12" in the day-7 mail. It stops at the twelve a year needs, so
+ * a window of thirteen tracked months never reads "13 of 12".
+ */
+export function monthsTrackedOfAYear(n: number): string {
+  return `${Math.min(n, YEAR_ON_FILE_MONTHS)} of ${YEAR_ON_FILE_MONTHS} months tracked`;
+}
+
+/**
+ * Under a figure averaged short of a year on file: "Based on 5 finished months. It firms up at 12
+ * months tracked." The averages count finished months, this month left out, and a year on file
+ * counts this month too, so each count says which it is (review M10).
+ */
+export function basedOnFinishedMonths(n: number): string {
+  return `Based on ${n} finished ${n === 1 ? 'month' : 'months'}. It firms up at ${YEAR_ON_FILE_MONTHS} months tracked.`;
+}
 
 /** How many of `trackedMonths` ('YYYY-MM') fall in the year window that ends with `today`'s month. */
 export function trackedMonthsInYearWindow(trackedMonths: Iterable<string>, today: string): number {

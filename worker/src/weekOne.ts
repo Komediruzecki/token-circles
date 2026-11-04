@@ -38,11 +38,7 @@ import type { RenderedEmail, WeekOneCounts, WeekOneStep } from './emailTemplates
 import { aboutOrigin, appOrigin, ensureUnsubToken, unsubscribeUrl } from './reminders';
 import { WELCOME_KEY } from './welcome';
 import { nextSteps } from '../../shared/orientation';
-import {
-  isTrackedMonth,
-  trackedMonthsInYearWindow,
-  YEAR_WINDOW_MONTHS,
-} from '../../shared/trackedMonths';
+import { isTrackedMonth, trackedMonthsInYearWindow } from '../../shared/trackedMonths';
 
 /**
  * The daily cron the mails go out on, 08:30 UTC (wrangler.jsonc triggers.crons). Their own, so a
@@ -230,7 +226,6 @@ export async function weekOneDay7Content(
     counts: {
       entriesImported: tx?.imported ?? 0,
       monthsTracked,
-      windowMonths: YEAR_WINDOW_MONTHS,
       subscriptions: bills.find((b) => b.type === 'subscription')?.n ?? 0,
       bills: bills.find((b) => b.type === 'bill')?.n ?? 0,
       uncategorised,

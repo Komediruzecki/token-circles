@@ -14,7 +14,6 @@
  * `import()` only while the gate is open, so a closed gate never fetches it.
  */
 import { createEffect, createMemo, createSignal, Show } from 'solid-js'
-import { CLEAR_PICTURE_MONTHS } from '../../../../shared/guidance/circles'
 import {
   percentText,
   principalLine,
@@ -22,6 +21,7 @@ import {
   shownRate,
 } from '../../../../shared/guidance/savingsWords'
 import { round } from '../../../../shared/retirementSettings'
+import { basedOnFinishedMonths } from '../../../../shared/trackedMonths'
 import { circlesProfileLine } from '../../core/circlesProfile'
 import { DEFAULT_SAVINGS_GOAL } from '../../core/savingsGoal'
 import { setSettingsTab } from '../../core/settingsStore'
@@ -128,9 +128,10 @@ export default function SavingsGauge(props: {
               when={shown() !== null}
               fallback={
                 <p class={styles.line} data-test-id="savings-gauge-waiting">
+                  {/* Finished months, this month left out (review M10). */}
                   {facts().averaged
-                    ? `No income in your last ${months()} months, so there's no rate to show.`
-                    : 'Your savings rate shows once 3 months are tracked.'}
+                    ? `No income in your last ${months()} finished months, so there's no rate to show.`
+                    : 'Your savings rate shows once 3 finished months are tracked.'}
                 </p>
               }
             >
@@ -142,7 +143,7 @@ export default function SavingsGauge(props: {
                   band={band() ? { from: band()!.from, to: band()!.to } : undefined}
                   label={`${months()} months`}
                   ariaLabel={[
-                    `Savings rate ${percentText(shown()!)}% over the last ${months()} months`,
+                    `Savings rate ${percentText(shown()!)}% over the last ${months()} finished months`,
                     band() ? `typical range ${band()!.from}% to ${band()!.to}%` : null,
                     goal() === null ? null : `goal ${goal()}%`,
                   ]
@@ -165,9 +166,7 @@ export default function SavingsGauge(props: {
                     {(line) => <p class={styles.line}>{line()}</p>}
                   </Show>
                   <Show when={!facts().firm}>
-                    <p class={styles.line}>
-                      Based on {months()} months. It firms up at {CLEAR_PICTURE_MONTHS}.
-                    </p>
+                    <p class={styles.line}>{basedOnFinishedMonths(months())}</p>
                   </Show>
 
                   <ul class={styles.legend} aria-hidden="true">

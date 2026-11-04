@@ -156,12 +156,12 @@ describe('the savings rate', () => {
     const shown = savingsCard(short, words, at('HR'))!
     expect(shown.title).toBe('€300 a month more out than in')
     expect(shown.body).toEqual([
-      'Over the last 12 months, spending ran ahead of income. About 1 in 4 households in the EU spends more than its income over a year (Eurostat, around 2020). March was the heaviest month, mostly Rent.',
+      'Over the last 12 finished months, spending ran ahead of income. About 1 in 4 households in the EU spends more than its income over a year (Eurostat, around 2020). March was the heaviest month, mostly Rent.',
     ])
     expect(shown.step).toEqual({ label: 'See what made March heavier', hash: '#analytics' })
     // The EU sentence is European evidence: the UK and US cards leave it out.
     expect(savingsCard(short, words, at('UK'))!.body[0]).toBe(
-      'Over the last 12 months, spending ran ahead of income. March was the heaviest month, mostly Rent.'
+      'Over the last 12 finished months, spending ran ahead of income. March was the heaviest month, mostly Rent.'
     )
   })
 
@@ -209,7 +209,7 @@ describe('the savings rate', () => {
       months: ['2025-10', '2025-11', '2025-12', '2026-01', '2026-02'],
     })
     expect(savingsCard(early, words, at('DE'))!.provisional).toBe(
-      'Based on 5 months. It firms up at 12.'
+      'Based on 5 finished months. It firms up at 12 months tracked.'
     )
     expect(
       savingsCard(
@@ -578,7 +578,7 @@ describe('subscriptions', () => {
       months: ['2026-04', '2026-05', '2026-06', '2026-07'],
     })
     expect(subscriptionsCard(early, words, at('DE'))!.provisional).toBe(
-      'Based on 4 months. It firms up at 12.'
+      'Based on 4 finished months. It firms up at 12 months tracked.'
     )
     expect(subscriptionsCard(held(3, 40), words, at('DE'))!.provisional).toBeNull()
   })
@@ -660,7 +660,7 @@ describe('groceries, eating out and transport', () => {
           'Below most households in the US. With fewer than 12 months here, yearly costs like insurance may not have come round yet.',
         ],
         step: { label: 'Import the rest of your year', hash: '#import' },
-        provisional: 'Based on 1 month. It firms up at 12.',
+        provisional: 'Based on 1 finished month. It firms up at 12 months tracked.',
       }
     )
     expect(card('transport', shares({}, 'US'))).toMatchObject({

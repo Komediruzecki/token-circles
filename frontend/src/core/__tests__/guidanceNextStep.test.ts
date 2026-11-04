@@ -61,7 +61,7 @@ describe('before a year is on file', () => {
       id: 'import-year',
       circle: 1,
       title: 'Import the rest of your year',
-      why: '7 of the last 13 months are tracked. A month counts once it holds 3 entries.',
+      why: '7 of 12 months tracked. A month counts once it holds 3 entries.',
       // In Clear picture's view, the key figure says the months and the check how one counts.
       whyHere: '5 months to go.',
       // Getting started's link: the Bank Imports tab (review M4).
@@ -93,7 +93,7 @@ describe('before a year is on file', () => {
     expect(step(none)).toMatchObject({
       id: 'year-on-file',
       title: 'Import a year of statements',
-      why: 'None of the last 13 months is tracked yet. A month counts once it holds 3 entries.',
+      why: '0 of 12 months tracked. A month counts once it holds 3 entries.',
     })
   })
 })
@@ -218,17 +218,17 @@ describe('once a year is on file', () => {
       id: 'own-income',
       circle: 2,
       title: 'Close the €100 a month gap',
-      why: 'Over your last 12 tracked months, €100 a month more went out than came in.',
+      why: 'Over your last 12 finished months, €100 a month more went out than came in.',
       // The title says the gap.
-      whyHere: 'Over your last 12 tracked months, more went out than came in.',
+      whyHere: 'Over your last 12 finished months, more went out than came in.',
       action: { kind: 'open', hash: '#budgets', label: 'Open Budgets' },
       meter: { kind: 'bar', left: '€2,400 in', right: '€2,500 out' },
     })
     expect(step(facts({ ownIncome: 2400 })).why).toBe(
-      'Over your last 12 tracked months, €100 a month more went out than your own income brought in.'
+      'Over your last 12 finished months, €100 a month more went out than your own income brought in.'
     )
     expect(step(facts({ ownIncome: 2400 })).whyHere).toBe(
-      'Over your last 12 tracked months, more went out than your own income brought in.'
+      'Over your last 12 finished months, more went out than your own income brought in.'
     )
   })
 

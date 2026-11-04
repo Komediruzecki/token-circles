@@ -8,7 +8,7 @@
  */
 import { monthName } from '../orientation';
 import { targetFromSpend } from '../retirement';
-import { TRACKED_MONTH_MIN_TRANSACTIONS, YEAR_WINDOW_MONTHS } from '../trackedMonths';
+import { A_MONTH_COUNTS } from '../trackedMonths';
 import {
   CIRCLE_NAMES,
   FULL_CUSHION_MONTHS,
@@ -56,7 +56,8 @@ export interface CheckRow {
 
 export const WAITING_ON_ANSWER = 'Waiting on your answer';
 export const WAITING_ON_ACCOUNTS = "Your accounts didn't load";
-export const WAITING_ON_MONTHS = 'Known once 3 months are tracked';
+/** The averages count finished months, this month left out (review M10). */
+export const WAITING_ON_MONTHS = 'Known once 3 finished months are tracked';
 export const WAITING_ON_WORK_OPTIONAL = 'Asked once you reach Work optional';
 const NO_ACCOUNT = 'None of your accounts is a savings, cash or current account yet.';
 
@@ -168,7 +169,9 @@ function rowFor(
       return {
         ...base,
         title: 'A year on file',
-        detail: `12 tracked months of the last ${YEAR_WINDOW_MONTHS}. A month counts once it holds ${TRACKED_MONTH_MIN_TRANSACTIONS} entries.`,
+        // The twelve are the title's and the key figure's ("7 of 12 months on file"). It read "12
+        // tracked months of the last 13" beside that twelve (review M8).
+        detail: A_MONTH_COUNTS,
       };
     case 'sorted': {
       // The share sorted is Your numbers'.
@@ -405,7 +408,7 @@ export function circleNumbers(
   const lead =
     facts.averaged && first && last
       ? `Averages over ${monthYear(first)} to ${monthYear(last)}. Balances as of today.`
-      : 'Averages appear once 3 months are tracked. Balances as of today.';
+      : 'Averages appear once 3 finished months are tracked. Balances as of today.';
   const avg = (value: number | null) => (value === null ? unknown : money(value));
   const invested: NumberRow = {
     label: 'Invested',

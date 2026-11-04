@@ -188,15 +188,15 @@ describe('the status over the rows', () => {
 
   it('says when the figures appear, before three months are tracked', () => {
     const none = facts({ months: [], monthsInYear: 0, firm: false, averaged: false })
-    expect(status(none).waiting).toBe('Your figures appear once 3 months are tracked.')
+    expect(status(none).waiting).toBe('Your figures appear once 3 finished months are tracked.')
     expect(
       status(facts({ months: ['2026-09'], monthsInYear: 1, firm: false, averaged: false })).waiting
-    ).toBe('Your figures appear once 3 months are tracked. One is so far.')
+    ).toBe('Your figures appear once 3 finished months are tracked. One is so far.')
     expect(
       status(
         facts({ months: ['2026-08', '2026-09'], monthsInYear: 2, firm: false, averaged: false })
       ).waiting
-    ).toBe('Your figures appear once 3 months are tracked. Two are so far.')
+    ).toBe('Your figures appear once 3 finished months are tracked. Two are so far.')
   })
 })
 

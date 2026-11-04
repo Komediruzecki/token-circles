@@ -461,7 +461,8 @@ export function ledgerStatus(
   const months = facts.months.length;
   const waiting = facts.averaged
     ? null
-    : `Your figures appear once 3 months are tracked.${months === 1 ? ' One is so far.' : months === 2 ? ' Two are so far.' : ''}`;
+    : // Finished months, this month left out, beside a year on file that counts it (review M10).
+      `Your figures appear once 3 finished months are tracked.${months === 1 ? ' One is so far.' : months === 2 ? ' Two are so far.' : ''}`;
   if (current === null) {
     return {
       meta: 'All seven reached',

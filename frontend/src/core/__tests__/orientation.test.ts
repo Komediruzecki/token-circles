@@ -56,21 +56,22 @@ describe('with nothing to do', () => {
 })
 
 describe('import-year', () => {
-  it('applies until twelve of the last thirteen months are tracked, and names that window', () => {
+  // One count of months everywhere (review M8): "4 of 12 months tracked", as the Dashboard's step
+  // meter, circle 1 and the day-7 mail count them. It read "4 of the last 13 months are tracked"
+  // beside "4 of 12 months on file".
+  it('applies until twelve months are tracked, and counts them of twelve', () => {
     expect(only({ trackedMonthsInYear: 4 })).toEqual({
       id: 'import-year',
       title: 'Import the rest of your year',
-      reason: '4 of the last 13 months are tracked. A month counts once it holds 3 entries.',
+      reason: '4 of 12 months tracked. A month counts once it holds 3 entries.',
       // The Bank Imports tab (review M4): the step is about a year from the bank.
       link: { hash: '#import/bank', label: 'Import' },
       article: 'bank-year',
     })
     expect(only({ trackedMonthsInYear: 1 }).reason).toBe(
-      '1 of the last 13 months is tracked. A month counts once it holds 3 entries.'
+      '1 of 12 months tracked. A month counts once it holds 3 entries.'
     )
-    expect(only({ trackedMonthsInYear: 11 }).reason).toMatch(
-      /^11 of the last 13 months are tracked\./
-    )
+    expect(only({ trackedMonthsInYear: 11 }).reason).toMatch(/^11 of 12 months tracked\./)
     expect(orientationSteps(facts({ trackedMonthsInYear: 12 }))).toEqual([])
     expect(only({ trackedMonthsInYear: 0 }).link).toEqual({ hash: '#import/bank', label: 'Import' })
   })
@@ -78,9 +79,7 @@ describe('import-year', () => {
   it('asks for a year when nothing of the past year is tracked', () => {
     const step = only({ trackedMonthsInYear: 0 })
     expect(step.title).toBe('Import a year of statements')
-    expect(step.reason).toBe(
-      'None of the last 13 months is tracked yet. A month counts once it holds 3 entries.'
-    )
+    expect(step.reason).toBe('0 of 12 months tracked. A month counts once it holds 3 entries.')
   })
 })
 

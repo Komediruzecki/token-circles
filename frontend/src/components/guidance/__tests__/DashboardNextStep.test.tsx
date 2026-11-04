@@ -63,7 +63,7 @@ function viewOf(f: GuidanceFacts): GuidanceView {
         {
           id: 'import-year',
           title: 'Import the rest of your year',
-          reason: '7 of the last 13 months are tracked.',
+          reason: '7 of 12 months tracked.',
           link: { hash: '#import', label: 'Import' },
         },
       ],

@@ -2991,6 +2991,32 @@ true, or is too small for one.
   fails, one fails each; the cloud case then reads the review's "Personal Profile has 1 account
   and 2 tracked subscriptions."
 
+- **Months are counted one way, and a count of finished months says so** (M8, M10). Getting
+  started said "2 of the last 13 months are tracked." beside "2 of 12 months on file", circle 1
+  "12 tracked months of the last 13", and the day-7 mail "Months tracked of the last 13: 12". A
+  year on file is now counted of the twelve it needs everywhere, and never past them: "2 of 12
+  months tracked. A month counts once it holds 3 entries." on Getting started, Your next step and
+  setup's last step, "Months tracked: 2 of 12" and "2 of 12 months tracked, from 46 imported
+  entries." in the day-7 mail (`monthsTrackedOfAYear`, `importYearReason`). Circle 1's check, whose
+  title and key figure carry the twelve, says how a month counts. The averages leave this month
+  out, so their counts now say "finished": "Your figures appear once 3 finished months are
+  tracked. Two are so far.", "Known once 3 finished months are tracked", "Averages appear once 3
+  finished months are tracked.", "Based on 5 finished months. It firms up at 12 months tracked."
+  (`basedOnFinishedMonths`), "Over your last 12 finished months, ...", and the savings gauge's
+  "Your savings rate shows once 3 finished months are tracked." The badges' months in a row are
+  a different rule and keep their words. Captures at 1280 and 390, light and dark, after setup
+  with the review's N26 statement: `m08-dashboard-*`, `m08-progress-*`, `m08-circle1-*`, text in
+  `m08-months-before.json` and `m08-months-after.json`. Tests: `orientation.test.ts`,
+  `monthCountsOnDashboard.test.ts`, `guidanceNextStep.test.ts`, `guidanceCircleView.test.ts`,
+  `guidanceLedger.test.ts`, `guidanceCards.test.ts`, `progressCircles.test.tsx`,
+  `SavingsGauge.test.tsx`, `GettingStarted.test.tsx`, `onboardingDoneStep.test.tsx`,
+  `week-one-mails.test.ts`, and in e2e `orientation.spec.ts` and `circles.spec.ts`. Without the
+  stop at twelve, in the mail's row or in the shared count, the mail's case fails. The mail reads
+  the count from `shared/trackedMonths.ts`, which imports its own file with the extension, so the
+  sample mails still load under plain Node (`node worker/scripts/send-sample-mails.ts`);
+  `src/__tests__/mailSamplesUnderNode.test.ts` loads and renders every sample that way, and fails
+  with the import written without it.
+
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
 The production build holds back the benchmarks and the questions that choose their figures

@@ -344,13 +344,13 @@ describe('day 7', () => {
     const parts = [mail!.subject, mail!.html, mail!.text].map((part) => part.replaceAll(token, ''));
     // Six came in by an import; April and May hold three each, June one.
     expect(mail!.text).toContain('Entries imported: 6');
-    expect(mail!.text).toContain('Months tracked of the last 13: 2');
+    expect(mail!.text).toContain('Months tracked: 2 of 12');
     expect(mail!.text).toContain('Subscriptions you track: 1');
     expect(mail!.text).not.toContain('Bills you track');
     // One of the six entries that take a category has none: the transfer does not count.
     expect(mail!.text).toContain('Entries without a category: 1');
     expect(mail!.text).toContain('Import the rest of your year');
-    expect(mail!.text).toContain('2 of the last 13 months are tracked.');
+    expect(mail!.text).toContain('2 of 12 months tracked.');
     expect(mail!.text).toContain('Open Import: http://localhost:3800/#import/bank');
     for (const part of parts) {
       for (const amount of ['4321', '4,321', '8765', '8,765', '1234', '1,234', '2468', '1357']) {
@@ -596,7 +596,6 @@ describe('the day-7 mail itself', () => {
   const counts = {
     entriesImported: 1284,
     monthsTracked: 12,
-    windowMonths: 13,
     subscriptions: 0,
     bills: 0,
     uncategorised: 0,
@@ -605,9 +604,23 @@ describe('the day-7 mail itself', () => {
   it('leaves out a count of nothing, and the step when none applies', () => {
     const { text } = renderWeekOneDay7({ counts, step: null });
     expect(text).toContain('Entries imported: 1,284');
-    expect(text).toContain('Months tracked of the last 13: 12');
+    expect(text).toContain('Months tracked: 12 of 12');
     expect(text).not.toMatch(/Subscriptions you track|Bills you track|without a category/);
     expect(text).not.toContain('One next step');
+  });
+
+  // One count of months everywhere (review M8): of the twelve a year needs, as the app counts
+  // them. The window is this month and the twelve before it, so a count can reach 13: it never
+  // reads "13 of 12", nor "of the last 13" beside the app's "of 12".
+  it('counts the months tracked of the twelve a year needs, and no more', () => {
+    const mail = renderWeekOneDay7({ counts: { ...counts, monthsTracked: 13 }, step: null });
+    expect(mail.text).toContain('Months tracked: 12 of 12');
+    expect(mail.html).toContain('12 of 12 months tracked, from 1,284 imported entries.');
+    for (const part of [mail.subject, mail.html, mail.text]) {
+      expect(part).not.toMatch(/of the last 13|13 of 12/);
+    }
+    const one = renderWeekOneDay7({ counts: { ...counts, monthsTracked: 1 }, step: null });
+    expect(one.html).toContain('1 of 12 months tracked, from 1,284 imported entries.');
   });
 
   it('says what came in when no month is tracked yet', () => {

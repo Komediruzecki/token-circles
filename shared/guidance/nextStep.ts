@@ -26,8 +26,7 @@ import {
   freeMoneyQuestion,
   YEARLY_BILLS_QUESTION,
 } from './questions';
-import { DAYS_IN_A_MONTH, monthName } from '../orientation';
-import { TRACKED_MONTH_MIN_TRANSACTIONS, YEAR_WINDOW_MONTHS } from '../trackedMonths';
+import { DAYS_IN_A_MONTH, importYearReason, monthName } from '../orientation';
 import type { Check, CircleNumber, Placement } from './circles';
 import { EXPENSIVE_DEBT_NOTE } from './facts';
 import type { Debt, GuidanceFacts } from './facts';
@@ -271,15 +270,10 @@ function stepFor(
     case 'year-on-file': {
       // Getting started's words for the same step (shared/orientation.ts, `import-year`).
       const n = Math.min(facts.monthsInYear, 12);
-      const counts = `A month counts once it holds ${TRACKED_MONTH_MIN_TRANSACTIONS} entries.`;
-      const window = `the last ${YEAR_WINDOW_MONTHS} months`;
       return {
         title: n === 0 ? 'Import a year of statements' : 'Import the rest of your year',
         thenText: n === 0 ? 'import a year of statements' : 'import the rest of your year',
-        why:
-          n === 0
-            ? `None of ${window} is tracked yet. ${counts}`
-            : `${n} of ${window} ${n === 1 ? 'is' : 'are'} tracked. ${counts}`,
+        why: importYearReason(n),
         whyHere: monthsToGo(n),
         action: open('#import', 'Import'),
         meter: {
@@ -321,13 +315,14 @@ function stepFor(
       return {
         title: `Close the ${gap} a month gap`,
         thenText: `close the ${gap} a month gap`,
+        // The averages' months are finished ones, this month left out (review M10).
         why: support
-          ? `Over your last ${facts.months.length} tracked months, ${gap} a month more went out than your own income brought in.`
-          : `Over your last ${facts.months.length} tracked months, ${gap} a month more went out than came in.`,
+          ? `Over your last ${facts.months.length} finished months, ${gap} a month more went out than your own income brought in.`
+          : `Over your last ${facts.months.length} finished months, ${gap} a month more went out than came in.`,
         // The title says the gap; Your numbers, what came in and went out.
         whyHere: support
-          ? `Over your last ${facts.months.length} tracked months, more went out than your own income brought in.`
-          : `Over your last ${facts.months.length} tracked months, more went out than came in.`,
+          ? `Over your last ${facts.months.length} finished months, more went out than your own income brought in.`
+          : `Over your last ${facts.months.length} finished months, more went out than came in.`,
         action: open('#budgets', 'Budgets'),
         meter: {
           kind: 'bar',

@@ -71,7 +71,7 @@ describe('the savings gauge', () => {
     expect(text(c, 'savings-gauge-title')).toBe('You kept 16.7% of your income')
     const ring = q(c, 'svg[role="img"]')
     expect(ring.getAttribute('aria-label')).toBe(
-      'Savings rate 16.7% over the last 12 months; goal 20%'
+      'Savings rate 16.7% over the last 12 finished months; goal 20%'
     )
     expect(ring.textContent).toContain('12 MONTHS')
     expect(text(c, 'savings-gauge-goal')).toBe(
@@ -130,7 +130,9 @@ describe('the savings gauge', () => {
     const early = mount(
       viewOf(facts({ firm: false, months: ['2026-03', '2026-04', '2026-05', '2026-06'] }))
     )
-    expect(early.textContent).toContain('Based on 4 months. It firms up at 12.')
+    expect(early.textContent).toContain(
+      'Based on 4 finished months. It firms up at 12 months tracked.'
+    )
     expect(q(early, 'svg[role="img"]').textContent).toContain('4 MONTHS')
     dispose?.()
     host.remove()
@@ -147,7 +149,7 @@ describe('the savings gauge', () => {
       )
     )
     expect(text(waiting, 'savings-gauge-waiting')).toBe(
-      'Your savings rate shows once 3 months are tracked.'
+      'Your savings rate shows once 3 finished months are tracked.'
     )
     expect(waiting.querySelector('svg')).toBeNull()
     dispose?.()
@@ -157,7 +159,7 @@ describe('the savings gauge', () => {
       viewOf(facts({ income: 0, savings: { rate: null, cash: null, withPrincipal: null } }))
     )
     expect(text(noIncome, 'savings-gauge-waiting')).toBe(
-      "No income in your last 12 months, so there's no rate to show."
+      "No income in your last 12 finished months, so there's no rate to show."
     )
   })
 
@@ -218,7 +220,7 @@ describe('behind the benchmarks gate', () => {
       expect(c.querySelector('[data-test-id="gauge-band"]')).not.toBeNull()
     })
     expect(q(c, 'svg[role="img"]').getAttribute('aria-label')).toBe(
-      'Savings rate 16.7% over the last 12 months; typical range 9.3% to 19.3%'
+      'Savings rate 16.7% over the last 12 finished months; typical range 9.3% to 19.3%'
     )
     // The legend says the band, once: the goal line doesn't say it again.
     expect(c.textContent!.split('Typical in the EU: 9.3% to 19.3%')).toHaveLength(2)

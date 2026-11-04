@@ -45,7 +45,7 @@ const STATEMENT = [
 const AFTER_IMPORT = [
   {
     title: 'Import the rest of your year',
-    reason: '4 of the last 13 months are tracked. A month counts once it holds 3 entries.',
+    reason: '4 of 12 months tracked. A month counts once it holds 3 entries.',
     href: '#import/bank',
   },
   {
@@ -62,7 +62,7 @@ const AFTER_IMPORT = [
 
 const NOTHING_YET = {
   title: 'Import a year of statements',
-  reason: 'None of the last 13 months is tracked yet. A month counts once it holds 3 entries.',
+  reason: '0 of 12 months tracked. A month counts once it holds 3 entries.',
   href: '#import/bank',
 }
 
@@ -299,7 +299,7 @@ const LAST_MONTH = new Date(`${monthsAgo(1)}-15T12:00:00`).toLocaleString('en-GB
 const BEFORE_A_CUSHION = [
   {
     title: 'Import the rest of your year',
-    reason: '4 of the last 13 months are tracked. A month counts once it holds 3 entries.',
+    reason: '4 of 12 months tracked. A month counts once it holds 3 entries.',
     href: '#import/bank',
   },
   {

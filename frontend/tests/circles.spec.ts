@@ -222,7 +222,7 @@ test.describe('The seven circles @smoke', () => {
       'For now: 0 of 12 months'
     )
     await expect(page.getByTestId('circles-waiting')).toHaveText(
-      'Your figures appear once 3 months are tracked.'
+      'Your figures appear once 3 finished months are tracked.'
     )
 
     await aYearInSolidGround(page)

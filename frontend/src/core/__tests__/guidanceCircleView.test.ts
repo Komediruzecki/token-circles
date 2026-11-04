@@ -82,7 +82,7 @@ describe('what a circle checks', () => {
       {
         id: 'year-on-file',
         title: 'A year on file',
-        detail: '12 tracked months of the last 13. A month counts once it holds 3 entries.',
+        detail: 'A month counts once it holds 3 entries.',
         state: 'met',
         waiting: null,
         needed: 'Needed to reach Clear picture',
@@ -97,7 +97,7 @@ describe('what a circle checks', () => {
       },
     ])
     expect(row(facts({ monthsInYear: 1, firm: false }), 1, 'year-on-file')?.detail).toBe(
-      '12 tracked months of the last 13. A month counts once it holds 3 entries.'
+      'A month counts once it holds 3 entries.'
     )
   })
 
@@ -280,7 +280,7 @@ describe('what a circle checks', () => {
     })
     expect(row(short, 2, 'own-income')).toMatchObject({
       state: 'not-known',
-      waiting: 'Known once 3 months are tracked',
+      waiting: 'Known once 3 finished months are tracked',
       detail: null,
     })
   })
@@ -355,7 +355,7 @@ describe("the person's numbers", () => {
       'Averages over January 2025 to December 2025. Balances as of today.'
     )
     expect(numbers(facts({ averaged: false }), 1).lead).toBe(
-      'Averages appear once 3 months are tracked. Balances as of today.'
+      'Averages appear once 3 finished months are tracked. Balances as of today.'
     )
   })
 
