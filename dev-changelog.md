@@ -3301,6 +3301,15 @@ true, or is too small for one.
   function, `isCatchAllCategory` in `shared/guidance/kinds.ts`, read by both. Test:
   `monthFacts.test.ts`, "is no catch-all once something gives it a kind, as the circles read it",
   which fails with the name-only rule.
+- **A profile switch does not count the new profile's entries as uncategorised.** On
+  Transactions, `categoriesLoaded` stayed true across a switch, so until the new profile's
+  categories came in, its filed entries were checked against the old profile's list and counted
+  as without a category: the "entries without a category" list from Getting started showed them,
+  briefly or, with a slow read, for as long as it took. The page now keeps which profiles the
+  category list answers for (`categoriesAnsweredFor`, as the account list already did) and reads
+  it as loaded only for the profiles read now. Test: `transactionsUncategorisedLink.test.tsx`,
+  "takes no filed entry for uncategorised while the new profile's categories load", which fails
+  without it.
 
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 

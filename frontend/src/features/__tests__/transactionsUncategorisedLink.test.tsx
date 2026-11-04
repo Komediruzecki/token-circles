@@ -6,7 +6,7 @@
  */
 import { render } from 'solid-js/web'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { setPage } from '../../core/appStore'
+import { bumpProfileVersion, setPage } from '../../core/appStore'
 import { period, setPeriod } from '../../core/periodStore'
 import { fromPill } from '../../utils/period'
 import type { Transaction } from '../../types/models'
@@ -219,5 +219,32 @@ describe('an entry under a category the profile no longer has', () => {
     await mountTransactions()
     // Groceries is filed under Food, which has not arrived yet.
     expect(shown().sort()).toEqual(['Old market', 'Refund'])
+  })
+})
+
+describe('a profile switch', () => {
+  // categoriesLoaded stayed true across a switch, so until the new profile's categories came in,
+  // its filed entries were checked against the old profile's and counted as uncategorised.
+  it("takes no filed entry for uncategorised while the new profile's categories load", async () => {
+    serverTransactions.push(
+      tx(7, 'Their market', { profile_id: 2 as never, category_id: 8 as never })
+    )
+    try {
+      history.replaceState(null, '', '#transactions?uncategorised=1')
+      await mountTransactions()
+      expect(shown().sort()).toEqual(['Old market', 'Refund'])
+
+      categoryRead.next = () => new Promise(() => {})
+      localStorage.setItem('currentProfileId', '2')
+      bumpProfileVersion()
+      await flush()
+      await flush()
+
+      // Their market is filed under profile 2's category 8, whose list has not arrived yet.
+      expect(shown()).not.toContain('Their market')
+      expect(shown()).toContain('Their lunch')
+    } finally {
+      serverTransactions.pop()
+    }
   })
 })
