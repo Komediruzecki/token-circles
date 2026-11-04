@@ -115,29 +115,52 @@ describe('reading the local workspace before the switch', () => {
 })
 
 describe('what the switch asks', () => {
+  /** The confirm as it reads: the title, then each line. */
+  const said = (found: LocalWorkspace, empty: boolean) => {
+    const { title, lines } = localOnlyQuestion(found, empty)
+    return [title, ...lines].join(' ')
+  }
+  const ALL: LocalWorkspace[] = [
+    { kind: 'none' },
+    { kind: 'examples' },
+    { kind: 'own', names: ['A'], ids: [4] },
+    { kind: 'unknown' },
+  ]
+
   // Asked of a signed-in account (3 Nov review A3): the account stays, and the switch turns its
   // first-week mails off first, so the question says so. It used to say "no account is needed".
-  it('says the data stays here and what happens to the account, over nothing', () => {
-    expect(localOnlyQuestion({ kind: 'none' }, true)).toBe(
-      'Keep your data in this browser only? It stays on this device and nothing syncs to the cloud. Your account stays, empty, and sends no first-week mails. Settings can switch back.'
-    )
+  // On a phone it was one six-line paragraph (review D5): the question is now the dialog's
+  // heading, and two short lines say the rest.
+  it('asks in a heading, and says in two short lines what happens, over nothing', () => {
+    expect(localOnlyQuestion({ kind: 'none' }, true)).toEqual({
+      title: 'Keep your data in this browser only?',
+      lines: [
+        'Nothing syncs to the cloud, and Settings can switch back.',
+        'Your account stays empty and sends no first-week mails.',
+      ],
+    })
+  })
+
+  it('keeps every line short, and the title the same, whatever the browser holds', () => {
+    for (const found of ALL) {
+      for (const empty of [true, false]) {
+        const { title, lines } = localOnlyQuestion(found, empty)
+        expect(title, found.kind).toBe('Keep your data in this browser only?')
+        expect(lines.length, found.kind).toBeLessThanOrEqual(3)
+        for (const line of lines) expect(line.length, line).toBeLessThanOrEqual(120)
+      }
+    }
   })
 
   it('calls the account empty only when it is, and says it stays as it is otherwise', () => {
-    const cases: LocalWorkspace[] = [
-      { kind: 'none' },
-      { kind: 'examples' },
-      { kind: 'own', names: ['A'], ids: [4] },
-      { kind: 'unknown' },
-    ]
-    for (const found of cases) {
-      const fresh = localOnlyQuestion(found, true)
+    for (const found of ALL) {
+      const fresh = said(found, true)
       expect(fresh, found.kind).toContain(
-        ' Your account stays, empty, and sends no first-week mails. Settings can switch back.'
+        ' Nothing syncs to the cloud, and Settings can switch back. Your account stays empty and sends no first-week mails.'
       )
-      const kept = localOnlyQuestion(found, false)
+      const kept = said(found, false)
       expect(kept, found.kind).toContain(
-        ' Your account stays as it is and sends no first-week mails. Settings can switch back.'
+        ' Nothing syncs to the cloud, and Settings can switch back. Your account stays as it is and sends no first-week mails.'
       )
       expect(kept, found.kind).not.toContain('empty')
       for (const text of [fresh, kept]) {
@@ -148,45 +171,35 @@ describe('what the switch asks', () => {
   })
 
   it('over the examples, says setup comes next and the examples can go', () => {
-    const text = localOnlyQuestion({ kind: 'examples' }, true)
-    expect(text).toBe(
-      'Keep your data in this browser only? This browser has the example profiles from the demo. Next you name a space of your own and choose whether the examples stay. Nothing syncs to the cloud. Your account stays, empty, and sends no first-week mails. Settings can switch back.'
+    const { lines } = localOnlyQuestion({ kind: 'examples' }, true)
+    expect(lines[0]).toBe(
+      "This browser has the demo's example profiles. Next you name a space of your own and choose whether they stay."
     )
-    expect(text).not.toContain('carry on')
+    expect(lines.join(' ')).not.toContain('carry on')
   })
 
   it("over a workspace of the person's own, names what is carried on with", () => {
-    expect(localOnlyQuestion({ kind: 'own', names: ['Our flat'], ids: [4] }, true)).toBe(
-      'Keep your data in this browser only? This browser already has a local workspace with your profile "Our flat". You carry on with it, and nothing syncs to the cloud. Your account stays, empty, and sends no first-week mails. Settings can switch back.'
+    expect(localOnlyQuestion({ kind: 'own', names: ['Our flat'], ids: [4] }, true).lines[0]).toBe(
+      'This browser already has a local workspace with your profile "Our flat". You carry on with it.'
     )
-    expect(localOnlyQuestion({ kind: 'own', names: ['A', 'B'], ids: [4, 5] }, true)).toContain(
+    expect(said({ kind: 'own', names: ['A', 'B'], ids: [4, 5] }, true)).toContain(
       'with your profiles "A" and "B".'
     )
     expect(
-      localOnlyQuestion(
-        { kind: 'own', names: ['A', 'B', 'C', 'D', 'E'], ids: [4, 5, 6, 7, 8] },
-        true
-      )
+      said({ kind: 'own', names: ['A', 'B', 'C', 'D', 'E'], ids: [4, 5, 6, 7, 8] }, true)
     ).toContain('with your profiles "A", "B", "C" and 2 more.')
   })
 
   it('where it could not tell, says only what is true either way', () => {
-    const text = localOnlyQuestion({ kind: 'unknown' }, true)
-    expect(text).toContain(
+    expect(localOnlyQuestion({ kind: 'unknown' }, true).lines[0]).toBe(
       'If this browser already has a local workspace, you carry on with that one.'
     )
   })
 
   it('no question uses an em dash', () => {
-    const cases: LocalWorkspace[] = [
-      { kind: 'none' },
-      { kind: 'examples' },
-      { kind: 'own', names: ['A'], ids: [4] },
-      { kind: 'unknown' },
-    ]
-    for (const found of cases) {
+    for (const found of ALL) {
       for (const empty of [true, false]) {
-        expect(localOnlyQuestion(found, empty)).not.toMatch(/—/)
+        expect(said(found, empty)).not.toMatch(/—/)
       }
     }
   })

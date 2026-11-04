@@ -3145,6 +3145,17 @@ true, or is too small for one.
   `week-one-unsubscribe.test.ts` measures the page's button and link, and
   `successTextContrast.test.ts` reads the toast's rule; on the old colours both fail.
 
+- **The local-only confirm asks in a heading and says the rest in two short lines, with 44px
+  buttons on a phone** (D5). It was one paragraph with no heading, five lines at 390 px (six in
+  the review's capture), and its buttons were 39 px tall. It is now headed "Keep your data in this
+  browser only?", which names the dialog, then "Nothing syncs to the cloud, and Settings can switch
+  back." and "Your account stays empty and sends no first-week mails." (177 characters down to 148;
+  each line wraps to two at 390 and in the 400 px dialog on a desktop). Over the demo's examples,
+  a workspace of the person's own or one it could not read, one line says that first. A confirm
+  can now carry a title and a few lines (`confirmStore.ts`, `ConfirmDialog.tsx`), and every
+  confirm's buttons are 44 px tall on a phone. Tests: `ConfirmDialog.test.tsx` (heading, name,
+  lines, the phone rule), `localOnly.test.ts`, and the setup tests that read the confirm.
+
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
 The production build holds back the benchmarks and the questions that choose their figures

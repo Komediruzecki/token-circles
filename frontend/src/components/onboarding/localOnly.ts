@@ -138,28 +138,56 @@ function ownProfiles(names: readonly string[]): string {
   return `your profiles ${names.slice(0, 3).map(quoted).join(', ')} and ${String(more)} more`
 }
 
+/** The local-only confirm: the question as its heading, and a short line each for the rest. */
+export interface LocalOnlyQuestion {
+  title: string
+  lines: string[]
+}
+
 /**
  * What the switch asks, for what this browser's local workspace holds. Only a signed-in account is
  * asked, and the account stays: the switch turns its first-week mails off (stopFirstWeekMails), so
  * the question says both (3 Nov review A3). `accountEmpty` is whether the account holds nothing
  * of the person's yet, as on its first setup; run again over an account with data, it stays as it
- * is.
+ * is. On a phone it was one paragraph of six lines (review D5): the question heads the dialog, and
+ * over a fresh workspace two short lines say the rest.
  */
-export function localOnlyQuestion(found: LocalWorkspace, accountEmpty: boolean): string {
+export function localOnlyQuestion(found: LocalWorkspace, accountEmpty: boolean): LocalOnlyQuestion {
+  const title = 'Keep your data in this browser only?'
+  const cloud = 'Nothing syncs to the cloud, and Settings can switch back.'
   const account = accountEmpty
-    ? 'Your account stays, empty, and sends no first-week mails.'
+    ? 'Your account stays empty and sends no first-week mails.'
     : 'Your account stays as it is and sends no first-week mails.'
-  const ask = 'Keep your data in this browser only?'
-  const back = 'Settings can switch back.'
   switch (found.kind) {
     case 'none':
-      return `${ask} It stays on this device and nothing syncs to the cloud. ${account} ${back}`
+      return { title, lines: [cloud, account] }
     case 'examples':
-      return `${ask} This browser has the example profiles from the demo. Next you name a space of your own and choose whether the examples stay. Nothing syncs to the cloud. ${account} ${back}`
+      return {
+        title,
+        lines: [
+          "This browser has the demo's example profiles. Next you name a space of your own and choose whether they stay.",
+          cloud,
+          account,
+        ],
+      }
     case 'own':
-      return `${ask} This browser already has a local workspace with ${ownProfiles(found.names)}. You carry on with it, and nothing syncs to the cloud. ${account} ${back}`
+      return {
+        title,
+        lines: [
+          `This browser already has a local workspace with ${ownProfiles(found.names)}. You carry on with it.`,
+          cloud,
+          account,
+        ],
+      }
     default:
-      return `${ask} It stays on this device and nothing syncs to the cloud. If this browser already has a local workspace, you carry on with that one. ${account} ${back}`
+      return {
+        title,
+        lines: [
+          'If this browser already has a local workspace, you carry on with that one.',
+          cloud,
+          account,
+        ],
+      }
   }
 }
 

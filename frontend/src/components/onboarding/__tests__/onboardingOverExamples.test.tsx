@@ -287,9 +287,8 @@ it('says on the switch that the examples are here, before anything changes', asy
   await vi.waitFor(() => {
     expect(confirmRequests()).toHaveLength(1)
   })
-  expect(confirmRequests()[0].message).toContain(
-    'This browser has the example profiles from the demo.'
-  )
+  expect(confirmRequests()[0].title).toBe('Keep your data in this browser only?')
+  expect(confirmRequests()[0].message[0]).toContain("This browser has the demo's example profiles.")
   resolveConfirm(confirmRequests()[0].id, false)
   // Cancelled: still on the account, nothing marked.
   expect(localStorage.getItem('finance_storage_mode')).toBe('self-hosted')
@@ -322,7 +321,9 @@ async function switchToLocalOnly(): Promise<{ question: string; reloads: () => n
   await vi.waitFor(() => {
     expect(confirmRequests()).toHaveLength(1)
   })
-  const question = confirmRequests()[0].message
+  // The confirm as it reads: its heading, then its lines.
+  const { title, message } = confirmRequests()[0]
+  const question = [title, ...(typeof message === 'string' ? [message] : message)].join(' ')
   resolveConfirm(confirmRequests()[0].id, true)
   await vi.waitFor(() => {
     expect(reloads).toBe(1)
@@ -365,7 +366,7 @@ it("carries on with an empty profile of the person's own without opening setup o
 it('leaves the selection for the app to pick over the examples alone, as before', async () => {
   const { question } = await switchToLocalOnly()
 
-  expect(question).toContain('This browser has the example profiles from the demo.')
+  expect(question).toContain("This browser has the demo's example profiles.")
   expect(localStorage.getItem('finance_storage_mode')).toBe('serverless')
   expect(localStorage.getItem('currentProfileId')).toBeNull()
   expect(localStorage.getItem('selectedProfileIds')).toBeNull()

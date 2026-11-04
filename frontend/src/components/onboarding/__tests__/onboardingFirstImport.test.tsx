@@ -776,7 +776,7 @@ describe('leaving setup at its subscriptions', () => {
     const [{ id, message }] = confirmRequests()
     resolveConfirm(id, false)
     await settle()
-    return message
+    return typeof message === 'string' ? message : message.join(' ')
   }
 
   it('after a statement went in on this visit, says the import is kept', async () => {

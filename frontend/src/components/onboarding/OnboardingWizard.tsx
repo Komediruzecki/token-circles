@@ -713,7 +713,9 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
     const found = await readLocalWorkspace().catch((): LocalWorkspace => ({ kind: 'unknown' }))
     const accountEmpty =
       firstSetupOfTheAccount() && createdAccounts().length === 0 && profileAccounts().length === 0
-    const sure = await showConfirm(localOnlyQuestion(found, accountEmpty), {
+    const question = localOnlyQuestion(found, accountEmpty)
+    const sure = await showConfirm(question.lines, {
+      title: question.title,
       confirmText: 'Keep it here',
       cancelText: 'Cancel',
     })

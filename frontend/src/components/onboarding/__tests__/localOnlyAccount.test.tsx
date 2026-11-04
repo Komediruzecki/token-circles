@@ -142,7 +142,9 @@ async function chooseLocalOnly(from: 'space' | 'account' = 'space'): Promise<str
   await vi.waitFor(() => {
     expect(confirmRequests()).toHaveLength(1)
   })
-  const question = confirmRequests()[0].message
+  // The confirm as it reads: its heading, then its lines (review D5).
+  const { title, message } = confirmRequests()[0]
+  const question = [title, ...(typeof message === 'string' ? [message] : message)].join(' ')
   resolveConfirm(confirmRequests()[0].id, true)
   await vi.waitFor(() => {
     expect(reloads).toBe(1)
@@ -155,7 +157,7 @@ const mailsOff = 'PUT /api/notifications/settings {"weekOneMails":false}'
 it("turns the account's first-week mails off before the switch, and says so", async () => {
   const question = await chooseLocalOnly()
   expect(question).toBe(
-    'Keep your data in this browser only? It stays on this device and nothing syncs to the cloud. Your account stays, empty, and sends no first-week mails. Settings can switch back.'
+    'Keep your data in this browser only? Nothing syncs to the cloud, and Settings can switch back. Your account stays empty and sends no first-week mails.'
   )
   expect(worker.sent).toContain(mailsOff)
   // Sent to the Worker, before the mode changed: after it, the request would go to the browser.

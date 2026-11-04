@@ -705,11 +705,15 @@ test.describe('keeping the data in this browser, over the demo @smoke', () => {
       await expect(page.getByTestId('onboarding-examples-choice')).toHaveCount(0)
 
       await page.getByTestId('onboarding-local-only').click()
+      // The question heads the confirm and names it (review D5).
+      await expect(
+        page.getByRole('alertdialog', { name: 'Keep your data in this browser only?' })
+      ).toBeVisible()
       await expect(page.getByRole('alertdialog')).toContainText(
-        'This browser has the example profiles from the demo.'
+        "This browser has the demo's example profiles."
       )
       await expect(page.getByRole('alertdialog')).toContainText(
-        'Your account stays, empty, and sends no first-week mails.'
+        'Your account stays empty and sends no first-week mails.'
       )
       expect(mailsOn(email), 'first-week mails before the switch').toBe(1)
       await page.getByTestId('confirm-accept').click()
