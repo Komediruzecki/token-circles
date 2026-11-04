@@ -57,8 +57,11 @@
 }
 
 .rail-btn {
-  width: 52px;
+  /* As wide as its caption needs, never under 52px; the column rail stretches every button to
+     the widest. */
+  min-width: 52px;
   height: 52px;
+  padding: 0 6px;
   border-radius: 15px;
   border: 1px solid transparent;
   background: transparent;
@@ -79,8 +82,10 @@
 }
 
 .rail-caption {
-  font-size: 9.5px;
+  /* The 12px floor for labels (review D8); it was 9.5px. */
+  font-size: 12px;
   letter-spacing: 0.2px;
+  white-space: nowrap;
 }
 
 .rail-btn:hover {

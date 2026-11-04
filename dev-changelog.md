@@ -2605,6 +2605,16 @@ check')` first, as the cushion and debt cases do.
   the row and the switch and expects four flips, one each, and none on a disabled row; the first
   fails on the old opt-in row.
 
+- **A 12px floor on the first-week surfaces** (D8). Badge names were 11px and their dates 10px on
+  the Dashboard's badge rail (`BadgeRail.module.css`), and 10.5px and 11.5px on Progress's
+  timeline (`BadgeTimeline.module.css`); the sidebar's tagline was 11px (`Layout.module.css`);
+  the Settings section labels ("General", "Exports", "API access", "Billing", "About") 9.5px
+  (`SettingsPage.module.css`). All are 12px. A Settings section button is as wide as its label
+  needs and never under 52px, and the column rail stretches every button to the widest, so "API
+  access" fits on one line. "primary" in the profile menu went to 12px with the brand-text fix
+  above. Test: `tests/a11y-phone.spec.ts` (`@smoke`) reads the size of every badge name and date
+  on the Dashboard and Progress, the tagline, "primary" and every Settings section label.
+
 ### Found in the first-week test run (3 Nov)
 
 What the 3 Nov test run and the functionality review after it found in the first week's changes,
