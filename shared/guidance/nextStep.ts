@@ -26,8 +26,7 @@ import {
   freeMoneyQuestion,
   YEARLY_BILLS_QUESTION,
 } from './questions';
-import { DAYS_IN_A_MONTH, monthName } from '../orientation';
-import { TRACKED_MONTH_MIN_TRANSACTIONS, YEAR_WINDOW_MONTHS } from '../trackedMonths';
+import { DAYS_IN_A_MONTH, importYearReason, monthName } from '../orientation';
 import type { Check, CircleNumber, Placement } from './circles';
 import { EXPENSIVE_DEBT_NOTE } from './facts';
 import type { Debt, GuidanceFacts } from './facts';
@@ -108,10 +107,31 @@ const monthsToGo = (n: number): string => `${12 - n} ${12 - n === 1 ? 'month' : 
 /** "Set a budget" as "Then:" lists it. */
 const lowerFirst = (text: string): string => text.charAt(0).toLowerCase() + text.slice(1);
 
-/** "Then: a, and b." */
+/** The words that start what a step is about, after its head: "grow your cushion | to six months". */
+const LINKS = new Set('to by for at on in into from with without of'.split(' '));
+
+/** A step's head, the words before its first linking word, and the rest from that word on. */
+function headOf(item: string): { head: string; rest: string } | null {
+  const words = item.split(' ');
+  const at = words.findIndex((word, i) => i > 0 && LINKS.has(word));
+  if (at < 0) return null;
+  return { head: words.slice(0, at).join(' '), rest: words.slice(at).join(' ') };
+}
+
+/**
+ * "Then: a, and b." A step that shares its head with the one before it says only the rest: "Then:
+ * grow your cushion to three months, then to six months."
+ */
 export function thenLine(items: readonly string[]): string | null {
   if (items.length === 0) return null;
-  return `Then: ${items.join(', and ')}.`;
+  let line = items[0];
+  for (let i = 1; i < items.length; i++) {
+    const before = headOf(items[i - 1]);
+    const here = headOf(items[i]);
+    line +=
+      before && here && before.head === here.head ? `, then ${here.rest}` : `, and ${items[i]}`;
+  }
+  return `Then: ${line}.`;
 }
 
 /** A bar's share: below 1 while the check is not met, whatever the rounding. */
@@ -250,15 +270,10 @@ function stepFor(
     case 'year-on-file': {
       // Getting started's words for the same step (shared/orientation.ts, `import-year`).
       const n = Math.min(facts.monthsInYear, 12);
-      const counts = `A month counts once it holds ${TRACKED_MONTH_MIN_TRANSACTIONS} entries.`;
-      const window = `the last ${YEAR_WINDOW_MONTHS} months`;
       return {
         title: n === 0 ? 'Import a year of statements' : 'Import the rest of your year',
         thenText: n === 0 ? 'import a year of statements' : 'import the rest of your year',
-        why:
-          n === 0
-            ? `None of ${window} is tracked yet. ${counts}`
-            : `${n} of ${window} ${n === 1 ? 'is' : 'are'} tracked. ${counts}`,
+        why: importYearReason(n),
         whyHere: monthsToGo(n),
         action: open('#import', 'Import'),
         meter: {
@@ -300,13 +315,14 @@ function stepFor(
       return {
         title: `Close the ${gap} a month gap`,
         thenText: `close the ${gap} a month gap`,
+        // The averages' months are finished ones, this month left out (review M10).
         why: support
-          ? `Over your last ${facts.months.length} tracked months, ${gap} a month more went out than your own income brought in.`
-          : `Over your last ${facts.months.length} tracked months, ${gap} a month more went out than came in.`,
+          ? `Over your last ${facts.months.length} finished months, ${gap} a month more went out than your own income brought in.`
+          : `Over your last ${facts.months.length} finished months, ${gap} a month more went out than came in.`,
         // The title says the gap; Your numbers, what came in and went out.
         whyHere: support
-          ? `Over your last ${facts.months.length} tracked months, more went out than your own income brought in.`
-          : `Over your last ${facts.months.length} tracked months, more went out than came in.`,
+          ? `Over your last ${facts.months.length} finished months, more went out than your own income brought in.`
+          : `Over your last ${facts.months.length} finished months, more went out than came in.`,
         action: open('#budgets', 'Budgets'),
         meter: {
           kind: 'bar',
@@ -554,8 +570,11 @@ export function nextStepOf({ placement, facts, orientation, words }: NextStepInp
   // it reads.
   if (!first) return circleStep(current, placement);
   // Checks that wait on the same thing (accounts that didn't load, an account to add) are one step.
+  // The withdrawal rate is said from Work optional only, where it is the step itself: as a then,
+  // three circles off, it followed a savings point as if it came next (review M15).
   const later: string[] = [];
   for (const step of rest) {
+    if (step.check.id === 'work-optional') continue;
     const text = step.words.thenText;
     if (text !== first.words.thenText && !later.includes(text)) later.push(text);
     if (later.length === 2) break;
@@ -572,6 +591,18 @@ export function nextStepOf({ placement, facts, orientation, words }: NextStepInp
     fine: first.words.fine,
     article: first.words.article,
   };
+}
+
+/**
+ * Your next step on Dashboard once Getting started is hidden (review M14). The card it replaces led
+ * with Getting started's first step, and Hide brought the same step straight back; it leads with
+ * the next one on that list while there is one. With one step left that is the step, and with a
+ * year on file Getting started is not shown, so nothing is skipped.
+ */
+export function nextStepOnceHidden(input: NextStepInput): NextStep {
+  const { facts, orientation } = input;
+  if (facts.firm || !orientation || orientation.length < 2) return nextStepOf(input);
+  return nextStepOf({ ...input, orientation: orientation.slice(1) });
 }
 
 /** The circle's name for the step's chip. */

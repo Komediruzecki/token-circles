@@ -2589,6 +2589,829 @@ check')` first, as the cushion and debt cases do.
     the two import cases for a space that has Restaurant pass before and after, as the guard that
     the fold keeps it. `categoryGroups.test.ts` expects Eating out for `UBER EATS`.
 
+### Found in the first-week test run (3 Nov)
+
+What the 3 Nov test run and the functionality review after it found in the first week's changes,
+fixed before the release. None of it is in CHANGELOG.md on its own: each one makes a line there
+true, or is too small for one.
+
+- **A new profile starts with the default categories, in both runtimes.** Only "Clear data" and
+  "Reset to defaults" wrote them, so a space made by sign-up, a first Google sign-in, the profile
+  menu or setup had none, and quick add "coffee 4.50" stored an entry with no category. On the
+  Worker, `defaultCategoryInserts` (`worker/src/profileData.ts`) gives the batch that makes a
+  profile one `INSERT ... SELECT` per default, each skipped where the profile already has that
+  name (compared without case). It runs with the sign-up's account batch (`routes/auth.ts`), the
+  Google sign-up (`resolveGoogleUser`), `POST /api/profiles` (with the plan cap: a refused profile
+  adds none, through the new `db.batch`, which retries only the export lock as `db.run` does) and
+  `ensureProfile`, for an account with no profile (two requests racing there add one set).
+  Local-first does the same in `createProfile` and `ensureAProfile` (`core/storage/idb.ts`), in the
+  transaction that makes the profile. Left alone: profiles made before (an empty one stays empty),
+  the example profiles' own seed, a restore (it brings the backup's categories), and the rows the
+  repair files under "Recovered entries" (`unfiledProfileRows.ts`). An import that names a
+  default in another case reuses it, as before. The e2e fixtures (`tests/e2e-seed.ts`,
+  `tests/release/release-fixtures.ts`) now use a category the profile has and make only missing
+  ones; release case 1.1 expects the new profile's defaults, not an empty page, and
+  `quick-entry-phone.spec.ts` makes "Pet food" where it made Groceries. Tests:
+  `worker/test/new-profile-categories.test.ts` (every path, the cap, the race, an import, a
+  restore, old profiles; five fail without the change, and the per-name guard's case fails with the
+  guard removed), `core/storage/__tests__/newProfileCategories.test.ts` (three fail without it) and
+  `tests/new-space-categories.spec.ts` (a fresh account and a fresh local-only browser file
+  "coffee 4.50" under Eating out; both fail without it).
+
+- **A met circle check's "Met" reads at 5.4:1 in the light theme.** The word was set in `--success`
+  (#14985a), 3.70:1 on the check's white card, under the 4.5:1 small text needs. A new token,
+  `--success-text`, is #0e7a47 in `dawn-light.css` (5.39:1 on `--surface`, 5.12:1 on `--bg`) and
+  `--success` itself in `orbit-dark.css` (7.36:1 on `--surface`; 8.09:1 on the instrument deck's
+  card). `.check[data-state='met'] .check-state` (`CircleView.module.css`) uses it; the check's
+  mark stays on `--success`, a graphic at 3:1. Measured in the demo's circle 1 at 1280 and 390:
+  light 3.70:1 before, 5.39:1 after; dark 7.36:1 both. Test: `src/__tests__/successTextContrast.test.ts`
+  (the token on `--card-bg`, `--surface` and `--bg` in all three themes, and the rule that sets
+  the word); all ten cases fail without the change.
+
+- **Setup no longer opens over a profile the person made.** In local-first, setup opened at the
+  next load over the current profile whenever it held no account, transaction or bill and the
+  browser had no decision (`shouldOfferLocally`), so a profile made from the profile menu got setup
+  on reload, and so did one the local-only switch's confirm says "You carry on with". A profile
+  the person made now counts as a decision taken: `countProfileMadeAsDecided`
+  (`core/onboardingStore.ts`) keeps "skipped" for a local workspace with no decision yet, mirrors
+  it to the profile's settings and begins Getting started, as leaving setup does. The profile
+  menu's Create Profile (`ProfileModal.tsx`) calls it; signed in it does nothing, as the account's
+  record decides. The switch (`chooseLocalOnly`) calls it for `local` over a workspace with
+  profiles of the person's own, instead of forgetting the local decision and marking setup
+  pending, which it still does over nothing or the examples. Setup's own space step does not call
+  it. Tests: `components/__tests__/profileModal.test.tsx` (setup stays closed over the new
+  profile; a decision taken before is kept; nothing kept for a signed-in account) and
+  `components/onboarding/__tests__/onboardingOverExamples.test.tsx` (the switch over an empty
+  Household: no marker, no setup after the reload). Each first case fails without its change.
+
+- **A badge toast on screen when setup opens waits until setup closes.** Badges earned while setup
+  is open were already held (`core/achievementsStore.ts`), but one announced just before, such as
+  the demo's "20 badges and 26 prints from your history so far." at boot, stayed up beside the
+  wizard through What's New, Run setup again, with "See my prints" leading away from it. The
+  store now keeps the last announcement (`shown`); when setup opens while its toast is still on
+  the `achievements` channel, the toast goes and the announcement joins the held ones, said again
+  when setup closes, and, as before, only for the profile still in use. One already gone is not
+  said again. Measured in the demo with setup opened over the toast: one toast on screen before
+  (at 1280 beside the 600 px wizard, at 390 over it), none after, in both themes. Tests:
+  `core/__tests__/achievementsStore.test.ts` (taken back and said again; not said again once gone;
+  not said on another profile after a switch); the first and the third fail without the change.
+
+- **The subscription scan writes prices with their cents, dates as the app does, and the whole
+  line.** A row's price field started at `String(d.amount)`, so 4.50 read "4.5", and its line said
+  "last 2026-10-18" and at 1280 was cut by an ellipsis to "High con...". The price now starts at
+  `toFixed(2)`, the date is `dueDateLabel` (`features/billDue.ts`, "Oct 18, 2026" on the local
+  calendar), and the line (`sub-scan-meta`) wraps at every width instead of only on a coarse
+  pointer, each of its three parts kept whole (`.meta-part`). The same component is the scan on
+  Bills and setup's subscriptions step. Measured on setup's step after a made-up Revolut statement
+  with 4.50 and 48.10 charges: prices "4.5" and "48.1" before, "4.50" and "48.10" after; the line
+  cut at 1280 in both themes before (scrollWidth over clientWidth), whole on two lines after; at
+  390 it wrapped before and after. Tests: `components/__tests__/SubscriptionScan.test.tsx` (the
+  cents, the date, and the rule that wraps the line); all three fail without the change.
+
+- **"Then:" says a head two steps share once.** Over a yearly-bills question the line read "Then:
+  grow your cushion to three months, and grow your cushion to six months." `thenLine`
+  (`shared/guidance/nextStep.ts`) now splits each step at its first linking word (to, by, for, at,
+  on, in, into, from, with, without, of) and, where a step's head matches the one before it, says
+  only the rest: "Then: grow your cushion to three months, then to six months." Steps with
+  different heads, or the same first words with no linking word after them ("say whether you
+  ..."), keep ", and". Tests: `core/__tests__/guidanceNextStep.test.ts` (the yearly-bills step's
+  line, shared heads, different heads); the first two fail without the change.
+
+- **Getting started and Progress no longer ask for a budget for Other.** After an import, "Set a
+  budget for Other" led the steps: Other is where the import files an entry no rule matches
+  (`categorize`'s fallback, `shared/bankImport/categoryRules.ts`), so its total says nothing about
+  where the money goes. `biggestUnbudgeted` (`core/achievements/monthFacts.ts`) now takes the
+  profile's categories and passes over a catch-all, known by its name: `isCatchAll`
+  (`shared/guidance/kinds.ts`) is `kindForName(name) === 'other'`, which holds for "Other" (the
+  import creates it with that kind, `routes/imports.ts` and `importFlow.ts`), "Misc" and
+  "Miscellaneous", and not for "Other shopping". Not by the stored kind: a person can give their
+  own Pets the kind Other, the statistics' group for what has none of its own, and Pets is worth a
+  budget. When the catch-all spent more, the words say so, since "more than on any other category"
+  would be wrong: "Not counting Other, you spent more on it in September than on any other
+  category with no budget or bill." on Getting started, and "Not counting Other, it is the biggest
+  thing you spend on with nothing set aside for it." on Progress's card. A month spent only under
+  catch-alls offers no budget step. CHANGELOG.md's Getting started line says a catch-all doesn't
+  count. Tests: `achievements/__tests__/monthFacts.test.ts` (passed over and named, not named
+  when it spent less, nothing when it is all there is, Pets counted),
+  `core/__tests__/guidanceKinds.test.ts` (the import's fallback in both rule sets is a
+  catch-all), `core/__tests__/orientation.test.ts` (the words) and
+  `core/__tests__/orientationFacts.test.ts` (Getting started and the advice agree); each fails
+  without its change.
+
+- **A tour's tip sits narrower beside a wide target instead of over it.** At 1280x800 the
+  Progress tour's third step, Your seven circles, spotlights a list 976px wide and 752 tall,
+  272px in from the left: no side had room for the 320px tip, so it went against the left edge
+  and covered the circle numbers of rows 3 and 4. `placeTip` (`components/spotlightPlacement.ts`)
+  now tries, before covering a target, the left and right sides with the tip as wide as their
+  room allows, down to `MIN_NARROW_TIP_WIDTH` (240px), when the caller can measure it there
+  (`heightAt`): only a width the tip's content fits and a height the screen holds. `Spotlight.tsx`
+  measures the tip at its own width and at the narrower one, and sets that width only for such a
+  placement. A phone's tip is pinned across the screen and never narrows. Measured in the demo at
+  1280x800, both themes: before, the tip at 12,296 (320x207) covered 1.7% of the list, over rows
+  2 to 5; after, 252x227 at 12,286, none of it, its buttons on one line. At 390x844 the list is
+  1085px tall, taller than the screen, and the tip still covers its rows 5 and 6 (16.5%), as
+  before. The tour walk at 1280, all 57 steps: before, seven covered their target with no room
+  beside it (Charts, Your seven circles, Category allocations, Your categories, Category trends,
+  Budget flow diagram, Your assumptions, each by 1 to 3%); after, none, their tips 252 to 297px
+  wide. At 390 the walk passes as before, nine steps covering a target taller than the room left
+  (the pinned tip has no side to go to). Tests:
+  `components/__tests__/spotlightPlacement.test.ts` (beside the list as wide as the strip; as
+  before without a measure; the minimum width; overflowing or too-tall content; right before
+  left; never on a phone; a tip that fits as it is) and `spotlightTipWiring.test.tsx` (the width
+  set, kept off where the content would overflow, dropped on the next step). Each fails without
+  its change, and each guard (the minimum width, the height, the overflow) fails a test when
+  removed.
+
+- **On Every print, a print focused from the keyboard no longer looks like the one shown.** The
+  focus ring was a second blue outline (`--primary-hover`, 3 px out) beside the pressed print's
+  (`--primary`, 2 px out): 1.32:1 apart in the light theme and 1.31:1 in the dark, and on the
+  pressed print it replaced the pressed ring. In `PrintsShelf.module.css` the pressed ring is now a
+  shadow, the same blue ring 2 px clear, so the outline is free for focus: 2 px in `--text`, 3 px
+  out, and 5 px out on the pressed print, outside its ring, so a pressed print focused from the
+  keyboard shows both. Forced colours draw no shadows, so there the pressed print keeps a 3 px
+  `Highlight` border. The phone strip keeps 7 px clear (was 5) for the ring that now reaches 7 px
+  out. Measured on the demo's strip at 390 and 1280: focus against the pressed ring 3.79:1 light
+  and 2.36:1 dark (was 1.32 and 1.31), the focus ring on the card 17.57:1 and 14.69:1 (was 6.09 and
+  8.15), the pressed ring unchanged at 4.63:1 and 6.22:1. Tests: `tests/prints-layout.spec.ts`
+  (focused beside the pressed print and on it, in both themes, and forced colours; fails on the
+  old rules), and the existing whole-ring test fails with the strip's padding left at 5 px.
+
+- **Check your inbox keeps the address and the footer's items whole.** At 1280 and 390 the
+  address broke at a hyphen ("uat-j01-" on one line, the rest on the next), and in the sign-in
+  footer "Contact support" and a build's version ("v5.17.6-2-g70a3431d") each took two lines. The
+  address, with its full stop, now sits in an inline block (`.address`, `SignInSteps.module.css`)
+  that moves to the next line whole, and still breaks inside an address longer than the line; the
+  "fresh link is on its way" line wraps its address the same way. The footer
+  (`LoginScreen.module.css`, also the Confirm your email screen's) keeps each item on one line and
+  wraps as a row, so a version too long for the row moves to a line of its own; a release's
+  "v5.17.6" still fits beside the other two. Measured after a sign-up with a hyphenated address,
+  both themes: the address on 2 lines before, 1 after; Contact support and the version on 2 lines
+  each before, 1 after, the version on a second row (footer 53 to 58px tall). Test:
+  `tests/check-inbox-layout.spec.ts` (at 1280 and 390; fails on the address with the old markup
+  and on Contact support with the old footer). The footer has `data-test-id="sign-in-footer"`.
+
+- **Map columns names the file it is reading.** Setup's Open in Import lands on Map columns with
+  the file setup could not read, and nothing on the page said which one. Under the heading a line
+  now says "From october-statement.csv" (`mappingSource`, `features/import/ImportMappingStep.tsx`):
+  the file, with its sheet for a workbook of more than one ("From budget.xlsx, sheet April"), or
+  "From 3 statements" for bank files read together; nothing for pasted text or a Google Sheet. It
+  shows on Map columns however the file came. Measured after Open in Import at 1280 and 390, both
+  themes: the file's name nowhere on the page before; one 19.5px line after. Tests:
+  `features/import/__tests__/mappingSource.test.tsx` (a handed-over file, a workbook's sheet,
+  pasted text) and the Open in Import case of `tests/onboarding.spec.ts`; both fail without it.
+
+- **The demo's prints differ from year to year.** Every example year spent the same twelve months,
+  give or take 15% per category, so Every print showed 26 seals that looked alike. Example Mid and
+  High Income now spend each year to a shape of its own (`demoYearShape`, `core/storage/idb.ts`):
+  two or three quiet months at 55 to 70% of the usual, in different places each year, the rest at
+  100 to 103%, and the year's total as before. Deeper quiet months push Mid's other months past
+  what it earns; Example Low Income, which spends 95% of its pay, keeps its flat year for the same
+  reason. Measured over the 26 years: petals 4.4 share points apart from one year to the next
+  before, 14.4 after (the closest two years 2.5 and 6.8); the shortest petal 85% of the heaviest
+  before, 46% after; neighbouring thumbnails on Every print at 1280 differ by 9.01 grey levels on
+  average before, 13.83 after. The examples earn the same 18 badges either way. Demo data only.
+  Test: `core/storage/__tests__/demoPrintsDiffer.test.ts` (both profiles' petals apart, and no
+  month spending more than came in); the first fails for both without the shape, the second
+  with quiet months at 35%.
+
+- **Topping up the current account from savings no longer shrinks the cushion.** Savings count at
+  their balance today and the current accounts at their lowest in the last 30 days, read back
+  through the entries since. A move from savings walked back off the current account's earlier
+  days, and savings no longer held it, so for 30 days the money counted nowhere: 1,000 on the
+  current account and 3,000 in savings read 4,000, and the same after moving 2,000 across read
+  2,000 (2.67 months of 1,500 to 1.33). The walk back (`currentAccountsLow`,
+  `shared/guidance/facts.ts`) now leaves out a move in from a savings or cash account, so it reads
+  4,000 and 2.67 months. A move the other way is walked back as before: the review's own check
+  had it changing nothing, and leaving it out too would take a standing order's 500 off the days
+  before it and read a salary account's 300 low point as 0 (5,800 read 5,500). Tests:
+  `src/core/__tests__/guidanceFacts.test.ts` (a move in from savings and from cash, the review's
+  case through `cushionOf`, a move then part of it spent, and a standing order out to savings);
+  the first two fail without the change, and the last fails with moves out left out as well.
+
+- **"Keep my data in this browser only" turns the account's first-week mails off, and says so.**
+  Offered to a signed-in account on setup's first screen, the switch only reloaded into the local
+  workspace: the account, empty, still got the day-2 and day-7 mails, and the confirm had said
+  "no account is needed". `chooseLocalOnly` (`components/onboarding/OnboardingWizard.tsx`) now
+  sends `PUT /api/notifications/settings` with `{ weekOneMails: false }` first, through
+  `stopFirstWeekMails` (`components/onboarding/localOnly.ts`), while the app still talks to the
+  Worker, and waits at most 5 seconds for it. The switch goes ahead whatever the answer: if the
+  request fails, the person sees the same reload into the browser's workspace and nothing else,
+  and the account keeps its mails until they are stopped from a mail's footer or from Settings
+  when signed in. The confirm now reads "Keep your data in this browser only? It stays on this
+  device and nothing syncs to the cloud. Your account stays, empty, and sends no first-week mails.
+  Settings can switch back.", with the same account sentence over the examples, a workspace of
+  the person's own and one it could not read. "Empty" only on the account's first setup before an
+  account was made or found on it (`firstSetupOfTheAccount`, `core/onboardingStore.ts`); "Run
+  setup again" over an account with data says "Your account stays as it is and sends no
+  first-week mails." Measured at 1280 and 390, both themes: 3 lines before, 4 at 1280 and 5 at
+  390 after; the buttons stay 112x39 and 80x39 (D5 is the phone layout). Tests:
+  `components/onboarding/__tests__/localOnly.test.ts` (each question, the request, a refusal and
+  an answer that never comes), `components/onboarding/__tests__/localOnlyAccount.test.tsx` (the
+  wizard against a stand-in Worker: sent before the mode changes, the switch when it is refused
+  or unreachable, run again over a finished setup, after setup made an account, and nothing sent
+  on Cancel), and the switch case of `tests/onboarding-server.spec.ts`, which reads the account's
+  switch on the local Worker go from 1 to 0. Without the request four wizard cases and the e2e
+  fail; sent after the mode change, the same four; without the first-setup check or the accounts
+  check, the case for each.
+
+- **Setup asks what a YNAB account that starts below zero is.** A Register file made every
+  account it names a current account, so a card or a loan that starts below zero read as an
+  expensive overdraft and held Solid ground back. Setup's statement step now lists the accounts
+  the file starts below zero and the import makes, each with the Import page's type chooser and
+  Credit Card chosen: "Starts below zero, as a card often does. What kind of account is it?", or
+  "These start below zero, as cards often do. What kind of account is each?" for more than one
+  (`belowZero`, `components/onboarding/FirstImport.tsx`). The rest stay current accounts,
+  unasked, and an account the profile has keeps its own type. The choice goes with the import's
+  `accountTypes`, which both runtimes already read; a file chosen again starts from Credit Card.
+  The chooser's five choices now live in `features/import/accountTypeChoices.ts`, read by both
+  screens. Measured with a plan holding a card at 640.00 below zero: the statement card 158 px
+  tall before, 239 after at 1280 (200 and 299 at 390), the select 150x48, and the step still
+  needs no scrolling at either size. Tests: `components/onboarding/__tests__/onboardingFirstImport.test.tsx`
+  (asked with Credit Card and made a card, another choice kept, two accounts, one the profile
+  has, a file chosen again; no question for a plan that starts above zero) and the Register
+  case on the Worker in `tests/onboarding-server.spec.ts`. Without the choice sent, the first and
+  the e2e fail ("giro" made); without the profile's accounts left out, that case; without the
+  reset on a new file, that one.
+
+- **The savings rate adds loan principal back only where the loan's payments were spending.**
+  D6 counts principal repaid as kept, and the rate added the schedule's principal to income less
+  spending whatever the entries showed, so a loan paid by transfer or from an account outside the
+  app counted twice: the review's case, 3,000 in, 1,700 spent and 1,000 a month paid by
+  transfer, read 76.7% where cash alone is 43.3%. `guidanceFacts` (`shared/guidance/facts.ts`)
+  now adds back at most what the window's entries spent paying loans (`loanPaymentsSpent`): what
+  was filed under the Debt payments kind, and any other expense the size of a payment a loan's
+  schedule has due that month, within 1% or 1.00, as a mortgage under Housing is (the bank rules
+  file "mortgage" rows there, so the kind alone would have dropped every imported mortgage from
+  D6). A loan's payments found that way count only when they recur in at least half of its
+  months in the window, so one grocery bill of the same size is not taken for one; its extra
+  payments are looked for once its payments are found, and each expense counts once. The demo's
+  loans are never paid from its entries: Example Mid Income's gauge read "You kept 25.4% of your
+  income" with "Of your loan payments, €637 a month on average paid the debt down; that counts as
+  saving here. Cash alone: 20%." before, and "You kept 20% of your income" after; Example High
+  Income 40.0% before, 29.8% after (measured on the seed, both themes and sizes the same). Tests:
+  `src/core/__tests__/guidanceFacts.test.ts` (debt payments counted, extra payments, a transfer,
+  nothing booked, part of it booked, a mortgage under Housing found by its size, rent and one
+  chance match not, two loans of one size, a chance match left for the loan due it, extra
+  payments found the same way). Without the cap four fail; with the Debt payments kind alone
+  two; without the leeway, the recurrence rule, counting each expense once, putting a chance
+  match back or the extra payments, one each.
+- **The savings gauge and Your next step name their profile on a household Dashboard** (A17).
+  Both are worked out for the active profile, while the cards around them add up every profile
+  selected, so a household's totals sat beside one profile's rate with nothing to tell them apart.
+  With more than one profile selected, both cards now say "For Example Mid Income only" under
+  their heading; with one, the whole page is that profile and neither does. The line follows the
+  selection from the sidebar and Settings > Household without a reload
+  (`frontend/src/core/circlesProfile.ts`). Profiles are often places or purposes ("Holiday
+  house"), so the name is not put in a possessive. On the demo with two profiles: the gauge keeps
+  its height (264 px at 1280, 510 at 390) and its 50x48 Details link, the line sitting inside the
+  head; Your next step grows 22 px (337 to 359 at 1280, 375 to 398 at 390); the line reads 5.35:1
+  (gauge) and 5.63:1 (step) in light, 8.84:1 and 7.71:1 in dark. Tests:
+  `src/core/__tests__/circlesProfile.test.ts`, the two cards' own tests and
+  `src/features/__tests__/dashboardCircles.test.tsx` (named with two, not with one, follows
+  a change of selection). Without the one-profile check three fail, without following the
+  selection one, counting a profile listed twice twice one.
+- **A Dashboard layout saved with the old Savings rate card keeps it as it was** (A18). The gauge
+  that replaced the card was spliced into every saved layout switched on, under the metrics, so
+  someone who had switched the card off met the gauge anyway. A layout that holds the card now
+  hands its switch and its place in the order to the gauge (`frontend/src/core/dashboardWidgets.ts`):
+  off stays off, and on stays where the card was, which by default is among the widgets under
+  Show more; the page draws the gauge there while the order puts it after one of those widgets,
+  and under the metrics otherwise, so dragging Savings Rate in Views now moves it on the page too.
+  A layout with no switches saved keeps the gauge off, as the card was by default. Layouts saved
+  before the card existed, and new accounts, get the gauge on under the metrics as before. Since
+  the card was off by default, a layout saved in Views without ever switching it on keeps the
+  gauge off too; Views switches it on. On the demo with an old layout: card off, 1 gauge before
+  and 0 after; card on, the gauge under the metrics before and under Show more after, at 1280
+  and 390 in both themes. Tests: `src/core/__tests__/dashboardWidgets.test.ts` (off, on at a
+  moved place, on with no order, no switches, a layout older than the card, where the gauge is
+  drawn) and `src/features/__tests__/dashboardCircles.test.tsx` (under the metrics by default,
+  under Show more in an old layout, off in one). Without the carry six fail; with the gauge never
+  in the tail, without drawing it there, or drawing it at the top whatever the order, one or two
+  each; without the no-switches rule one.
+- **Entries without a category mean one thing everywhere, and circle 1 says which it counts**
+  (A19). Circle 1 counted an entry filed under a category the profile no longer has as without
+  one (before #384 in July 2026, deleting a category left its entries pointing at it), while
+  Getting started, Your next step, the day-7 mail and the Transactions filter they link to counted
+  only entries with no category at all, so those entries showed "—" on Transactions and could not
+  be found from there to sort. All five now read one rule (`shared/uncategorised.ts`, and the same
+  in SQL in `worker/src/weekOne.ts`): no category, or one the profile does not have, transfers
+  aside. The Transactions filter and Auto Categorize list them, so they can be sorted; until the
+  category list has loaded the filter counts only entries with none, so a filed entry never shows
+  as unsorted while it loads. Circle 1 still counts the spending of its months, and now says so:
+  "Entries without a category: 0" became "Spending without a category: None" with "Only spending
+  from November 2025 to October 2026 counts here." on the demo ("4 entries", "1 entry"; the row
+  grows from 42 to 62 px at 1280 and to 80 at 390; the note reads 5.35:1 light, 8.84:1 dark).
+  The "Named everything" badge and its Progress advice still read entries with no category at
+  all. Tests: `src/core/__tests__/uncategorised.test.ts`, `orientationFacts.test.ts`,
+  `guidanceCircleView.test.ts`, `src/features/__tests__/transactionsUncategorisedLink.test.tsx`
+  (a deleted category's entry listed, another profile's category, nothing while the list loads)
+  and `worker/test/week-one-mails.test.ts` (a deleted category, another profile's). With the rule
+  reading no category alone, seven fail (its own, Getting started's, circle 1's three and the
+  filter's two); without the loading guard, the profile check on Transactions, Getting started's
+  count or the mail's profile check, one each; with the mail counting no category alone, two.
+
+- **Dev links to dev: the app's and the mails' links follow the deployment** (A20). The about
+  site's address was fixed in code (`shared/articles.ts`), so the dev app's Privacy, Terms and
+  article links, and every mail's About, Terms and Privacy and the day-2 article, opened
+  production's about site; and every confirmed mail's wordmark, its "Open the app" line and the
+  reminders' buttons (Budgets, Analytics, Bills, Settings) opened production's app, while the
+  import link in the same mail opened the run's own. The frontend now reads `VITE_ABOUT_ORIGIN`
+  (`frontend/src/core/aboutSite.ts`) and the Worker `ABOUT_ORIGIN` (`aboutOrigin` in
+  `worker/src/reminders.ts`), both production's `https://about.tokencircles.com` when unset; dev
+  sets `https://dev.about.tokencircles.com` in `frontend/.env.dev` and in `wrangler.jsonc`'s
+  `env.dev`, and production sets neither. Every mail renderer takes the app and about origins
+  (`MailOrigins` in `worker/src/emailTemplates.ts`), and every sender passes its deployment's
+  (`mailOriginsOf`). No mail's wording changed, and production's mails are byte for byte what they
+  were: 18 renderers on production's origins, 72 of 72 renders identical to before. The
+  payment-failed digest in `mail-catalogue.test.ts` is re-pinned because its sample grid renders
+  on a dev origin too, where the wordmark now opens dev. Built bundles: `--mode dev` holds
+  `dev.about.tokencircles.com` and the production build does not. `index.html`'s no-script line and
+  `public/llms.txt` still name production's about site; both are static, and dev is not indexed.
+  Tests: `worker/test/mail-origins.test.ts` (all 19 samples on made-up origins, the footer, all 19
+  on production's when none are given, dev's and prod's config), `mail-origins-senders.test.ts`
+  (every sender through its route or run, on made-up origins: 12 of 12 failed before),
+  `week-one-mails.test.ts`, and in the frontend `src/core/__tests__/aboutSite.test.ts` (the
+  default, a named origin, what the dev and production builds are given), `LegalLinks.test.tsx`
+  and the article link's test. With the Worker ignoring `ABOUT_ORIGIN` 13 fail, without dev's
+  value 1; with the app ignoring `VITE_ABOUT_ORIGIN` 3, Privacy and Terms on the fixed address 1,
+  the article link on it 1, and without `.env.dev`'s value 1.
+
+- **Other counts as needed until it is sorted, so the cushion stops reading in years** (M1). The
+  bank import files whatever no rule knows under Other, rent and groceries included, and the name
+  Other gave the category the kind Other, which is not needed every month. On the review's made-up
+  Revolut statement (August to October, with 1,240.50 typed as the balance) Progress read "224.1
+  months of essentials" against "€17 needed a month", and circle 1 said "100% of spending sorted"
+  while Other held 95% of it. A catch-all's name (Other, Misc, Miscellaneous: `isCatchAll`) now
+  suggests no kind (`shared/guidance/kinds.ts`), so it counts as needed until the person says
+  otherwise, as any category with no kind does, and both imports create Other with no kind. A
+  kind or a choice the person stored stays theirs. The same statement now reads "2.6 months of
+  essentials" and "€3,778 you can reach, against €1,439 needed a month"; the cushion card opens
+  with "That counts Other (€1,422 a month) as needed until you sort it."; circle 1 says "Every
+  entry has a category; Other holds 95% of spending.", and Your numbers' "Spending sorted 100%"
+  notes "Other holds 95% of spending." (`catchAlls` in `shared/guidance/facts.ts`; an Other filed
+  under a category with a kind goes by that kind and is no catch-all). The circle-1 check still
+  counts Other as sorted. Categories an import created on dev before this fix keep the kind Other
+  stored, so they still count as not needed; production never stored one, as migration 0036 has
+  not shipped. Captures at 1280 and 390, light and dark: `m01-circle1-*` and `m01-cushion-*`, with
+  the numbers in `m01-other-before.json` and `m01-other-after.json`. Tests:
+  `src/core/__tests__/guidanceKinds.test.ts`, `guidanceFacts.test.ts`, `guidanceCards.test.ts`,
+  `guidanceLedger.test.ts`, `guidanceCircleView.test.ts` and the CRUD contract's import scenario,
+  run in both runtimes. With the name guessing Other again seven fail, and the contract scenario on
+  the Worker; without the catch-all's needed share, the parent rule, the card's sentence, circle 1's
+  line or the row's note, one each.
+
+- **Circle 1 says what it asks for, not what is "needed"** (M9). While Clear picture is the
+  circle, its line read "89% of spending sorted; 90% is needed." beside "Needed every month" on the
+  same page, where needed means what a month costs. It now reads "89% of spending sorted; this
+  circle asks for 90%." (`shared/guidance/ledger.ts`). Test: `guidanceLedger.test.ts`, which fails
+  on the old line.
+
+- **The balance typed in setup is today's, and an import is worked back from it** (M2). Setup
+  asks for "Balance today", stored it as the opening balance, and every entry imported after went
+  on top: 1,240.50 typed, the review's made-up N26 statement (September to October, +1,865.87)
+  imported, and Accounts read €3,106.37. Setup now remembers the figure and the day it was typed
+  (`frontend/src/core/setupTypedBalances.ts`, kept through a reload until setup is finished or
+  skipped) and, after each statement it imports, sets the account's balance today back to it by
+  moving the opening balance (`workBackTypedBalances` in
+  `frontend/src/components/onboarding/setupBalances.ts`, the rule in `shared/balanceToday.ts`).
+  Entries dated after today stay on top, as they will once their day comes. A blank balance is
+  left alone. The same statement now reads €1,240.50. The hint under the field changed from "It
+  becomes the account's opening balance." to "What your bank shows now. Entries you import here
+  are worked back from it." The Import page, after any import, lists each account it changed with
+  its balance today and "Not what your bank shows? Set today's balance", which opens a field for
+  the bank's figure and sets it the same way (`ImportBalances.tsx`). An account whose entries net
+  to exactly zero is not listed. Both runtimes: the calls go through the storage seam. Captures at
+  1280 and 390, light and dark: `m02-hint-*`, `m02-accounts-*`, `m02-import-*` (the block, then its
+  form), numbers in `m02-balance-before.json` and `m02-balance-after.json`; the button reads 5.78:1
+  in light and 9.35:1 in dark, and the button, field and Save are 44px tall. Tests:
+  `src/core/__tests__/balanceToday.test.ts`, `balanceTodayCalls.test.ts`,
+  `components/onboarding/__tests__/setupBalances.test.ts`, `onboardingFirstImport.test.tsx`,
+  `features/import/__tests__/importBalances.test.tsx`, and in e2e `onboarding.spec.ts`,
+  `onboarding-server.spec.ts` (on the Worker) and `import.spec.ts`. Without the work-back, with a
+  blank balance counted as typed, with later entries not kept on top, with the day typed ignored
+  and without the figure forgotten after setup, one fails each; without it kept through a reload,
+  two.
+
+- **A statement from a bank the app knows opens on what it brings in, and one button** (M4, with
+  B8). The day-2 mail says files from Revolut, N26 and the rest "import as they are", and its
+  "Import statements" opened the Import page on Google Sheets. A statement chosen under Bank
+  Imports then opened on Map columns: "Map your data columns to the 12 required fields. Fields in
+  bold are required." over three starred fields, then category types and a row count. The mail's
+  button and picture, and Getting started's import step (with it the day-7 mail's), now open
+  `#import/bank`, the Bank Imports tab (`shared/importRoute.ts`); `#import` opens the page as
+  before. After Process & continue, a statement whose every file is from a bank the app knows is
+  read and dry-run straight away and opens on a summary in setup's words (`bankSummary.ts`,
+  `BankImportSummary.tsx`): "N26 file recognised: 300 entries, 1 Oct 2025 to 28 Oct 2026.", "Goes
+  into N26 year.", the new categories, how many are here already, and "Import 300 entries". The
+  count is what the import adds. Check the columns opens the columns step, from where the preview
+  goes on as before, and Cancel starts over. A YNAB Register file, which names its accounts, and a
+  file the app does not know still open on the columns. The columns step's intro now reads "Match
+  your columns. Starred fields are required." Captures at 1280 and 390, light and dark:
+  `m04-landing-*` (where the mail lands), `m04-opens-*` (what the statement opens on) and
+  `m04-columns-*`, numbers in `m04-bank-before.json` and `m04-bank-after.json`; the summary's
+  line reads 16.69:1 in light and 16.85:1 in dark, its notes 5.35:1 and 8.84:1, Check the columns
+  15.68:1 and 15.85:1, and its three buttons are 44px tall. Tests:
+  `src/core/__tests__/importRoute.test.ts`, `hashRoute.test.ts`, `orientation.test.ts`,
+  `GettingStarted.test.tsx`, `features/import/__tests__/bankSummary.test.ts`,
+  `mappingSource.test.tsx`, `worker/test/week-one-mails.test.ts`, and in e2e `import.spec.ts`; the
+  release suite's import helper goes through Check the columns, and its case 4.2 counts two dry
+  runs, the summary's and the preview's. Without the page reading the
+  address on a change, with Process & continue going to the columns, with the summary's button
+  kept after the import (a second tap imports again), with entries here already counted, with a
+  YNAB file summarised, and with the mail's button or picture on `#import`, one fails each.
+
+- **The first Dashboard after an import opens on a month with entries** (M6). Setup that imported
+  the review's made-up Revolut statement (August to October) on 4 November finished on November:
+  "INCOME €0.00", "↓2350.00 vs last month" beside last month's €2,350.00, and "No flows for
+  November 2026 yet." While Getting started shows, a Dashboard opened on this month with nothing
+  in it now opens on the latest month that has entries and says so under the period bar:
+  "November has no entries yet. Showing October." It decides once a session, only on the month
+  the app opened on (a month the person chose stays), and not before some month has an entry, so a
+  statement imported later on the Import page opens its month too. The period is the app's, so the
+  other pages follow. A card's change against the month before now names its currency and that
+  month: "→€0.00 vs September", "↑€41.31 vs September" (`MonthChangeLine` in `Dashboard.tsx`,
+  `dashboardMonth.ts`); a range or a year keeps "vs last month". Money that rounds to no cents
+  reads "€0.00" everywhere, never "-€0.00" (`formatCurrency`). Captures at 1280 and 390, light
+  and dark: `m06-dashboard-*`, numbers in `m06-dashboard-before.json` and
+  `m06-dashboard-after.json`; the note reads 5.35:1 in light and 8.84:1 in dark. Tests:
+  `src/core/__tests__/currencies.test.ts`, `src/features/__tests__/dashboardMonth.test.ts`, and in
+  e2e `dashboard-first-month.spec.ts`. Without the move, with it made more than once a session,
+  with it made while Getting started is hidden, with it decided before any month has an entry, and
+  with the old "vs last month" for a month, one fails each.
+
+- **Local-first setup comes back after a reload, at the step it reached** (M7). Signed in, a
+  reload opens setup again at the step the account's record holds. In local-first, a reload on the
+  statement step landed on the Dashboard with nothing imported, and one on Done never gave
+  Getting started: the marker that asks for setup (`finance_local_setup_pending`,
+  `onboardingFlag.ts`) went once the space was saved, and with an account made the workspace no
+  longer read as new. Local-first's first setup now keeps the furthest step it reached in that
+  marker until it is finished or left, and a reload opens setup there (`keepLocalStep` and
+  `whereToOfferOnboarding` in `onboardingStore.ts`); finishing gives Getting started as before.
+  Setup run again after a decision keeps nothing, as signed in, and one the local-only switch asked
+  for keeps its steps over a decision the demo left behind. Tests:
+  `src/core/__tests__/onboardingAfterLocalOnly.test.ts`, `onboardingOverExamples.test.tsx` (whose
+  account cases now run as the account, as the app does), and in e2e `onboarding.spec.ts` (a
+  reload on the statement step and on Done). Without the reopening, four fail, and the e2e case;
+  without the steps kept, four; with the latest step kept in place of the furthest, with steps kept
+  after a decision, with the switch's setup over a decided demo dropped, and with the marker
+  cleared when the space is saved, one each.
+
+- **Setup's last line says what the profile holds, in both runtimes and after a reload** (M20). The
+  line under "Your orbit is set" counted what the visit made, in memory, so a reload lost it. The
+  cloud reopens setup at the step it reached, and a reload on the subscriptions step after the
+  review's Revolut statement (69 rows) read "Personal Profile has 1 tracked subscription." where
+  local-first read "Personal Profile has 1 account, 69 new transactions and 1 tracked
+  subscription.". The review's cloud line, "1 account and 2 tracked subscriptions", is what the old
+  line gives after that reload with two ticked. The line now counts the profile's own rows from the
+  evaluation the step runs for its next steps (`doneLine.ts`): "Personal Profile has 1 account, 69
+  transactions and 1 tracked subscription." in both runtimes, reloaded or not. A paused bill is not
+  counted, and when that evaluation fails the line counts the visit's work, as before, not an
+  earlier evaluation's. It shows with the next steps, 1.3 s after the step in the local cloud stack.
+  Setup keeps the word "space", and the name field now says once how it meets the menu: "It shows as
+  a profile in the menu." (13 px, 5.35:1 light, 8.84:1 dark). Captures of the space step at 1280 and
+  390, light and dark, `m20-space-*`, and of Done at 1280 in each runtime, `m20-done-local-*` and
+  `m20-done-cloud-*`; numbers in `m20-space-before.json`, `m20-space-after.json`, `m20-done-*.json`
+  and `m20-reload-*.json`. Tests: `onboardingDoneStep.test.tsx`, `onboardingForms.test.tsx`, and in
+  e2e `onboarding.spec.ts`, `onboarding-server.spec.ts` (a reload on the subscriptions step, on the
+  Worker) and `onboarding-form-errors.spec.ts` (the hint read after each refusal, in both runtimes).
+  Counting the visit, counting paused bills (0 or false), or reading an earlier evaluation when the
+  step's fails, one fails each; the cloud case then reads the review's "Personal Profile has 1
+  account and 2 tracked subscriptions."
+
+- **Months are counted one way, and a count of finished months says so** (M8, M10). Getting
+  started said "2 of the last 13 months are tracked." beside "2 of 12 months on file", circle 1
+  "12 tracked months of the last 13", and the day-7 mail "Months tracked of the last 13: 12". A
+  year on file is now counted of the twelve it needs everywhere, and never past them: "2 of 12
+  months tracked. A month counts once it holds 3 entries." on Getting started, Your next step and
+  setup's last step, "Months tracked: 2 of 12" and "2 of 12 months tracked, from 46 imported
+  entries." in the day-7 mail (`monthsTrackedOfAYear`, `importYearReason`). Circle 1's check, whose
+  title and key figure carry the twelve, says how a month counts. The averages leave this month
+  out, so their counts now say "finished": "Your figures appear once 3 finished months are
+  tracked. Two are so far.", "Known once 3 finished months are tracked", "Averages appear once 3
+  finished months are tracked.", "Based on 5 finished months. It firms up at 12 months tracked."
+  (`basedOnFinishedMonths`), "Over your last 12 finished months, ...", and the savings gauge's
+  "Your savings rate shows once 3 finished months are tracked." The badges' months in a row are
+  a different rule and keep their words. Captures at 1280 and 390, light and dark, after setup
+  with the review's N26 statement: `m08-dashboard-*`, `m08-progress-*`, `m08-circle1-*`, text in
+  `m08-months-before.json` and `m08-months-after.json`. Tests: `orientation.test.ts`,
+  `monthCountsOnDashboard.test.ts`, `guidanceNextStep.test.ts`, `guidanceCircleView.test.ts`,
+  `guidanceLedger.test.ts`, `guidanceCards.test.ts`, `progressCircles.test.tsx`,
+  `SavingsGauge.test.tsx`, `GettingStarted.test.tsx`, `onboardingDoneStep.test.tsx`,
+  `week-one-mails.test.ts`, and in e2e `orientation.spec.ts` and `circles.spec.ts`. Without the
+  stop at twelve, in the mail's row or in the shared count, the mail's case fails. The mail reads
+  the count from `shared/trackedMonths.ts`, which imports its own file with the extension, so the
+  sample mails still load under plain Node (`node worker/scripts/send-sample-mails.ts`);
+  `src/__tests__/mailSamplesUnderNode.test.ts` loads and renders every sample that way, and fails
+  with the import written without it.
+
+- **The day-7 mail says a year when one came in, and the first import only while it is news**
+  (M11). It opened "Your first import is in." for everyone, so an account that brought in a year
+  of statements on day 2, with the A year badge and its first print, read it five days late over
+  two counts. With a year on file it now opens "You brought in a year: 300 entries, the A year
+  badge and your first print." The badge and the print are said only when the Worker counts twelve
+  tracked months in a row itself (`printsOf` in `shared/trackedMonths.ts`, held to the app's shelf
+  by a test; a month that has not begun finishes no run); without them the line is "You brought in
+  a year: 300 entries." "Your first import is in." stays for a first import from the last two days,
+  and otherwise the mail opens on "Here is the week in counts; the amounts stay in the app."
+  Counts only, as before. A sample of the year's mail joins the catalogue (`week-one-day-7-year`).
+  Tests: `week-one-mails.test.ts` (a year in a row, a year with a gap, a month put in early, news
+  and five days on, and the render cases), `mail-catalogue.test.ts`, and
+  `src/core/__tests__/printsCounted.test.ts`. Saying the first import always, a news window of
+  six days, the badge without a run, counting a month that has not begun, or a run that a gap does
+  not end, one fails each.
+
+- **Regular payments are one count in one word, from setup to Bills** (M12). After the review's
+  Revolut statement, with the streaming plan and the gym ticked, setup's done step said "2
+  tracked subscriptions", the day-7 mail split the same two into "Subscriptions you track: 1" and
+  "Bills you track: 1", and Bills headed its list "Unpaid Bills, 1 bills". The done step now says
+  "Personal Profile has 1 account, 69 transactions and 2 regular payments tracked on Bills.", the
+  mail has one row, "Regular payments on Bills: 2", counting both kinds that are not paused, and
+  the heading counts "1 bill" and "2 bills". Why the streaming plan was an unpaid bill: Revolut's
+  file has no categories, so its charges were filed under Other, and the scan makes a regular
+  payment a subscription only when its category's kind is subscriptions or leisure; the made-up
+  name matches nothing in the catalogue. The scan also saves no last payment, so the bill reads
+  unpaid until it is marked paid. Neither is changed here. Captures at 1280 and 390, light and
+  dark: `m12-step-*`, `m12-done-*`, `m12-bills-*`, text and the stored rows in
+  `m12-bills-before.json` and `m12-bills-after.json`. Tests: `billCards.test.tsx`,
+  `onboardingDoneStep.test.tsx`, `onboardingForms.test.tsx`, `week-one-mails.test.ts`, and in e2e
+  `onboarding.spec.ts` and `onboarding-server.spec.ts`. Counting paused ones, or only one kind, in
+  the mail fails its test.
+
+- **Setup's "Regular payments we spotted": each row says who and when, and is 44 px with a
+  mouse too** (M13, with A5 and D4). The step was headed "Subscriptions we spotted" over a rent, a
+  phone and a transit pass, and its button said "Track 2 subscriptions"; it is headed "Regular
+  payments we spotted" and the button says "Track 2 on Bills". A Revolut transfer read "Regular
+  payment to To Example Landlord": the finder drops the "To " Revolut writes before a payee (only
+  that word, so "Tomasz" and "TOTAL" keep their names), and a bill under the payee's own name
+  tracks it. A catalogue name keeps the statement's beside it where that says more: "Gym
+  membership (Example Gym)", while "NETFLIX.COM AMSTERDAM" adds nothing to "Netflix"; the bill is
+  still saved as "Gym membership". The meta line reads "3 charges, last 15 Oct", a day written as
+  the import step before it writes one (`utils/dayText.ts`, shared with `dateRangeText`), and it
+  wraps (A5). At 1280 the price field went from 64 x 20 inside a 30 px border to 44 px, the period
+  from 32 to 44 px, and the tick's label from 59 to 64 px; a phone was 44 px already. Captures at
+  1280 and 390, light and dark: `m13-step-*`, `m13-done-*` and `m13-bills-*`, with every row's
+  sizes in `m13-bills-before.json` and `m13-bills-after.json`. Tests: `SubscriptionScan.test.tsx`,
+  `recurringPayments.test.ts`, `onboardingForms.test.tsx`, and in e2e `onboarding.spec.ts` and
+  `onboarding-server.spec.ts`. Dropping "To" without its space, or the statement's name shown
+  where it says nothing more, fails a test each.
+
+- **Hide brings the next different step, and setup and Getting started stop repeating each
+  other** (M14). After the review's Revolut statement, setup's done step and Dashboard's Getting
+  started listed the same three steps word for word (3 of 3), and Hide put Your next step in the
+  card's place leading with the step the hidden card had just shown, "Import the rest of your
+  year". Your next step now leads with the next step on Getting started's list once the card is
+  hidden ("Review the subscription we spotted", then "set a budget for Eating out"), while there
+  is one; with one step left that is the step, and an account that never had the card is not
+  affected (`nextStepOnceHidden` in `shared/guidance/nextStep.ts`). The done step lists each
+  step's title and page (0 of 3 the same); Getting started, a click on, says why. The day-2 mail
+  drops the YNAB sentences the welcome already says word for word. Captures at 1280 and 390,
+  light and dark: `m14-done-*`, `m14-getting-started-*` and `m14-after-hide-*`, with the lists in
+  `m14-repeat-before.json` and `m14-repeat-after.json`. Tests: `guidanceNextStep.test.ts`,
+  `DashboardNextStep.test.tsx`, `onboardingDoneStep.test.tsx`, `week-one-mails.test.ts`, and in
+  e2e the two Hide cases of `orientation.spec.ts` (local-first and signed in). Skipping the first
+  step with one on the list, skipping it for an account without the card, or never skipping it
+  fails a test each, and never skipping it fails both e2e cases.
+
+- **The withdrawal rate is said from Work optional only** (M15). "Raise your savings rate by one
+  point" was followed by "Then: check the withdrawal rate you plan with.", and Breathing room's
+  first step by "Then: raise your savings rate by one point, and check the withdrawal rate you plan
+  with.": a check three circles off, read as if it came next. Your next step leaves it out of the
+  Then line; from Work optional it is the step itself, as before. The button "Open Goals" stays:
+  it opens Goals and nothing more, so "Set a savings goal" would promise what it does not do. The
+  review's case came from the circles M1 inflated. Tests: `guidanceNextStep.test.ts`; listing it
+  again fails both of its cases.
+
+- **Setup's done step names the button a tour starts from** (M16). It said "take a page tour any
+  time from the sidebar", where the button is What's New, which opens Take a Tour. It now says
+  "take a page tour any time from What's New in the sidebar." The test reads the sidebar's label
+  from `App.tsx` too, so a rename there (B2 in the next PR) fails it until both change. Tests:
+  `onboardingDoneStep.test.tsx`; the old words, or another label in the sidebar, fail it.
+
+- **A print says a tie as one** (M17). Two months that spent the same each said they "spent the
+  least of these 12 months", and on another print four months each "spent the sixth most", which
+  read as contradictions. A tapped petal that ties now says "October and November 2025 tied for
+  the least spent. October 2025 kept money.", the year once when the months share it and both
+  across a year end ("December 2025 and January 2026"); the print's text alternative names its
+  ties the same way ("November and December 2026 the least"). A month with no tie reads as
+  before. Tests: `printsSeal.test.ts`; without the tie, or with the year said twice, it fails.
+
+- **Check your inbox points at Send the link again, and the confirm mails say once how long the
+  link works** (M18). With no mail, the screen said to "create the account again with the same
+  password", which a few tries took into the sign-up limit; it now says "No mail after a few
+  minutes? Check spam, or send the link again.", under the button that does it. The confirm mail
+  said "Open it within an hour" in its body and "The link works once, for 24 hours. Run out? ..."
+  in a note: two lengths of time and a vague question. Both confirm mails now say it beside what
+  the link does ("It works once, for 24 hours." in the first, "It replaces the ones sent before,
+  and works once, for 24 hours." in the fresh link's), where it signs in on its own line, and the
+  note "Expired? Open it anyway and choose Send the link again." Tests:
+  `loginScreen.refusals.test.tsx` and `email-verification.test.ts`; the old note fails the second.
+
+- **The mails name ING NL, as the importer does, and the welcome's subject holds after a setup
+  import** (M19). The welcome and the day-2 mail listed "ING" among the banks whose files import
+  as they are; the Import page lists "ING NL", and both mails now say that. The welcome goes when
+  an address is first confirmed, and a Google sign-up has it while setup runs, so it is often read
+  after setup has imported a statement. Its subject "Token Circles is ready for your first
+  statement" was then untrue; it is now "Welcome to Token Circles: start with a year". Tests:
+  `mail-bank-names.test.ts` holds both lists to the importer's labels and fails on "ING" or on a
+  bank the importer does not read; `email-verification.test.ts`, `mail-catalogue.test.ts` and
+  `welcome-once.test.ts` pin the subject.
+
+- **Settings shows only the error while its answers could not be read, and clears it on the next
+  load** (M21). About this space showed "Not answered yet." and "Nothing yet. A circle asks ..."
+  above "Couldn't load your answers. Reload the page to try again.", and the error stayed after a
+  later load succeeded. The error now takes the place of the answers, the next load that succeeds
+  clears it, a failed load for a profile no longer open says nothing, and a failed save stays said.
+  Tests: `AboutThisSpace.test.tsx`; without the clearing, the hiding or the profile check, one of
+  them fails.
+
+- **The stop page's buttons are on the app's blue, and a badge toast's button on the text green**
+  (D1, first-week parts). The page a mail's stop link opens set Unsubscribe and Back to the app in
+  white on #4f6ef7, 4.28:1, under the 4.5:1 their 14px text needs; they are now on the app's blue,
+  #3b6fe0, 4.63:1. In the light theme, a badge toast's "See badges" or "See my prints" was 12px
+  #14985a on the toast, 3.70:1; it now takes `--success-text`, the green "Met" has, 5.39:1. The
+  icon and the border keep `--success`, and the dark theme reads as before (7.36:1). Tests:
+  `week-one-unsubscribe.test.ts` measures the page's button and link, and
+  `successTextContrast.test.ts` reads the toast's rule; on the old colours both fail.
+
+- **The local-only confirm asks in a heading and says the rest in two short lines, with 44px
+  buttons on a phone** (D5). It was one paragraph with no heading, five lines at 390 px (six in
+  the review's capture), and its buttons were 39 px tall. It is now headed "Keep your data in this
+  browser only?", which names the dialog, then "Nothing syncs to the cloud, and Settings can switch
+  back." and "Your account stays empty and sends no first-week mails." (177 characters down to 148;
+  each line wraps to two at 390 and in the 400 px dialog on a desktop). Over the demo's examples,
+  a workspace of the person's own or one it could not read, one line says that first. A confirm
+  can now carry a title and a few lines (`confirmStore.ts`, `ConfirmDialog.tsx`), and every
+  confirm's buttons are 44 px tall on a phone. Tests: `ConfirmDialog.test.tsx` (heading, name,
+  lines, the phone rule), `localOnly.test.ts`, and the setup tests that read the confirm.
+
+- **Check your inbox gives a phone 44px targets** (D6, this screen only). At 390, Send the link
+  again was 300x37, Back to sign in 90x20, and the footer's Contact support, Privacy and Terms
+  121x20, 38x17 and 32x17. On a phone they are now 300x44, 90x44, 121x44, 44x44 and 44x44; the
+  card grows from 490 to 546 px, and the desktop is as it was. The sign-in and create stages keep
+  their footer until the accessibility pass, so only this stage sets the taller one. Tests:
+  `loginScreen.refusals.test.tsx` (the classes on this stage alone, and the phone rules) and
+  `check-inbox-layout.spec.ts`, which measures each target at 390 and fails on the old styles.
+
+- **A mail's step links are a fingertip tall on a phone** (D10). The welcome's "Open Import →",
+  "Open Bills →" and "Open Progress →", and the day-7 mail's next step, were 16 px tall at 390.
+  A phone rule in the mails with steps makes each 44 px tall (20 px of line, 12 px above and
+  below); a wider screen draws them as before, and no other mail's output moves (the four mails
+  that show an amount keep their pinned digests). No words changed. Tests:
+  `mail-catalogue.test.ts` checks every step link and the rule, in the mails with steps alone.
+
+- **The first-week switch takes a tap anywhere on its row** (D11). Only the switch did, which is
+  44x26 at 390. Its row, 312x77 there and 786x77 at 1280, is now the switch's label: a tap on
+  "First-week mails", on the line under it or in the space around them flips it once, and while it
+  is fixed off after an unsubscribe the row takes no tap. Nothing moves on screen, and the switch stays the one
+  control a keyboard or a screen reader meets. ToggleField does this for a row that asks for it
+  (`wholeRow`); its other rows (Bills, Housing, the retirement planner) are as they were. Tests:
+  `settingsWeekOne.test.tsx`; without `wholeRow` a tap on the words saves nothing.
+- **Setup run again over an account that holds data no longer offers to keep it in this
+  browser.** "Keep my data in this browser only" leaves the account's data on the Worker and
+  reloads into a local workspace that shows none of it. Run again from the tour menu over an
+  account with one account in it, setup offered the switch; after it the app opened setup over an
+  empty local workspace and Accounts listed nothing, while the Worker still held the account (1
+  before and after) and the session stayed signed in. Only Settings, Storage, Server brought it
+  back. Setup now asks the Worker what the account holds each time the space step opens
+  (`accountHoldsData` in `localOnly.ts`: an account, a transaction or a budget in any profile, as
+  GET /api/profiles counts them) and offers the switch only on a fresh "nothing", which a new
+  account's first setup still gets. Tests: `localOnly.test.ts`, `localOnlyAccount.test.tsx` (data
+  in a second profile, a reload mid-setup after an account was made, asked again on each visit
+  with nothing offered until the Worker answers, the latest answer kept, a Worker that cannot
+  answer), `onboardingOverExamples.test.tsx`, and in e2e `onboarding-server.spec.ts` (run again
+  over an account with an account in it). With the old rule four fail, and the e2e case; counting
+  an unanswered ask as nothing, keeping the earlier answer while asking, asking once, or taking
+  every answer fails one or two each.
+- **Release case 4.7 runs its local pass on profiles of the person's own.** It failed in
+  local-first, at 70a3431d too, and was read as setup ignoring the profile's import rules. It is
+  not: the local pass runs over the demo, whose two profiles are examples, and setup over an
+  example makes a space of its own (removing the examples) and reads the statement with that new
+  profile's rules, none stored, so the default ones. A probe logged the read on profile 4 with
+  rules stored for 1 and 2 only. With both profiles renamed first, so neither is an example, the
+  case passes in both runtimes: each read files under its own profile's rules. The unit guard for
+  the behaviour was already there (`importRulesFollowProfile.test.tsx`, the wizard relaunched
+  after a profile switch). Whether a space made over an example should take over the example's
+  edited rules is left as it is, a question for maff.
+- **A file set aside leaves its starting balances behind.** The import flow kept each account's
+  starting balance and date through Cancel, setup's Remove and choosing another file: `resetForm`
+  cleared neither. They went to the next file's accounts of the same name, and because a YNAB
+  register's own Starting Balance only fills an empty field, they kept that file's own out too. A
+  register removed in setup's statement step, then a later export of the same plan, opened Test
+  Checking at the first file's 1,250.00 instead of its own 1,500.00, and Test Savings, which the
+  later file gives none, at 3,000.00. Setup shows no starting balance to check, and neither does
+  the Import page's bank summary (a register without an Account column opens on it); a register
+  that names its accounts goes through the columns step, whose account row shows the old figure.
+  M2 does not undo it: setup works back only the balances typed in it, and the list after an
+  import reads the accounts as stored, so it shows the wrong balance beside its field to set it.
+  `resetForm` now clears both, in the Import page's flow and setup's. Tests:
+  `ynabExportFlow.test.tsx` (a register cancelled on Bank Imports, then another) and
+  `onboardingFirstImport.test.tsx` (a register removed in setup, then another). Without the
+  balances cleared both fail; without the dates the first does, on the starting date.
+- **The phone-width setup walk measures Done's next steps once they are in.** It read their
+  heights as soon as Done had settled, but the steps follow the badge evaluation, which can finish
+  later: one full run failed there on "the panel stays on a 390x844 screen on every step, light",
+  with no steps to measure (`Expected: > 0, Received: 0`). The walk now waits for the first step
+  link to show before it measures them. Test change only, in `onboarding.spec.ts`.
+- **Getting started's cushion case reads the card in one pass.** In CI it failed in both runtimes
+  on #693 and #694: after the second savings account the card kept "covers 18 days" for 30 s. The
+  app was not stuck. A probe showed the evaluation after the second account holding both accounts,
+  the card working its steps out again 10 to 30 ms later without the cushion, and the page showing
+  those two steps when the wait gave up. The test read the card row by row: one poll counted three
+  rows, the card dropped the third, and the read of the third row waited for it. With no action
+  timeout that read never returned, so the poll failed on the last list it had, three rows. On one
+  core (`taskset -c 0`) the local-first case failed 10 of 12 and 6 of 6 repeats that way; the
+  logged poll call started at three rows as the card changed and ended 29,085 ms later. `stepsIn`
+  in `orientation.spec.ts` now reads every row in one `evaluateAll`. Test change only: all four
+  cushion cases, 8 repeats each on one core, 32 passed.
+- **An imported row files under a category of its own type.** Every new profile now starts with
+  the income categories Gifts and Investments (94586cf6), and an import matched a row's category
+  by name alone, so an expense row under "Gifts" (a present bought) went into the income Gifts and
+  no expense category was made for it. Before, it got an expense Gifts with the kind gifts. Both
+  runtimes now match by name and type, with one rule in `shared/importCategories.ts`: an expense
+  row files under the expense category of its name, made if there is none; an income row under
+  the income one, and with none under the expense category of that name, as money back (a refund
+  in Groceries stays Groceries', as `shared/guidance/facts.ts` reads it); a transfer row by name
+  alone, as before. An income category is made only when no category of either type has the
+  name, so an income row and an expense row of a new name share the one expense category, in
+  whatever order they come. The preview lists each name once. On the Worker a new category now
+  takes its row's type, as it already did in local-first, instead of the type set for its name or
+  a guess from words in it (the guess, `INCOME_KEYWORDS`, is gone). Test: the contract scenario "a
+  new profile's import files each row under a category of its own type", on D1 and IndexedDB.
+  With the old matching it fails in both, at the preview (`new_categories` empty); without the
+  money-back rule it fails at the preview too, offering an income Groceries.
+- **A file set aside takes all its preview options with it.** `resetForm` cleared the starting
+  balances and dates (2ae16fd0) but kept the date range (`importStartDate`, `importEndDate`), the
+  budgets from spending, the account types and the tracking start date. The bank summary
+  (89b13585) goes from a file straight to its import without the preview step that shows them,
+  so a second file was imported with the first one's date range or budget backfill where nobody
+  could see it. `resetForm` now clears all five, on the Import page and in setup. Tests:
+  `resetFormOptions.test.ts`, one per option; leaving out any one of the five resets fails its
+  test.
+- **A loan adds back only the principal its own payments spent.** The savings rate counts loan
+  principal repaid as kept where its payments were spending (review A5). The add-back was pooled:
+  every expense under the Debt payments kind counted, plus any other expense within 1% of a
+  payment due, and the cap was on the total. So a mortgage paid by transfer, beside a card paid as
+  a Debt payments expense of the same 1,000, or a 995 childcare fee, still counted its principal
+  as kept on top of `cash` (the review's probe: 0 added for the transfer alone, 1,000 and 995 with
+  the other expense). `principalKeptIn` now works loan by loan: a loan's payments are the entries
+  the size of a payment its schedule has due that month, a transfer first, then a Debt payments
+  expense (within 5%, since the kind says it is a loan's: Jordan's personal loan is due 103.57 and
+  paid at 105), then an expense under Housing, Other, no kind or no category (within 1%). A
+  payment found as a transfer was never spending and adds nothing; each loan adds its principal
+  in the window up to what its own payments spent. Childcare, groceries and the other kinds are
+  never taken for a payment. Tests in `guidanceFacts.test.ts` ("a loan paid by transfer, beside an
+  expense of its payment size"): all three fail on the old code; looking for transfers last fails
+  the Debt payments case; taking any kind fails the childcare case with no transfer; a 1% leeway
+  for Debt payments fails the Jordan example in `guidanceExamples.test.ts`.
+- **Setting today's balance after an import reads the account at Save.** `ImportBalances` worked
+  the starting balance back from the account as its list read it, when the import finished. An
+  entry saved on that account while the list was up (Quick entry, another tab) had moved the
+  stored balance since, so the starting balance came out off by that entry. Save now reads the
+  account as stored first and works back from that. Test: `importBalances.test.tsx`, "works back
+  from the account as stored at Save, not as the list read it", which fails without the read. The
+  test that reads the figure back now has the stored account change when the figure is set, as it
+  does, rather than before Save.
+- **A file setup hands to the Import page keeps the balance typed in setup.** "Open in Import"
+  finishes setup, and finishing forgot setup's "Balance today" figures (`forgetTypedBalances`)
+  before the handed file was imported, so that import added up on top of the typed balance, the
+  double count M2 removed. The figures now go with the file (`HandedImportFile.typed`), and the
+  Import page works the file's import back from them, once, before it lists the balances. Setup
+  left any other way still forgets them, and the Import page drops them after the next import
+  finishes. Tests: `onboardingFirstImport.test.tsx` ("goes with a file handed to the Import page")
+  fails without the figures in the hand-off; `importOpensHandedFile.test.tsx` ("works the handed
+  file's import back from the balance typed in setup") fails without the page taking them, the
+  account reading 1,228.00 instead of 1,240.50.
+- **One rule says what a catch-all category is.** Getting started's "Set a budget for ..." step
+  (`biggestUnbudgeted` in `monthFacts.ts`) passed over any category named Other or Misc, by its
+  name alone, while the circles' facts take one as a catch-all only when nothing gives it a kind:
+  Other with a kind set on it, or under a parent with one, is that kind's. The rule is now one
+  function, `isCatchAllCategory` in `shared/guidance/kinds.ts`, read by both. Test:
+  `monthFacts.test.ts`, "is no catch-all once something gives it a kind, as the circles read it",
+  which fails with the name-only rule.
+- **A profile switch does not count the new profile's entries as uncategorised.** On
+  Transactions, `categoriesLoaded` stayed true across a switch, so until the new profile's
+  categories came in, its filed entries were checked against the old profile's list and counted
+  as without a category: the "entries without a category" list from Getting started showed them,
+  briefly or, with a slow read, for as long as it took. The page now keeps which profiles the
+  category list answers for (`categoriesAnsweredFor`, as the account list already did) and reads
+  it as loaded only for the profiles read now. Test: `transactionsUncategorisedLink.test.tsx`,
+  "takes no filed entry for uncategorised while the new profile's categories load", which fails
+  without it.
+- **Reset to defaults matches each default by name and type.** After the import fix above, an
+  import can leave an expense Gifts beside the default income Gifts. The reset keyed its kept
+  categories by name alone, so it folded the expense Gifts into the income one, its expenses with
+  it: the import's bug again, through the Danger Zone. Both runtimes now reset by one plan,
+  `planCategoryReset` in `shared/defaultCategories.ts`. Each default is set back on the lowest-id
+  category of its reset name and its own type, or, with none of that type, the lowest-id one of
+  that name, so a default whose type was changed comes back as before. Another category of that
+  name is folded into it, entries and budgets, only when it has the default's type; otherwise it
+  goes as any category that is no default does, its entries left with no category. Tests: the
+  contract scenario "resetting the categories matches each default by name and type", on D1 and
+  IndexedDB, fails on the old reset in both (the present landed in the income Gifts); it also
+  checks that Salary made an expense category comes back as income with its entry.
+  `categoryResetPlan.test.ts` covers the plan; preferring the lowest id whatever its type fails
+  its first case, and folding in whatever the type fails the contract scenario.
+
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
 The production build holds back the benchmarks and the questions that choose their figures

@@ -68,10 +68,15 @@ const CloseIcon = (): JSX.Element => (
   </svg>
 )
 
-/** The steps, in order, each a link to its page. `onFollow` runs as a link is followed. */
+/**
+ * The steps, in order, each a link to its page. `onFollow` runs as a link is followed. With
+ * `titlesOnly`, as setup's done step lists them, a step is its title and page: Getting started on
+ * Dashboard, a click on, says why (review M14).
+ */
 export function NextSteps(props: {
   steps: OrientationStep[]
   onFollow?: (step: OrientationStep) => void
+  titlesOnly?: boolean
 }): JSX.Element {
   return (
     <ol class={styles.steps} data-test-id="next-steps">
@@ -90,11 +95,13 @@ export function NextSteps(props: {
                 <ArrowIcon />
               </span>
             </a>
-            <p class={styles.reason} data-test-id="next-step-reason">
-              {step.reason}
-            </p>
-            <Show when={step.article}>
-              {(article) => <ArticleLink article={article()} class={styles.article} />}
+            <Show when={!props.titlesOnly}>
+              <p class={styles.reason} data-test-id="next-step-reason">
+                {step.reason}
+              </p>
+              <Show when={step.article}>
+                {(article) => <ArticleLink article={article()} class={styles.article} />}
+              </Show>
             </Show>
           </li>
         )}

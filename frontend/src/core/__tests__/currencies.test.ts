@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { formatWholeCurrency, getLocalCurrency } from '../api'
+import { formatCurrency, formatWholeCurrency, getLocalCurrency } from '../api'
 import { CURRENCY_OPTIONS, normalizeCurrencyCode } from '../currencies'
 
 beforeEach(() => {
@@ -39,5 +39,23 @@ describe('whole money, as the circles write it', () => {
     expect(formatWholeCurrency(-0.5, 'EUR')).toBe('-€1')
     expect(formatWholeCurrency(-1234.5, 'EUR')).toBe('-€1,235')
     expect(formatWholeCurrency(1234.5, 'USD')).toBe('$1,235')
+  })
+})
+
+// Review M6: Accounts read "-€0.00" for an account whose entries net to nothing. Intl keeps the
+// sign of a negative that rounds to zero cents, and of -0.
+describe('money in cents', () => {
+  it('writes what rounds to no cents as €0.00, never -€0.00', () => {
+    expect(formatCurrency(-0, 'EUR')).toBe('€0.00')
+    expect(formatCurrency(-0.004, 'EUR')).toBe('€0.00')
+    expect(formatCurrency(0.004, 'EUR')).toBe('€0.00')
+    // Float noise from sums that net to nothing: this one is -5.6e-17.
+    expect(formatCurrency(0.3 - (0.1 + 0.2), 'EUR')).toBe('€0.00')
+  })
+
+  it('keeps the sign of anything that is a cent or more', () => {
+    expect(formatCurrency(-0.005, 'EUR')).toBe('-€0.01')
+    expect(formatCurrency(-2350, 'EUR')).toBe('-€2,350.00')
+    expect(formatCurrency(1191, 'USD')).toBe('$1,191.00')
   })
 })

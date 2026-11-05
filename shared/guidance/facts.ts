@@ -44,6 +44,7 @@ import { nextPaymentMonth } from '../loanScenarios';
 import { DEFAULT_SETTINGS, MIN_MONTHS_FOR_AVERAGES } from '../retirementSettings';
 import { monthlyEquivalent } from '../subscriptionMath';
 import { trackedMonthsInYearWindow, trackedMonthsOf, YEAR_ON_FILE_MONTHS } from '../trackedMonths';
+import { isUncategorised } from '../uncategorised';
 import { CLEAR_PICTURE_MONTHS } from './circles';
 import { flowsOf } from './flows';
 import {
@@ -51,6 +52,7 @@ import {
   effectiveKind,
   essentialOf,
   holdsTransfers,
+  isCatchAllCategory,
   takesEssential,
 } from './kinds';
 import type { LoanInput } from '../loanSchedule';
@@ -253,6 +255,13 @@ export interface Cushion {
   against: 'needs' | 'spending';
 }
 
+/** A catch-all the window spent in (`GuidanceFacts.catchAlls`). */
+export interface CatchAll {
+  name: string;
+  share: number;
+  unsure: number | null;
+}
+
 export interface GuidanceFacts {
   today: string;
   region: Region;
@@ -284,6 +293,15 @@ export interface GuidanceFacts {
    * and with too few months.
    */
   unsure: { categories: number; uncategorised: number | null; all: boolean };
+  /**
+   * The catch-alls the window spent in, the most spent first: categories named only for holding
+   * what the others don't, Other and Misc (`isCatchAll`), that nothing else gives a kind. Each
+   * one's name, its share of the spending in percent, and what of it counted as needed only
+   * because nothing said otherwise, a month on average (null with too few months). The bank
+   * import files there whatever no rule knows, rent and groceries included (review M1), so the
+   * lines that would call it sorted, or count it as needed, say so.
+   */
+  catchAlls: CatchAll[];
   liquid: number | null;
   /** Liquid money in months of essential spending. */
   cushionMonths: number | null;
@@ -291,7 +309,11 @@ export interface GuidanceFacts {
   debts: Debt[];
   /** Whether the accounts were read: without them, a card or an overdraft is not known of. */
   accountsKnown: boolean;
-  /** Loan principal repaid, a month on average over the window. */
+  /**
+   * Loan principal repaid, a month on average over the window, up to what the window's entries
+   * spent paying loans (`loanPaymentsSpent`): a loan paid by transfer or from outside the app is
+   * in `cash` as kept already.
+   */
   principalRepaid: number | null;
   /**
    * What was kept, in percent of income: `cash` is income less spending, `withPrincipal` adds the
@@ -431,6 +453,18 @@ interface WindowSums {
   byMonth: Map<string, { spent: number; byCategory: Map<number, number> }>;
   /** What was spent under each kind, by the kind its category goes by. */
   byKind: Map<Kind, number>;
+  /** What each catch-all spent, and of it what counted as needed only because nothing said. */
+  catchAll: Map<number, { name: string; spent: number; unsure: number }>;
+  /** Each month's expenses filed under the Debt payments kind, one amount each. */
+  debtExpenses: Map<string, number[]>;
+  /**
+   * Each month's other expenses that could be a loan's payment, one amount each: those filed under
+   * Housing (a mortgage), Other or no kind, or under no category. Childcare or groceries of a
+   * payment's size are not one.
+   */
+  loanExpenses: Map<string, number[]>;
+  /** Each month's transfers, one amount each: a loan paid by transfer was never spending. */
+  transfers: Map<string, number[]>;
 }
 
 /** The window's money, added up, without the expenses that only moved money (`holdsTransfers`). */
@@ -460,6 +494,9 @@ function sumWindow(
   // 'outside': a category that can be marked needed never (kinds.ts `takesEssential`).
   const verdicts = new Map<number, ReturnType<typeof essentialOf> | 'outside'>();
   const kinds = new Map<number, Kind | null>();
+  // A catch-all by its name that nothing else gives a kind: under a parent with one, Other is
+  // that kind's.
+  const catchAll = new Map<number, boolean>();
   const sums: WindowSums = {
     months: months.length,
     income: flows.income,
@@ -475,6 +512,15 @@ function sumWindow(
     uncategorisedEntries: 0,
     byMonth: new Map(),
     byKind: new Map(),
+    catchAll: new Map(),
+    debtExpenses: new Map(),
+    loanExpenses: new Map(),
+    transfers: new Map(),
+  };
+  const list = (lists: Map<string, number[]>, month: string, value: number) => {
+    const held = lists.get(month);
+    if (held) held.push(value);
+    else lists.set(month, [value]);
   };
   const add = (totals: Map<number, number>, id: number, value: number) => {
     totals.set(id, (totals.get(id) ?? 0) + value);
@@ -486,18 +532,23 @@ function sumWindow(
       if (isId(id) && support.has(id)) sums.support += Math.abs(amount(entry));
       continue;
     }
+    if (entry.type === 'transfer')
+      list(sums.transfers, monthOf(entry.date), Math.abs(amount(entry)));
     if (entry.type !== 'expense') continue;
     const spent = Math.abs(amount(entry));
-    // Filed under a category the profile no longer has: no category. Before #384 (July 2026),
-    // deleting a category in either runtime left its entries pointing at it; both clear it now.
-    // Nothing can mark a category that is gone, and the essentials question cannot list it.
-    const filed = isId(id) && lookup(id) !== undefined;
+    // Filed under a category the profile no longer has: no category, as every count of them reads
+    // it (shared/uncategorised.ts). Before #384 (July 2026), deleting a category in either runtime
+    // left its entries pointing at it; both clear it now. Nothing can mark a category that is
+    // gone, and the essentials question cannot list it.
+    const filed =
+      isId(id) && !isUncategorised(entry, (categoryId) => lookup(categoryId) !== undefined);
     const month = sums.byMonth.get(monthOf(entry.date)) ?? { spent: 0, byCategory: new Map() };
     month.spent += spent;
     const key = filed ? id : 0;
     month.byCategory.set(key, (month.byCategory.get(key) ?? 0) + spent);
     sums.byMonth.set(monthOf(entry.date), month);
     if (!filed) {
+      list(sums.loanExpenses, monthOf(entry.date), spent);
       sums.uncategorisedEntries += 1;
       sums.uncategorised += spent;
       sums.essentials += spent;
@@ -512,10 +563,16 @@ function sumWindow(
         id,
         takesEssential(category, lookup) ? essentialOf(category, lookup) : 'outside'
       );
-      kinds.set(id, effectiveKind(category, lookup));
+      const kind = effectiveKind(category, lookup);
+      kinds.set(id, kind);
+      catchAll.set(id, isCatchAllCategory(category, lookup));
     }
     const kind = kinds.get(id);
     if (kind) sums.byKind.set(kind, (sums.byKind.get(kind) ?? 0) + spent);
+    if (kind === 'debt') list(sums.debtExpenses, monthOf(entry.date), spent);
+    else if (kind === null || kind === undefined || LOAN_PAYMENT_KINDS.has(kind)) {
+      list(sums.loanExpenses, monthOf(entry.date), spent);
+    }
     const verdict = verdicts.get(id)!;
     // Filed under a category that can take no kind, an income category: spending, but nothing
     // can mark it needed and the essentials question does not list it, so it counts neither as
@@ -525,6 +582,16 @@ function sumWindow(
     if (verdict.via === 'no-kind') {
       sums.noKind.add(id);
       sums.unsureSpent += spent;
+    }
+    if (catchAll.get(id)) {
+      const held = sums.catchAll.get(id) ?? {
+        name: String(lookup(id)!.name ?? '').trim(),
+        spent: 0,
+        unsure: 0,
+      };
+      held.spent += spent;
+      if (verdict.via === 'no-kind') held.unsure += spent;
+      sums.catchAll.set(id, held);
     }
   }
   return sums;
@@ -566,9 +633,16 @@ function accountsToday(
  * today (`accountsToday`) through the entries since. Each account counts from zero up on each
  * day, so one account's overdraft takes nothing from another, and a move between two of them
  * changes neither the total nor its low point.
+ *
+ * A move in from savings or cash (`reserves`) is left out of the walk back. Those count at their
+ * balance today, which no longer holds the money, so walking the move back would count it
+ * nowhere until the 30 days passed it (3 Nov review A2): topping up the current account from
+ * savings shrank the cushion for a month. A move out to savings is walked back as it happened: the
+ * money counts in savings, and the days before it are what the current account held then.
  */
 function currentAccountsLow(
   giros: readonly FactsAccount[],
+  reserves: ReadonlySet<number>,
   transactions: readonly FactsEntry[],
   today: string
 ): number {
@@ -579,6 +653,7 @@ function currentAccountsLow(
   for (const entry of transactions) {
     const day = entry.date.slice(0, 10);
     if (day <= first || day > today) continue;
+    if (movedInFrom(entry, reserves, ids)) continue;
     for (const move of balanceMoves(entry)) {
       if (!ids.has(move.account)) continue;
       const moves = byDay.get(day);
@@ -601,6 +676,21 @@ function currentAccountsLow(
     low = Math.min(low, pooled());
   }
   return low;
+}
+
+/** Whether the entry moves money from one of `from` into one of `into`, both accounts named. */
+function movedInFrom(
+  entry: FactsEntry,
+  from: ReadonlySet<number>,
+  into: ReadonlySet<number>
+): boolean {
+  return (
+    entry.type === 'transfer' &&
+    isId(entry.account_id) &&
+    isId(entry.transfer_account_id) &&
+    from.has(entry.account_id) &&
+    into.has(entry.transfer_account_id)
+  );
 }
 
 /** The account types money can be reached in: savings, cash and current accounts. */
@@ -633,9 +723,12 @@ export function liquidPartsOf(
     finite(account.balance)
   );
   const giros = counted.filter((account) => storedAccountType(account.type) === 'giro');
+  const reserves = new Set(
+    counted.filter((account) => storedAccountType(account.type) !== 'giro').map(({ id }) => id)
+  );
   const parts: LiquidParts = {
     savings: 0,
-    current: giros.length > 0 ? currentAccountsLow(giros, transactions, today) : 0,
+    current: giros.length > 0 ? currentAccountsLow(giros, reserves, transactions, today) : 0,
     cash: 0,
   };
   for (const account of counted) {
@@ -835,16 +928,81 @@ export function debtsOf(
   return debts;
 }
 
-/** Loan principal repaid in the window's months: the installments' principal and extra payments. */
-function principalIn(loans: readonly FactsLoan[], months: readonly string[]): number {
+/** The kinds besides Debt payments a loan's payment can be filed under: Housing (a mortgage), Other. */
+const LOAN_PAYMENT_KINDS: ReadonlySet<Kind> = new Set<Kind>(['housing', 'other']);
+
+/**
+ * How far a booked payment may be from the schedule's and still be that payment: 1%, or 5% for
+ * one filed under Debt payments, which says it is a loan's. A loan entered in the app is often a
+ * little off the bank's installment: Jordan's personal loan is due 103.57 and paid at 105.
+ */
+const paymentLeeway = (due: number, debt: boolean): number =>
+  Math.max(1, due * (debt ? 0.05 : 0.01));
+
+/**
+ * Loan principal repaid in the window that its payments spent, loan by loan (D6). A loan's
+ * payments are the entries the size of a payment its schedule has due that month: a transfer
+ * first, then an expense that could be one (`loanExpenses`). They count only when they recur, in
+ * at least half its due months in the window: an entry of about its size once is chance. Its
+ * extra payments are then looked for the same way. Each entry is one loan's payment at most.
+ *
+ * What a loan adds back is its principal in the window, at most what its own payments spent. A
+ * loan paid by transfer, or from an account the app does not hold, adds none: its payments were
+ * never spending, so `cash` has them as kept already (3 Nov review A5). Pooled across loans, as it
+ * was, any Debt payments expense, or a childcare fee within 1% of a payment, let a loan paid by
+ * transfer count its principal twice (3 Nov review, round 3).
+ */
+function principalKeptIn(
+  sums: WindowSums,
+  loans: readonly FactsLoan[],
+  months: readonly string[]
+): number {
   const inWindow = new Set(months);
-  let repaid = 0;
-  for (const loan of loans) {
-    for (const row of amortize(loan)) {
-      if (inWindow.has(monthOf(row.date))) repaid += row.principal + row.prepayment;
+  const copy = (lists: Map<string, number[]>) =>
+    new Map([...lists].map(([month, amounts]) => [month, [...amounts]]));
+  type Pool = 'transfer' | 'debt' | 'expense';
+  const pools: Record<Pool, Map<string, number[]>> = {
+    transfer: copy(sums.transfers),
+    debt: copy(sums.debtExpenses),
+    expense: copy(sums.loanExpenses),
+  };
+  type Found = { month: string; amount: number; pool: Pool };
+  /** Take an entry the size of `due` from `month`'s: a transfer, then Debt payments, then others. */
+  const take = (month: string, due: number): Found | null => {
+    for (const pool of ['transfer', 'debt', 'expense'] as const) {
+      const amounts = pools[pool].get(month);
+      const leeway = paymentLeeway(due, pool === 'debt');
+      const at = amounts ? amounts.findIndex((amount) => Math.abs(amount - due) <= leeway) : -1;
+      if (amounts && at >= 0) return { month, amount: amounts.splice(at, 1)[0], pool };
     }
+    return null;
+  };
+  const giveBack = (found: Found) => pools[found.pool].get(found.month)?.push(found.amount);
+  let kept = 0;
+  for (const loan of loans) {
+    const rows = amortize(loan).filter((row) => inWindow.has(monthOf(row.date)));
+    const due = rows.filter((row) => row.payment > 0);
+    const found: Found[] = [];
+    for (const row of due) {
+      const payment = take(monthOf(row.date), row.payment);
+      if (payment !== null) found.push(payment);
+    }
+    if (found.length * 2 < due.length) {
+      found.forEach(giveBack);
+      continue;
+    }
+    for (const row of rows) {
+      const extra = row.prepayment > 0 ? take(monthOf(row.date), row.prepayment) : null;
+      if (extra !== null) found.push(extra);
+    }
+    const spent = found.reduce(
+      (sum, payment) => sum + (payment.pool === 'transfer' ? 0 : payment.amount),
+      0
+    );
+    const principal = rows.reduce((sum, row) => sum + row.principal + row.prepayment, 0);
+    kept += Math.min(principal, spent);
   }
-  return repaid;
+  return kept;
 }
 
 const percentOf = (part: number, whole: number): number | null =>
@@ -865,7 +1023,9 @@ export function guidanceFacts(input: GuidanceInput): GuidanceFacts {
   const spending = perMonth(sums.spending);
   const essentials = perMonth(sums.essentials);
   const liquid = liquidOf(input.accounts, input.transactions, today);
-  const principalRepaid = perMonth(principalIn(input.loans ?? [], months));
+  // D6 counts principal repaid as kept where its payments were spent, loan by loan: no more than
+  // each loan's own payments spent, or a loan paid by transfer would count twice.
+  const principalRepaid = perMonth(principalKeptIn(sums, input.loans ?? [], months));
   const kept = income !== null && spending !== null ? income - spending : null;
   const cash = kept === null || income === null ? null : percentOf(kept, income);
   const withPrincipal =
@@ -894,6 +1054,16 @@ export function guidanceFacts(input: GuidanceInput): GuidanceFacts {
       uncategorised: perMonth(sums.uncategorised),
       all: averaged && neededIsUnsure(sums),
     },
+    catchAlls:
+      sums.spending > 0
+        ? [...sums.catchAll.values()]
+            .sort((a, b) => b.spent - a.spent)
+            .map((held) => ({
+              name: held.name,
+              share: (held.spent / sums.spending) * 100,
+              unsure: perMonth(held.unsure),
+            }))
+        : [],
     liquid,
     cushionMonths: cushionMonthsOf(liquid, essentials),
     invested: investedOf(accountsNow, input.holdings, input.answers?.savedElsewhere),

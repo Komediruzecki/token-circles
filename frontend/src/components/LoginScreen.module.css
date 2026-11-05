@@ -236,14 +236,22 @@
  * so the card closes rather than being cut off by a full-width line. Drawn as a pseudo-element
  * because a border cannot hold a gradient.
  */
+/* Each item stays on one line, and a row too narrow for all three puts the last on a line of its
+   own: a build's version such as "v5.17.6-2-g70a3431d" left "Contact support" and itself each on
+   two lines. */
 .footer {
   position: relative;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 8px 12px;
   margin-top: 20px;
   padding-top: 14px;
+}
+
+.footer > * {
+  white-space: nowrap;
 }
 
 .footer::before {
@@ -267,6 +275,23 @@
   font-size: 11px;
   opacity: 0.7;
   font-variant-numeric: tabular-nums;
+}
+
+/* Check your inbox on a phone: each footer link a fingertip tall, and Privacy and Terms as wide,
+   as the screen's own button and link are (review D6). The sign-in and create stages follow with
+   the accessibility pass, so only that stage sets the class. */
+@media (max-width: 768px), (pointer: coarse) {
+  .footerRoomy > a,
+  .footerRoomy nav a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+
+  .footerRoomy nav a {
+    justify-content: center;
+    min-width: 44px;
+  }
 }
 
 @media (max-width: 420px) {

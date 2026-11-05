@@ -62,6 +62,7 @@ export default function WeekOneMails(props: {
           checked={() => props.loaded.weekOneMails !== false && !unsubscribed()}
           disabled={busy() || unsubscribed()}
           onChange={(on) => void save(on)}
+          wholeRow
           data-test-id="settings-week-one-toggle"
         />
       </div>

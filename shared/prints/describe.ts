@@ -38,6 +38,17 @@ function list(items: string[]): string {
 }
 
 /**
+ * Months' names as one list, the year said once when they share it: "October and November 2025",
+ * "December 2025 and January 2026". Names are "Month YYYY", as `SealWords.monthName` writes them.
+ */
+function monthsList(names: string[]): string {
+  const year = /\s(\d{4})$/.exec(names[0] ?? '')?.[1];
+  const shared = year !== undefined && names.every((name) => name.endsWith(` ${year}`));
+  if (!shared || names.length <= 1) return list(names);
+  return `${list(names.map((name) => name.slice(0, -(year.length + 1))))} ${year}`;
+}
+
+/**
  * Each filled slot's rank by spending: 1 plus the number of months that spent strictly more, so
  * months that tie share a rank and the months under them still count every month above them
  * (100, 90, 90, 80 rank 1, 2, 2, 4). `least` marks the months that spent the least, and `alike`
@@ -78,7 +89,8 @@ export function monthLine(
       ? `${name} is the only month here so far. It spent more than came in.`
       : `${name} is the only month here so far, and it ${kept}.`;
   }
-  const { rank, least, alike } = ranks(slots).get(i)!;
+  const all = ranks(slots);
+  const { rank, least, alike } = all.get(i)!;
   if (alike) {
     // One share for every month: none spent the most or the least. A share of 0 for all of them
     // means the heaviest month spent nothing, as any month that spent something is 100.
@@ -87,6 +99,19 @@ export function monthLine(
     return `${name} ${spent}, and ${kept}.`;
   }
   const most = rank === 1 ? 'the most' : least ? 'the least' : `the ${ORDINALS[rank]} most`;
+  // A tie is said as one, with the tapped month's own money after it: each tied month saying it
+  // spent the least read as a contradiction (review M17).
+  const tied = [...all.entries()].filter(([, other]) => other.rank === rank).map(([at]) => at);
+  if (tied.length > 1) {
+    const names = tied.sort((a, b) => a - b).map((at) => words.monthName(monthAt(from, at)));
+    const own =
+      slot.kept > 0
+        ? 'kept money'
+        : slot.kept < 0
+          ? 'spent more than came in'
+          : 'came out about even';
+    return `${monthsList(names)} tied for ${most} spent. ${name} ${own}.`;
+  }
   return `${name} spent ${most} of these ${n} months, and ${kept}.`;
 }
 
@@ -109,7 +134,7 @@ export function sealSummary(slots: readonly SealSlot[], from: string, words: Sea
     n === 1
       ? ''
       : !alike
-        ? ` ${list(pick((v) => v.rank === 1))} spent the most, ${list(pick((v) => v.least))} the least.`
+        ? ` ${monthsList(pick((v) => v.rank === 1))} spent the most, ${monthsList(pick((v) => v.least))} the least.`
         : slots.some((s) => s !== null && s.spent > 0)
           ? ' Every month spent about the same.'
           : ' None of these months spent anything.';

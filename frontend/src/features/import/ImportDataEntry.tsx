@@ -36,7 +36,15 @@ const TABS: { id: ImportTab; label: string }[] = [
   { id: 'bank-imports', label: 'Bank Imports' },
 ]
 
-export function ImportDataEntry(props: { flow: ImportFlow; compact?: boolean }) {
+/**
+ * `onProcessBank`: what Process & continue does on Bank Imports, when the page has its own way on
+ * (the Import page's summary for a bank the app knows, review M4). The columns step without it.
+ */
+export function ImportDataEntry(props: {
+  flow: ImportFlow
+  compact?: boolean
+  onProcessBank?: () => Promise<void>
+}) {
   const flow = props.flow
   // Inputs are targeted by <label for>; ids must be unique because the Import
   // page (keep-alive) and the onboarding wizard can be in the DOM at once.
@@ -671,7 +679,7 @@ export function ImportDataEntry(props: { flow: ImportFlow; compact?: boolean }) 
               class={`${styles.btn} ${styles.btnPrimary}`}
               style={{ 'margin-top': '12px' }}
               data-test-id="bank-process-btn"
-              onClick={() => void flow.processBankFiles()}
+              onClick={() => void (props.onProcessBank ?? flow.processBankFiles)()}
               disabled={flow.loading()}
             >
               Process &amp; continue

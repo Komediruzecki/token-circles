@@ -13,7 +13,9 @@
  * A category stored without a kind still has one to go by, its effective kind: its own, else its
  * parent's, else a guess from its name (`kindForName`), else a guess from its parent's name. A
  * category with none of these counts as essential: it errs towards a larger cushion, and a card
- * can say how many categories it counted that way (`essentialOf`'s `via`).
+ * can say how many categories it counted that way (`essentialOf`'s `via`). A catch-all's name,
+ * Other or Misc (`isCatchAll`), suggests no kind: the bank import files there whatever no rule
+ * knows, rent and groceries included, so it counts as needed until the person says otherwise.
  *
  * A category that holds transfers (`holdsTransfers`) holds money moved between accounts, not money
  * spent: what is filed under it is neither spending nor needed, whatever its kind.
@@ -162,14 +164,13 @@ const WORDS: readonly (readonly [Kind, RegExp])[] = [
     /\b(entertainment|leisure|travel|holidays?|vacations?|hobby|hobbies|sports?|gym|fun|movies|cinema|games?)\b/,
   ],
   ['shopping', /\b(shopping|clothes|clothing|electronics)\b/],
-  ['other', /\b(other|misc|miscellaneous)\b/],
 ];
 
-/**
- * The kind a category's name suggests, from English names: the app's own names first, then words
- * in the name. Null when the name says nothing a kind could be guessed from.
- */
-export function kindForName(name: unknown): Kind | null {
+/** Words that say a name holds only what the others don't, tried after every kind's. */
+const CATCH_ALL = /\b(other|misc|miscellaneous)\b/;
+
+/** What a name says: a kind, that it holds what the others don't (`catch-all`), or nothing. */
+function readName(name: unknown): Kind | 'catch-all' | null {
   if (typeof name !== 'string') return null;
   // Accents go, so that "Café" reads as "cafe".
   const key = name
@@ -183,7 +184,41 @@ export function kindForName(name: unknown): Kind | null {
   for (const [kind, words] of WORDS) {
     if (words.test(key)) return kind;
   }
-  return null;
+  return CATCH_ALL.test(key) ? 'catch-all' : null;
+}
+
+/**
+ * The kind a category's name suggests, from English names: the app's own names first, then words
+ * in the name. Null when the name says nothing a kind could be guessed from, a catch-all's
+ * included (`isCatchAll`): "Other" says nothing about what it holds.
+ */
+export function kindForName(name: unknown): Kind | null {
+  const read = readName(name);
+  return read === 'catch-all' ? null : read;
+}
+
+/**
+ * Whether a category's name says only that it holds what the others don't: "Other", where the bank
+ * import files an entry no rule matches (`categorize`, shared/bankImport/categoryRules.ts), and
+ * "Misc" or "Miscellaneous", unless another word in it names a kind ("Other shopping" is
+ * shopping). Known by the name, not by the stored kind: the kind Other is the statistics' group
+ * for what has no group of its own, and a person can give it to a category of their own, such as
+ * Pets, that is worth a budget.
+ */
+export function isCatchAll(name: unknown): boolean {
+  return readName(name) === 'catch-all';
+}
+
+/**
+ * Whether a category holds only what the others don't: its name says so (`isCatchAll`) and
+ * nothing gives it a kind of its own. Other with a kind set on it, or under a parent with one, is
+ * that kind's. The one rule for the circles' facts and Getting started's biggest category without
+ * a budget.
+ */
+export function isCatchAllCategory(category: KindedCategory, lookup?: CategoryLookup): boolean {
+  if (!isCatchAll(category.name)) return false;
+  const kind = effectiveKind(category, lookup);
+  return kind === null || kind === 'other';
 }
 
 /** A category as far as its kind goes: what both runtimes store, and what the app reads. */

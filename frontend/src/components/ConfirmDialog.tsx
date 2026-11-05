@@ -1,4 +1,4 @@
-import { Index, Show } from 'solid-js'
+import { For, Index, Show } from 'solid-js'
 import { acceptConfirm, confirmRequests, resolveConfirm } from '../core/confirmStore'
 import styles from './ConfirmDialog.module.css'
 import { OrbitSpinner } from './OrbitSpinner'
@@ -17,6 +17,12 @@ export default function ConfirmDialog() {
           return Math.min(100, Math.max(0, Math.round((p.done / p.total) * 100)))
         }
         const busyLabel = () => progress()?.label ?? 'Working…'
+        const lines = () => {
+          const message = req().message
+          return typeof message === 'string' ? [message] : message
+        }
+        const titleId = () => `confirm-title-${String(req().id)}`
+        const bodyId = () => `confirm-body-${String(req().id)}`
         return (
           <div
             class={styles.overlay}
@@ -28,12 +34,23 @@ export default function ConfirmDialog() {
               class={styles.dialog}
               role="alertdialog"
               aria-modal="true"
+              aria-labelledby={req().title ? titleId() : undefined}
+              aria-describedby={bodyId()}
               aria-busy={req().busy}
               onClick={(e) => {
                 e.stopPropagation()
               }}
             >
-              <p class={styles.message}>{req().message}</p>
+              <Show when={req().title}>
+                {(title) => (
+                  <h2 class={styles.title} id={titleId()}>
+                    {title()}
+                  </h2>
+                )}
+              </Show>
+              <div class={styles.messages} id={bodyId()}>
+                <For each={lines()}>{(line) => <p class={styles.message}>{line}</p>}</For>
+              </div>
 
               <Show when={req().busy}>
                 <div class={styles.progress} data-test-id="confirm-progress">

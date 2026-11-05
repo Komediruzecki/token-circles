@@ -29,6 +29,7 @@ export const BASE_FACTS: GuidanceFacts = {
   annualSpending: 30000,
   essentials: 2000,
   unsure: { categories: 0, uncategorised: 0, all: false },
+  catchAlls: [],
   liquid: 4000,
   cushionMonths: 2,
   invested: 0,

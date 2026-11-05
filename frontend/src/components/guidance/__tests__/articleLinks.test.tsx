@@ -55,6 +55,16 @@ describe('an article link', () => {
     expect(a.textContent).toBe(`${ARTICLES['one-month'].title} (article, opens in a new tab)`)
     expect(a.querySelector('svg')!.getAttribute('aria-hidden')).toBe('true')
   })
+
+  it('opens it on the about site the build names (A20), so dev links to dev', () => {
+    vi.stubEnv('VITE_ABOUT_ORIGIN', 'https://about.example.test')
+    try {
+      const c = mount(() => <ArticleLink article="bank-year" />)
+      expect(links(c)[0]!.href).toBe(`https://about.example.test${ARTICLES['bank-year'].path}`)
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
 })
 
 describe('Getting started', () => {

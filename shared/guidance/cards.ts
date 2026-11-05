@@ -21,15 +21,11 @@ import {
   referencesFor,
   sourceFor,
 } from './benchmarks';
-import {
-  CLEAR_PICTURE_MONTHS,
-  FIRST_CUSHION_MONTHS,
-  FULL_CUSHION_MONTHS,
-  SORTED_SHARE,
-} from './circles';
-import { gapOf, monthsText, shareOf } from './ledger';
+import { FIRST_CUSHION_MONTHS, FULL_CUSHION_MONTHS, SORTED_SHARE } from './circles';
+import { andList, gapOf, monthsText, shareOf } from './ledger';
 import { percentText, principalLine, savingsTitle, shownRate } from './savingsWords';
 import { DAYS_IN_A_MONTH, monthName } from '../orientation';
+import { basedOnFinishedMonths } from '../trackedMonths';
 import type { Band, BandEntry, MetricId, Reference, RegionId, Strength } from './benchmarks';
 import type { CircleNumber } from './circles';
 import type { Debt, GuidanceFacts } from './facts';
@@ -80,7 +76,7 @@ export interface BenchmarkCard {
    * that compares nothing yet.
    */
   where: { rule: string; sources: CardSource[]; strength: string } | null;
-  /** "Based on 5 months. It firms up at 12.", under 12 months on file. */
+  /** "Based on 5 finished months. It firms up at 12 months tracked.", short of a year on file. */
   provisional: string | null;
   /**
    * Asked on the card while it has no answer: the housing card's "How do you live?", the
@@ -226,11 +222,9 @@ function barOf(
   };
 }
 
-/** "Based on 5 months. It firms up at 12.", while less than a year is on file. */
+/** "Based on 5 finished months. It firms up at 12 months tracked.", short of a year on file. */
 function provisionalOf(facts: GuidanceFacts): string | null {
-  if (facts.firm) return null;
-  const n = facts.months.length;
-  return `Based on ${n} ${n === 1 ? 'month' : 'months'}. It firms up at ${CLEAR_PICTURE_MONTHS}.`;
+  return facts.firm ? null : basedOnFinishedMonths(facts.months.length);
 }
 
 /** The typical band's edges, for the bar's words: "Typical in Germany: 13.9% to 23.9%". */
@@ -295,7 +289,7 @@ export function savingsCard(
   if (cash < 0) {
     const n = facts.months.length;
     title = savingsTitle(facts, words) ?? '';
-    const first = [`Over the last ${n} months, spending ran ahead of income.`];
+    const first = [`Over the last ${n} finished months, spending ran ahead of income.`];
     if (EUROPEAN.has(region)) {
       const dissaving = referencesFor('savings.rate', 'EU27').find(
         (one) => one.sourceId === 'eurostat-icw'
@@ -455,6 +449,13 @@ export function cushionCard(
       body += ` Next milestone: ${milestone} months, ${money(gapOf(milestone * essentials, liquid))} away.`;
     }
     step = { label: 'Open the emergency fund calculator', hash: '#emergency' };
+  }
+  // Other holds what no import rule knew, rent and groceries among it, and counts as needed until
+  // the person says otherwise (review M1): the card says so, as its months depend on it.
+  const counted = facts.catchAlls.filter((one) => (one.unsure ?? 0) > 0);
+  if (counted.length > 0) {
+    const perMonth = counted.reduce((sum, one) => sum + (one.unsure ?? 0), 0);
+    body = `That counts ${andList(counted.map((one) => one.name))} (${money(perMonth)} a month) as needed until you sort ${counted.length === 1 ? 'it' : 'them'}. ${body}`;
   }
   const context = CUSHION_CONTEXT[region];
   const quoted = referencesFor('cushion.months', region);

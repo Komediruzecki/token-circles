@@ -28,7 +28,7 @@
  * new profile and selects it, and asks whether the example profiles stay (localOnly.ts).
  */
 import { createEffect, createMemo, createSignal, For, on, onCleanup, Show, untrack } from 'solid-js'
-import { refreshAchievements } from '../../core/achievementsStore'
+import { refreshAchievements, snapshot } from '../../core/achievementsStore'
 import { api, apiGet, getLocalCurrency, showToast } from '../../core/api'
 import {
   bumpProfileVersion,
@@ -41,9 +41,11 @@ import { showConfirm } from '../../core/confirmStore'
 import { isExampleProfileName } from '../../core/demoMode'
 import { loadAnswers, saveAnswers } from '../../core/guidanceAnswers'
 import { benchmarksShown } from '../../core/guidanceGate'
+import { LOCAL_ONBOARDING_OWNER } from '../../core/onboardingFlag'
 import {
-  clearLocalSetupPending,
   completeOnboarding,
+  countProfileMadeAsDecided,
+  firstSetupOfTheAccount,
   forgetOnboardingStatus,
   goToOnboardingStep,
   markLocalSetupPending,
@@ -53,8 +55,10 @@ import {
   prevOnboardingStep,
   skipOnboarding,
 } from '../../core/onboardingStore'
+import { rememberTypedBalance, typedBalances } from '../../core/setupTypedBalances'
 import { getStorageMode, setStorageMode } from '../../core/storage/storageFactory'
 import { handFileToImport } from '../../features/import/importHandoff'
+import { localToday } from '../../utils/period'
 import { Field, FormNotice } from '../form'
 import { currentNextSteps, NextSteps } from '../GettingStarted'
 import { SPACE_QUESTIONS_LEAD } from '../guidance/regionWords'
@@ -62,14 +66,17 @@ import { SpaceQuestions } from '../guidance/SpaceQuestions'
 import choiceStyles from '../guidance/SpaceQuestions.module.css'
 import { LogoMark } from '../Logo'
 import { SubscriptionScanPanel } from '../SubscriptionScan'
-import { counted, createFirstImport, FirstImportPanel, listed } from './FirstImport'
+import { doneLine, holdsOf } from './doneLine'
+import { counted, createFirstImport, FirstImportPanel } from './FirstImport'
 import {
+  accountHoldsData,
   EXAMPLES_CHOICE_LEGEND,
   EXAMPLES_NOT_REMOVED,
   examplesChoiceNote,
   leaveSelectionForLocalWorkspace,
   localOnlyQuestion,
   readLocalWorkspace,
+  stopFirstWeekMails,
 } from './localOnly'
 import styles from './Onboarding.module.css'
 import {
@@ -78,11 +85,15 @@ import {
   createSpaceForm,
   spaceAnswerChanges,
 } from './onboardingForms'
+import { workBackTypedBalances } from './setupBalances'
 import type { AnswerChanges, Answers } from '../../../../shared/guidance/answers'
 import type { OrientationStep } from '../../../../shared/orientation'
+import type { AchievementsSnapshot } from '../../core/achievementsStore'
 import type { ImportSummary } from '../../features/import/importFlow'
 import type { AccountType } from '../../types/models'
-import type { LocalWorkspace } from './localOnly'
+import type { ProfileHolds } from './doneLine'
+import type { LocalWorkspace, ProfileCounts } from './localOnly'
+import type { CreatedAccount } from './onboardingForms'
 
 /** The counted steps: Space, Account, Statement. Done is not one of them. */
 const COUNTED_STEPS = 3
@@ -238,7 +249,7 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
 
   // ---- what this visit did, for Done's summary ----
   const [createdAccounts, setCreatedAccounts] = createSignal<
-    { name: string; type: AccountType; currency: string; balance: number }[]
+    (CreatedAccount & { type: AccountType })[]
   >([])
   const [importSummary, setImportSummary] = createSignal<ImportSummary | null>(null)
   const [subsAdded, setSubsAdded] = createSignal(0)
@@ -318,8 +329,8 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
         props.selectProfiles([created.id])
         if (leaving.length > 0) await removeExamples(leaving)
       }
-      // The space is saved: a switch to local-only that asked for it has it.
-      clearLocalSetupPending()
+      // The marker stays until setup is finished or left: a reload from here on opens setup
+      // again at the step it reached (review M7).
     },
     onSaved: () => {
       if (benchmarksShown()) setSpaceScreen('about')
@@ -367,12 +378,41 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
     }
   }
 
+  /**
+   * Whether the signed-in account holds an account, a transaction or a budget in any profile, as
+   * the Worker counts them each time the space step opens (accountHoldsData). The switch leaves
+   * that data on the Worker and reloads into a local workspace that shows none of it, until
+   * Settings switches back, so it is offered only while the account holds nothing: not on "Run
+   * setup again" over an account with data, nor once setup has put something in it. Null from the
+   * moment it is asked until the Worker answers, and while it cannot; the latest answer counts.
+   */
+  const [accountHolds, setAccountHolds] = createSignal<boolean | null>(null)
+  let holdsAsked = 0
+  const readAccountHolds = async () => {
+    const asked = ++holdsAsked
+    setAccountHolds(null)
+    let holds: boolean | null
+    try {
+      const list = await apiGet<ProfileCounts[]>('/api/profiles')
+      holds = Array.isArray(list) ? accountHoldsData(list) : null
+    } catch {
+      holds = null
+    }
+    if (asked === holdsAsked) setAccountHolds(holds)
+  }
+  /** Offered signed in, over an account the Worker has just said holds nothing. */
+  const offerLocalOnly = () => getStorageMode() === 'self-hosted' && accountHolds() === false
+
   // What it checks and says is onboardingForms.ts; a refusal is said under its field, or in the
   // step's notice when no field is the reason. Adding the account is the step's one action: the
   // next screen says it worked, so there is no toast.
   const accountForm = createFirstAccountForm({
     onCreated: async (account) => {
       setCreatedAccounts((prev) => [...prev, { ...account, type: account.type as AccountType }])
+      // What the bank shows now, kept for the statements to come (review M2).
+      if (account.typed && account.id !== null) {
+        rememberTypedBalance({ id: account.id, figure: account.balance, asOf: localToday() })
+      }
       bumpProfileVersion()
       await refreshProfileAccounts()
       if (onboardingOpen() && onboardingStep() === 'account') nextOnboardingStep()
@@ -408,6 +448,14 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
             }
           : summary
       )
+      // "Balance today" is what the bank shows now (review M2): the accounts this visit made with
+      // one typed read it again, with the statement worked back from it.
+      if (summary.imported > 0) {
+        void workBackTypedBalances(typedBalances()).catch((err: unknown) => {
+          console.error('Could not set the balance today after the statement:', err)
+          showToast("Couldn't set your account's balance today. Accounts can set it.", 'warning')
+        })
+      }
       // On to what the import made possible. With nothing new, the step says so and stays.
       if (summary.imported > 0) goToOnboardingStep('subscriptions')
     },
@@ -437,7 +485,9 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
   const openInImport = () => {
     const handed = firstImport.handOver()
     if (!handed) return
-    handFileToImport(handed.file, handed.tab)
+    // The balances typed here go with the file: finishing forgets setup's copy, and the file's
+    // import on the Import page works back from them, as setup's own import would have (M2).
+    handFileToImport(handed.file, handed.tab, typedBalances())
     completeOnboarding()
     window.location.hash = 'import'
   }
@@ -451,11 +501,25 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
 
   // ---- step: done, with the next steps from what the profile now holds ----
   const [nextUp, setNextUp] = createSignal<OrientationStep[]>([])
+  /**
+   * What the done line counts (doneLine.ts, review M20): the rows of the evaluation the step runs,
+   * which are the profile's as both runtimes hold them, or, when that evaluation fails, what this
+   * visit made. Nothing until the evaluation has answered.
+   */
+  const [counting, setCounting] = createSignal<AchievementsSnapshot | 'visit' | null>(null)
   const loadNextSteps = async () => {
     setNextUp([])
+    setCounting(null)
     // Evaluated now rather than after the usual pause, so the steps count what was just imported.
-    await refreshAchievements().catch(() => undefined)
-    if (onboardingOpen() && onboardingStep() === 'done') setNextUp(currentNextSteps())
+    const evaluated = await refreshAchievements().then(
+      () => true,
+      () => false
+    )
+    if (!onboardingOpen() || onboardingStep() !== 'done') return
+    setNextUp(currentNextSteps())
+    // A failed evaluation leaves an earlier one in place, from before this visit's import, say.
+    const snap = snapshot()
+    setCounting(evaluated && snap !== null ? snap : 'visit')
   }
 
   const accountsHeld = () =>
@@ -464,15 +528,19 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
       createdAccounts().length + (importSummary()?.createdAccounts.length ?? 0)
     )
 
-  /** "Personal has 1 account, 7 new transactions and 2 tracked subscriptions." */
+  /** "Personal Profile has 1 account, 69 transactions and 1 regular payment tracked on Bills." */
   const doneSummary = () => {
-    const name = state.currentProfile?.name ?? 'Your space'
-    const parts: string[] = []
-    if (accountsHeld() > 0) parts.push(counted(accountsHeld(), 'account'))
-    const imported = importSummary()?.imported ?? 0
-    if (imported > 0) parts.push(counted(imported, 'new transaction'))
-    if (subsAdded() > 0) parts.push(counted(subsAdded(), 'tracked subscription'))
-    return parts.length > 0 ? `${name} has ${listed(parts)}.` : `${name} is ready.`
+    const from = counting()
+    if (from === null) return ''
+    const holds: ProfileHolds =
+      from === 'visit'
+        ? {
+            accounts: accountsHeld(),
+            transactions: importSummary()?.imported ?? 0,
+            bills: subsAdded(),
+          }
+        : holdsOf(from, accountsHeld())
+    return doneLine(state.currentProfile?.name ?? 'Your space', holds)
   }
 
   const finish = () => {
@@ -488,6 +556,8 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
     // rename that re-ran this reset the form while it saved, and the step never moved on; the
     // name typed in reset the currency chosen.
     if (step === 'space') {
+      // Signed in, whether the account holds anything decides whether local-only is offered.
+      if (getStorageMode() === 'self-hosted') void readAccountHolds()
       untrack(() => {
         // An example's name is not offered for the person's space.
         const named = overExample() ? undefined : state.currentProfile?.name
@@ -664,26 +734,40 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
   // workspace, which opens this wizard as the E2E zero-state helper's does), only the demo's
   // example profiles (setup opens on the space over them, and asks whether they stay), or
   // profiles of the person's own (carried on with).
+  //
+  // The account stays, so its first-week mails are turned off before the switch, while the app
+  // still talks to the Worker (3 Nov review A3); the switch goes ahead whatever the answer. The
+  // question calls the account empty on its first setup, and says it stays as it is on "Run setup
+  // again" (over an account that holds nothing, the only one it is offered to).
   const chooseLocalOnly = async () => {
     const found = await readLocalWorkspace().catch((): LocalWorkspace => ({ kind: 'unknown' }))
-    const sure = await showConfirm(localOnlyQuestion(found), {
+    const accountEmpty =
+      firstSetupOfTheAccount() && createdAccounts().length === 0 && profileAccounts().length === 0
+    const question = localOnlyQuestion(found, accountEmpty)
+    const sure = await showConfirm(question.lines, {
+      title: question.title,
       confirmText: 'Keep it here',
       cancelText: 'Cancel',
     })
     if (!sure) return
+    await stopFirstWeekMails()
     try {
       // The example seed never runs into a workspace the person chose: an empty one stays empty.
       localStorage.setItem('finance_had_profiles', '1')
-      // A relaunched wizard may carry a completed/skipped flag; a fresh local workspace should
-      // offer setup again. (Harmless when local data exists: a workspace of the person's own that
-      // is not pristine never auto-opens the wizard.)
-      forgetOnboardingStatus('local')
       // The account's selection means nothing against the local DB: the oldest profile of the
       // person's own where there is one, else none, for App to pick (localOnly.ts).
       leaveSelectionForLocalWorkspace(found)
-      // Setup opens on the space after the reload unless the workspace has a profile of the
-      // person's own (onboardingStore.ts, whereToOfferOnboarding).
-      markLocalSetupPending()
+      if (found.kind === 'own') {
+        // The confirm says they carry on with their profiles: those count as a decision taken,
+        // so setup does not open over them after the reload, empty or not.
+        countProfileMadeAsDecided(LOCAL_ONBOARDING_OWNER)
+      } else {
+        // A relaunched wizard may carry a completed/skipped flag; a fresh local workspace should
+        // offer setup again, and setup opens on the space after the reload
+        // (onboardingStore.ts, whereToOfferOnboarding).
+        forgetOnboardingStatus('local')
+        markLocalSetupPending()
+      }
     } catch {
       // Non-fatal: worst case the first init seeds the demo profiles.
     }
@@ -710,6 +794,9 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
           label="Profile name"
           class={styles.field}
           labelClass={styles.fieldLabel}
+          // Setup says "space"; the menu lists it as a profile (review M20).
+          hint="It shows as a profile in the menu."
+          hintClass={styles.hint}
         >
           {(control) => (
             <input
@@ -786,7 +873,7 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
             </p>
           </fieldset>
         </Show>
-        <Show when={getStorageMode() === 'self-hosted'}>
+        <Show when={offerLocalOnly()}>
           <button
             type="button"
             class={styles.linkBtn}
@@ -918,7 +1005,7 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
           label="Balance today"
           class={styles.field}
           labelClass={styles.fieldLabel}
-          hint="It becomes the account's opening balance."
+          hint="What your bank shows now. Entries you import here are worked back from it."
           hintClass={styles.hint}
         >
           {(control) => (
@@ -973,7 +1060,7 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
   const subscriptionsStep = () => (
     <div class={styles.step} data-test-id="onboarding-step-subscriptions">
       <h2 class={styles.title} tabindex="-1" data-step-heading>
-        Subscriptions we spotted
+        Regular payments we spotted
       </h2>
       <p class={styles.lead}>
         Tick the ones to track. They go under Bills, where you can change them.
@@ -1012,8 +1099,10 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
         <section class={styles.nextSteps} data-test-id="onboarding-next-steps">
           <h3 class={styles.nextStepsTitle}>Next steps</h3>
           {/* A step's link leaves setup the way Go to my dashboard does, for the step's page. */}
+          {/* Titles only: Getting started on Dashboard lists the same steps with why. */}
           <NextSteps
             steps={nextUp()}
+            titlesOnly
             onFollow={() => {
               completeOnboarding()
             }}
@@ -1021,9 +1110,10 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
         </section>
       </Show>
       {/* A keyboard shortcut, so only where there is a keyboard to press it: not on touch. */}
-      <p class={styles.tip}>
+      {/* The sidebar's button by its label (review M16): What's New opens Take a Tour. */}
+      <p class={styles.tip} data-test-id="onboarding-done-tip">
         Press <kbd>Ctrl</kbd>+<kbd>K</kbd> anywhere to add a transaction, and take a page tour any
-        time from the sidebar.
+        time from What's New in the sidebar.
       </p>
     </div>
   )
@@ -1101,7 +1191,8 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
         const picked = scan?.chosenCount() ?? 0
         if (scan && picked > 0) {
           return {
-            label: `Track ${counted(picked, 'subscription')}`,
+            // Where they go, in the done step's words (review M12): a rent is not a subscription.
+            label: `Track ${picked} on Bills`,
             run: () => {
               void scan.addSelected().then(() => {
                 // A subscription that was refused stays chosen, marked under its row or named in

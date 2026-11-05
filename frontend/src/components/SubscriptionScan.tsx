@@ -42,6 +42,7 @@ import {
   recentForScan,
   worthTracking,
 } from '../features/subscriptionDetection'
+import { dayText } from '../utils/dayText'
 import { createForm, FormNotice, SubmitButton } from './form'
 import { OrbitSpinner } from './OrbitSpinner'
 import { refusedMessages } from './refusedSubscriptions'
@@ -145,7 +146,8 @@ export function SubscriptionScanPanel(props: SubscriptionScanPanelProps) {
           included: worthTracking(d),
           frequency: d.frequency,
         }
-        prices[d.key] = String(d.amount)
+        // As money is written: 4.50, never 4.5.
+        prices[d.key] = d.amount.toFixed(2)
       }
       setRows(next)
       form.reset(prices)
@@ -350,15 +352,30 @@ export function SubscriptionScanPanel(props: SubscriptionScanPanelProps) {
             </Show>
           </span>
           <span class={styles.info}>
-            <span class={styles.name}>
+            <span class={styles.name} data-test-id="sub-scan-name">
               {recurring ? `Regular payment to ${d.name}` : d.name}
+              {/* The statement's own name for a catalogue match: "Gym membership (Example Gym)". */}
+              <Show when={d.statementName}>
+                {' '}
+                <span class={styles.statementName} data-test-id="sub-scan-statement-name">
+                  ({d.statementName})
+                </span>
+              </Show>
               <Show when={d.matchedPlan}>
                 <span class={styles.plan}>{d.matchedPlan!.label}</span>
               </Show>
             </span>
-            <span class={styles.meta}>
-              {d.occurrences} charge{d.occurrences === 1 ? '' : 's'} · last {d.lastDate} ·{' '}
-              {isTracked() ? 'Already tracked' : confidenceLabel[d.confidence]}
+            {/* "3 charges, last 15 Oct": a day as the import step before writes one. Each part
+                keeps its words together, so a narrow row breaks between them. */}
+            <span class={styles.meta} data-test-id="sub-scan-meta">
+              <span class={styles.metaPart}>
+                {d.occurrences} charge{d.occurrences === 1 ? '' : 's'},
+              </span>{' '}
+              <span class={styles.metaPart}>last {dayText(d.lastDate)}</span>
+              {' · '}
+              <span class={styles.metaPart}>
+                {isTracked() ? 'Already tracked' : confidenceLabel[d.confidence]}
+              </span>
             </span>
           </span>
         </label>

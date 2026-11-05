@@ -5,6 +5,9 @@
  *
  * Run against the real local-first router on fake-indexeddb.
  */
+/* eslint-disable security/detect-non-literal-fs-filename -- App.tsx, named below */
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { render } from 'solid-js/web'
 import { afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest'
 import { setCurrentProfile, setProfiles } from '../../../core/appStore'
@@ -102,7 +105,8 @@ afterEach(() => {
 const steps = () =>
   Array.from(host.querySelectorAll<HTMLElement>('[data-test-id="next-step"]')).map((step) => ({
     id: step.dataset.step,
-    reason: step.querySelector('[data-test-id="next-step-reason"]')?.textContent,
+    title: step.querySelector('[data-test-id="next-step-link"]')?.firstElementChild?.textContent,
+    reason: step.querySelector('[data-test-id="next-step-reason"]')?.textContent ?? null,
   }))
 
 it('lists the next steps from what the profile holds, and a step finishes setup on its way', async () => {
@@ -116,16 +120,16 @@ it('lists the next steps from what the profile holds, and a step finishes setup 
     },
     { timeout: 10_000 }
   )
+  // Review M14: Getting started on Dashboard, a click on, listed the same steps with the same
+  // reasons word for word. Here each step is its title and page; Getting started says why.
   expect(steps()).toEqual([
+    { id: 'import-year', title: 'Import the rest of your year', reason: null },
     {
-      id: 'import-year',
-      reason: '4 of the last 13 months are tracked. A month counts once it holds 3 entries.',
+      id: 'review-subscriptions',
+      title: 'Review the subscription we spotted',
+      reason: null,
     },
-    { id: 'review-subscriptions', reason: "It's in your statements but not on Bills yet." },
-    {
-      id: 'sort-uncategorised',
-      reason: "That's 33% of your entries. Budgets and Analytics group spending by category.",
-    },
+    { id: 'sort-uncategorised', title: 'Sort the 4 entries without a category', reason: null },
   ])
 
   const scan = host.querySelector<HTMLAnchorElement>(
@@ -140,6 +144,97 @@ it('lists the next steps from what the profile holds, and a step finishes setup 
   await vi.waitFor(() => {
     expect(window.location.hash).toBe('#bills?scan=1')
   })
+})
+
+// Review M20: the line under the heading counted what this visit made, held in memory. A reload
+// on the subscriptions step (the cloud reopens there, and local-first does too since M7) left
+// "Personal Profile has 1 tracked subscription." in one runtime and "1 account and 1 tracked
+// subscription" in the other, for the same statement. It counts what the profile holds now.
+it('says what the profile holds, though this visit counted nothing: as after a reload', async () => {
+  const db = await getDB()
+  await db.add('accounts', {
+    id: 11,
+    profile_id: 1,
+    name: 'Main',
+    balance: 1000,
+    starting_balance: 1000,
+  } as never)
+  const bill = {
+    profile_id: 1,
+    due_date: `${monthsAgo(0)}-14`,
+    category_id: null,
+    recurring: 1,
+    last_paid_date: null,
+    next_due_date: null,
+    frequency: 'monthly',
+    type: 'subscription',
+  }
+  await db.add('bills', { ...bill, id: 21, name: 'Netflix', amount: 15.99, is_active: 1 } as never)
+  // A bill and a subscription are one count in one word (review M12).
+  await db.add('bills', {
+    ...bill,
+    id: 23,
+    name: 'Rent',
+    amount: 650,
+    is_active: 1,
+    type: 'bill',
+  } as never)
+  // Paused: not tracked any more, as the week-one mail counts them.
+  await db.add('bills', { ...bill, id: 22, name: 'Gym', amount: 30, is_active: 0 } as never)
+  await db.add('bills', { ...bill, id: 24, name: 'Paper', amount: 9, is_active: false } as never)
+  // Another profile's: not this one's.
+  await db.add('accounts', {
+    id: 12,
+    profile_id: 2,
+    name: 'Shared',
+    balance: 5,
+    starting_balance: 5,
+  } as never)
+
+  startOnboarding('done')
+  const { OnboardingWizard } = await import('../OnboardingWizard')
+  dispose = render(() => <OnboardingWizard selectProfiles={() => {}} />, host)
+
+  await vi.waitFor(
+    () => {
+      expect(host.querySelector('[data-test-id="onboarding-next-steps"]')).not.toBeNull()
+    },
+    { timeout: 10_000 }
+  )
+  expect(host.querySelector('[data-test-id="onboarding-done-summary"]')?.textContent).toBe(
+    'Personal has 1 account, 12 transactions and 2 regular payments tracked on Bills.'
+  )
+})
+
+it('reads no earlier evaluation as what the profile holds, when the done step cannot evaluate it', async () => {
+  // An evaluation from before the account: 12 transactions and no account.
+  const { refreshAchievements } = await import('../../../core/achievementsStore')
+  await refreshAchievements()
+  const db = await getDB()
+  await db.add('accounts', {
+    id: 11,
+    profile_id: 1,
+    name: 'Main',
+    balance: 1000,
+    starting_balance: 1000,
+  } as never)
+  // A row the bills list refuses: the done step's evaluation fails on it.
+  await db.add('bills', { id: 23, profile_id: 1, name: 'Unreadable' } as never)
+
+  startOnboarding('done')
+  const { OnboardingWizard } = await import('../OnboardingWizard')
+  dispose = render(() => <OnboardingWizard selectProfiles={() => {}} />, host)
+
+  // What this visit can count: the account the step reads itself. Not "Personal has 12
+  // transactions.", which is the earlier evaluation's, with no account.
+  await vi.waitFor(
+    () => {
+      expect(host.querySelector('[data-test-id="onboarding-done-summary"]')?.textContent).toBe(
+        'Personal has 1 account.'
+      )
+    },
+    { timeout: 10_000 }
+  )
 })
 
 // Done has nothing left to leave: Escape there finishes setup as Go to my dashboard does, and
@@ -157,4 +252,22 @@ it('Escape on Done finishes setup without asking, and records it completed', asy
   expect(confirmRequests()).toEqual([])
   expect(onboardingOpen()).toBe(false)
   expect(localStorage.getItem('finance_onboarding:local')).toBe('completed')
+})
+
+// Review M16: the tip sent people to "the sidebar" for a tour; the button there is What's New,
+// which opens Take a Tour. The tip names it as the sidebar labels it.
+it('names the sidebar button a tour starts from, as the sidebar labels it', async () => {
+  startOnboarding('done')
+  const { OnboardingWizard } = await import('../OnboardingWizard')
+  dispose = render(() => <OnboardingWizard selectProfiles={() => {}} />, host)
+
+  await vi.waitFor(() => {
+    expect(host.querySelector('[data-test-id="onboarding-done-tip"]')).not.toBeNull()
+  })
+  expect(host.querySelector('[data-test-id="onboarding-done-tip"]')!.textContent).toBe(
+    "Press Ctrl+K anywhere to add a transaction, and take a page tour any time from What's New in the sidebar."
+  )
+  const app = readFileSync(resolve(__dirname, '../../../App.tsx'), 'utf8')
+  expect(app).toContain('data-test-id="whats-new-btn"')
+  expect(app).toContain("<span>What's New</span>")
 })

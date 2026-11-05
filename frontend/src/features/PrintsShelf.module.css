@@ -205,13 +205,29 @@
   overflow: hidden;
   cursor: pointer;
 }
+/* The print shown above: a ring in the brand colour, 2 px clear of the print. Drawn as a shadow,
+   so the outline is left to the keyboard's focus and a pressed print focused from it shows both.
+   The focus ring had been a second blue outline 1 px further out, indistinguishable from this
+   one, and on a pressed print it replaced it. */
 .thumb[aria-pressed='true'] {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
+  box-shadow:
+    0 0 0 2px var(--card-bg),
+    0 0 0 4px var(--primary);
 }
+/* Focus from the keyboard: in the text colour, 3 px clear, and outside the pressed ring on the
+   pressed print. */
 .thumb:focus-visible {
-  outline: 2px solid var(--primary-hover);
+  outline: 2px solid var(--text);
   outline-offset: 3px;
+}
+.thumb[aria-pressed='true']:focus-visible {
+  outline-offset: 5px;
+}
+/* Forced colours draw no shadows: the pressed print keeps a border of its own there. */
+@media (forced-colors: active) {
+  .thumb[aria-pressed='true'] {
+    border: 3px solid Highlight;
+  }
 }
 .thumb-seal,
 .thumb-seal img {
@@ -242,16 +258,16 @@
     margin: 6px 0 4px;
   }
   /* On a phone the prints sit in one row that scrolls inside itself, newest first. A box that
-     scrolls clips what its children draw outside it, so the strip keeps 5 px clear on every side
-     for the rings drawn around a print (focus reaches 5 px out, pressed 4 px), also where a
-     scroll or a snap stops, and gives the room back as a negative margin so the prints still line
-     up with the words above them. */
+     scrolls clips what its children draw outside it, so the strip keeps 7 px clear on every side
+     for the rings drawn around a print (focus on the pressed print reaches 7 px out, on another
+     5 px, pressed 4 px), also where a scroll or a snap stops, and gives the room back as a
+     negative margin so the prints still line up with the words above them. */
   .strip {
     display: flex;
     overflow-x: auto;
-    margin: 5px -5px 0;
-    padding: 5px 5px 6px;
-    scroll-padding-inline: 5px;
+    margin: 7px -7px 0;
+    padding: 7px 7px 8px;
+    scroll-padding-inline: 7px;
     scroll-snap-type: x proximity;
   }
   .strip > li {

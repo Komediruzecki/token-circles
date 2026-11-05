@@ -14,13 +14,14 @@
 import { cushionOf } from '../../../shared/guidance/facts'
 import { lastFullMonth } from '../../../shared/orientation'
 import { trackedMonthsInYearWindow } from '../../../shared/trackedMonths'
+import { isUncategorised } from '../../../shared/uncategorised'
 import {
   detectSubscriptions,
   recentForScan,
   worthTracking,
 } from '../features/subscriptionDetection'
 import { bucketByMonth } from './achievements/evaluate'
-import { biggestUnbudgeted, monthInTheRed, uncategorisedIn } from './achievements/monthFacts'
+import { biggestUnbudgeted, monthInTheRed } from './achievements/monthFacts'
 import { monthOf } from './achievements/months'
 import type { FactsAccount } from '../../../shared/guidance/facts'
 import type { KindedCategory } from '../../../shared/guidance/kinds'
@@ -54,12 +55,21 @@ export interface OrientationSource {
 /** The facts for `source`, with the scan's window ending at `nowMs`. */
 export function orientationFacts(source: OrientationSource, nowMs: number): OrientationFacts {
   const { today, transactions } = source
+  const filedUnder = new Set(source.categories.map((c) => c.id))
   const last = lastFullMonth(today)
   const lastMonth = bucketByMonth(transactions).get(last) ?? []
   // Spent in the last full month, budgeted this month: the step goes once the budget is set.
-  const top = biggestUnbudgeted(lastMonth, monthOf(today), source.budgets, source.bills)
-  const name =
-    top === null ? undefined : source.categories.find((c) => c.id === top.categoryId)?.name
+  const top = biggestUnbudgeted(
+    lastMonth,
+    monthOf(today),
+    source.budgets,
+    source.bills,
+    source.categories
+  )
+  const nameOf = (id: number | undefined) =>
+    id === undefined ? undefined : source.categories.find((c) => c.id === id)?.name
+  const name = nameOf(top?.categoryId)
+  const notCounting = nameOf(top?.notCounting)
   const spotted = detectSubscriptions(recentForScan(transactions, nowMs), source.bills, {
     today,
     categories: source.categories,
@@ -76,8 +86,18 @@ export function orientationFacts(source: OrientationSource, nowMs: number): Orie
     subscriptionsSpotted: spotted.length,
     billsSpotted: spotted.filter((found) => found.billType === 'bill').length,
     entries: transactions.filter((t) => t.type !== 'transfer').length,
-    uncategorised: uncategorisedIn(transactions),
-    topUnbudgeted: top !== null && name !== undefined ? { categoryId: top.categoryId, name } : null,
+    // One under a category the profile no longer has counts too, as circle 1 and the Transactions
+    // filter this step links to read it (shared/uncategorised.ts).
+    uncategorised: transactions.filter((t) => isUncategorised(t, (id) => filedUnder.has(id)))
+      .length,
+    topUnbudgeted:
+      top !== null && name !== undefined
+        ? {
+            categoryId: top.categoryId,
+            name,
+            ...(notCounting === undefined ? {} : { notCounting }),
+          }
+        : null,
     heavyMonth: monthInTheRed(lastMonth) === null ? null : last,
     loans: source.loans.length,
     cushionMonths: cushion.months,

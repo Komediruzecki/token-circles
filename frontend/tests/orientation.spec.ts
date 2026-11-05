@@ -45,8 +45,8 @@ const STATEMENT = [
 const AFTER_IMPORT = [
   {
     title: 'Import the rest of your year',
-    reason: '4 of the last 13 months are tracked. A month counts once it holds 3 entries.',
-    href: '#import',
+    reason: '4 of 12 months tracked. A month counts once it holds 3 entries.',
+    href: '#import/bank',
   },
   {
     title: 'Review the 2 subscriptions we spotted',
@@ -62,23 +62,31 @@ const AFTER_IMPORT = [
 
 const NOTHING_YET = {
   title: 'Import a year of statements',
-  reason: 'None of the last 13 months is tracked yet. A month counts once it holds 3 entries.',
-  href: '#import',
+  reason: '0 of 12 months tracked. A month counts once it holds 3 entries.',
+  href: '#import/bank',
 }
 
-/** The steps a list shows, read off the page. */
+/**
+ * The steps a list shows, read off the page in one pass. Row by row, a read that counted three rows
+ * waited for a third the card had just taken away: with no action timeout that read never
+ * returned, and the poll failed on the last list it saw, 30 s after the card had changed.
+ */
 async function stepsIn(page: Page, list: string) {
-  const steps = page.getByTestId(list).getByTestId('next-step')
-  const out: Array<{ title: string; reason: string; href: string }> = []
-  for (const step of await steps.all()) {
-    const link = step.getByTestId('next-step-link')
-    out.push({
-      title: (await link.locator('span').first().textContent()) ?? '',
-      reason: (await step.getByTestId('next-step-reason').textContent()) ?? '',
-      href: (await link.getAttribute('href')) ?? '',
-    })
-  }
-  return out
+  return page
+    .getByTestId(list)
+    .getByTestId('next-step')
+    .evaluateAll((steps) =>
+      steps.map((step) => {
+        const link = step.querySelector('[data-test-id="next-step-link"]')
+        // Setup's done step lists titles only (review M14): no reason to read there.
+        const reason = step.querySelector('[data-test-id="next-step-reason"]')
+        return {
+          title: link?.querySelector('span')?.textContent ?? '',
+          reason: reason?.textContent ?? '',
+          href: link?.getAttribute('href') ?? '',
+        }
+      })
+    )
 }
 
 /** The card's steps once they say what `expected` says, failing with what they say otherwise. */
@@ -157,9 +165,10 @@ test.describe('Getting started @smoke', () => {
     expect(await page.evaluate(() => localStorage.getItem('finance_getting_started:local'))).toBe(
       '{"hidden":true}'
     )
-    // Your next step takes its place: Getting started's first step, while less than a year is here.
+    // Your next step takes its place, and leads with the card's next different step: the card it
+    // replaces led with the first, and Hide brought that straight back (review M14).
     await expect(page.getByTestId('dashboard-container').getByTestId('next-step-title')).toHaveText(
-      AFTER_IMPORT[0].title,
+      AFTER_IMPORT[1].title,
       { timeout: 30_000 }
     )
 
@@ -190,7 +199,7 @@ test.describe('Getting started @smoke', () => {
     await expect(page.getByTestId('onboarding-step-done')).toBeVisible()
     await expect
       .poll(() => stepsIn(page, 'onboarding-next-steps'), { timeout: 30_000 })
-      .toEqual([NOTHING_YET])
+      .toEqual([{ ...NOTHING_YET, reason: '' }])
 
     await page.getByTestId('onboarding-next-steps').getByText(NOTHING_YET.title).click()
     await expect(page.getByTestId('onboarding-wizard')).toHaveCount(0)
@@ -247,9 +256,10 @@ test.describe('Getting started @smoke', () => {
       await page.getByTestId('getting-started-hide').click()
       expect((await hidden).request().postData()).toBe('{"hidden":true}')
       await expect(page.getByTestId('getting-started')).toHaveCount(0)
+      // The next different step on the card's list, as in local-first (review M14).
       await expect(
         page.getByTestId('dashboard-container').getByTestId('next-step-title')
-      ).toHaveText(AFTER_IMPORT[0].title, { timeout: 30_000 })
+      ).toHaveText(AFTER_IMPORT[1].title, { timeout: 30_000 })
 
       // Another device: nothing in its storage, the same account signed in.
       const elsewhere = await browser.newContext({ storageState: { cookies: [], origins: [] } })
@@ -299,8 +309,8 @@ const LAST_MONTH = new Date(`${monthsAgo(1)}-15T12:00:00`).toLocaleString('en-GB
 const BEFORE_A_CUSHION = [
   {
     title: 'Import the rest of your year',
-    reason: '4 of the last 13 months are tracked. A month counts once it holds 3 entries.',
-    href: '#import',
+    reason: '4 of 12 months tracked. A month counts once it holds 3 entries.',
+    href: '#import/bank',
   },
   {
     title: 'Set a budget for Groceries',

@@ -389,3 +389,26 @@ describe('a regular payment added as a bill under the name it was proposed under
     expect(again.alreadyTracked).toBe(true)
   })
 })
+
+// Review M13: Revolut writes a transfer's payee as "To Example Landlord", and the scan proposed
+// "Regular payment to To Example Landlord".
+describe('a payee Revolut writes as "To ..."', () => {
+  const monthly = ['2026-04-02', '2026-05-02', '2026-06-02', '2026-07-02']
+  const revolut = (payee: string) =>
+    monthly.map((d) => paid('', 650, d, { description: payee, category_id: 1 }))
+
+  it('is proposed under its own name, without the "To "', () => {
+    const [rent] = detect(revolut('To Example Landlord'))
+    expect(rent).toMatchObject({ matchedVia: 'recurring', name: 'Example Landlord' })
+  })
+
+  it('is tracked by a bill under its own name', () => {
+    const [rent] = detect(revolut('To Example Landlord'), [{ name: 'Example Landlord' }])
+    expect(rent.alreadyTracked).toBe(true)
+  })
+
+  it('keeps a name that only starts with the letters', () => {
+    expect(detect(revolut('Tomasz Beispiel'))[0].name).toBe('Tomasz Beispiel')
+    expect(detect(revolut('TOTAL Beispiel'))[0].name).toBe('TOTAL Beispiel')
+  })
+})

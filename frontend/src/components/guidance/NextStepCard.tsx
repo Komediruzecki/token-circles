@@ -19,6 +19,7 @@ import {
   YEARLY_BILLS_OPTIONS,
 } from '../../../../shared/guidance/questions'
 import { refreshAchievements } from '../../core/achievementsStore'
+import { circlesProfileLine } from '../../core/circlesProfile'
 import { takeAnswers } from '../../core/guidance'
 import { saveAnswers } from '../../core/guidanceAnswers'
 import ArticleLink from './ArticleLink'
@@ -98,6 +99,11 @@ export interface NextStepCardProps {
    * and the key figure over the card draw the same measure.
    */
   inCircle?: boolean
+  /**
+   * The profile the step is for, named while the Dashboard around it adds up more than one
+   * (core/circlesProfile.ts).
+   */
+  profile?: string | null
 }
 
 export default function NextStepCard(props: NextStepCardProps): JSX.Element {
@@ -168,6 +174,13 @@ export default function NextStepCard(props: NextStepCardProps): JSX.Element {
           )}
         </Show>
       </div>
+      <Show when={props.profile}>
+        {(name) => (
+          <p class={styles.profile} data-test-id="next-step-profile">
+            {circlesProfileLine(name())}
+          </p>
+        )}
+      </Show>
       <Dynamic
         component={level() === 2 ? 'h3' : 'h4'}
         class={styles.title}

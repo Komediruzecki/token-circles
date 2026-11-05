@@ -244,6 +244,85 @@ describe('About this space', () => {
     expect(await stored()).toEqual({ region: 'UK' })
   })
 
+  // Review M21: a failed load showed "Not answered yet." and "Nothing yet." above the error that
+  // says the answers could not be read, and the error stayed after a later load succeeded.
+  it('shows only the error while the answers could not be read', async () => {
+    await seed({ region: 'HR' })
+    vi.spyOn(api, 'getSettings').mockRejectedValueOnce(new Error('offline'))
+    await open()
+
+    await vi.waitFor(() => {
+      expect(byTestId('about-this-space-problem')?.textContent).toBe(
+        "Couldn't load your answers. Reload the page to try again."
+      )
+    })
+    expect(byTestId('settings-space-region')).toBeNull()
+    expect(byTestId('settings-circle-answers')).toBeNull()
+    expect(host.textContent).not.toContain('Not answered yet.')
+    expect(host.textContent).not.toContain('Nothing yet.')
+  })
+
+  it('clears the error, and shows the answers, once a load succeeds', async () => {
+    await seed({ region: 'HR' })
+    vi.spyOn(api, 'getSettings').mockRejectedValueOnce(new Error('offline'))
+    await open()
+    await vi.waitFor(() => {
+      expect(byTestId('about-this-space-problem')).not.toBeNull()
+    })
+
+    bumpProfileVersion()
+
+    await vi.waitFor(() => {
+      expect(radio('region-HR').checked).toBe(true)
+    })
+    expect(byTestId('about-this-space-problem')).toBeNull()
+    expect(byTestId('settings-circle-answers')).not.toBeNull()
+  })
+
+  it('says nothing of a failed load for a profile no longer open', async () => {
+    await seed({ region: 'HR' })
+    await seed({ region: 'elsewhere' }, 'guidance:2')
+    let fail: (error: Error) => void = () => {}
+    vi.spyOn(api, 'getSettings').mockImplementationOnce(
+      () =>
+        new Promise((_, reject) => {
+          fail = reject
+        })
+    )
+    await open()
+
+    localStorage.setItem('currentProfileId', '2')
+    bumpProfileVersion()
+    await vi.waitFor(() => {
+      expect(radio('region-elsewhere').checked).toBe(true)
+    })
+    fail(new Error('offline'))
+    await new Promise((resolve) => setTimeout(resolve, 50))
+
+    expect(byTestId('about-this-space-problem')).toBeNull()
+    expect(radio('region-elsewhere').checked).toBe(true)
+  })
+
+  it('keeps a failed save said when a load succeeds after it', async () => {
+    await seed({ region: 'UK' })
+    await open()
+    vi.spyOn(api, 'updateSettings').mockRejectedValueOnce(new Error('offline'))
+    chip('region-HR').click()
+    await vi.waitFor(() => {
+      expect(byTestId('about-this-space-problem')?.textContent).toBe(
+        "Couldn't save your answer. Try again."
+      )
+    })
+
+    bumpProfileVersion()
+    await new Promise((resolve) => setTimeout(resolve, 100))
+
+    expect(byTestId('about-this-space-problem')?.textContent).toBe(
+      "Couldn't save your answer. Try again."
+    )
+    expect(radio('region-UK').checked).toBe(true)
+  })
+
   it('shows the answers of the profile opened next', async () => {
     await seed({ region: 'HR' })
     await seed({ region: 'elsewhere', children: 2 }, 'guidance:2')

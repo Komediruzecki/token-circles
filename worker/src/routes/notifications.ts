@@ -9,6 +9,7 @@ import { pendingEmailChange, requestEmailChange } from '../email-change';
 import { escapeHtml, renderTestBasic } from '../emailTemplates';
 import {
   composeReminderPreview,
+  mailOriginsOf,
   sendBillsRemindersForUser,
   sendBudgetAlertsForUser,
   sendSpendingReportForUser,
@@ -178,9 +179,7 @@ notificationsRoutes.post('/api/notifications/test-email', requireAuth, async (c)
   if (!user?.email) throw new HttpError(400, 'No email on your account');
 
   const type = ((await c.req.json().catch(() => ({}))) as { type?: string }).type ?? 'basic';
-  let mail = renderTestBasic({
-    assetOrigin: c.env.CORS_ORIGIN || c.env.APP_ORIGINS?.split(',')[0] || undefined,
-  });
+  let mail = renderTestBasic(mailOriginsOf(c.env));
   if (type === 'spending' || type === 'budget' || type === 'bills') {
     const preview = await composeReminderPreview(c.env, c.get('userId'), type, localNow(c));
     if (!preview) {
@@ -246,6 +245,13 @@ notificationsRoutes.post('/api/notifications/trigger', requireAuth, async (c) =>
 
 type UnsubscribeContext = Context<AppEnv>;
 
+/**
+ * The page's button and link: white on the app's blue (--primary in
+ * frontend/src/styles/themes/dawn-light.css), 4.63:1, where the #4f6ef7 they had was 4.28:1, under
+ * the 4.5:1 their 14px text needs (review D1).
+ */
+const APP_BLUE = '#3b6fe0';
+
 function unsubscribePage(
   c: UnsubscribeContext,
   title: string,
@@ -255,10 +261,10 @@ function unsubscribePage(
   const appUrl = c.env.CORS_ORIGIN || '';
   const button = opts.action
     ? `<form method="post" action="${escapeHtml(opts.action)}">
-<button type="submit" style="font:inherit;font-size:14px;font-weight:600;background:#4f6ef7;color:#fff;border:0;border-radius:8px;padding:10px 20px;cursor:pointer">Unsubscribe</button>
+<button type="submit" style="font:inherit;font-size:14px;font-weight:600;background:${APP_BLUE};color:#fff;border:0;border-radius:8px;padding:10px 20px;cursor:pointer">Unsubscribe</button>
 </form>`
     : appUrl
-      ? `<a href="${escapeHtml(appUrl)}" style="display:inline-block;background:#4f6ef7;color:#fff;text-decoration:none;padding:10px 20px;border-radius:8px;font-size:14px">Back to the app</a>`
+      ? `<a href="${escapeHtml(appUrl)}" style="display:inline-block;background:${APP_BLUE};color:#fff;text-decoration:none;padding:10px 20px;border-radius:8px;font-size:14px">Back to the app</a>`
       : '';
   return c.html(
     `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">

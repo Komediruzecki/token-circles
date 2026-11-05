@@ -18,7 +18,10 @@ import { getProfiles, setCurrentProfile, setProfiles, useAppState } from '../../
 import { confirmRequests, resolveConfirm } from '../../../core/confirmStore'
 import { __resetDataVersionsForTest } from '../../../core/dataVersions'
 import { EXAMPLE_PROFILE_NAMES } from '../../../core/demoMode'
+import { accountOnboardingOwner } from '../../../core/onboardingFlag'
 import {
+  completeOnboarding,
+  forgetOnboardingStatus,
   LOCAL_SETUP_PENDING_KEY,
   markLocalSetupPending,
   onboardingOpen,
@@ -26,6 +29,7 @@ import {
   setOnboardingOwner,
   skipOnboarding,
   startOnboarding,
+  whereToOfferOnboarding,
 } from '../../../core/onboardingStore'
 import { getDB } from '../../../core/storage/idb'
 import { setStorageMode } from '../../../core/storage/storageFactory'
@@ -98,6 +102,35 @@ async function openSpaceStep() {
     const input = host.querySelector<HTMLInputElement>('[data-test-id="onboarding-profile-name"]')
     expect(input).not.toBeNull()
     return input!
+  })
+}
+
+/**
+ * Signed in, the account answers GET /api/profiles with its one profile, empty: local-only is
+ * offered only over an account that holds nothing (localOnly.ts, accountHoldsData). Every other
+ * request goes on as before.
+ */
+function anEmptyAccount() {
+  const sent = globalThis.fetch
+  vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+    if (new URL(url, 'http://localhost').pathname !== '/api/profiles') return sent(input, init)
+    const empty = { id: 77, name: 'Personal Profile', transaction_count: 0, account_count: 0 }
+    return Promise.resolve(
+      new Response(JSON.stringify([{ ...empty, budget_count: 0 }]), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    )
+  })
+}
+
+/** The local-only button, once the account has said it holds nothing. */
+function localOnlyButton(): Promise<HTMLButtonElement> {
+  return vi.waitFor(() => {
+    const found = host.querySelector<HTMLButtonElement>('[data-test-id="onboarding-local-only"]')
+    expect(found).not.toBeNull()
+    return found!
   })
 }
 
@@ -176,8 +209,22 @@ it('makes a new space over an example, selects it, and removes the examples by d
   expect(localStorage.getItem('currentProfileId')).toBe(String(ours))
   expect(JSON.parse(localStorage.getItem('selectedProfileIds') ?? '[]')).toEqual([ours])
   expect(await exampleRows()).toEqual([])
-  expect(localStorage.getItem(LOCAL_SETUP_PENDING_KEY)).toBeNull()
+  // The marker stays until setup is finished or left, with the step it reached (review M7).
+  expect(localStorage.getItem(LOCAL_SETUP_PENDING_KEY)).toBe('account')
   expect(toasts()).toEqual([])
+})
+
+// Review M7: the switch's ask outlives the space, so a reload later in setup opens it again, even
+// where the demo finished its own setup before and left that decision here.
+it('keeps asking past the space, over a demo that finished its setup before', async () => {
+  completeOnboarding()
+  markLocalSetupPending()
+  const name = await openSpaceStep()
+  nameAndContinue(name, 'Our flat')
+  await vi.waitFor(() => {
+    expect(onboardingStep()).toBe('account')
+  })
+  expect(localStorage.getItem(LOCAL_SETUP_PENDING_KEY)).toBe('account')
 })
 
 it('keeps the examples when asked, beside the new space, and renames none of them', async () => {
@@ -260,16 +307,18 @@ it('asks nothing about examples on an account, which has none', async () => {
 
 it('says on the switch that the examples are here, before anything changes', async () => {
   setStorageMode('self-hosted')
+  // The account's wizard, whose steps go to the account's record, never to the local marker.
+  setOnboardingOwner(accountOnboardingOwner(1))
   setCurrentProfile(null)
   setProfiles([])
+  anEmptyAccount()
   await openSpaceStep()
-  host.querySelector<HTMLButtonElement>('[data-test-id="onboarding-local-only"]')!.click()
+  ;(await localOnlyButton()).click()
   await vi.waitFor(() => {
     expect(confirmRequests()).toHaveLength(1)
   })
-  expect(confirmRequests()[0].message).toContain(
-    'This browser has the example profiles from the demo.'
-  )
+  expect(confirmRequests()[0].title).toBe('Keep your data in this browser only?')
+  expect(confirmRequests()[0].message[0]).toContain("This browser has the demo's example profiles.")
   resolveConfirm(confirmRequests()[0].id, false)
   // Cancelled: still on the account, nothing marked.
   expect(localStorage.getItem('finance_storage_mode')).toBe('self-hosted')
@@ -290,17 +339,22 @@ async function switchToLocalOnly(): Promise<{ question: string; reloads: () => n
     hash: '',
   } as unknown as Location)
   setStorageMode('self-hosted')
+  // The account's wizard, whose steps go to the account's record, never to the local marker.
+  setOnboardingOwner(accountOnboardingOwner(1))
   setCurrentProfile(null)
   setProfiles([])
   // What the account's session left: its own profile selected.
   localStorage.setItem('currentProfileId', '77')
   localStorage.setItem('selectedProfileIds', '[77]')
+  anEmptyAccount()
   await openSpaceStep()
-  host.querySelector<HTMLButtonElement>('[data-test-id="onboarding-local-only"]')!.click()
+  ;(await localOnlyButton()).click()
   await vi.waitFor(() => {
     expect(confirmRequests()).toHaveLength(1)
   })
-  const question = confirmRequests()[0].message
+  // The confirm as it reads: its heading, then its lines.
+  const { title, message } = confirmRequests()[0]
+  const question = [title, ...(typeof message === 'string' ? [message] : message)].join(' ')
   resolveConfirm(confirmRequests()[0].id, true)
   await vi.waitFor(() => {
     expect(reloads).toBe(1)
@@ -322,10 +376,28 @@ it("opens the app on the person's own profile, not an example, when both are her
   expect(JSON.parse(localStorage.getItem('selectedProfileIds') ?? '[]')).toEqual([4])
 })
 
+it("carries on with an empty profile of the person's own without opening setup over it", async () => {
+  // 3 Nov test run: the confirm said "You carry on with it", and setup opened over Household after
+  // the reload, because Household held no account, transaction or bill yet.
+  const db = await getDB()
+  await db.add('profiles', { id: 4, name: 'Household', created_at: '2026-02-01T00:00:00.000Z' })
+  // Made before a profile counted as a decision: no decision is kept for it.
+  forgetOnboardingStatus('local')
+
+  const { question } = await switchToLocalOnly()
+  expect(question).toContain('your profile "Household". You carry on with it')
+  expect(localStorage.getItem(LOCAL_SETUP_PENDING_KEY)).toBeNull()
+
+  // The reload: local-first, the browser's own workspace.
+  setOnboardingOwner('local')
+  expect(await whereToOfferOnboarding()).toBeNull()
+  expect(localStorage.getItem('currentProfileId')).toBe('4')
+})
+
 it('leaves the selection for the app to pick over the examples alone, as before', async () => {
   const { question } = await switchToLocalOnly()
 
-  expect(question).toContain('This browser has the example profiles from the demo.')
+  expect(question).toContain("This browser has the demo's example profiles.")
   expect(localStorage.getItem('finance_storage_mode')).toBe('serverless')
   expect(localStorage.getItem('currentProfileId')).toBeNull()
   expect(localStorage.getItem('selectedProfileIds')).toBeNull()

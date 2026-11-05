@@ -139,6 +139,55 @@ describe('Spotlight measures its tip', () => {
   })
 })
 
+describe('Spotlight narrows its tip beside a wide target', () => {
+  it('sets the narrower width beside a target with no room for the tip as it is', async () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1280 })
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 800 })
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(227)
+    vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(320)
+    // The Progress tour's circle list at 1280x800: 252px to its left.
+    anchor('circles', { top: 24, left: 272, width: 976, height: 752 })
+    start([step('circles', 'top')])
+    await settle(150)
+    expect(tipEl().style.width).toBe('252px')
+    expect(tipEl().style.left).toBe('12px')
+  })
+
+  it('keeps the tip as it is where its content would overflow the narrower width', async () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1280 })
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 800 })
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(227)
+    vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(320)
+    // Buttons that need 300px: wider than the tip at any width under its own.
+    vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockReturnValue(300)
+    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(function (
+      this: HTMLElement
+    ) {
+      return parseFloat(this.style.width) || 320
+    })
+    anchor('circles', { top: 24, left: 272, width: 976, height: 752 })
+    start([step('circles', 'top')])
+    await settle(150)
+    expect(tipEl().style.width).toBe('')
+  })
+
+  it('sets no width where the tip fits as it is, and drops one set before', async () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1280 })
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 800 })
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(150)
+    vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(320)
+    anchor('circles', { top: 24, left: 272, width: 976, height: 752 })
+    anchor('card', { top: 200, left: 600, width: 100, height: 40 })
+    start([step('circles', 'top'), step('card')])
+    await settle(150)
+    expect(tipEl().style.width).toBe('252px')
+    setSpotlightStep(1)
+    await settle(150)
+    expect(tipEl().style.width).toBe('')
+    expect(tipEl().style.left).toBe('490px')
+  })
+})
+
 describe('Spotlight scrolls a target into view once per step', () => {
   it('does not pull the page back when the user scrolls during a step', async () => {
     // Taller than the screen, so it can never sit 80px clear of both edges.

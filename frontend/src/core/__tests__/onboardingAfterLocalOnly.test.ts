@@ -12,15 +12,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { __resetAccountStateForTest } from '../accountState'
 import { EXAMPLE_PROFILE_NAMES } from '../demoMode'
+import { LOCAL_GETTING_STARTED_KEY } from '../gettingStarted'
 import { accountOnboardingOwner } from '../onboardingFlag'
 import {
   completeOnboarding,
   forgetOnboardingStatus,
+  goToOnboardingStep,
   LOCAL_SETUP_PENDING_KEY,
   localSetupPending,
   markLocalSetupPending,
   onboardingMirrorSettled,
   onboardingOpen,
+  prevOnboardingStep,
   setOnboardingOwner,
   skipOnboarding,
   startOnboarding,
@@ -148,6 +151,84 @@ describe('after "Keep my data in this browser only"', () => {
     // Read on the next load: setup opens then.
     profilesRead.fails = false
     expect(await whereToOfferOnboarding()).toBe('space')
+  })
+})
+
+/**
+ * Review M7: local-first setup did not come back after a reload, where the account's did. finn
+ * reloaded on the statement step and met a Dashboard with nothing imported; eva reloaded on Done and
+ * never got Getting started. The marker went once the space was saved, and with an account made the
+ * workspace no longer read as new. It now keeps the furthest step setup reached until setup is
+ * finished or left, and a reload opens setup there.
+ */
+describe("local-first's own setup, through a reload", () => {
+  /** What setup has made by the account step: the space, and an account in it. */
+  async function spaceAndAccount(): Promise<void> {
+    const db = await getDB()
+    await db.add('profiles', { id: 4, name: 'Our flat', created_at: '2026-02-01' })
+    await db.add('accounts', { id: 2, profile_id: 4, name: 'Main', balance: 5 })
+    localStorage.setItem('currentProfileId', '4')
+  }
+
+  it('opens again on the statement step it reached', async () => {
+    expect(await whereToOfferOnboarding()).toBe('space')
+    startOnboarding('space')
+    await spaceAndAccount()
+    goToOnboardingStep('account')
+    goToOnboardingStep('import')
+    // The reload: the workspace has an account now, and setup opens where it was.
+    expect(await whereToOfferOnboarding()).toBe('import')
+  })
+
+  it('opens again on Done, and finishing there gives Getting started', async () => {
+    startOnboarding('space')
+    await spaceAndAccount()
+    goToOnboardingStep('done')
+    expect(await whereToOfferOnboarding()).toBe('done')
+    startOnboarding('done')
+    completeOnboarding()
+    expect(localSetupPending()).toBe(false)
+    expect(localStorage.getItem(LOCAL_GETTING_STARTED_KEY)).not.toBeNull()
+    await onboardingMirrorSettled()
+    expect(await whereToOfferOnboarding()).toBeNull()
+  })
+
+  it('opens at the furthest step reached, as the account does: Back does not move it', async () => {
+    startOnboarding('space')
+    await spaceAndAccount()
+    goToOnboardingStep('import')
+    prevOnboardingStep()
+    expect(await whereToOfferOnboarding()).toBe('import')
+  })
+
+  it('opens nothing again once setup is left', async () => {
+    startOnboarding('space')
+    await spaceAndAccount()
+    goToOnboardingStep('import')
+    skipOnboarding()
+    expect(localSetupPending()).toBe(false)
+    await onboardingMirrorSettled()
+    expect(await whereToOfferOnboarding()).toBeNull()
+  })
+
+  it('keeps no step for setup run again after it was decided', async () => {
+    completeOnboarding()
+    await onboardingMirrorSettled()
+    startOnboarding('space')
+    goToOnboardingStep('import')
+    expect(localSetupPending()).toBe(false)
+  })
+
+  it('keeps the steps of a setup the local-only switch asked for, over a demo decided before', async () => {
+    await examplesWorkspace()
+    completeOnboarding()
+    await onboardingMirrorSettled()
+    markLocalSetupPending()
+    expect(await whereToOfferOnboarding()).toBe('space')
+    startOnboarding('space')
+    await spaceAndAccount()
+    goToOnboardingStep('import')
+    expect(await whereToOfferOnboarding()).toBe('import')
   })
 })
 

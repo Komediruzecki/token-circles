@@ -25,10 +25,9 @@ import styles from './SignInSteps.module.css'
  * /api/auth/verify-email/resend), behind the captcha. A limit reached and a request the captcha
  * stopped are said in the notice (captchaGate.ts).
  *
- * With no mail at all, creating the account again is the other way: it makes the account when
- * the first sign-up did not, and mails a fresh link to one still waiting for it. That account
- * keeps the password it was created with, hence "the same password", and a sign-up with that
- * password leaves a marker this browser's link signs in with (worker/src/signup-marker.ts).
+ * With no mail after a few minutes, it says to look in spam or to send the link again: the button
+ * above. It said to create the account again with the same password, which a few tries took into
+ * the sign-up limit (review M18). On a phone its button and its link are 44px tall (review D6).
  */
 export default function CheckInbox(props: { email: string; onBack: () => void }) {
   // Its own widget: the form that sent the address is gone, and its token with it.
@@ -54,16 +53,19 @@ export default function CheckInbox(props: { email: string; onBack: () => void })
   })
 
   return (
-    <div data-test-id="check-inbox">
+    <div class={styles.inbox} data-test-id="check-inbox">
       <p class={styles.lead} data-test-id="check-inbox-lead">
-        We sent a link to <strong data-test-id="check-inbox-address">{props.email}</strong>.{' '}
+        We sent a link to{' '}
+        <span class={styles.address}>
+          <strong data-test-id="check-inbox-address">{props.email}</strong>.
+        </span>{' '}
         {whereTheLinkSignsIn()}
       </p>
       <FormNotice form={resend} testId="check-inbox-error" />
       <Show when={sentAgain()}>
         <p class={styles.lead} role="status" data-test-id="check-inbox-sent">
-          If {props.email} still needs confirming, a fresh link is on its way. Only the newest link
-          works.
+          If <span class={styles.address}>{props.email}</span> still needs confirming, a fresh link
+          is on its way. Only the newest link works.
         </p>
       </Show>
       <form {...resend.attrs}>
@@ -79,8 +81,7 @@ export default function CheckInbox(props: { email: string; onBack: () => void })
           Send the link again
         </SubmitButton>
         <p class={styles.hint} data-test-id="check-inbox-no-mail">
-          No mail after a few minutes? Check your spam folder, or create the account again with the
-          same password.
+          No mail after a few minutes? Check spam, or send the link again.
         </p>
         <p class={styles.links}>
           <button

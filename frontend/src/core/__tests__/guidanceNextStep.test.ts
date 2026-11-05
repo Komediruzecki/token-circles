@@ -8,7 +8,12 @@ import { describe, expect, it } from 'vitest'
 import { regionName } from '../../../../shared/guidance/cards'
 import { placeCircle } from '../../../../shared/guidance/circles'
 import { EXPENSIVE_DEBT_NOTE, guidanceFacts } from '../../../../shared/guidance/facts'
-import { nextStepOf, stepCircleName, thenLine } from '../../../../shared/guidance/nextStep'
+import {
+  nextStepOf,
+  nextStepOnceHidden,
+  stepCircleName,
+  thenLine,
+} from '../../../../shared/guidance/nextStep'
 import { ASKED_ONCE } from '../../../../shared/guidance/questions'
 import { REGIONS } from '../../../../shared/guidance/region'
 import { orientationSteps } from '../../../../shared/orientation'
@@ -61,16 +66,45 @@ describe('before a year is on file', () => {
       id: 'import-year',
       circle: 1,
       title: 'Import the rest of your year',
-      why: '7 of the last 13 months are tracked. A month counts once it holds 3 entries.',
+      why: '7 of 12 months tracked. A month counts once it holds 3 entries.',
       // In Clear picture's view, the key figure says the months and the check how one counts.
       whyHere: '5 months to go.',
-      action: { kind: 'open', hash: '#import', label: 'Open Import' },
+      // Getting started's link: the Bank Imports tab (review M4).
+      action: { kind: 'open', hash: '#import/bank', label: 'Open Import' },
       meter: { kind: 'cells', on: 7, left: '7 of 12 months on file', right: 'A year' },
       then: 'Then: sort the 30 entries without a category, and build a one-month cushion.',
       fine: null,
       article: 'bank-year',
     })
     expect(stepCircleName(next)).toBe('Clear picture')
+  })
+
+  // Review M14: Hide on Getting started put Your next step in its place, leading with the step the
+  // hidden card had just led with.
+  it("takes Getting started's next step once the card is hidden, while it has one", () => {
+    const seven = facts({ monthsInYear: 7, firm: false })
+    const input = { placement: placeCircle(seven), facts: seven, words }
+    const hidden = nextStepOnceHidden({ ...input, orientation: orientationSteps(ORIENTATION) })
+    expect(hidden).toMatchObject({
+      id: 'sort-uncategorised',
+      title: 'Sort the 30 entries without a category',
+      then: 'Then: build a one-month cushion.',
+    })
+    // One step on the list: it is the step, since there is no other to take.
+    const [year] = orientationSteps(ORIENTATION)
+    expect(nextStepOnceHidden({ ...input, orientation: [year] }).id).toBe('import-year')
+    // A year on file: Getting started is not shown, so nothing is skipped.
+    const year12 = facts()
+    expect(
+      nextStepOnceHidden({
+        placement: placeCircle(year12),
+        facts: year12,
+        words,
+        orientation: null,
+      })
+    ).toEqual(
+      nextStepOf({ placement: placeCircle(year12), facts: year12, words, orientation: null })
+    )
   })
 
   it('reads the circles when Getting started has no steps to give', () => {
@@ -92,7 +126,7 @@ describe('before a year is on file', () => {
     expect(step(none)).toMatchObject({
       id: 'year-on-file',
       title: 'Import a year of statements',
-      why: 'None of the last 13 months is tracked yet. A month counts once it holds 3 entries.',
+      why: '0 of 12 months tracked. A month counts once it holds 3 entries.',
     })
   })
 })
@@ -217,17 +251,17 @@ describe('once a year is on file', () => {
       id: 'own-income',
       circle: 2,
       title: 'Close the €100 a month gap',
-      why: 'Over your last 12 tracked months, €100 a month more went out than came in.',
+      why: 'Over your last 12 finished months, €100 a month more went out than came in.',
       // The title says the gap.
-      whyHere: 'Over your last 12 tracked months, more went out than came in.',
+      whyHere: 'Over your last 12 finished months, more went out than came in.',
       action: { kind: 'open', hash: '#budgets', label: 'Open Budgets' },
       meter: { kind: 'bar', left: '€2,400 in', right: '€2,500 out' },
     })
     expect(step(facts({ ownIncome: 2400 })).why).toBe(
-      'Over your last 12 tracked months, €100 a month more went out than your own income brought in.'
+      'Over your last 12 finished months, €100 a month more went out than your own income brought in.'
     )
     expect(step(facts({ ownIncome: 2400 })).whyHere).toBe(
-      'Over your last 12 tracked months, more went out than your own income brought in.'
+      'Over your last 12 finished months, more went out than your own income brought in.'
     )
   })
 
@@ -257,7 +291,8 @@ describe('once a year is on file', () => {
       id: 'first-cushion',
       title: 'Add the accounts your money is in',
       action: { kind: 'open', hash: '#accounts', label: 'Open Accounts' },
-      then: 'Then: raise your savings rate by one point, and check the withdrawal rate you plan with.',
+      // The withdrawal rate is Work optional's to raise (review M15), not a then three circles off.
+      then: 'Then: raise your savings rate by one point.',
     })
   })
 
@@ -393,7 +428,7 @@ describe('once a year is on file', () => {
         why: '2 yearly bills on Bills come to €770 a year: about €65 a month.',
         action: { kind: 'question', question: 'yearly-bills' },
         fine: ASKED_ONCE,
-        then: 'Then: grow your cushion to three months, and grow your cushion to six months.',
+        then: 'Then: grow your cushion to three months, then to six months.',
       })
       expect(step(facts({ yearlyBills: { count: 1, perYear: 600, perMonth: 50 } })).why).toBe(
         'One yearly bill on Bills comes to €600 a year: about €50 a month.'
@@ -418,7 +453,8 @@ describe('once a year is on file', () => {
       why: 'One more point is €30 a month. €50,000 to two years of spending.',
       whyHere: 'One more point is €30 a month. €50,000 to two years of spending.',
       meter: { kind: 'bar', left: '€10,000', right: '€60,000' },
-      then: 'Then: check the withdrawal rate you plan with.',
+      // Review M15: "Then: check the withdrawal rate you plan with." a circle before Work optional.
+      then: null,
     })
   })
 
@@ -502,5 +538,32 @@ describe('the Then line', () => {
     expect(thenLine([])).toBeNull()
     expect(thenLine(['grow your cushion'])).toBe('Then: grow your cushion.')
     expect(thenLine(['a', 'b'])).toBe('Then: a, and b.')
+  })
+
+  it('says a head two steps share once', () => {
+    expect(thenLine(['grow your cushion to three months', 'grow your cushion to six months'])).toBe(
+      'Then: grow your cushion to three months, then to six months.'
+    )
+    expect(thenLine(['set a budget for Groceries', 'set a budget for Eating out'])).toBe(
+      'Then: set a budget for Groceries, then for Eating out.'
+    )
+    expect(thenLine(['look at the 19% Visa costs', 'look at the 12% Car loan costs'])).toBe(
+      'Then: look at the 19% Visa costs, then at the 12% Car loan costs.'
+    )
+  })
+
+  it('keeps both steps whole when their heads differ', () => {
+    expect(
+      thenLine(['grow your cushion to six months', 'raise your savings rate by one point'])
+    ).toBe('Then: grow your cushion to six months, and raise your savings rate by one point.')
+    // The same first words are not a head: a head ends where a linking word starts the rest.
+    expect(
+      thenLine(['say whether you carry a card balance', 'say whether you set yearly bills aside'])
+    ).toBe(
+      'Then: say whether you carry a card balance, and say whether you set yearly bills aside.'
+    )
+    expect(thenLine(['import a year of statements', 'import the rest of your year'])).toBe(
+      'Then: import a year of statements, and import the rest of your year.'
+    )
   })
 })

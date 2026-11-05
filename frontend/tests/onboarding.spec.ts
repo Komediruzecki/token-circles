@@ -155,6 +155,87 @@ test.describe('onboarding wizard', () => {
     expect(flag).toBe('completed')
   })
 
+  test("takes the balance typed as today's, and works the statement back from it (review M2)", async ({
+    page,
+  }) => {
+    await gotoServerlessZeroState(page, 'dashboard', 'onboarding-wizard')
+    await toAccount(page)
+    await expect(page.getByTestId('onboarding-step-account')).toContainText(
+      'What your bank shows now. Entries you import here are worked back from it.'
+    )
+    await page.getByTestId('onboarding-account-name').fill('Main Checking')
+    await page.getByTestId('onboarding-account-balance').fill('1500')
+    await page.getByTestId('onboarding-account-create').click()
+    await expect(page.getByTestId('onboarding-step-import')).toBeVisible()
+    await page
+      .getByTestId('onboarding-import-input')
+      .setInputFiles('tests/fixtures/revolut-sample.csv')
+    await fileIn(page, 'ready')
+    await page.getByTestId('onboarding-import-selected').click()
+    await expect(page.getByTestId('onboarding-step-subscriptions')).toBeVisible({ timeout: 15000 })
+
+    // The statement nets +1,888.85, all of it before today: the account still reads 1,500.
+    const stored = () =>
+      page.evaluate(
+        () =>
+          new Promise<unknown>((resolve) => {
+            const req = indexedDB.open('finance-manager')
+            req.onsuccess = () => {
+              const db = req.result
+              const all = db.transaction('accounts', 'readonly').objectStore('accounts').getAll()
+              all.onsuccess = () => {
+                db.close()
+                resolve(
+                  (all.result as { name: string; balance: number; starting_balance: number }[]).map(
+                    (a) => [a.name, a.balance, Math.round(a.starting_balance * 100) / 100]
+                  )
+                )
+              }
+            }
+          })
+      )
+    await expect.poll(stored, { timeout: 15000 }).toEqual([['Main Checking', 1500, -388.85]])
+  })
+
+  // Review M7: a reload part way through local-first setup landed on the Dashboard, with nothing
+  // imported and no Getting started. It opens setup again at the step it reached, as signed in.
+  test('comes back after a reload at the step it reached, and finishes into Getting started (review M7)', async ({
+    page,
+  }) => {
+    await gotoServerlessZeroState(page, 'dashboard', 'onboarding-wizard')
+    await toAccount(page)
+    await page.getByTestId('onboarding-account-name').fill('Main Checking')
+    await page.getByTestId('onboarding-account-create').click()
+    await expect(page.getByTestId('onboarding-step-import')).toBeVisible()
+
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    await expect(page.getByTestId('onboarding-step-import')).toBeVisible({ timeout: 30000 })
+    await page
+      .getByTestId('onboarding-import-input')
+      .setInputFiles('tests/fixtures/revolut-sample.csv')
+    await fileIn(page, 'ready')
+    await expect(page.getByTestId('onboarding-import-target')).toHaveValue('Main Checking')
+    await page.getByTestId('onboarding-import-selected').click()
+    await expect(page.getByTestId('onboarding-step-subscriptions')).toBeVisible({ timeout: 15000 })
+    await page.getByTestId('onboarding-subs-skip').click()
+    await expect(page.getByTestId('onboarding-step-done')).toBeVisible()
+
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    await expect(page.getByTestId('onboarding-step-done')).toBeVisible({ timeout: 30000 })
+    // What the profile holds, though the reload kept no count of the visit's (review M20).
+    await expect(page.getByTestId('onboarding-done-summary')).toHaveText(
+      'Personal Profile has 1 account and 7 transactions.'
+    )
+    await page.getByTestId('onboarding-finish').click()
+    await expect(page.getByTestId('onboarding-wizard')).toHaveCount(0)
+    await expect(page.getByTestId('getting-started')).toBeVisible({ timeout: 30000 })
+
+    // Finished: a reload opens the Dashboard, and setup stays closed.
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    await expect(page.getByTestId('getting-started')).toBeVisible({ timeout: 30000 })
+    await expect(page.getByTestId('onboarding-wizard')).toHaveCount(0)
+  })
+
   test('@smoke reads a statement, imports it in one tap, and tracks the subscriptions it shows', async ({
     page,
   }) => {
@@ -180,7 +261,10 @@ test.describe('onboarding wizard', () => {
     )
     const target = page.getByTestId('onboarding-import-target')
     await expect(target).toHaveValue('Main Checking')
-    await expect(page.getByTestId('onboarding-import-categories')).toHaveText(/^New categories: /)
+    // Its categories (Subscriptions, Groceries, Salary) are among the defaults a new profile
+    // starts with, so none is new and the step names none. release/s04-import.spec.ts reads the
+    // line with categories of its own.
+    await expect(page.getByTestId('onboarding-import-categories')).toHaveCount(0)
     expect(await footerButtons(page)).toEqual([
       ['onboarding-import-skip', 'Skip'],
       ['onboarding-import-selected', 'Import 7'],
@@ -195,13 +279,13 @@ test.describe('onboarding wizard', () => {
     await expect(page.getByTestId('sub-scan-add-btn')).toHaveCount(0)
     await expect(page.getByRole('button', { name: 'Rescan' })).toHaveCount(0)
     const track = page.getByTestId('onboarding-subs-add-continue')
-    await expect(track).toHaveText('Track 2 subscriptions')
+    await expect(track).toHaveText('Track 2 on Bills')
     await track.click()
 
     // Done says what went in, and no toast covered the wizard on the way.
     await expect(page.getByTestId('onboarding-step-done')).toBeVisible()
     await expect(page.getByTestId('onboarding-done-summary')).toHaveText(
-      'Personal Profile has 1 account, 7 new transactions and 2 tracked subscriptions.'
+      'Personal Profile has 1 account, 7 transactions and 2 regular payments tracked on Bills.'
     )
     await expect(page.getByText('2 subscriptions added')).toHaveCount(0)
     await page.getByTestId('onboarding-finish').click()
@@ -238,6 +322,8 @@ test.describe('onboarding wizard', () => {
     await expect(page.getByTestId('onboarding-wizard')).toHaveCount(0)
     await expect(page.getByTestId('import-header')).toBeVisible({ timeout: 30000 })
     await expect(page.getByTestId('import-map-date')).toBeVisible({ timeout: 20000 })
+    // Map columns names the file it is reading.
+    await expect(page.getByTestId('import-map-source')).toHaveText('From export.csv')
     for (const column of ['When', 'What', 'How much']) {
       await expect(
         page.getByTestId('import-map-date').locator('option', { hasText: column })
@@ -1063,7 +1149,9 @@ test.describe('onboarding wizard at phone width', () => {
           await page.getByTestId('onboarding-subs-skip').click()
           await expect(page.getByTestId('onboarding-step-done')).toBeVisible()
           await check('done')
-          // Each next step on Done takes a finger: 44 px tall at least.
+          // Each next step on Done takes a finger: 44 px tall at least. The steps follow the
+          // badge evaluation, which can finish after Done shows: measure once the first is in.
+          await expect(page.getByTestId('next-step-link').first()).toBeVisible()
           const heights = await page
             .getByTestId('next-step-link')
             .evaluateAll((links) => links.map((a) => a.getBoundingClientRect().height))

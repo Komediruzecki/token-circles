@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mergeAnswers, readAnswers } from '../../../../shared/guidance/answers'
 import { placeCircle } from '../../../../shared/guidance/circles'
 import { ledgerRows, ledgerStatus } from '../../../../shared/guidance/ledger'
-import { nextStepOf } from '../../../../shared/guidance/nextStep'
+import { nextStepOf, nextStepOnceHidden } from '../../../../shared/guidance/nextStep'
 import { facts, words } from '../../core/__tests__/guidanceFixtures'
 import type { JSX } from 'solid-js'
 import type { AnswerChanges, Answers } from '../../../../shared/guidance/answers'
@@ -78,6 +78,7 @@ function viewOf(f: GuidanceFacts, gate = false, answers: Answers = {}): Guidance
     rows: ledgerRows(placement, f, words),
     status: ledgerStatus(placement, f, words),
     next: nextStepOf({ placement, facts: f, orientation: null, words }),
+    nextOnceHidden: nextStepOnceHidden({ placement, facts: f, orientation: null, words }),
     words,
   }
 }
@@ -198,7 +199,7 @@ describe('the ledger', () => {
     )
     const c = mount(() => <Progress />)
     expect(q(c, '[data-test-id="circles-waiting"]').textContent).toBe(
-      'Your figures appear once 3 months are tracked. One is so far.'
+      'Your figures appear once 3 finished months are tracked. One is so far.'
     )
   })
 

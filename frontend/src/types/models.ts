@@ -456,6 +456,8 @@ export interface DashboardMonthMetrics {
 }
 
 export interface DashboardChartData {
+  /** The charts' months (YYYY-MM), each present once it holds an entry. */
+  months?: { month: string; income: number; expense: number }[]
   /** Net-worth timeline labels (full history). */
   labels: string[]
   /** Labels for the income/expenses series (true monthly stats, last 12). */

@@ -25,7 +25,7 @@ import {
   parseDay,
   pickAmountCluster,
 } from './chargePatterns'
-import { findRecurringPayments } from './recurringPayments'
+import { findRecurringPayments, payeeKey, payeeName, payeeText } from './recurringPayments'
 import { BRANDS } from './subscriptionBrands'
 import { CATALOG_ITEMS } from './subscriptionCatalog'
 import type { BillType } from '../../../shared/billSchema'
@@ -90,6 +90,12 @@ export interface DetectedSubscription {
   categoryId?: number
   /** Up to 3 raw transaction descriptions behind the proposal. */
   sampleDescriptions: string[]
+  /**
+   * The payee as the latest charge names it, for a catalogue or brand name it does not contain:
+   * "Example Gym" behind "Gym membership", none behind "Netflix" for "NETFLIX.COM AMSTERDAM"
+   * (review M13). The row shows it beside the name; the bill keeps the name.
+   */
+  statementName?: string
   /** The catalogue entry backing this proposal, when one exists. */
   catalogItem?: CatalogItem
   /** The catalogue plan whose price matches the observed amount, if any. */
@@ -391,7 +397,7 @@ export function detectSubscriptions(
   interface Group {
     match: MerchantMatch
     ambiguous: boolean
-    txns: GroupTxn[]
+    txns: (GroupTxn & { payee: string })[]
   }
   const groups = new Map<string, Group>()
   // The expenses no name matched: the finder's to read.
@@ -428,6 +434,7 @@ export function detectSubscriptions(
       date: txn.date.slice(0, 10),
       currency: txn.currency ?? null,
       raw: (txn.description || text).trim(),
+      payee: payeeText(txn),
     })
   }
 
@@ -461,6 +468,8 @@ export function detectSubscriptions(
     }
 
     const frequency: DetectedFrequency = cadence ?? 'monthly'
+    const said = payeeName(latest.payee)
+    const saysMore = payeeKey(said) !== '' && !payeeKey(said).includes(payeeKey(group.match.name))
 
     results.push({
       key,
@@ -479,6 +488,7 @@ export function detectSubscriptions(
       matchedVia: group.match.matchedVia,
       billType: 'subscription',
       sampleDescriptions: [...new Set(txns.map((t) => t.raw))].slice(-3),
+      ...(saysMore ? { statementName: said } : {}),
       catalogItem: group.match.catalogItem,
       matchedPlan,
     })

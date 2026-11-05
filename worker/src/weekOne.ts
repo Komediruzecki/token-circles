@@ -35,14 +35,10 @@ import * as db from './db';
 import { sendMail } from './email';
 import { renderWeekOneDay2, renderWeekOneDay7 } from './emailTemplates';
 import type { RenderedEmail, WeekOneCounts, WeekOneStep } from './emailTemplates';
-import { appOrigin, ensureUnsubToken, unsubscribeUrl } from './reminders';
+import { aboutOrigin, appOrigin, ensureUnsubToken, unsubscribeUrl } from './reminders';
 import { WELCOME_KEY } from './welcome';
 import { nextSteps } from '../../shared/orientation';
-import {
-  isTrackedMonth,
-  trackedMonthsInYearWindow,
-  YEAR_WINDOW_MONTHS,
-} from '../../shared/trackedMonths';
+import { isTrackedMonth, printsOf, trackedMonthsInYearWindow } from '../../shared/trackedMonths';
 
 /**
  * The daily cron the mails go out on, 08:30 UTC (wrangler.jsonc triggers.crons). Their own, so a
@@ -77,6 +73,14 @@ export const WEEK_ONE_BATCH = 50;
 
 /** An instant as SQLite's datetime('now') writes it: 'YYYY-MM-DD HH:MM:SS', UTC. */
 const sqliteInstant = (date: Date) => date.toISOString().slice(0, 19).replace('T', ' ');
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * The day-7 mail says "Your first import is in." while the first import is no older than this:
+ * since the daily run two days before. Five days on, it read as late (review M11).
+ */
+const FIRST_IMPORT_NEWS_DAYS = 2;
 
 /** Whether account `userId` (an SQL expression) has a transaction that came in by an import. */
 const importedSql = (userId: string) =>
@@ -164,8 +168,9 @@ async function release(env: Env, mail: WeekOneMail, userId: number): Promise<voi
 export async function weekOneDay7Content(
   env: Env,
   userId: number,
-  today: string
+  now: Date
 ): Promise<{ counts: WeekOneCounts; step: WeekOneStep | null } | null> {
+  const today = now.toISOString().slice(0, 10);
   const profile = await db.first<{ id: number }>(
     env.DB,
     `SELECT t.profile_id AS id FROM transactions t JOIN profiles p ON p.id = t.profile_id
@@ -175,12 +180,23 @@ export async function weekOneDay7Content(
   );
   if (!profile) return null;
   const pid = profile.id;
-  const tx = await db.first<{ imported: number; entries: number; uncategorised: number }>(
+  // Without a category as shared/uncategorised.ts reads it, as circle 1, Getting started and the
+  // Transactions filter do: none, or one the profile no longer has (before #384, deleting a
+  // category left its entries pointing at it), transfers aside.
+  const tx = await db.first<{
+    imported: number;
+    entries: number;
+    uncategorised: number;
+    firstImported: string | null;
+  }>(
     env.DB,
-    `SELECT COALESCE(SUM(import_id IS NOT NULL), 0) AS imported,
-            COALESCE(SUM(type != 'transfer'), 0) AS entries,
-            COALESCE(SUM(type != 'transfer' AND category_id IS NULL), 0) AS uncategorised
-       FROM transactions WHERE profile_id = ?`,
+    `SELECT COALESCE(SUM(t.import_id IS NOT NULL), 0) AS imported,
+            MIN(CASE WHEN t.import_id IS NOT NULL THEN t.created_at END) AS firstImported,
+            COALESCE(SUM(t.type != 'transfer'), 0) AS entries,
+            COALESCE(SUM(t.type != 'transfer' AND (t.category_id IS NULL OR NOT EXISTS (
+              SELECT 1 FROM categories c WHERE c.id = t.category_id AND c.profile_id = t.profile_id
+            ))), 0) AS uncategorised
+       FROM transactions t WHERE t.profile_id = ?`,
     pid
   );
   // A tracked month as shared/trackedMonths.ts defines one: enough transactions dated in it.
@@ -192,9 +208,10 @@ export async function weekOneDay7Content(
   const tracked = months
     .filter((m) => /^\d{4}-\d{2}$/.test(m.month) && isTrackedMonth(m.n))
     .map((m) => m.month);
-  const bills = await db.all<{ type: string; n: number }>(
+  // Bills and subscriptions are one count, as setup's done step says it (review M12).
+  const bills = await db.first<{ n: number }>(
     env.DB,
-    'SELECT type, COUNT(*) AS n FROM bills WHERE profile_id = ? AND is_active = 1 GROUP BY type',
+    'SELECT COUNT(*) AS n FROM bills WHERE profile_id = ? AND is_active = 1',
     pid
   );
   const loans = await db.first<{ n: number }>(
@@ -203,6 +220,12 @@ export async function weekOneDay7Content(
     pid
   );
   const monthsTracked = trackedMonthsInYearWindow(tracked, today);
+  // The prints Progress shows: none for a month that has not begun (trackedMonthsOf).
+  const prints = printsOf(tracked.filter((month) => month <= today.slice(0, 7)));
+  // News while it is no older than the two runs before this one (review M11).
+  const firstImportNew =
+    tx?.firstImported != null &&
+    tx.firstImported > sqliteInstant(new Date(now.getTime() - FIRST_IMPORT_NEWS_DAYS * DAY_MS));
   const entries = tx?.entries ?? 0;
   const uncategorised = tx?.uncategorised ?? 0;
   // Getting started's rules, with what the Worker can count. The subscription scan, the month in
@@ -224,10 +247,10 @@ export async function weekOneDay7Content(
   return {
     counts: {
       entriesImported: tx?.imported ?? 0,
+      firstImportNew,
       monthsTracked,
-      windowMonths: YEAR_WINDOW_MONTHS,
-      subscriptions: bills.find((b) => b.type === 'subscription')?.n ?? 0,
-      bills: bills.find((b) => b.type === 'bill')?.n ?? 0,
+      prints,
+      bills: bills?.n ?? 0,
       uncategorised,
     },
     step: first
@@ -296,18 +319,18 @@ async function sendDue(
 ): Promise<{ sent: number; stopped: boolean }> {
   const due = await candidates(env, mail, sqliteInstant(now), limit);
   const appUrl = appOrigin(env);
-  const today = now.toISOString().slice(0, 10);
+  const aboutUrl = aboutOrigin(env);
   let sent = 0;
   for (const account of due) {
     try {
       let rendered: RenderedEmail;
       const stopUrl = weekOneStopUrl(await ensureUnsubToken(env, account), env);
       if (mail === 'day2') {
-        rendered = renderWeekOneDay2({ appUrl, unsubUrl: stopUrl });
+        rendered = renderWeekOneDay2({ appUrl, aboutUrl, unsubUrl: stopUrl });
       } else {
-        const content = await weekOneDay7Content(env, account.id, today);
+        const content = await weekOneDay7Content(env, account.id, now);
         if (!content) continue;
-        rendered = renderWeekOneDay7({ ...content, appUrl, unsubUrl: stopUrl });
+        rendered = renderWeekOneDay7({ ...content, appUrl, aboutUrl, unsubUrl: stopUrl });
       }
       if (!(await claim(env, mail, account.id))) continue;
       const outcome = await sendClaimedOnce(env, mail, account.id, account.email, rendered);

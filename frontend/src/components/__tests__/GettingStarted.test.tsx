@@ -182,8 +182,8 @@ describe('with the card on the account', () => {
       {
         id: 'import-year',
         title: 'Import the rest of your year',
-        href: '#import',
-        reason: '4 of the last 13 months are tracked. A month counts once it holds 3 entries.',
+        href: '#import/bank',
+        reason: '4 of 12 months tracked. A month counts once it holds 3 entries.',
       },
       {
         id: 'budget-top-category',

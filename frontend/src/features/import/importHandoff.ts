@@ -7,11 +7,17 @@
  * Upload for any other table, where the person matches its columns.
  */
 import { createRoot, createSignal } from 'solid-js'
+import type { TypedBalance } from '../../core/setupTypedBalances'
 import type { ImportTab } from './importFlow'
 
 export interface HandedImportFile {
   file: File
   tab: Extract<ImportTab, 'bank-imports' | 'file-upload'>
+  /**
+   * The balances typed in setup's "Balance today" (review M2). Setup forgets its own copy as it
+   * finishes, so they come along with the file, for its import to work back from.
+   */
+  typed: readonly TypedBalance[]
 }
 
 const handoff = createRoot(() => createSignal<HandedImportFile | null>(null))
@@ -20,8 +26,12 @@ const handoff = createRoot(() => createSignal<HandedImportFile | null>(null))
 export const handedImportFile = handoff[0]
 
 /** Give the Import page `file`, to open on `tab` the next time it shows. */
-export function handFileToImport(file: File, tab: HandedImportFile['tab']): void {
-  handoff[1]({ file, tab })
+export function handFileToImport(
+  file: File,
+  tab: HandedImportFile['tab'],
+  typed: readonly TypedBalance[] = []
+): void {
+  handoff[1]({ file, tab, typed })
 }
 
 /** Take the waiting file: once, by the page that opens it. */

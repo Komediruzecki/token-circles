@@ -17,6 +17,7 @@ const PAGES = new Set([
   'tags',
   'loans',
   'progress',
+  'import',
   'notFound',
 ])
 const isPage = (name: string) => PAGES.has(name)
@@ -58,6 +59,13 @@ describe('resolvePageFromHash', () => {
     expect(resolve('#progress/4?period=2026-10')).toBe('progress')
     // A circle that is not 1 to 7 is Progress's to show as the page.
     expect(resolve('#progress/9')).toBe('progress')
+  })
+
+  it('selects Import for its Bank Imports tab (review M4)', () => {
+    // The day-2 mail and Getting started open `#import/bank`; the page reads the tab itself.
+    expect(resolve('#import/bank')).toBe('import')
+    expect(resolve('#import/bank?period=2026-10')).toBe('import')
+    expect(resolve('#import')).toBe('import')
   })
 
   it('sends a path under a page that has no views below it to the 404 page', () => {

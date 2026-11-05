@@ -9,10 +9,13 @@
  * files, so renaming one there fails until it is renamed here too.
  *
  * Pure, and used by both runtimes: the frontend links to them, and the Worker's day-2 mail does.
+ * Each runtime names the about site it links to: the frontend's VITE_ABOUT_ORIGIN
+ * (frontend/src/core/aboutSite.ts) and the Worker's ABOUT_ORIGIN (worker/src/reminders.ts
+ * `aboutOrigin`), so dev links to dev's about site. Production's when neither is set.
  */
 
-/** The marketing site, where the articles and the legal pages live. */
-export const ABOUT_SITE = 'https://about.tokencircles.com';
+/** The marketing site, where the articles and the legal pages live: production's. */
+export const DEFAULT_ABOUT_ORIGIN = 'https://about.tokencircles.com';
 
 export type ArticleId = 'bank-year' | 'one-month' | 'first-cushion';
 
@@ -38,7 +41,7 @@ export const ARTICLES: Readonly<Record<ArticleId, Article>> = {
   },
 };
 
-/** The article's full address. */
-export function articleUrl(id: ArticleId): string {
-  return `${ABOUT_SITE}${ARTICLES[id].path}`;
+/** The article's full address, on the about site at `origin`. */
+export function articleUrl(id: ArticleId, origin: string = DEFAULT_ABOUT_ORIGIN): string {
+  return `${origin}${ARTICLES[id].path}`;
 }

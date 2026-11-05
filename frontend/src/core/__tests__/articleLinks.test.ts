@@ -4,12 +4,13 @@
  * surface gives resolves in that list, and only the three surfaces' questions carry one.
  */
 import { describe, expect, it } from 'vitest'
-import { ABOUT_SITE, ARTICLES, articleUrl } from '../../../../shared/articles'
+import { ARTICLES, articleUrl, DEFAULT_ABOUT_ORIGIN } from '../../../../shared/articles'
 import { placeCircle } from '../../../../shared/guidance/circles'
 import { checkRows, circleNumbers } from '../../../../shared/guidance/circleView'
 import { nextStepOf } from '../../../../shared/guidance/nextStep'
 import { orientationSteps } from '../../../../shared/orientation'
 import { MARKETING_SITE, PRIVACY_URL } from '../../components/LegalLinks'
+import { aboutOrigin } from '../aboutSite'
 import { facts, words } from './guidanceFixtures'
 import type { ArticleId } from '../../../../shared/articles'
 import type { CircleNumber } from '../../../../shared/guidance/circles'
@@ -52,14 +53,18 @@ describe('the list of articles', () => {
     for (const id of IDS) {
       expect(ARTICLES[id].path).toBe(`/articles/${ON_THE_SITE[id]}/`)
       expect(articleUrl(id)).toBe(`https://about.tokencircles.com/articles/${ON_THE_SITE[id]}/`)
+      expect(articleUrl(id, 'https://about.example.test')).toBe(
+        `https://about.example.test/articles/${ON_THE_SITE[id]}/`
+      )
       expect(ARTICLES[id].title.trim()).not.toBe('')
     }
     expect(new Set(IDS.map((id) => ARTICLES[id].path)).size).toBe(IDS.length)
   })
 
   it('shares its site with the legal links', () => {
-    expect(MARKETING_SITE).toBe(ABOUT_SITE)
-    expect(PRIVACY_URL.startsWith(`${ABOUT_SITE}/`)).toBe(true)
+    expect(DEFAULT_ABOUT_ORIGIN).toBe('https://about.tokencircles.com')
+    expect(MARKETING_SITE).toBe(aboutOrigin())
+    expect(PRIVACY_URL.startsWith(`${aboutOrigin()}/`)).toBe(true)
   })
 })
 

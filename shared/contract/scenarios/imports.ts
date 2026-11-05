@@ -57,6 +57,72 @@ async function categoryNames(api: ContractApi, expect: Expect): Promise<string[]
 }
 
 export const imports = [
+  scenario(
+    "a new profile's import files each row under a category of its own type",
+    async (api, expect) => {
+      // A new profile starts with the default categories, Gifts and Investments among its income
+      // ones, and Groceries among its expense ones.
+      const made = await api.post('/api/profiles', { name: 'Household' });
+      expectOk(expect, made, 'POST /api/profiles');
+      const house = api.as(made.body.id as number);
+      const categoriesOf = async () => {
+        const reply = await house.get('/api/categories');
+        expectOk(expect, reply, 'GET /api/categories');
+        return reply.body as Json[];
+      };
+      const before = await categoriesOf();
+      const income = (name: string) => before.find((c) => c.name === name && c.type === 'income');
+      expect(income('Gifts')).toBeDefined();
+      expect(income('Investments')).toBeDefined();
+      const groceries = before.find((c) => c.name === 'Groceries' && c.type === 'expense');
+      expect(groceries).toBeDefined();
+
+      const body = {
+        rows: [
+          ['2026-07-01', 'Birthday present', '-50', 'Gifts'],
+          ['2026-07-02', 'ETF top-up', '-200', 'Investments'],
+          ['2026-07-03', 'From grandma', '30', 'Gifts'],
+          ['2026-07-04', 'Market', '-10', 'Groceries'],
+          // Money back under an expense category is that category's: no income Groceries.
+          ['2026-07-05', 'Market refund', '4', 'Groceries'],
+        ],
+        mapping: { date: 0, description: 1, amount: 2, category: 3 },
+        defaultCurrency: 'EUR',
+      };
+      const preview = await house.post('/api/import/execute', { ...body, dry_run: true });
+      expectOk(expect, preview, 'POST /api/import/execute (preview)');
+      expect([...preview.body.new_categories].sort()).toEqual(['Gifts', 'Investments']);
+
+      const ran = await house.post('/api/import/execute', {
+        ...body,
+        approvedCategories: ['Gifts', 'Investments'],
+      });
+      expectOk(expect, ran, 'POST /api/import/execute');
+      expect(ran.body).toMatchObject({ imported: 5, categories_created: 2 });
+
+      const after = await categoriesOf();
+      const rows = await listTransactions(house, expect);
+      const filed = Object.fromEntries(
+        rows.map((row) => {
+          const category = after.find((c) => c.id === row.category_id);
+          return [row.description, `${row.type} in ${category?.type} ${category?.name}`];
+        })
+      );
+      expect(filed).toEqual({
+        'Birthday present': 'expense in expense Gifts',
+        'ETF top-up': 'expense in expense Investments',
+        'From grandma': 'income in income Gifts',
+        Market: 'expense in expense Groceries',
+        'Market refund': 'income in expense Groceries',
+      });
+      // The expense Gifts takes the kind its name suggests, as any new expense category does.
+      expect(after.find((c) => c.name === 'Gifts' && c.type === 'expense')).toMatchObject({
+        kind: 'gifts',
+      });
+      expect(after.filter((c) => c.name === 'Groceries')).toHaveLength(1);
+    }
+  ),
+
   scenario('an import previews what it would create, and writes nothing', async (api, expect) => {
     await account(api, expect, 'Everyday', 1000);
     await addCategory(api, expect, 'Food');
@@ -143,17 +209,21 @@ export const imports = [
           ['2026-03-02', 'Pizza', '-18', 'Restaurant', 'Everyday', 'expense'],
           ['2026-03-03', 'Card fee', '-2', 'Bank Fees', 'Everyday', 'expense'],
           ['2026-03-04', 'Vet', '-60', 'Pets', 'Everyday', 'expense'],
+          // Where the bank import files what no rule knows: no kind, so needed until the person
+          // says otherwise (review M1).
+          ['2026-03-05', 'Landlord', '-650', 'Other', 'Everyday', 'expense'],
         ],
         categoryTypes: {
           Salary: 'income',
           Restaurant: 'expense',
           'Bank Fees': 'expense',
           Pets: 'expense',
+          Other: 'expense',
         },
         accountTypes: {},
         accountBalances: {},
         accountBalanceDates: {},
-        approvedCategories: ['Salary', 'Restaurant', 'Bank Fees', 'Pets'],
+        approvedCategories: ['Salary', 'Restaurant', 'Bank Fees', 'Pets', 'Other'],
       });
       const reply = await api.get('/api/categories');
       expectOk(expect, reply, 'GET /api/categories');
@@ -165,6 +235,7 @@ export const imports = [
         Restaurant: ['eating_out', null],
         'Bank Fees': ['taxes', null],
         Pets: [null, null],
+        Other: [null, null],
       });
     }
   ),

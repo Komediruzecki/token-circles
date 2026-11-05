@@ -33,6 +33,9 @@ import { E2E_BASE, gotoServerlessZeroState } from './test-helpers'
 import type { Mode } from './form-errors-helpers'
 import type { Page } from '@playwright/test'
 
+/** Setup's name field says where the name shows (review M20); a refusal is read before it. */
+const NAME_HINT = 'It shows as a profile in the menu.'
+
 /**
  * Opens the wizard over a profile with nothing in it, or over an empty local-first browser.
  *
@@ -89,7 +92,7 @@ for (const mode of MODES) {
       await next.click()
 
       await expect(name).toHaveAttribute('aria-invalid', 'true')
-      await expect(name).toHaveAccessibleDescription('Give the profile a name.')
+      await expect(name).toHaveAccessibleDescription(`Give the profile a name. ${NAME_HINT}`)
       await expect(name).toBeFocused()
       await expect(spaceStep).toBeVisible()
       expect(profileWrites).toEqual([])
@@ -106,7 +109,7 @@ for (const mode of MODES) {
       await next.click()
 
       await expect(name).toHaveAccessibleDescription(
-        `You already have a profile called "${taken}". Choose another name.`
+        `You already have a profile called "${taken}". Choose another name. ${NAME_HINT}`
       )
       await expect(name).toBeFocused()
       await expect(spaceStep).toBeVisible()

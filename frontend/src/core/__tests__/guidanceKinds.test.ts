@@ -3,7 +3,12 @@
  * a name gives, the kind a category goes by, and whether it is needed every month.
  */
 import { describe, expect, it } from 'vitest'
-import { RULE_GROUPS } from '../../../../shared/bankImport/categoryRules'
+import {
+  categorize,
+  DEFAULT_CATEGORY_RULES,
+  DEFAULT_CATEGORY_RULES_WORLDWIDE,
+  RULE_GROUPS,
+} from '../../../../shared/bankImport/categoryRules'
 import { resetKeepsIcon, resetName } from '../../../../shared/defaultCategories'
 import {
   categoryLookup,
@@ -11,6 +16,7 @@ import {
   ESSENTIAL_KINDS,
   essentialOf,
   holdsTransfers,
+  isCatchAll,
   isEssential,
   KIND_LABELS,
   kindForName,
@@ -106,7 +112,6 @@ describe('kindForName', () => {
     ['Kids', 'childcare'],
     ['Gym', 'leisure'],
     ['Christmas presents', 'gifts'],
-    ['Misc', 'other'],
   ])('reads %s as %s', (name, kind) => {
     expect(kindForName(name)).toBe(kind)
   })
@@ -123,6 +128,38 @@ describe('kindForName', () => {
     expect(kindForName(undefined)).toBeNull()
     expect(kindForName(42)).toBeNull()
   })
+
+  it.each([['Other'], ['Misc'], ['Miscellaneous'], ['Other expenses']])(
+    'has no kind for the catch-all %j, which says nothing about what it holds',
+    (name) => {
+      // The import files rent and groceries under Other when no rule knows the payee (review M1):
+      // guessing the kind Other from the name counted all of it as not needed.
+      expect(kindForName(name)).toBeNull()
+    }
+  )
+})
+
+describe('a catch-all', () => {
+  it('is where the import files what no rule matches, in either rule set', () => {
+    for (const rules of [DEFAULT_CATEGORY_RULES, DEFAULT_CATEGORY_RULES_WORLDWIDE]) {
+      expect(isCatchAll(categorize(['NOTHING ANY RULE KNOWS'], rules))).toBe(true)
+    }
+  })
+
+  it.each([['Other'], ['OTHER'], ['other '], ['Misc'], ['Miscellaneous'], ['Other expenses']])(
+    'is %j',
+    (name) => {
+      expect(isCatchAll(name)).toBe(true)
+    }
+  )
+
+  it.each([['Pets'], ['Groceries'], ['Mother'], ['Other shopping'], [''], [undefined]])(
+    'is not %j',
+    (name) => {
+      // "Other shopping" is shopping: a name with a kind of its own says what it holds.
+      expect(isCatchAll(name)).toBe(false)
+    }
+  )
 })
 
 describe('the kind a category goes by', () => {
@@ -176,6 +213,31 @@ describe('whether a category is needed every month', () => {
     expect(essentialOf({ name: 'Restaurant', type: 'expense', essential: null })).toEqual({
       essential: false,
       kind: 'eating_out',
+      via: 'kind',
+    })
+  })
+
+  it('is yes for a catch-all until the person says, and what they chose once they have', () => {
+    expect(essentialOf({ name: 'Other', type: 'expense' })).toEqual({
+      essential: true,
+      kind: null,
+      via: 'no-kind',
+    })
+    expect(essentialOf({ name: 'Misc', type: 'expense', essential: 0 })).toEqual({
+      essential: false,
+      kind: null,
+      via: 'chosen',
+    })
+    // A kind the person gives a catch-all, or the kind Other given to a category of their own,
+    // stays theirs.
+    expect(essentialOf({ name: 'Other', type: 'expense', kind: 'groceries' })).toEqual({
+      essential: true,
+      kind: 'groceries',
+      via: 'kind',
+    })
+    expect(essentialOf({ name: 'Pets', type: 'expense', kind: 'other' })).toEqual({
+      essential: false,
+      kind: 'other',
       via: 'kind',
     })
   })

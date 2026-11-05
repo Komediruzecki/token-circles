@@ -11,8 +11,12 @@
  * | hidden                 | either         | Your next step    |
  * | none                   | either         | Your next step    |
  *
+ * Once the record is hidden, Your next step leads with the next different step on Getting
+ * started's list (review M14): it led with the step the hidden card had just shown.
+ *
  * It shows nothing until both the record and the circles are known, so it never shows the one and
- * then swaps it for the other.
+ * then swaps it for the other. Your next step names the profile it is for while the Dashboard adds
+ * up more than one (`profile`, core/circlesProfile.ts).
  */
 import { Match, onMount, Switch } from 'solid-js'
 import {
@@ -25,7 +29,11 @@ import NextStepCard, { AllCircles } from './NextStepCard'
 import type { JSX } from 'solid-js'
 import type { GuidanceView } from '../../core/guidance'
 
-export default function DashboardNextStep(props: { view: () => GuidanceView | null }): JSX.Element {
+export default function DashboardNextStep(props: {
+  view: () => GuidanceView | null
+  /** The profile the circles are for, named while the Dashboard adds up more than one. */
+  profile?: () => string | null
+}): JSX.Element {
   onMount(() => {
     void loadGettingStarted()
   })
@@ -40,10 +48,12 @@ export default function DashboardNextStep(props: { view: () => GuidanceView | nu
       <Match when={known() ? props.view() : null}>
         {(view) => (
           <NextStepCard
-            step={view().next}
+            // Hidden, the card led with Getting started's first step: the next different one.
+            step={gettingStartedRecord()?.hidden === true ? view().nextOnceHidden : view().next}
             view={view()}
             level={3}
             compact
+            profile={props.profile?.()}
             footer={<AllCircles />}
           />
         )}

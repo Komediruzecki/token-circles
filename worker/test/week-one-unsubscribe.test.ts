@@ -140,6 +140,39 @@ describe('GET with list=week-one', () => {
   });
 });
 
+/** The WCAG contrast of white text on `hex`. */
+function whiteOn(hex: string): number {
+  const [r, g, b] = [1, 3, 5].map((i) => {
+    const v = parseInt(hex.slice(i, i + 2), 16) / 255;
+    return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+  });
+  return 1.05 / (0.2126 * r! + 0.7152 * g! + 0.0722 * b! + 0.05);
+}
+
+/** The ground of every white-text button and link on a page. */
+const buttonGrounds = (html: string) =>
+  [...html.matchAll(/<(?:button|a) [^>]*style="[^"]*background:(#[0-9a-f]{6});color:#fff/gi)].map(
+    (m) => m[1]!.toLowerCase()
+  );
+
+describe("the stop page's buttons", () => {
+  // Review D1: white on #4f6ef7 is 4.28:1, under the 4.5:1 that 14px text needs. The app's blue,
+  // #3b6fe0, gives 4.63:1.
+  it("are white on the app's blue, at 4.5:1 or more", async () => {
+    const asking = buttonGrounds(await (await SELF.fetch(WEEK_ONE_URL)).text());
+    await env.DB.prepare('UPDATE users SET week_one_mails = 0 WHERE id = ?').bind(ID).run();
+    const stopped = await (await SELF.fetch(WEEK_ONE_URL)).text();
+    expect(stopped).toContain('Back to the app');
+    const back = buttonGrounds(stopped);
+    expect(asking).toHaveLength(1);
+    expect(back).toHaveLength(1);
+    for (const ground of [...asking, ...back]) {
+      expect(ground).toBe('#3b6fe0');
+      expect(whiteOn(ground)).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+});
+
 describe('POST with list=week-one', () => {
   it("stops the week-one mails only, from the page's button", async () => {
     const res = await SELF.fetch(WEEK_ONE_URL, BUTTON);

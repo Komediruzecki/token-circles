@@ -1,13 +1,30 @@
 /**
  * Column-mapping step of the import flow: map source columns onto the 12 target
- * fields and review detected category types (with per-account setup for values
+ * fields (three of them required, and starred) and review detected category types (with per-account setup for values
  * flagged as accounts). Shared by the Import page and the onboarding wizard.
  */
 import { For, Show } from 'solid-js'
 import { getLocalCurrency } from '../../core/api'
 import { FIELD_NAMES } from '../../core/importMapping'
 import styles from '../Import.module.css'
-import type { ImportFlow } from './importFlow'
+import { IMPORT_ACCOUNT_TYPES } from './accountTypeChoices'
+import type { ImportFlow, UploadResult } from './importFlow'
+
+/**
+ * What the rows being matched came from, as Map columns names it: the file, with its sheet when
+ * the workbook has more than one, or the count of bank statements read together. Null for pasted
+ * text, which is no file (importFlow's paste path names its sheet 'Pasted'), and for a Google
+ * Sheet, which leaves no upload result. Setup's Open in Import lands here with the file it could
+ * not read, and nothing on the page said which file that was.
+ */
+export function mappingSource(
+  upload: Pick<UploadResult, 'filename' | 'sheetName' | 'sheetNames'> | null
+): string | null {
+  if (!upload || upload.sheetName === 'Pasted') return null
+  return upload.sheetNames.length > 1
+    ? `${upload.filename}, sheet ${upload.sheetName}`
+    : upload.filename
+}
 
 /**
  * `embedded`: rendered inside the onboarding wizard, whose footer carries the
@@ -21,8 +38,15 @@ export function ImportMappingStep(props: { flow: ImportFlow; embedded?: boolean 
     <>
       <div class={styles.mappingSection}>
         <h2 class={styles.mappingTitle}>Map columns</h2>
-        <p class={styles.mappingSubtitle}>
-          Map your data columns to the 12 required fields. Fields in bold are required.
+        <Show when={mappingSource(flow.uploadResult())}>
+          {(source) => (
+            <p class={styles.mappingSource} data-test-id="import-map-source">
+              From <strong>{source()}</strong>
+            </p>
+          )}
+        </Show>
+        <p class={styles.mappingSubtitle} data-test-id="import-map-intro">
+          Match your columns. Starred fields are required.
         </p>
 
         <div class={styles.mappingGrid}>
@@ -151,11 +175,18 @@ export function ImportMappingStep(props: { flow: ImportFlow; embedded?: boolean 
                                 flow.setAccountTypes(v)
                               }}
                             >
-                              <option value="giro">Giro</option>
-                              <option value="savings">Savings</option>
-                              <option value="ib">Investment</option>
-                              <option value="cash">Cash</option>
-                              <option value="credit">Credit Card</option>
+                              <For each={IMPORT_ACCOUNT_TYPES}>
+                                {(choice) => (
+                                  <option
+                                    value={choice.value}
+                                    selected={
+                                      choice.value === (flow.accountTypes()[category] || 'giro')
+                                    }
+                                  >
+                                    {choice.label}
+                                  </option>
+                                )}
+                              </For>
                             </select>
                             <input
                               type="text"

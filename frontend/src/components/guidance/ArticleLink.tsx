@@ -1,9 +1,10 @@
 /**
- * A link to one of the articles on about.tokencircles.com (shared/articles.ts), under the line
+ * A link to one of the articles on the about site (shared/articles.ts, core/aboutSite.ts), under the line
  * whose question it answers: the article's own title, with a page mark, opening in a new tab as
  * the legal links do, so the page the person is reading stays where it was.
  */
 import { ARTICLES, articleUrl } from '../../../../shared/articles'
+import { aboutOrigin } from '../../core/aboutSite'
 import styles from './ArticleLink.module.css'
 import type { JSX } from 'solid-js'
 import type { ArticleId } from '../../../../shared/articles'
@@ -26,7 +27,7 @@ export default function ArticleLink(props: { article: ArticleId; class?: string 
   return (
     <a
       class={`${styles.link} ${props.class ?? ''}`}
-      href={articleUrl(props.article)}
+      href={articleUrl(props.article, aboutOrigin())}
       target="_blank"
       rel="noopener noreferrer"
       data-test-id="article-link"

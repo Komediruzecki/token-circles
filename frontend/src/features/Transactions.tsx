@@ -44,6 +44,7 @@ import {
   Switch,
   untrack,
 } from 'solid-js'
+import { isUncategorised } from '../../../shared/uncategorised'
 import AutoCategorizeModal from '../components/AutoCategorizeModal'
 import BulkActionBar from '../components/BulkActionBar'
 import FilterBar from '../components/FilterBar'
@@ -191,6 +192,19 @@ export default function Transactions() {
     Array<{ id: number; name: string; type: string; profile_id: number }>
   >([])
   const [categories, setCategories] = createSignal<Category[]>([])
+  /** The profiles `categories` is the server's answer for: null before one has come in. */
+  const [categoriesAnsweredFor, setCategoriesAnsweredFor] = createSignal<string | null>(null)
+  /**
+   * Whether `categories` is the answer for the profiles read now, rather than the empty list
+   * before one, or the profile's before a switch: until the new one's list is in, its entries are
+   * not taken for uncategorised against the old profile's categories.
+   */
+  const categoriesLoaded = createMemo(
+    on(
+      [() => state.profileVersion, () => state.currentProfile?.id, categoriesAnsweredFor],
+      ([, , answeredFor]) => answeredFor !== null && answeredFor === profileReadScope()
+    )
+  )
   /**
    * The active profile: where a write lands (X-Profile-Id), read where apiFetch reads it. Followed
    * on every profile notice: a switch bumps profileVersion, and creating a profile makes it the
@@ -688,13 +702,32 @@ export default function Transactions() {
   })
 
   /**
-   * An entry of the active profile with no category, transfers aside: what Auto Categorize offers,
-   * and what Getting started counts as needing one.
+   * The active profile's categories, by id, once the list is in; null before, when an entry's
+   * category cannot be told from one that is gone.
    */
-  const isUncategorisedEntry = (tx: Transaction): boolean =>
-    (tx.category_id === undefined || tx.category_id === null) &&
-    tx.type !== 'transfer' &&
-    tx.profile_id === activeId()
+  const ownCategoryIds = createMemo((): Set<number> | null => {
+    if (!categoriesLoaded()) return null
+    const active = activeId()
+    return new Set(
+      categories()
+        .filter(
+          (c) => c.profile_id === undefined || c.profile_id === null || c.profile_id === active
+        )
+        .map((c) => c.id)
+    )
+  })
+
+  /**
+   * An entry of the active profile with no category, transfers aside: what Auto Categorize offers,
+   * and what Getting started counts as needing one. One filed under a category the profile no
+   * longer has counts (shared/uncategorised.ts): before #384 deleting a category left its entries
+   * pointing at it, and the row shows no category. Until the list is in, only an entry with none.
+   */
+  const isUncategorisedEntry = (tx: Transaction): boolean => {
+    if (tx.profile_id !== activeId()) return false
+    const own = ownCategoryIds()
+    return isUncategorised(tx, (id) => own === null || own.has(id))
+  }
 
   // Calculate filtered results
   const filteredTransactions = createMemo(() => {
@@ -1327,6 +1360,7 @@ export default function Transactions() {
       categoriesShown = asked
       categoriesShownFor = scope
       setCategories(cats as Category[])
+      setCategoriesAnsweredFor(scope)
       if (!categoryHashApplied) {
         categoryHashApplied = true
         applyCategoryFromHash(cats as Category[])
@@ -1336,6 +1370,7 @@ export default function Transactions() {
       categoriesShown = asked
       categoriesShownFor = scope
       setCategories([])
+      setCategoriesAnsweredFor(null)
     }
   }
 

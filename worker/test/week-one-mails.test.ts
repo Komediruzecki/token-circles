@@ -9,8 +9,9 @@
  */
 import { env } from 'cloudflare:test';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { renderWeekOneDay2, renderWeekOneDay7 } from '../src/emailTemplates';
+import { renderWeekOneDay2, renderWeekOneDay7, renderWelcome } from '../src/emailTemplates';
 import { runWeekOneMails, WEEK_ONE, WEEK_ONE_CRON } from '../src/weekOne';
+import { offOrigins } from './helpers/mail-links';
 
 const NOW = new Date('2030-06-15T08:00:00Z');
 const HOUR = 3_600_000;
@@ -38,6 +39,8 @@ let attempts = 0;
 let whileSending: ((to: string) => Promise<void>) | null = null;
 let nextId = FIRST_ID;
 const mine: number[] = [];
+/** Each account's one category, which its entries are filed under unless a row says otherwise. */
+const categoryOf = new Map<number, number>();
 
 async function removeAccounts(): Promise<void> {
   if (mine.length === 0) return;
@@ -46,12 +49,14 @@ async function removeAccounts(): Promise<void> {
     env.DB.prepare(`DELETE FROM transactions WHERE profile_id IN (${ids})`),
     env.DB.prepare(`DELETE FROM bills WHERE profile_id IN (${ids})`),
     env.DB.prepare(`DELETE FROM loans WHERE profile_id IN (${ids})`),
+    env.DB.prepare(`DELETE FROM categories WHERE profile_id IN (${ids})`),
     env.DB.prepare(`DELETE FROM reminder_dedup WHERE user_id IN (${ids})`),
     env.DB.prepare(`DELETE FROM reminder_sends WHERE user_id IN (${ids})`),
     env.DB.prepare(`DELETE FROM profiles WHERE id IN (${ids})`),
     env.DB.prepare(`DELETE FROM users WHERE id IN (${ids})`),
   ]);
   mine.length = 0;
+  categoryOf.clear();
 }
 
 interface AccountOptions {
@@ -91,6 +96,7 @@ async function account(opts: AccountOptions = {}): Promise<{ id: number; email: 
       `Week one ${id}`
     ),
   ]);
+  categoryOf.set(id, await category(id));
   const ago = opts.confirmedAgo === undefined ? 2 * DAY : opts.confirmedAgo;
   if (ago !== null) {
     await env.DB.prepare(
@@ -108,21 +114,36 @@ interface Tx {
   type?: string;
   imported?: boolean;
   categoryId?: number | null;
+  /** How long before NOW the row was written; by default, long before. */
+  createdAgo?: number;
+}
+
+/** A category of the profile's, by its id. */
+async function category(profileId: number): Promise<number> {
+  const made = await env.DB.prepare(
+    "INSERT INTO categories (name, type, profile_id) VALUES ('Sample groceries', 'expense', ?)"
+  )
+    .bind(profileId)
+    .run();
+  return Number(made.meta.last_row_id);
 }
 
 async function transactions(profileId: number, rows: Tx[]): Promise<void> {
+  // A profile added beside an account's own gets a category on its first entries.
+  if (!categoryOf.has(profileId)) categoryOf.set(profileId, await category(profileId));
   await env.DB.batch(
     rows.map((row) =>
       env.DB.prepare(
-        `INSERT INTO transactions (description, amount, date, type, category_id, currency, profile_id, import_id)
-         VALUES ('Sample entry', ?, ?, ?, ?, 'EUR', ?, ?)`
+        `INSERT INTO transactions (description, amount, date, type, category_id, currency, profile_id, import_id, created_at)
+         VALUES ('Sample entry', ?, ?, ?, ?, 'EUR', ?, ?, ?)`
       ).bind(
         row.amount ?? 12.5,
         row.date,
         row.type ?? 'expense',
-        row.categoryId === undefined ? 1 : row.categoryId,
+        row.categoryId === undefined ? categoryOf.get(profileId)! : row.categoryId,
         profileId,
-        row.imported === false ? null : 'import-sample'
+        row.imported === false ? null : 'import-sample',
+        sqlite(NOW.getTime() - (row.createdAgo ?? 400 * DAY))
       )
     )
   );
@@ -213,8 +234,12 @@ describe('day 2', () => {
     // The address comes from the app's one list of articles (shared/articles.ts).
     const steps = 'https://about.tokencircles.com/articles/getting-a-year-out-of-your-bank/';
     expect(mail!.html).toMatch(
-      /<a class="tc-btn" href="[^"]+\/#import"[^>]*>Import statements<\/a>/
+      /<a class="tc-btn" href="[^"]+\/#import\/bank"[^>]*>Import statements<\/a>/
     );
+    // The mail is about a year from the bank: its button and its picture open the Bank Imports
+    // tab (review M4), not the page's first tab, Google Sheets.
+    expect(mail!.text).toContain('Import statements: http://localhost:3800/#import/bank');
+    expect(mail!.html).toMatch(/<a href="[^"]+\/#import\/bank" style="display:block">/);
     const second = /<a class="tc-btn2" href="([^"]+)"[^>]*>([^<]+)<\/a>/.exec(mail!.html);
     expect(second?.slice(1)).toEqual([steps, 'Steps for your bank']);
     expect(mail!.text).toContain(`Steps for your bank: ${steps}`);
@@ -311,6 +336,9 @@ describe('day 7', () => {
       env.DB.prepare(
         "INSERT INTO bills (profile_id, name, amount, frequency, due_date, is_active, type) VALUES (?, 'Sample old', 11, 'monthly', '2030-06-20', 0, 'bill')"
       ).bind(a.id),
+      env.DB.prepare(
+        "INSERT INTO bills (profile_id, name, amount, frequency, due_date, is_active, type) VALUES (?, 'Sample rent', 7654.32, 'monthly', '2030-06-02', 1, 'bill')"
+      ).bind(a.id),
     ]);
     await run();
 
@@ -322,19 +350,23 @@ describe('day 7', () => {
     const parts = [mail!.subject, mail!.html, mail!.text].map((part) => part.replaceAll(token, ''));
     // Six came in by an import; April and May hold three each, June one.
     expect(mail!.text).toContain('Entries imported: 6');
-    expect(mail!.text).toContain('Months tracked of the last 13: 2');
-    expect(mail!.text).toContain('Subscriptions you track: 1');
-    expect(mail!.text).not.toContain('Bills you track');
+    expect(mail!.text).toContain('Months tracked: 2 of 12');
+    // One count in one word for both kinds on Bills, as setup's done step and Bills say it
+    // (review M12): a paused one is not tracked.
+    expect(mail!.text).toContain('Regular payments on Bills: 2');
+    expect(mail!.text).not.toMatch(/Subscriptions you track|Bills you track/);
     // One of the six entries that take a category has none: the transfer does not count.
     expect(mail!.text).toContain('Entries without a category: 1');
     expect(mail!.text).toContain('Import the rest of your year');
-    expect(mail!.text).toContain('2 of the last 13 months are tracked.');
-    expect(mail!.text).toContain('Open Import: http://localhost:3800/#import');
+    expect(mail!.text).toContain('2 of 12 months tracked.');
+    expect(mail!.text).toContain('Open Import: http://localhost:3800/#import/bank');
     for (const part of parts) {
       for (const amount of ['4321', '4,321', '8765', '8,765', '1234', '1,234', '2468', '1357']) {
         expect(part).not.toContain(amount);
       }
-      for (const amount of ['9753', '3141', '9876', '9,876']) expect(part).not.toContain(amount);
+      for (const amount of ['9753', '3141', '9876', '9,876', '7654', '7,654']) {
+        expect(part).not.toContain(amount);
+      }
       expect(part).not.toMatch(/[€$£]|EUR/);
     }
   });
@@ -502,34 +534,189 @@ describe('the batch', () => {
 });
 
 describe('the day-2 mail itself', () => {
-  it('names the YNAB file that imports, as the welcome does', () => {
-    // A register export imports with its accounts and transfers; the plan file beside it in the
-    // same download does not. "YNAB exports" sent people to either.
+  // Review M14: the welcome and day 2 said the same two YNAB sentences word for word. The welcome
+  // names the file that imports (a register export, not the plan file beside it in the same
+  // download); day 2 is about getting a year out of a bank.
+  it('leaves the YNAB file to the welcome, which names it', () => {
     const { html, text } = renderWeekOneDay2();
-    const ynab =
-      'So does the Register file in a YNAB plan export, with its accounts and transfers. Its starting balances go to accounts that are new or still empty.';
-    expect(text).toContain(`Sparkasse import as they are. ${ynab} Any other CSV`);
-    expect(html).toContain(ynab);
-    expect(text).not.toContain('YNAB exports');
+    expect(text).toMatch(/Sparkasse import as they are\. Any other CSV or Excel file works/);
+    expect(html + text).not.toContain('YNAB');
+    expect(renderWelcome().text).toContain(
+      'So does the Register file in a YNAB plan export, with its accounts and transfers.'
+    );
+  });
+});
+
+describe("the links in the first-week mails, on this deployment's origins", () => {
+  // The wordmark, "Open the app", the footer and the bank article pointed at production from dev
+  // and from a self-hosted Worker (A20). The app and the API are wrangler.jsonc's local vars.
+  const ABOUT = 'https://about.example.test';
+  const vars = env as unknown as Record<string, string | undefined>;
+  afterEach(() => {
+    delete vars.ABOUT_ORIGIN;
+  });
+
+  it('day 2 and day 7 link only to the app, the about site and the API they are sent from', async () => {
+    vars.ABOUT_ORIGIN = ABOUT;
+    const day2 = await account({ confirmedAgo: 3 * DAY });
+    const day7 = await account({ confirmedAgo: 7 * DAY });
+    await imported(day7.id);
+    await run();
+    const origins = [vars.CORS_ORIGIN!, ABOUT, vars.API_PUBLIC_ORIGIN!];
+    for (const a of [day2, day7]) {
+      const [mail] = mailsTo(a.email);
+      expect(mail).toBeDefined();
+      expect(offOrigins(mail!, origins)).toEqual([]);
+      expect(mail!.html).toContain(`href="${ABOUT}/terms"`);
+    }
+    expect(mailsTo(day2.email)[0]!.html).toContain(
+      `href="${ABOUT}/articles/getting-a-year-out-of-your-bank/"`
+    );
+  });
+});
+
+describe('the entries without a category the day-7 mail counts', () => {
+  it('counts one under a category the profile no longer has, as Transactions lists it', async () => {
+    // Before #384 (July 2026), deleting a category left its entries pointing at it.
+    const a = await account({ confirmedAgo: 7 * DAY });
+    const gone = await category(a.id);
+    await env.DB.prepare('DELETE FROM categories WHERE id = ?').bind(gone).run();
+    await transactions(a.id, [
+      { date: '2030-05-02' },
+      { date: '2030-05-03', categoryId: gone },
+      { date: '2030-05-04', categoryId: null },
+      { date: '2030-05-05', categoryId: gone, type: 'transfer' },
+    ]);
+    await run();
+    expect(mailsTo(a.email)[0]!.text).toContain('Entries without a category: 2');
+  });
+
+  it("counts one under another profile's category as without one, as circle 1 does", async () => {
+    const a = await account({ confirmedAgo: 7 * DAY });
+    const b = await account({ confirmedAgo: 30 * DAY });
+    await transactions(a.id, [
+      { date: '2030-05-02' },
+      { date: '2030-05-03', categoryId: categoryOf.get(b.id)! },
+    ]);
+    await run();
+    expect(mailsTo(a.email)[0]!.text).toContain('Entries without a category: 1');
+  });
+});
+
+// Review M11: the mail read "Your first import is in." to an account that brought in a year five
+// days before, with the A year badge and its first print. It says what came in, in counts the
+// Worker can make itself, and the first import only while that is news.
+describe('what the day-7 mail says came in', () => {
+  /** Three entries in each month from `from`, `n` months on, all imported `createdAgo` before NOW. */
+  const months = (from: string, n: number, createdAgo = 5 * DAY): Tx[] => {
+    const rows: Tx[] = [];
+    let [y, m] = from.split('-').map(Number);
+    for (let i = 0; i < n; i++) {
+      const month = `${y}-${String(m).padStart(2, '0')}`;
+      for (const day of ['02', '12', '22']) rows.push({ date: `${month}-${day}`, createdAgo });
+      if (++m > 12) [y, m] = [y + 1, 1];
+    }
+    return rows;
+  };
+
+  it('says a year that came in, with the badge and the print the app shows for it', async () => {
+    const a = await account({ confirmedAgo: 7 * DAY });
+    await transactions(a.id, months('2029-06', 12));
+    await run();
+    const [mail] = mailsTo(a.email);
+    expect(mail!.text).toContain(
+      'You brought in a year: 36 entries, the A year badge and your first print.'
+    );
+    expect(mail!.text).not.toContain('Your first import is in.');
+    expect(mail!.text).toContain('Months tracked: 12 of 12');
+  });
+
+  it('says a year without the badge when its twelve months are not in a row', async () => {
+    const a = await account({ confirmedAgo: 7 * DAY });
+    // June to November, then January to June: twelve of the last thirteen, December missing.
+    await transactions(a.id, [...months('2029-06', 6), ...months('2030-01', 6)]);
+    await run();
+    const [mail] = mailsTo(a.email);
+    expect(mail!.text).toContain('You brought in a year: 36 entries.');
+    expect(mail!.text).not.toMatch(/badge|print/);
+  });
+
+  it('counts no print a month that has not begun would finish', async () => {
+    const a = await account({ confirmedAgo: 7 * DAY });
+    // June 2029, then August to June: twelve of the last thirteen. July 2030 is put in early: it
+    // would make the run from August twelve, but it has not begun.
+    await transactions(a.id, [
+      ...months('2029-06', 1),
+      ...months('2029-08', 11),
+      ...months('2030-07', 1),
+    ]);
+    await run();
+    const [mail] = mailsTo(a.email);
+    expect(mail!.text).toContain('You brought in a year: 39 entries.');
+    expect(mail!.text).not.toMatch(/badge|print/);
+  });
+
+  it('says the first import is in while that is news, and not five days on', async () => {
+    const recent = await account({ confirmedAgo: 7 * DAY });
+    await transactions(recent.id, months('2030-04', 2, DAY));
+    const older = await account({ confirmedAgo: 7 * DAY });
+    await transactions(older.id, months('2030-04', 2, 5 * DAY));
+    await run();
+    expect(mailsTo(recent.email)[0]!.text).toContain('Your first import is in.');
+    expect(mailsTo(older.email)[0]!.text).not.toContain('Your first import is in.');
+    for (const a of [recent, older]) {
+      expect(mailsTo(a.email)[0]!.text).toContain(
+        'Here is the week in counts; the amounts stay in the app.'
+      );
+      expect(mailsTo(a.email)[0]!.text).not.toContain('brought in a year');
+    }
   });
 });
 
 describe('the day-7 mail itself', () => {
   const counts = {
     entriesImported: 1284,
+    firstImportNew: false,
     monthsTracked: 12,
-    windowMonths: 13,
-    subscriptions: 0,
+    prints: 0,
     bills: 0,
     uncategorised: 0,
   };
 
+  it('names the prints a longer run made, and keeps the year without one', () => {
+    expect(renderWeekOneDay7({ counts: { ...counts, prints: 2 }, step: null }).text).toContain(
+      'You brought in a year: 1,284 entries, the A year badge and 2 prints.'
+    );
+    expect(renderWeekOneDay7({ counts, step: null }).text).toContain(
+      'You brought in a year: 1,284 entries. Here is the week in counts'
+    );
+    const short = renderWeekOneDay7({ counts: { ...counts, monthsTracked: 4 }, step: null });
+    expect(short.text).toContain('Here is the week in counts; the amounts stay in the app.');
+    expect(short.text).not.toMatch(/brought in|first import is in/);
+  });
+
   it('leaves out a count of nothing, and the step when none applies', () => {
     const { text } = renderWeekOneDay7({ counts, step: null });
     expect(text).toContain('Entries imported: 1,284');
-    expect(text).toContain('Months tracked of the last 13: 12');
-    expect(text).not.toMatch(/Subscriptions you track|Bills you track|without a category/);
+    expect(text).toContain('Months tracked: 12 of 12');
+    expect(text).not.toMatch(
+      /Regular payments|Subscriptions you track|Bills you track|without a category/
+    );
     expect(text).not.toContain('One next step');
+  });
+
+  // One count of months everywhere (review M8): of the twelve a year needs, as the app counts
+  // them. The window is this month and the twelve before it, so a count can reach 13: it never
+  // reads "13 of 12", nor "of the last 13" beside the app's "of 12".
+  it('counts the months tracked of the twelve a year needs, and no more', () => {
+    const mail = renderWeekOneDay7({ counts: { ...counts, monthsTracked: 13 }, step: null });
+    expect(mail.text).toContain('Months tracked: 12 of 12');
+    expect(mail.html).toContain('12 of 12 months tracked, from 1,284 imported entries.');
+    for (const part of [mail.subject, mail.html, mail.text]) {
+      expect(part).not.toMatch(/of the last 13|13 of 12/);
+    }
+    const one = renderWeekOneDay7({ counts: { ...counts, monthsTracked: 1 }, step: null });
+    expect(one.html).toContain('1 of 12 months tracked, from 1,284 imported entries.');
   });
 
   it('says what came in when no month is tracked yet', () => {

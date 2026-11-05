@@ -13,6 +13,10 @@
 import { render } from 'solid-js/web'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SIGN_IN_MESSAGES as SAY } from '../../../../shared/signInSchema'
+import screenStyles from '../LoginScreen.module.css'
+import screenCss from '../LoginScreen.module.css?raw'
+import stepStyles from '../SignInSteps.module.css'
+import stepCss from '../SignInSteps.module.css?raw'
 import { historySettled } from './historySettled'
 import type * as TurnstileModule from '../Turnstile'
 import type { TurnstileStatus } from '../Turnstile'
@@ -424,7 +428,9 @@ describe('creating an account', () => {
     )
   })
 
-  it('says on Check your inbox to look in spam, or to create the account again with the same password', async () => {
+  // Review M18: "create the account again with the same password" ran into the sign-up limit after
+  // a few tries. The button above it sends the link again.
+  it('says on Check your inbox to look in spam, or to send the link again', async () => {
     answers['/api/auth/register'] = () => json({ ok: true })
     await mount()
     button('Create one').click()
@@ -434,7 +440,7 @@ describe('creating an account', () => {
     await submit()
 
     expect(host.querySelector('[data-test-id="check-inbox-no-mail"]')?.textContent?.trim()).toBe(
-      'No mail after a few minutes? Check your spam folder, or create the account again with the same password.'
+      'No mail after a few minutes? Check spam, or send the link again.'
     )
   })
 
@@ -492,6 +498,43 @@ describe('creating an account', () => {
     expect(email().value).toBe('name@example.com')
     expect(password().value).toBe('')
     expect(notice()).toBe('')
+  })
+})
+
+describe('Check your inbox on a phone', () => {
+  /** The rules a phone gets: those inside `@media (max-width: 768px), (pointer: coarse)`. */
+  const phoneRules = (css: string) => {
+    const at = css.indexOf('@media (max-width: 768px), (pointer: coarse) {')
+    return at < 0 ? '' : css.slice(at, css.indexOf('\n}', at))
+  }
+
+  // Review D6, this screen only: its button was 300x37, "Back to sign in" 90x20, and the
+  // footer's Privacy and Terms 38x17 and 32x17.
+  it("gives the screen's button and links a fingertip's height, and only this screen", async () => {
+    answers['/api/auth/register'] = () => json({ ok: true })
+    await mount()
+    const footer = () => host.querySelector('[data-test-id="sign-in-footer"]')!
+    expect(footer().classList.contains(screenStyles.footerRoomy)).toBe(false)
+    button('Create one').click()
+    await settle()
+    type(email(), 'name@example.com')
+    type(password(), 'a-new-password')
+    await submit()
+
+    const inbox = host.querySelector('[data-test-id="check-inbox"]')!
+    expect(inbox.classList.contains(stepStyles.inbox)).toBe(true)
+    expect(footer().classList.contains(screenStyles.footerRoomy)).toBe(true)
+
+    const steps = phoneRules(stepCss)
+    expect(steps).toMatch(/\.inbox \.submit\s*\{\s*min-height:\s*44px/)
+    expect(steps).toMatch(/\.inbox \.link\s*\{\s*min-height:\s*44px/)
+    const screen = phoneRules(screenCss)
+    expect(screen).toMatch(/\.footerRoomy > a,\s*\.footerRoomy nav a\s*\{[^}]*min-height:\s*44px/)
+    expect(screen).toMatch(/\.footerRoomy nav a\s*\{[^}]*min-width:\s*44px/)
+
+    host.querySelector<HTMLButtonElement>('[data-test-id="check-inbox-back"]')!.click()
+    await settle()
+    expect(footer().classList.contains(screenStyles.footerRoomy)).toBe(false)
   })
 })
 

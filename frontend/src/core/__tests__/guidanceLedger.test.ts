@@ -188,15 +188,15 @@ describe('the status over the rows', () => {
 
   it('says when the figures appear, before three months are tracked', () => {
     const none = facts({ months: [], monthsInYear: 0, firm: false, averaged: false })
-    expect(status(none).waiting).toBe('Your figures appear once 3 months are tracked.')
+    expect(status(none).waiting).toBe('Your figures appear once 3 finished months are tracked.')
     expect(
       status(facts({ months: ['2026-09'], monthsInYear: 1, firm: false, averaged: false })).waiting
-    ).toBe('Your figures appear once 3 months are tracked. One is so far.')
+    ).toBe('Your figures appear once 3 finished months are tracked. One is so far.')
     expect(
       status(
         facts({ months: ['2026-08', '2026-09'], monthsInYear: 2, firm: false, averaged: false })
       ).waiting
-    ).toBe('Your figures appear once 3 months are tracked. Two are so far.')
+    ).toBe('Your figures appear once 3 finished months are tracked. Two are so far.')
   })
 })
 
@@ -229,13 +229,41 @@ describe('the rows', () => {
     expect(first.measure).toBeCloseTo(n < 12 ? n / 12 : 80 / 90, 6)
   })
 
-  it('says how much is sorted, and what is needed while Clear picture is the circle', () => {
+  it('says how much is sorted, and what the circle asks while it is the one (review M9)', () => {
     const f = facts({ sortedShare: 89.9 })
     expect(row(f, 1)).toMatchObject({
       state: 'current',
-      detail: '89% of spending sorted; 90% is needed.',
+      detail: '89% of spending sorted; this circle asks for 90%.',
     })
     expect(row(base, 1).detail).toBe('96% of spending sorted.')
+  })
+
+  it("doesn't call what Other holds sorted (review M1)", () => {
+    const other = [{ name: 'Other', share: 41.4, unsure: 600 }]
+    expect(row(facts({ sortedShare: 100, catchAlls: other }), 1).detail).toBe(
+      'Every entry has a category; Other holds 41% of spending.'
+    )
+    expect(row(facts({ catchAlls: other }), 1).detail).toBe(
+      '96% of spending has a category; Other holds 41% of spending.'
+    )
+    // While Clear picture is the circle too: what it asks is its check's.
+    expect(row(facts({ sortedShare: 100, catchAlls: other, monthsInYear: 5 }), 1)).toMatchObject({
+      state: 'current',
+      detail: 'Every entry has a category; Other holds 41% of spending.',
+    })
+    // Two of them, and a sliver: named together, and never 0%.
+    expect(
+      row(
+        facts({
+          sortedShare: 100,
+          catchAlls: [
+            { name: 'Other', share: 0.2, unsure: 2 },
+            { name: 'Misc', share: 0.1, unsure: 1 },
+          ],
+        }),
+        1
+      ).detail
+    ).toBe('Every entry has a category; Other and Misc hold 1% of spending.')
   })
 
   it('gives rows 2 to 7 no figures before three months, and says so once', () => {

@@ -7,6 +7,7 @@ import {
   readAccountType,
 } from '../../../../../shared/accountSchema'
 import { kindForName } from '../../../../../shared/guidance/kinds'
+import { categoriesToMake, categoryForImportRow } from '../../../../../shared/importCategories'
 import { parseImportCsv } from '../../../../../shared/importCsv'
 import {
   checkImportRowNumbers,
@@ -135,6 +136,30 @@ const resolvedDedupKey = (
 /** The type of a row booked into the account its Category names, from that account's side. */
 const signedType = (amount: number): 'income' | 'expense' => (amount > 0 ? 'income' : 'expense')
 
+/**
+ * A row's type, in the Worker's order (executeImport). An explicit "transfer" always wins: a
+ * transfer between two accounts is a transfer regardless of sign, and the category names the
+ * destination account (e.g. bank imports: means_of_payment = source, category = destination). A
+ * row with a Means of Payment books from that account, so its Type is read from that account's
+ * side as written. A row with none resolves as it always did: it books into an account its
+ * Category names, and when that value is set to Account its type is from that account's side, by
+ * the sign of the amount, whatever the Type column says. `catTypes` is keyed in lower case.
+ */
+function importRowType(
+  row: Record<string, unknown>,
+  amount: number,
+  catTypes: Record<string, string>
+): string {
+  const rawType = toStr(row.type).trim().toLowerCase()
+  const catType = catTypes[toStr(row.category).toLowerCase().trim()]
+  const asBefore = rawType !== 'transfer' && toStr(row.means_of_payment).trim() === ''
+  if (rawType === 'transfer') return 'transfer'
+  if (asBefore && catType === 'account') return signedType(amount)
+  if (rawType === 'income' || rawType === 'expense') return rawType
+  if (catType === 'income' || catType === 'expense') return catType
+  return amount < 0 ? 'expense' : amount > 0 ? 'income' : 'expense'
+}
+
 /** Distinct category-column values in `rows` that do NOT match an existing category
  *  (case-insensitive) in the active profile — the categories an import would create.
  *  Excludes a Transfer row's value (the account the money went to), mirroring the worker preview.
@@ -143,33 +168,35 @@ const signedType = (amount: number): 'income' | 'expense' => (amount > 0 ? 'inco
  *  existing account or is flagged as 'account' type: that row books into the account. Used to ask
  *  the user for confirmation before creating categories (audit B5). */
 async function detectNewCategories(
-  rows: Record<string, unknown>[],
+  validated: ReadonlyArray<{ row: Record<string, unknown>; amount: number }>,
   categoryTypes: Record<string, string> = {}
 ): Promise<string[]> {
   const db = await getDB()
   const profileId = await adapter.getCurrentProfileId()
   const categories = await db.getAllFromIndex('categories', 'by_profile', profileId)
   const accounts = await db.getAllFromIndex('accounts', 'by_profile', profileId)
-  const existingCat = new Set(categories.map((c) => toStr(c.name).toLowerCase().trim()))
   const existingAcct = new Set(accounts.map((a) => toStr(a.name).toLowerCase().trim()))
   const catTypeLower: Record<string, string> = {}
   for (const [k, v] of Object.entries(categoryTypes)) catTypeLower[k.toLowerCase().trim()] = v
-  const out: string[] = []
-  const seen = new Set<string>()
-  for (const row of rows) {
+  const values: Array<{ name: string; type: string }> = []
+  for (const { row, amount } of validated) {
     const raw = toStr(row.category).trim()
     if (!raw) continue
     if (toStr(row.type).trim().toLowerCase() === 'transfer') continue
     const lower = raw.toLowerCase()
-    if (existingCat.has(lower) || seen.has(lower)) continue
     if (
       !toStr(row.means_of_payment).trim() &&
       (existingAcct.has(lower) || catTypeLower[lower] === 'account')
     ) {
       continue
     }
-    seen.add(lower)
-    out.push(raw)
+    values.push({ name: raw, type: importRowType(row, amount, catTypeLower) })
+  }
+  // A row files under a category of its name and its type (shared/importCategories.ts). Each
+  // name once: the preview asks about a name, and approving it approves either type.
+  const out: string[] = []
+  for (const { name } of categoriesToMake(categories, values)) {
+    if (!out.some((seen) => seen.toLowerCase() === name.toLowerCase())) out.push(name)
   }
   return out
 }
@@ -883,6 +910,15 @@ export async function importExecute(body: unknown): Promise<Response> {
       }
     >()
 
+    // The names this import's expense rows file under, so an income row of the same name files
+    // under that expense category however the rows are ordered (shared/importCategories.ts).
+    const expenseNamesInImport = new Set(
+      validatedRows
+        .filter(({ row, amount }) => importRowType(row, amount, catTypes) === 'expense')
+        .map(({ row }) => toStr(row.category).toLowerCase().trim())
+        .filter((name) => name !== '')
+    )
+
     for (const validated of validatedRows) {
       const { index: i, row, date, amount, amountLocal, exchangeRate } = validated
       const description = toStr(row.description)
@@ -895,24 +931,12 @@ export async function importExecute(body: unknown): Promise<Response> {
       // books into an account its Category names, and when that value is set to Account its type
       // is from that account's side, by the sign of the amount, whatever the Type column says.
       // Which rule such a row should follow is a separate decision.
-      let type = 'expense'
       const rawType = toStr(row.type).trim().toLowerCase()
       const catName = toStr(row.category).toLowerCase().trim()
       const catType = catTypes[catName]
       const mopValue = toStr(row.means_of_payment).trim().toLowerCase()
       const asBefore = rawType !== 'transfer' && mopValue === ''
-
-      if (rawType === 'transfer') {
-        type = 'transfer'
-      } else if (asBefore && catType === 'account') {
-        type = signedType(amount)
-      } else if (rawType === 'income' || rawType === 'expense') {
-        type = rawType
-      } else if (catType && (catType === 'income' || catType === 'expense')) {
-        type = catType
-      } else {
-        type = amount < 0 ? 'expense' : amount > 0 ? 'income' : 'expense'
-      }
+      const type = importRowType(row, amount, catTypes)
 
       let categoryId: number | null = null
       let accountId: number | null = null
@@ -921,7 +945,12 @@ export async function importExecute(body: unknown): Promise<Response> {
       if (rawCat) {
         // Use lowered version only for matching; store original case in DB
         const catLower = rawCat.toLowerCase().trim()
-        let cat = categories.find((c) => c.name.toLowerCase().trim() === catLower)
+        // Matched by name and type (shared/importCategories.ts): an expense under "Gifts" is not
+        // the income category Gifts every new profile starts with.
+        let cat = categoryForImportRow(categories, rawCat, type)
+        // An income row of a name this import makes an expense category for files under that one,
+        // as money back, whichever row comes first.
+        const madeType = type === 'income' && expenseNamesInImport.has(catLower) ? 'expense' : type
         // Auto-create category if not found. In dry-run we never mutate (preview only).
         // When category creation is gated (audit B5), only create approved names — an
         // unapproved category imports uncategorized (category_id null), not skipped.
@@ -954,10 +983,10 @@ export async function importExecute(body: unknown): Promise<Response> {
           const storedName = displayName.charAt(0).toUpperCase() + displayName.slice(1)
           // An expense category takes the kind its name suggests, as on the Worker: "Restaurant"
           // is eating out (shared/guidance/kinds.ts).
-          const kind = type === 'expense' ? kindForName(storedName) : null
+          const kind = madeType === 'expense' ? kindForName(storedName) : null
           const id = await db.add('categories', {
             name: storedName,
-            type,
+            type: madeType,
             color: defaultColor,
             icon: 'tag',
             tax_deductible: false,
@@ -968,7 +997,7 @@ export async function importExecute(body: unknown): Promise<Response> {
           cat = {
             id: id as number,
             name: storedName,
-            type,
+            type: madeType,
             color: defaultColor,
             icon: 'tag',
           } as any
@@ -1245,7 +1274,7 @@ export async function importExecute(body: unknown): Promise<Response> {
 
     // Category-column values with no matching existing category — reported so a
     // preview (dry-run) can confirm before creation (audit B5).
-    const newCategories = await detectNewCategories(validRows, categoryTypes)
+    const newCategories = await detectNewCategories(validatedRows, categoryTypes)
     // Account-typed values that would be newly created — surfaced so the preview shows
     // the accounts a run will add (and, by omission, that a transfer destination matched
     // an existing account rather than silently failing to resolve).

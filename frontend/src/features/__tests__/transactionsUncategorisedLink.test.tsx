@@ -6,7 +6,7 @@
  */
 import { render } from 'solid-js/web'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { setPage } from '../../core/appStore'
+import { bumpProfileVersion, setPage } from '../../core/appStore'
 import { period, setPeriod } from '../../core/periodStore'
 import { fromPill } from '../../utils/period'
 import type { Transaction } from '../../types/models'
@@ -49,11 +49,20 @@ const serverTransactions: Transaction[] = [
   tx(5, 'Their lunch', { profile_id: 2 as never }),
 ]
 
+/** What the next category read answers, when a test says so; the profile's one category otherwise. */
+const categoryRead = vi.hoisted(() => ({ next: null as null | (() => Promise<unknown>) }))
+
 vi.mock('../../core/api', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   api: {
     getTransactions: vi.fn(async () => serverTransactions),
-    getCategories: vi.fn(async () => [{ id: 7, name: 'Food', type: 'expense', profile_id: 1 }]),
+    getCategories: vi.fn(() => {
+      const next = categoryRead.next
+      categoryRead.next = null
+      return next
+        ? next()
+        : Promise.resolve([{ id: 7, name: 'Food', type: 'expense', profile_id: 1 }])
+    }),
     getTags: vi.fn(async () => [{ id: 9, name: 'Trip', color: '#336699', profile_id: 1 }]),
     getAccounts: vi.fn(async () => [{ id: 3, name: 'Main', profile_id: 1 }]),
   },
@@ -84,6 +93,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  categoryRead.next = null
   dispose?.()
   host?.remove()
   history.replaceState(null, '', '#')
@@ -168,5 +178,73 @@ describe('arriving from Getting started', () => {
     expect(host.querySelector('[data-test-id="transactions-type-all"]')?.className ?? '').toMatch(
       /typeBtnActive/i
     )
+  })
+})
+
+describe('an entry under a category the profile no longer has', () => {
+  // Before #384 (July 2026), deleting a category left its entries pointing at it. The row shows
+  // no category, and Getting started counts it as without one; the list it links to shows it.
+  const gone = tx(6, 'Old pharmacy', { date: '2025-02-03', category_id: 42 as never })
+
+  it('is listed with the entries without a category, so it can be sorted', async () => {
+    serverTransactions.push(gone)
+    try {
+      history.replaceState(null, '', '#transactions?uncategorised=1')
+      await mountTransactions()
+      expect(shown().sort()).toEqual(['Old market', 'Old pharmacy', 'Refund'])
+      expect(note()?.textContent).toContain('Showing the 3 entries without a category.')
+    } finally {
+      serverTransactions.pop()
+    }
+  })
+
+  it("is listed when filed under another profile's category, as circle 1 counts it", async () => {
+    categoryRead.next = async () => [
+      { id: 7, name: 'Food', type: 'expense', profile_id: 1 },
+      { id: 8, name: 'Their food', type: 'expense', profile_id: 2 },
+    ]
+    serverTransactions.push(tx(6, 'Crossed lunch', { category_id: 8 as never }))
+    try {
+      history.replaceState(null, '', '#transactions?uncategorised=1')
+      await mountTransactions()
+      expect(shown().sort()).toEqual(['Crossed lunch', 'Old market', 'Refund'])
+    } finally {
+      serverTransactions.pop()
+    }
+  })
+
+  it('is not taken for every filed entry while the categories load', async () => {
+    categoryRead.next = () => new Promise(() => {})
+    history.replaceState(null, '', '#transactions?uncategorised=1')
+    await mountTransactions()
+    // Groceries is filed under Food, which has not arrived yet.
+    expect(shown().sort()).toEqual(['Old market', 'Refund'])
+  })
+})
+
+describe('a profile switch', () => {
+  // categoriesLoaded stayed true across a switch, so until the new profile's categories came in,
+  // its filed entries were checked against the old profile's and counted as uncategorised.
+  it("takes no filed entry for uncategorised while the new profile's categories load", async () => {
+    serverTransactions.push(
+      tx(7, 'Their market', { profile_id: 2 as never, category_id: 8 as never })
+    )
+    try {
+      history.replaceState(null, '', '#transactions?uncategorised=1')
+      await mountTransactions()
+      expect(shown().sort()).toEqual(['Old market', 'Refund'])
+
+      categoryRead.next = () => new Promise(() => {})
+      localStorage.setItem('currentProfileId', '2')
+      bumpProfileVersion()
+      await flush()
+      await flush()
+
+      // Their market is filed under profile 2's category 8, whose list has not arrived yet.
+      expect(shown()).not.toContain('Their market')
+      expect(shown()).toContain('Their lunch')
+    } finally {
+      serverTransactions.pop()
+    }
   })
 })

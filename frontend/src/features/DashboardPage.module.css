@@ -638,3 +638,11 @@
   font-weight: 500;
   border-radius: var(--radius);
 }
+
+/* Week one: the month the Dashboard opened on instead of an empty one, and why (review M6). */
+.emptyMonth {
+  margin: 4px 0 12px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}

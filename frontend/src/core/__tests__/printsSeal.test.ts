@@ -172,10 +172,29 @@ describe('the words', () => {
       ...Array<SealSlot>(9).fill(null),
     ]
     expect(sealSummary(slots, '2026-01', words)).toContain(
-      'January 2026 and February 2026 spent the most, March 2026 the least.'
+      'January and February 2026 spent the most, March 2026 the least.'
     )
+    // Review M17: each of the two said it spent the most, which read as a contradiction.
     expect(monthLine(slots, '2026-01', 0, words)).toBe(
-      'January 2026 spent the most of these 3 months, and kept money.'
+      'January and February 2026 tied for the most spent. January 2026 kept money.'
+    )
+    expect(monthLine(slots, '2026-01', 1, words)).toBe(
+      'January and February 2026 tied for the most spent. February 2026 kept money.'
+    )
+  })
+
+  it('names a tie across a year end with both years, and what the tapped month kept', () => {
+    const slots: SealSlot[] = [
+      { spent: 80, kept: 10 },
+      { spent: 20, kept: -5 },
+      { spent: 20, kept: 0 },
+      ...Array<SealSlot>(9).fill(null),
+    ]
+    expect(monthLine(slots, '2025-11', 1, words)).toBe(
+      'December 2025 and January 2026 tied for the least spent. December 2025 spent more than came in.'
+    )
+    expect(monthLine(slots, '2025-11', 2, words)).toBe(
+      'December 2025 and January 2026 tied for the least spent. January 2026 came out about even.'
     )
   })
 
@@ -185,15 +204,25 @@ describe('the words', () => {
     const spent = [100, 90, 90, 80, 70, 60, 60, 50, 40, 30, 20, 20]
     const slots: SealSlot[] = spent.map((s) => ({ spent: s, kept: 10 }))
     const line = (i: number) => monthLine(slots, '2026-01', i, words)
-    expect(line(1)).toBe('February 2026 spent the second most of these 12 months, and kept money.')
-    expect(line(2)).toBe('March 2026 spent the second most of these 12 months, and kept money.')
+    // A tie is said as one: "October and November 2025 tied for the least spent." (review M17).
+    expect(line(1)).toBe(
+      'February and March 2026 tied for the second most spent. February 2026 kept money.'
+    )
+    expect(line(2)).toBe(
+      'February and March 2026 tied for the second most spent. March 2026 kept money.'
+    )
     expect(line(3)).toBe('April 2026 spent the fourth most of these 12 months, and kept money.')
+    expect(line(5)).toBe('June and July 2026 tied for the sixth most spent. June 2026 kept money.')
     expect(line(8)).toBe('September 2026 spent the ninth most of these 12 months, and kept money.')
     expect(line(9)).toBe('October 2026 spent the tenth most of these 12 months, and kept money.')
-    expect(line(10)).toBe('November 2026 spent the least of these 12 months, and kept money.')
-    expect(line(11)).toBe('December 2026 spent the least of these 12 months, and kept money.')
+    expect(line(10)).toBe(
+      'November and December 2026 tied for the least spent. November 2026 kept money.'
+    )
+    expect(line(11)).toBe(
+      'November and December 2026 tied for the least spent. December 2026 kept money.'
+    )
     expect(sealSummary(slots, '2026-01', words)).toContain(
-      'January 2026 spent the most, November 2026 and December 2026 the least.'
+      'January 2026 spent the most, November and December 2026 the least.'
     )
   })
 })

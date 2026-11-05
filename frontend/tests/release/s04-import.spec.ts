@@ -196,10 +196,12 @@ for (const [pass, test] of both) {
       if (m.kind === 'cloud') {
         const requests = await since()
         const log = requests.map(describeFetch).join('\n    ')
+        // A statement from a bank the app knows opens on a summary, dry-run once, and Check the
+        // columns leads on to the preview, dry-run once more (review M4).
         expect(
           requests.filter((r) => r.method === 'POST' && /\/api\/import\/execute\?/.test(r.url)),
-          `the preview dry-runs the import once:\n    ${log}`
-        ).toHaveLength(1)
+          `the summary and the preview dry-run the import once each:\n    ${log}`
+        ).toHaveLength(2)
         // The badge evaluator's reads are 4.2b's to check.
         expect(
           requests
@@ -323,6 +325,18 @@ for (const [pass, test] of both) {
       // page: a statement it reads goes through the active profile's stored rules, which name its
       // categories.
       const { page } = m
+      // Local-first runs over the demo, whose two profiles are examples, and setup over an example
+      // makes a space of its own (and removes the examples), so it reads with the new space's
+      // rules. The case is setup on profiles of the person's own: in local-first both are made so
+      // first, by name, which is all that tells an example from one of the person's.
+      if (m.kind === 'local') {
+        for (const [profile, name] of [
+          [m.a, 'zz-own-a'],
+          [m.b, 'zz-own-b'],
+        ] as const) {
+          await m.api(`/api/profiles/${String(profile.id)}`, { method: 'PUT', body: { name } })
+        }
+      }
       await arrangeImportRules(page, m.a.id, RULES_A)
       await arrangeImportRules(page, m.b.id, RULES_B)
       await reloadOn(page, 'settings', 'settings-header')

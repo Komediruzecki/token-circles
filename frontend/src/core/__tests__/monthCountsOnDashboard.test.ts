@@ -89,9 +89,7 @@ describe('the counts of months on Dashboard', () => {
   it('eight tracked months this year with May missing: the run and the window each say which', () => {
     const said = dashboard(months('2026-01', '2026-09').filter((m) => m !== '2026-05'))
     expect(said.rail).toBe('4 months in a row')
-    expect(said.importYear).toBe(
-      '8 of the last 13 months are tracked. A month counts once it holds 3 entries.'
-    )
+    expect(said.importYear).toBe('8 of 12 months tracked. A month counts once it holds 3 entries.')
     expect(said.aYear).toBe(false)
   })
 
@@ -99,9 +97,7 @@ describe('the counts of months on Dashboard', () => {
     const said = dashboard(months('2024-01', '2024-12'))
     expect(said.aYear).toBe(true)
     expect(said.rail).toBe('Start a streak')
-    expect(said.importYear).toBe(
-      'None of the last 13 months is tracked yet. A month counts once it holds 3 entries.'
-    )
+    expect(said.importYear).toBe('0 of 12 months tracked. A month counts once it holds 3 entries.')
   })
 
   it('twelve of the last thirteen with May missing: a year on file, but not twelve in a row', () => {

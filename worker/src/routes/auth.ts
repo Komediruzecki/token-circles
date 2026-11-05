@@ -62,10 +62,12 @@ import {
   renderPasswordReset,
 } from '../emailTemplates';
 import { claimWelcomeOnConfirm, welcomeAfterAnswer, welcomeClaimed } from '../welcome';
+import { defaultCategoryInserts } from '../profileData';
 import { clearRateLimit, enforce, clientIp, rateLimit } from '../ratelimit';
 import { getTotpForLogin, issueTwofaChallengeCookie } from '../twofa';
 import { logAuthEvent } from '../authlog';
 import { captchaRejection, verifyTurnstileDetailed } from '../turnstile';
+import { aboutOrigin } from '../reminders';
 import { CAPTCHA_ACTIONS } from '../../../shared/captchaActions';
 import { checkSignInTry, coverNextTry, endLoginCheck, useUpLoginChecks } from '../login-check';
 import {
@@ -286,6 +288,13 @@ async function accountAt(
     env.DB.prepare(
       "INSERT INTO profiles (name, user_id) SELECT 'Personal Profile', id FROM users WHERE email = ?"
     ).bind(email),
+    // The profile starts with the default categories (profileData.ts).
+    ...defaultCategoryInserts(
+      env.DB,
+      `SELECT own.id FROM profiles own JOIN users u ON u.id = own.user_id
+       WHERE u.email = ? AND own.name = 'Personal Profile'`,
+      email
+    ),
     await firstConfirmLink(env.DB, email, token),
   ]);
   return { made: { token } };
@@ -326,7 +335,7 @@ async function signUpAfterAnswer(
     return;
   }
   if ('found' in account) {
-    const notice = renderAccountExists({ appUrl: base });
+    const notice = renderAccountExists({ appUrl: base, aboutUrl: aboutOrigin(env) });
     await sendMail(env, email, notice.subject, notice.html, { text: notice.text }).catch(
       (e: unknown) => {
         console.error('account-exists notice email failed to send:', e);
@@ -337,6 +346,8 @@ async function signUpAfterAnswer(
   const confirm = renderConfirmEmail({
     link: verifyLink(apiOrigin, account.made.token, base),
     ttlHours: VERIFY_TOKEN_TTL_HOURS,
+    appUrl: base,
+    aboutUrl: aboutOrigin(env),
     assetOrigin: base,
   });
   await sendMail(env, email, confirm.subject, confirm.html, { text: confirm.text }).catch(
@@ -555,7 +566,13 @@ async function mailResetLinkIfAccount(env: Env, email: string, base: string): Pr
     .bind(user.id, tokenHash, expiresAt)
     .run();
   const link = `${base}/#reset-password?token=${token}`;
-  const reset = renderPasswordReset({ link, ttlHours: RESET_TOKEN_TTL_HOURS, assetOrigin: base });
+  const reset = renderPasswordReset({
+    link,
+    ttlHours: RESET_TOKEN_TTL_HOURS,
+    appUrl: base,
+    aboutUrl: aboutOrigin(env),
+    assetOrigin: base,
+  });
   await sendMail(env, email, reset.subject, reset.html, { text: reset.text });
 }
 
@@ -904,6 +921,8 @@ async function mailFreshConfirmLink(
   const mail = renderEmailVerification({
     link: verifyLink(apiOrigin, token, base),
     ttlHours: VERIFY_TOKEN_TTL_HOURS,
+    appUrl: base,
+    aboutUrl: aboutOrigin(env),
     assetOrigin: base,
   });
   await sendMail(env, email, mail.subject, mail.html, { text: mail.text });
@@ -974,6 +993,8 @@ authRoutes.post('/api/auth/resend-verification', requireAuthEvenUnconfirmed, asy
   const mail = renderEmailVerification({
     link,
     ttlHours: VERIFY_TOKEN_TTL_HOURS,
+    appUrl: base,
+    aboutUrl: aboutOrigin(c.env),
     assetOrigin: base,
   });
   await sendMail(c.env, user.email, mail.subject, mail.html, { text: mail.text });

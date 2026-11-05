@@ -246,7 +246,7 @@ test.describe('Prints as drawn', () => {
     expect(pressed.pressed).toBe('true')
     fits(pressed, 'the pressed print')
 
-    // Scrolled along, the strip snaps to a print's start, which stops 5 px in from its edge. The
+    // Scrolled along, the strip snaps to a print's start, which stops 7 px in from its edge. The
     // first print wholly in view there takes the focus (still shown, as the last focus was).
     await strip.evaluate((el) => {
       const [a, b] = el.querySelectorAll('button')
@@ -266,6 +266,64 @@ test.describe('Prints as drawn', () => {
     const last = await ring()
     expect(last.from).toBe(await thumbs.last().getAttribute('data-from'))
     fits(last, 'the last print')
+  })
+
+  // The focus ring was a second blue outline 1 px further out than the pressed print's (3 Nov
+  // test run): a print focused from the keyboard looked pressed, and the pressed print, focused,
+  // lost its own ring. Focus is in the text colour now, and the pressed ring a shadow inside it.
+  test('a print focused from the keyboard looks unlike the pressed one, and the pressed one focused shows both, in both themes', async ({
+    page,
+  }) => {
+    await page.setViewportSize(PHONE)
+    await examplePrints(page)
+    for (const theme of ['light', 'dark'] as const) {
+      await inTheme(page, theme)
+      const strip = page.getByTestId('prints-every')
+      const thumbs = strip.getByRole('button')
+      await page.mouse.wheel(0, 1)
+      await strip.scrollIntoViewIfNeeded()
+      /** A print's rings as drawn: its outline's colour and reach, and its shadow. */
+      const rings = (n: number) =>
+        thumbs.nth(n).evaluate((b) => {
+          const s = getComputedStyle(b)
+          return {
+            keyboard: b.matches(':focus-visible'),
+            outline: s.outlineStyle === 'none' ? null : s.outlineColor,
+            offset: parseFloat(s.outlineOffset),
+            shadow: s.boxShadow === 'none' ? null : s.boxShadow,
+          }
+        })
+      // The second print pressed by a click; the first focused from the keyboard beside it.
+      await thumbs.nth(1).click()
+      await expect(thumbs.nth(1)).toHaveAttribute('aria-pressed', 'true')
+      await page.keyboard.press('Shift+Tab')
+      const focused = await rings(0)
+      const pressed = await rings(1)
+      expect(focused.keyboard, `${theme}: focus from the keyboard`).toBe(true)
+      expect(focused.shadow, `${theme}: a focused print is not drawn pressed`).toBeNull()
+      expect(pressed.outline, `${theme}: a pressed print has no focus ring`).toBeNull()
+      // The pressed ring is the shadow's outer colour, 4 px out.
+      const ring = pressed.shadow?.match(/rgba?\([^)]+\)/g)?.at(-1) ?? ''
+      expect(ring, `${theme}: the pressed ring`).not.toBe('')
+      expect(
+        contrast(focused.outline ?? '', ring),
+        `${theme}: the focus ring against the pressed ring`
+      ).toBeGreaterThanOrEqual(2)
+
+      await page.keyboard.press('Tab')
+      const both = await rings(1)
+      expect(both.keyboard, `${theme}: the pressed print focused`).toBe(true)
+      expect(both.shadow, `${theme}: still drawn pressed`).toBe(pressed.shadow)
+      expect(both.outline, `${theme}: with the focus ring`).toBe(focused.outline)
+      // Outside the pressed ring, which reaches 4 px out.
+      expect(both.offset, `${theme}: the focus ring clear of the pressed one`).toBeGreaterThan(4)
+    }
+
+    // Forced colours draw no shadows: the pressed print keeps a border of its own there.
+    await page.emulateMedia({ forcedColors: 'active' })
+    const pressedThere = page.getByTestId('prints-every').getByRole('button').nth(1)
+    await expect(pressedThere).toHaveAttribute('aria-pressed', 'true')
+    expect(await pressedThere.evaluate((b) => getComputedStyle(b).borderTopWidth)).toBe('3px')
   })
 
   // Chromium scrolls a focused element into view only when none of it shows, so Tab to a print

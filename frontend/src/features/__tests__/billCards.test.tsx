@@ -144,3 +144,31 @@ describe('the bill cards', () => {
     expect(details('Water')).toBe('Next due Nov 5, 2026 • Monthly • Utilities')
   })
 })
+
+// Review M12: the unpaid bills' heading read "1 bills". It counts in the word the done step and
+// the day-7 mail use, singular for one.
+describe('the unpaid bills heading', () => {
+  const meta = () =>
+    host
+      .querySelector('#bills-sec-unpaid h2')!
+      .parentElement!.textContent!.replace('Unpaid Bills', '')
+      .trim()
+
+  it('counts two unpaid bills as "2 bills"', async () => {
+    await mountPage()
+
+    expect(meta()).toBe('2 bills')
+  })
+
+  it('counts one unpaid bill as "1 bill"', async () => {
+    const db = await getDB()
+    await db.delete('bills', 3)
+    const { default: Bills } = await import('../Bills')
+    dispose = render(() => <Bills />, host)
+    await vi.waitFor(() => {
+      expect(host.querySelectorAll('[data-test-id="bill-name"]').length).toBe(2)
+    })
+
+    expect(meta()).toBe('1 bill')
+  })
+})

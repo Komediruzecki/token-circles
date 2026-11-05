@@ -81,11 +81,13 @@ export async function importAccountOptions(page: Page): Promise<string[]> {
 
 /**
  * The statement's account picked, processed, mapped, and on to the preview: the step whose dry run
- * of the import tells the user what it would skip and create.
+ * of the import tells the user what it would skip and create. A statement from a bank the app
+ * knows opens on a summary first (review M4), with the columns behind Check the columns.
  */
 export async function previewStatement(page: Page, account: string, rows: number): Promise<void> {
   await page.getByTestId('bank-target-account').first().selectOption(account)
   await page.getByTestId('bank-process-btn').click()
+  await page.getByTestId('import-summary-columns').click()
   await page.getByTestId('import-continue-preview').click()
   await expect(page.getByTestId('import-preview-total')).toHaveText(String(rows), {
     timeout: 20_000,

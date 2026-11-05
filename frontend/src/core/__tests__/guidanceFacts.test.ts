@@ -425,15 +425,59 @@ describe('money moved between accounts', () => {
     }
   })
 
-  it('leaves Other as spending, which its kind does not count as needed', () => {
+  it('counts Other as spending, and as needed until the person says otherwise (review M1)', () => {
+    // The import files what no rule knows under Other, rent and groceries among it: its name says
+    // nothing about what it holds, so it counts as needed, as any category with no kind does.
     const other = [...moving, { id: 8, name: 'Other', type: 'expense' }]
-    expect(kindForName('Other')).toBe('other')
+    expect(kindForName('Other')).toBeNull()
     const facts = guidanceFacts(
       input({ transactions: putBy(8), categories: other, accounts: savings })
     )
     expect(facts.spending).toBeCloseTo(1400, 6)
-    expect(facts.essentials).toBeCloseTo(400, 6)
-    expect(facts.unsure).toEqual({ categories: 0, uncategorised: 0, all: false })
+    expect(facts.essentials).toBeCloseTo(1400, 6)
+    expect(facts.unsure).toEqual({ categories: 1, uncategorised: 0, all: false })
+    // Every entry has a category; Other holds 1,000 of the 1,400 spent a month, all of it counted
+    // as needed only because nothing says otherwise.
+    expect(facts.sortedShare).toBeCloseTo(100, 6)
+    expect(facts.catchAlls).toEqual([
+      { name: 'Other', share: expect.closeTo((1000 / 1400) * 100, 6), unsure: 1000 },
+    ])
+    // Marked as not needed every month, it is not, and none of it is counted as needed.
+    const marked = guidanceFacts(
+      input({
+        transactions: putBy(8),
+        categories: [...moving, { id: 8, name: 'Other', type: 'expense', essential: 0 }],
+        accounts: savings,
+      })
+    )
+    expect(marked.essentials).toBeCloseTo(400, 6)
+    expect(marked.catchAlls).toEqual([
+      { name: 'Other', share: expect.closeTo((1000 / 1400) * 100, 6), unsure: 0 },
+    ])
+  })
+
+  it('names no catch-all while none is spent in, and one filed inside a kind is not one', () => {
+    const housing = { id: 5, name: 'Housing', type: 'expense', kind: 'housing' }
+    const facts = guidanceFacts(
+      input({
+        transactions: putBy(8),
+        categories: [...moving, housing, { id: 8, name: 'Other', type: 'expense', parent_id: 5 }],
+        accounts: savings,
+      })
+    )
+    // Housing's Other is housing: needed by its parent's kind, and no catch-all.
+    expect(facts.essentials).toBeCloseTo(1400, 6)
+    expect(facts.unsure.categories).toBe(0)
+    expect(facts.catchAlls).toEqual([])
+    expect(
+      guidanceFacts(
+        input({
+          transactions: putBy(1),
+          categories: [...moving, { id: 8, name: 'Other', type: 'expense' }],
+          accounts: savings,
+        })
+      ).catchAlls
+    ).toEqual([])
   })
 })
 
@@ -560,10 +604,10 @@ describe('the money a person can reach', () => {
     expect(liquidOf(accounts, dipped, TODAY)).toBe(400)
   })
 
-  it('reads money moved in from savings at the current account’s low point before it came', () => {
-    // 2,000 moved from savings to the current account on the 6th. Savings count at their balance and
-    // the current accounts at their low point, so the 2,000 counts from the day the low point
-    // passes it: until then 3,500 reads, held or spent. An under-count, towards a larger cushion.
+  it('counts money moved in from savings or cash once, on the current account, from the day it came', () => {
+    // 2,000 moved from savings to the current account on the 6th. Savings count at their balance
+    // today, which no longer holds it, so the walk back through the current account's days leaves
+    // the move out: the 2,000 counts there. It had counted nowhere for 30 days (3 Nov review A2).
     const moved = [
       entry('2026-10-06', {
         type: 'transfer',
@@ -576,14 +620,73 @@ describe('the money a person can reach', () => {
       { id: 1, type: 'giro', balance: 2500 },
       { id: 2, type: 'savings', balance: 3000 },
     ]
-    expect(liquidOf(held, moved, TODAY)).toBe(3500)
-    // Spent on a 2,000 bill on the 7th.
-    const spent = [...moved, entry('2026-10-07', { amount: 2000, account_id: 1 })]
+    expect(liquidOf(held, moved, TODAY)).toBe(5500)
+    expect(liquidPartsOf(held, moved, TODAY)).toEqual({ savings: 3000, current: 2500, cash: 0 })
+    // The same from a cash account: 300 paid in on the 9th.
+    const paidIn = [
+      entry('2026-10-09', { type: 'transfer', amount: 300, account_id: 3, transfer_account_id: 1 }),
+    ]
+    const fromCash = [
+      { id: 1, type: 'giro', balance: 800 },
+      { id: 3, type: 'cash', balance: 50 },
+    ]
+    expect(liquidOf(fromCash, paidIn, TODAY)).toBe(850)
+    // The review's case through the cushion: 1,000 on the current account and 3,000 in savings,
+    // then 2,000 moved across today. Still 4,000, and still 2.67 months of 1,500.
+    const months = [ago(3), ago(2), ago(1)].flatMap((ym) => month(ym, 2000, 1500))
+    const today = [
+      entry(TODAY, { type: 'transfer', amount: 2000, account_id: 2, transfer_account_id: 1 }),
+    ]
+    const across = [
+      { id: 1, type: 'giro', balance: 3000 },
+      { id: 2, type: 'savings', balance: 1000 },
+    ]
+    const cushion = cushionOf({
+      today: TODAY,
+      transactions: [...months, ...today],
+      categories: [],
+      accounts: across,
+    })
+    expect(cushion.liquid).toBe(4000)
+    expect(cushion.months).toBeCloseTo(4000 / 1500)
+  })
+
+  it('takes what is spent of money moved in from savings, and keeps the rest', () => {
+    const moved = entry('2026-10-06', {
+      type: 'transfer',
+      amount: 2000,
+      account_id: 2,
+      transfer_account_id: 1,
+    })
+    // 800 of it spent on the 7th: 1,200 of the 2,000 left, beside the 500 the account held.
+    const part = [moved, entry('2026-10-07', { amount: 800, account_id: 1 })]
     const after = [
+      { id: 1, type: 'giro', balance: 1700 },
+      { id: 2, type: 'savings', balance: 3000 },
+    ]
+    expect(liquidOf(after, part, TODAY)).toBe(4700)
+    // All of it spent on a 2,000 bill: the 500 and the savings.
+    const all = [moved, entry('2026-10-07', { amount: 2000, account_id: 1 })]
+    const spent = [
       { id: 1, type: 'giro', balance: 500 },
       { id: 2, type: 'savings', balance: 3000 },
     ]
-    expect(liquidOf(after, spent, TODAY)).toBe(3500)
+    expect(liquidOf(spent, all, TODAY)).toBe(3500)
+  })
+
+  it('keeps reading a move out to savings at the current account’s days as they were', () => {
+    // Salary on the 1st, and 500 of it put by the same day, as a standing order does. The current
+    // account held 300 the day before: that 300 never left, and the 500 is in savings. Leaving
+    // this move out too would take the 300 back off the days before it, and read 5,500.
+    const putBy = [
+      entry('2026-10-01', { type: 'income', amount: 2000, account_id: 1, category_id: 9 }),
+      entry('2026-10-01', { type: 'transfer', amount: 500, account_id: 1, transfer_account_id: 2 }),
+    ]
+    const accounts = [
+      { id: 1, type: 'giro', balance: 1800 },
+      { id: 2, type: 'savings', balance: 5500 },
+    ]
+    expect(liquidOf(accounts, putBy, TODAY)).toBe(5800)
   })
 
   it('reads back exactly 30 days: today and the 29 before it', () => {
@@ -947,21 +1050,34 @@ describe('invested money', () => {
 })
 
 describe('the savings rate (D6)', () => {
-  it('counts the loan principal repaid in the window as kept, and keeps the cash figure beside it', () => {
-    const loan = {
-      principal: 12000,
-      interest_rate: 0,
-      start_date: '2025-01-01',
-      term_months: 120,
-      rate_periods: [],
-      prepayments: [],
-    }
-    // At no interest, 100 of principal a month.
-    expect(amortize(loan)[0].principal).toBeCloseTo(100, 6)
-    const facts = guidanceFacts(input({ loans: [loan] }))
+  // The four months of `input()`: 2,000 in and 1,000 spent on groceries in each.
+  const window = [1, 2, 3, 4].map(ago)
+  const debtKind = { id: 3, name: 'Loan payments', type: 'expense', kind: 'debt' }
+  const housing = { id: 4, name: 'Housing', type: 'expense', kind: 'housing' }
+  const withCategories = [...categories, debtKind, housing]
+  /** At no interest, 100 of principal a month, and every payment is that 100. */
+  const interestFree = {
+    principal: 12000,
+    interest_rate: 0,
+    start_date: '2025-01-01',
+    term_months: 120,
+    rate_periods: [],
+    prepayments: [],
+  }
+  /** Each window month's groceries, with `extra` booked on the 20th. */
+  const booked = (extra: (ym: string) => FactsEntry[]) =>
+    window.flatMap((ym) => [...month(ym, 2000, 1000), ...extra(ym)])
+
+  it('counts the principal of the loan payments it spent as kept, and keeps the cash figure beside it', () => {
+    expect(amortize(interestFree)[0].principal).toBeCloseTo(100, 6)
+    const paid = booked((ym) => [entry(`${ym}-20`, { amount: 100, category_id: 3 })])
+    const facts = guidanceFacts(
+      input({ transactions: paid, categories: withCategories, loans: [interestFree] })
+    )
     expect(facts.principalRepaid).toBeCloseTo(100, 6)
-    expect(facts.savings.cash).toBeCloseTo(50, 6)
-    expect(facts.savings.withPrincipal).toBeCloseTo(55, 6)
+    // 2,000 in, 1,100 out: 45% in cash, and 50% with the 100 that paid the loan down.
+    expect(facts.savings.cash).toBeCloseTo(45, 6)
+    expect(facts.savings.withPrincipal).toBeCloseTo(50, 6)
     expect(LOAN_PRINCIPAL_IS_SAVING).toBe(true)
     expect(facts.savings.rate).toBe(facts.savings.withPrincipal)
   })
@@ -975,15 +1091,180 @@ describe('the savings rate (D6)', () => {
       rate_periods: [],
       prepayments: [{ month: 20, amount: 500 }],
     }
-    const window = new Set([1, 2, 3, 4].map(ago))
-    const rows = amortize(loan).filter((row) => window.has(row.date.slice(0, 7)))
+    const windowSet = new Set(window)
+    const rows = amortize(loan).filter((row) => windowSet.has(row.date.slice(0, 7)))
     expect(rows).toHaveLength(4)
     expect(rows.some((row) => row.prepayment > 0)).toBe(true)
+    // Each payment, and the extra one, spent as debt payments in its month.
+    const paid = booked((ym) =>
+      rows
+        .filter((row) => row.date.startsWith(ym))
+        .flatMap((row) => [row.payment, row.prepayment])
+        .filter((amount) => amount > 0)
+        .map((amount) => entry(`${ym}-20`, { amount, category_id: 3 }))
+    )
     const repaid = rows.reduce((sum, row) => sum + row.principal + row.prepayment, 0) / 4
-    expect(guidanceFacts(input({ loans: [loan] })).principalRepaid).toBeCloseTo(repaid, 6)
+    expect(
+      guidanceFacts(input({ transactions: paid, categories: withCategories, loans: [loan] }))
+        .principalRepaid
+    ).toBeCloseTo(repaid, 6)
     expect(repaid).toBeLessThan(
       rows.reduce((sum, row) => sum + row.payment + row.prepayment, 0) / 4
     )
+  })
+
+  // 3 Nov review A5: the principal was added on top of `cash` whatever the entries showed, so a
+  // loan whose payments never were spending counted twice.
+  it('adds nothing for a loan paid by transfer, or from outside the app', () => {
+    const byTransfer = booked((ym) => [
+      entry(`${ym}-20`, { type: 'transfer', amount: 100, account_id: 1, transfer_account_id: 7 }),
+    ])
+    for (const transactions of [byTransfer, booked(() => [])]) {
+      const facts = guidanceFacts(
+        input({ transactions, categories: withCategories, loans: [interestFree] })
+      )
+      expect(facts.principalRepaid).toBe(0)
+      expect(facts.savings.withPrincipal).toBeCloseTo(50, 6)
+      expect(facts.savings.rate).toBe(facts.savings.cash)
+    }
+    // The review's own case: 3,000 in, 1,700 spent, and a loan of 1,000 a month paid by transfer.
+    const big = { ...interestFree, principal: 120000 }
+    const review = window.flatMap((ym) => [
+      ...month(ym, 3000, 1700),
+      entry(`${ym}-20`, { type: 'transfer', amount: 1000, account_id: 1, transfer_account_id: 7 }),
+    ])
+    const facts = guidanceFacts(input({ transactions: review, loans: [big] }))
+    expect(facts.savings.cash).toBeCloseTo(43.33, 1)
+    // Was 76.7%: the 1,000 added back on top of the 1,300 kept.
+    expect(facts.savings.rate).toBeCloseTo(43.33, 1)
+  })
+
+  // 3 Nov review, round 3: the add-back was pooled across loans, so any Debt payments expense, or
+  // a recurring expense within 1% of a payment, let a loan paid by transfer count twice.
+  describe('a loan paid by transfer, beside an expense of its payment size', () => {
+    const childcare = { id: 5, name: 'Childcare', type: 'expense', kind: 'childcare' }
+    const big = { ...interestFree, principal: 120000 }
+    const byTransfer = (ym: string) =>
+      entry(`${ym}-20`, { type: 'transfer', amount: 1000, account_id: 1, transfer_account_id: 7 })
+    const factsFor = (extra: (ym: string) => FactsEntry[]) =>
+      guidanceFacts(
+        input({
+          transactions: booked(extra),
+          categories: [...withCategories, childcare],
+          loans: [big],
+        })
+      )
+
+    it('adds nothing for a card paid under Debt payments', () => {
+      const facts = factsFor((ym) => [
+        byTransfer(ym),
+        entry(`${ym}-21`, { amount: 1000, category_id: 3 }),
+      ])
+      expect(facts.principalRepaid).toBe(0)
+      expect(facts.savings.rate).toBe(facts.savings.cash)
+    })
+
+    it('adds nothing for a childcare fee within 1% of the payment', () => {
+      const facts = factsFor((ym) => [
+        byTransfer(ym),
+        entry(`${ym}-21`, { amount: 995, category_id: 5 }),
+      ])
+      expect(facts.principalRepaid).toBe(0)
+      expect(facts.savings.rate).toBe(facts.savings.cash)
+    })
+
+    it('takes no childcare fee for a payment, even with no transfer to find', () => {
+      const facts = factsFor((ym) => [entry(`${ym}-21`, { amount: 1000, category_id: 5 })])
+      expect(facts.principalRepaid).toBe(0)
+    })
+  })
+
+  it('adds back at most what the entries spent on debt payments', () => {
+    // Two of the four months' payments booked: 200 spent, of 400 principal.
+    const half = booked((ym) =>
+      window.indexOf(ym) < 2 ? [entry(`${ym}-20`, { amount: 100, category_id: 3 })] : []
+    )
+    const facts = guidanceFacts(
+      input({ transactions: half, categories: withCategories, loans: [interestFree] })
+    )
+    expect(facts.principalRepaid).toBeCloseTo(50, 6)
+  })
+
+  it('finds a payment filed under another kind by its size, as a mortgage under Housing is', () => {
+    const mortgage = { ...interestFree, principal: 96000, interest_rate: 3, term_months: 240 }
+    const windowSet = new Set(window)
+    const rows = amortize(mortgage).filter((row) => windowSet.has(row.date.slice(0, 7)))
+    const principal = rows.reduce((sum, row) => sum + row.principal, 0) / 4
+    // The bank's installment, a few cents off the schedule's, filed under Housing.
+    const paid = booked((ym) => {
+      const due = rows.find((row) => row.date.startsWith(ym))!.payment
+      return [entry(`${ym}-20`, { amount: Math.round(due * 100) / 100 + 0.03, category_id: 4 })]
+    })
+    expect(
+      guidanceFacts(input({ transactions: paid, categories: withCategories, loans: [mortgage] }))
+        .principalRepaid
+    ).toBeCloseTo(principal, 6)
+    // Rent of another size is no payment of it.
+    const rent = booked((ym) => [entry(`${ym}-20`, { amount: 850, category_id: 4 })])
+    expect(
+      guidanceFacts(input({ transactions: rent, categories: withCategories, loans: [mortgage] }))
+        .principalRepaid
+    ).toBe(0)
+    // Nor is one expense of its size in one month of the four: that is chance, not a payment.
+    const once = booked((ym) => {
+      const due = rows.find((row) => row.date.startsWith(ym))!.payment
+      return ym === window[0] ? [entry(`${ym}-20`, { amount: due, category_id: 4 })] : []
+    })
+    expect(
+      guidanceFacts(input({ transactions: once, categories: withCategories, loans: [mortgage] }))
+        .principalRepaid
+    ).toBe(0)
+  })
+
+  it('counts one expense as one payment, however many loans are due its size', () => {
+    // Two loans of 100 a month, and one 100 under Housing each month: one of them was paid.
+    const paid = booked((ym) => [entry(`${ym}-20`, { amount: 100, category_id: 4 })])
+    const facts = guidanceFacts(
+      input({
+        transactions: paid,
+        categories: withCategories,
+        loans: [interestFree, { ...interestFree }],
+      })
+    )
+    expect(facts.principalRepaid).toBeCloseTo(100, 6)
+  })
+
+  it('then finds its extra payments the same way', () => {
+    const base = { ...interestFree, principal: 96000, interest_rate: 3, term_months: 240 }
+    const start = amortize(base).findIndex((row) => row.date.startsWith(window[1]))
+    const mortgage = { ...base, prepayments: [{ month: start + 1, amount: 2000 }] }
+    const windowSet = new Set(window)
+    const rows = amortize(mortgage).filter((row) => windowSet.has(row.date.slice(0, 7)))
+    expect(rows.find((row) => row.date.startsWith(window[1]))?.prepayment).toBe(2000)
+    const paid = booked((ym) => {
+      const row = rows.find((r) => r.date.startsWith(ym))!
+      return [row.payment, row.prepayment]
+        .filter((amount) => amount > 0)
+        .map((amount) => entry(`${ym}-20`, { amount, category_id: 4 }))
+    })
+    const repaid = rows.reduce((sum, row) => sum + row.principal + row.prepayment, 0) / 4
+    expect(
+      guidanceFacts(input({ transactions: paid, categories: withCategories, loans: [mortgage] }))
+        .principalRepaid
+    ).toBeCloseTo(repaid, 6)
+  })
+
+  it('leaves a payment it found by chance for a loan that was due it', () => {
+    // A loan due all four months with one 100 found, and a new one of 100 due only last month:
+    // the 100 is the new loan's payment, not a chance match of the old one's.
+    const fresh = { ...interestFree, start_date: `${window[0]}-01` }
+    const paid = booked((ym) =>
+      ym === window[0] ? [entry(`${ym}-20`, { amount: 100, category_id: 4 })] : []
+    )
+    const facts = guidanceFacts(
+      input({ transactions: paid, categories: withCategories, loans: [interestFree, fresh] })
+    )
+    expect(facts.principalRepaid).toBeCloseTo(25, 6)
   })
 
   it('has none without income', () => {

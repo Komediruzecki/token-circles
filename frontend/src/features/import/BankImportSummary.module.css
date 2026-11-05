@@ -1,0 +1,40 @@
+/* The summary a statement from a bank the app knows opens on (BankImportSummary.tsx). */
+.summary {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.title {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.line {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--text);
+}
+
+.note {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+/* A finger's worth on a phone, and the same row height on a desk. */
+.action {
+  min-height: 44px;
+  justify-content: center;
+}

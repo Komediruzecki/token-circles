@@ -58,6 +58,9 @@
   --primary-bg: rgba(59, 111, 224, 0.1);
   --primary-strong: #3b6fe0;
   --success: #14985a;
+  /* Small text in the success hue, such as a circle check's "Met": 5.4:1 on --surface and 5.1:1 on
+     --bg. --success itself is 3.7:1 on --surface, enough for a mark, not for text. */
+  --success-text: #0e7a47;
   --danger: #d64550;
   --danger-hover: #b93842;
   --danger-outline: #d64550;

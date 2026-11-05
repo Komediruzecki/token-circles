@@ -44,8 +44,11 @@ import {
   clearLocalSetupPending,
   LOCAL_ONBOARDING_OWNER,
   localSetupPending,
+  localSetupStep,
+  markLocalSetupPending,
   onboardingFlagKey,
 } from './onboardingFlag'
+import { forgetTypedBalances } from './setupTypedBalances'
 import type { OnboardingDecision, OnboardingStep } from '../../../shared/accountStateKeys'
 
 // The step names are stored on the account and counted by the first-week measurement, so they
@@ -204,6 +207,10 @@ function recordDecision(
  */
 function recordStep(step: OnboardingStep): void {
   const of = owner
+  if (of === LOCAL_ONBOARDING_OWNER) {
+    keepLocalStep(step)
+    return
+  }
   if (!isServerAccount(of)) return
   const state = accountState()
   if (state === null || state.onboarding === UNREADABLE || onboardingFinished(state.onboarding)) {
@@ -216,6 +223,32 @@ function recordStep(step: OnboardingStep): void {
     // Not kept: the next step sends the furthest one again.
     if (owner === of) furthestSent = null
   })
+}
+
+/** A step as kept in the local marker, or null for none this build knows. */
+function knownStep(kept: string | null): OnboardingStep | null {
+  return ONBOARDING_STEPS.find((step) => step === kept) ?? null
+}
+
+/**
+ * Local-first: keep the furthest step the first setup reached in the marker, until it is finished
+ * or left (review M7). Setup run again after a decision keeps nothing, as signed in; one the
+ * local-only switch asked for keeps its steps over a decision the demo left behind.
+ */
+function keepLocalStep(step: OnboardingStep): void {
+  if (getOnboardingStatus(LOCAL_ONBOARDING_OWNER) !== null && !localSetupPending()) return
+  markLocalSetupPending(furthestStep(knownStep(localSetupStep()), step) ?? step)
+}
+
+/**
+ * Whether the wizard is on a signed-in account's first setup: its record is read and not finished.
+ * Run again over a finished record ("Run setup again"), or with the record unknown, it is not.
+ */
+export function firstSetupOfTheAccount(): boolean {
+  if (!isServerAccount(owner)) return false
+  const state = accountState()
+  if (state === null || state.onboarding === UNREADABLE) return false
+  return !onboardingFinished(state.onboarding)
 }
 
 const store = createRoot(() => {
@@ -267,6 +300,8 @@ function decide(outcome: OnboardingDecision): void {
   store.setOnboardingOpen(false)
   // Left or finished: a local-only switch's setup never opens again by itself.
   clearLocalSetupPending()
+  // Its "Balance today" figures say nothing about an import after it (review M2).
+  forgetTypedBalances()
   if (isServerAccount(of)) {
     // Relaunched over a finished record: the first decision stands, so there is nothing to send.
     // Over one this build cannot read, the decision may stand there too, so the same.
@@ -280,6 +315,25 @@ function decide(outcome: OnboardingDecision): void {
   setOnboardingStatus(outcome, of)
   persistRemoteStatus(outcome)
   if (first) beginGettingStarted(of)
+}
+
+/**
+ * A profile the person made counts as the decision setup asks for. In local-first, a workspace
+ * with no decision yet keeps "skipped", as leaving setup would, and Getting started begins as it
+ * does then, so setup never opens over that profile, empty as it starts. Signed in, the account's
+ * record decides, and nothing changes here.
+ *
+ * Called by the profile menu's Create Profile (ProfileModal) for the current owner, and by the
+ * local-only switch for `local` over a workspace with profiles of the person's own, which its
+ * confirm says they carry on with. Setup's own space step does not call it: setup decides itself.
+ */
+export function countProfileMadeAsDecided(of: string | null = owner): void {
+  if (of !== LOCAL_ONBOARDING_OWNER || getOnboardingStatus(of) !== null) return
+  setOnboardingStatus('skipped', of)
+  // The mirror goes to the settings of the workspace open now, which is this one only when it is
+  // local-first's; the switch calls this from the account.
+  if (owner === of) persistRemoteStatus('skipped')
+  beginGettingStarted(of)
 }
 
 /** Finish the wizard. */
@@ -330,7 +384,10 @@ export async function whereToOfferOnboarding(): Promise<OnboardingStep | null> {
     if (owner !== asking || own === null) return null
     // Only the examples, or nothing: setup opens on the space, however much the examples hold.
     if (!own) return 'space'
-    // A workspace of the person's own: carried on with as before.
+    // Setup under way in this workspace: on again at the furthest step it reached (review M7).
+    const reached = knownStep(localSetupStep())
+    if (reached !== null) return openingStep(reached)
+    // The switch's ask, over a workspace of the person's own: carried on with as before.
     clearLocalSetupPending()
   }
   return (await shouldOfferLocally(asking)) ? 'space' : null

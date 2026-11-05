@@ -148,6 +148,15 @@ describe('the facts', () => {
     expect(facts.uncategorised).toBe(4)
   })
 
+  it('count an entry under a category the profile no longer has as without one', () => {
+    // Before #384 (July 2026), deleting a category left its entries pointing at it: the
+    // Transactions filter the step links to lists them, and circle 1 counts them too.
+    const gone = [...transactions, row('2025-02-03', { category_id: 42 })]
+    const withGone = orientationFacts(source(gone), NOW)
+    expect(withGone.uncategorised).toBe(facts.uncategorised + 1)
+    expect(withGone.entries).toBe(facts.entries + 1)
+  })
+
   it('name the biggest category with no budget or bill in the last full month', () => {
     // Rent has a bill and Transport a budget; October's trip is not a full month yet.
     expect(facts.topUnbudgeted).toEqual({ categoryId: 7, name: 'Groceries' })
@@ -238,6 +247,39 @@ describe('agreeing with the advice', () => {
     expect(unbudgeted([budget('2026-06-01'), budget('2026-10-01')])).toEqual({
       advice: null,
       gettingStarted: null,
+    })
+  })
+
+  it('neither offers the catch-all the import filed the rest under, and both say so', () => {
+    const withOther = [...categories, { id: 11, name: 'Other' }]
+    const list = [
+      row('2026-09-02', { amount: -300, category_id: 7 }),
+      row('2026-09-03', { amount: -700, category_id: 11 }),
+      row('2026-10-02', { amount: -40, category_id: 7 }),
+      row('2026-10-03', { amount: -90, category_id: 11 }),
+    ]
+    const facts = orientationFacts(source(list, { categories: withOther }), NOW)
+    expect(facts.topUnbudgeted).toEqual({ categoryId: 7, name: 'Groceries', notCounting: 'Other' })
+    expect(nextSteps(facts).find((s) => s.id === 'budget-top-category')?.title).toBe(
+      'Set a budget for Groceries'
+    )
+    const card = buildAdvice({
+      transactions: list,
+      budgets: [],
+      goals: [],
+      importLogs: [],
+      loans: [],
+      selfHosted: false,
+      today: TODAY,
+      categories: withOther,
+      bills: [],
+      dismissed: [],
+    }).find((one) => one.kind === 'unbudgeted-category')
+    expect(card).toMatchObject({
+      id: 'unbudgeted-category:7:2026-10',
+      title: 'Groceries has no budget',
+      detail:
+        'Not counting Other, it is the biggest thing you spend on with nothing set aside for it.',
     })
   })
 

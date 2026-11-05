@@ -18,6 +18,7 @@ import type { AppEnv, Env } from './index';
 import { logAuthEvent } from './authlog';
 import { CLEARED_KINDS, type ClearedKind } from '../../shared/accessCleared';
 import { claimWelcome, claimWelcomeOnConfirm, welcomeClaimed } from './welcome';
+import { defaultCategoryInserts } from './profileData';
 import { sha256Hex } from './email-verification';
 import { appOrigins } from './request-origin';
 
@@ -757,11 +758,19 @@ export async function resolveGoogleUser(
     .first<{ id: number; token_version: number }>();
   const userId = created!.id;
   // Every user needs a default profile (the Express backend seeded one at bootstrap);
-  // without it every profile-scoped route would 403 immediately after sign-up.
-  await db
-    .prepare('INSERT INTO profiles (name, user_id) VALUES (?, ?)')
-    .bind('Personal Profile', userId)
-    .run();
+  // without it every profile-scoped route would 403 immediately after sign-up. It starts with the
+  // default categories, written with it (profileData.ts).
+  await db.batch([
+    db
+      .prepare('INSERT INTO profiles (name, user_id) VALUES (?, ?)')
+      .bind('Personal Profile', userId),
+    ...defaultCategoryInserts(
+      db,
+      'SELECT own.id FROM profiles own WHERE own.user_id = ? AND own.name = ?',
+      userId,
+      'Personal Profile'
+    ),
+  ]);
   // Google has confirmed the address, so its welcome goes now. An account made without a
   // confirmed address has nowhere to send one.
   const welcome =

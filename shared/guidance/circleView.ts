@@ -8,7 +8,7 @@
  */
 import { monthName } from '../orientation';
 import { targetFromSpend } from '../retirement';
-import { TRACKED_MONTH_MIN_TRANSACTIONS, YEAR_WINDOW_MONTHS } from '../trackedMonths';
+import { A_MONTH_COUNTS } from '../trackedMonths';
 import {
   CIRCLE_NAMES,
   FULL_CUSHION_MONTHS,
@@ -16,7 +16,7 @@ import {
   SOLID_CUSHION_MONTHS,
   SORTED_SHARE,
 } from './circles';
-import { debtName, gapOf, rateText, shareOf } from './ledger';
+import { catchAllShareLine, debtName, gapOf, rateText, shareOf } from './ledger';
 import { freeMoneyQuestion } from './questions';
 import type { FreeMoneyAnswer } from './answers';
 import type { Check, CheckId, CircleNumber, CirclePlace } from './circles';
@@ -56,7 +56,8 @@ export interface CheckRow {
 
 export const WAITING_ON_ANSWER = 'Waiting on your answer';
 export const WAITING_ON_ACCOUNTS = "Your accounts didn't load";
-export const WAITING_ON_MONTHS = 'Known once 3 months are tracked';
+/** The averages count finished months, this month left out (review M10). */
+export const WAITING_ON_MONTHS = 'Known once 3 finished months are tracked';
 export const WAITING_ON_WORK_OPTIONAL = 'Asked once you reach Work optional';
 const NO_ACCOUNT = 'None of your accounts is a savings, cash or current account yet.';
 
@@ -168,7 +169,9 @@ function rowFor(
       return {
         ...base,
         title: 'A year on file',
-        detail: `12 tracked months of the last ${YEAR_WINDOW_MONTHS}. A month counts once it holds ${TRACKED_MONTH_MIN_TRANSACTIONS} entries.`,
+        // The twelve are the title's and the key figure's ("7 of 12 months on file"). It read "12
+        // tracked months of the last 13" beside that twelve (review M8).
+        detail: A_MONTH_COUNTS,
       };
     case 'sorted': {
       // The share sorted is Your numbers'.
@@ -370,6 +373,27 @@ function partsNote(facts: GuidanceFacts, words: LedgerWords): string | undefined
   return `${text.charAt(0).toUpperCase()}${text.slice(1)}.`;
 }
 
+/**
+ * Clear picture's count of spending without a category. It counts the expenses of the months it
+ * reads, so it says so: Getting started, the day-7 mail and the Transactions filter count every
+ * entry without one, income and older months too (shared/uncategorised.ts).
+ */
+function uncategorisedRow(facts: GuidanceFacts): NumberRow {
+  const n = facts.uncategorisedEntries ?? 0;
+  const first = facts.months[0];
+  const last = facts.months[facts.months.length - 1];
+  return {
+    label: 'Spending without a category',
+    value: n === 0 ? 'None' : n === 1 ? '1 entry' : `${n} entries`,
+    note:
+      first && last
+        ? first === last
+          ? `Only spending in ${monthYear(first)} counts here.`
+          : `Only spending from ${monthYear(first)} to ${monthYear(last)} counts here.`
+        : undefined,
+  };
+}
+
 /** The person's numbers behind one circle's checks. */
 export function circleNumbers(
   circle: CircleNumber,
@@ -384,7 +408,7 @@ export function circleNumbers(
   const lead =
     facts.averaged && first && last
       ? `Averages over ${monthYear(first)} to ${monthYear(last)}. Balances as of today.`
-      : 'Averages appear once 3 months are tracked. Balances as of today.';
+      : 'Averages appear once 3 finished months are tracked. Balances as of today.';
   const avg = (value: number | null) => (value === null ? unknown : money(value));
   const invested: NumberRow = {
     label: 'Invested',
@@ -395,7 +419,9 @@ export function circleNumbers(
         : undefined,
   };
   switch (circle) {
-    case 1:
+    case 1: {
+      // Other's share has a category and says nothing about what it is (review M1).
+      const held = catchAllShareLine(facts);
       return {
         lead,
         rows: [
@@ -410,10 +436,12 @@ export function circleNumbers(
               facts.sortedShare === null
                 ? unknown
                 : `${shareOf(facts.sortedShare, 100, facts.sortedShare >= 100)}%`,
+            ...(held === null ? {} : { note: `${held}.` }),
           },
-          { label: 'Entries without a category', value: String(facts.uncategorisedEntries ?? 0) },
+          uncategorisedRow(facts),
         ],
       };
+    }
     case 2: {
       const support =
         facts.income !== null && facts.ownIncome !== null ? facts.income - facts.ownIncome : 0;

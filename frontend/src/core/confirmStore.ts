@@ -30,6 +30,8 @@ export interface ConfirmProgress {
 export type ConfirmWork = (report: (progress: ConfirmProgress) => void) => Promise<void>
 
 export interface ConfirmOptions {
+  /** The question, as the dialog's heading and name. The message then says what it means. */
+  title?: string
   /** Confirm-button text (default "Confirm"). */
   confirmText?: string
   /** Cancel-button text (default "Cancel"). */
@@ -42,7 +44,9 @@ export interface ConfirmOptions {
 
 export interface ConfirmRequest {
   id: number
-  message: string
+  title: string | null
+  /** One paragraph, or a few short lines, each its own. */
+  message: string | readonly string[]
   confirmText: string
   cancelText: string
   danger: boolean
@@ -92,13 +96,17 @@ function finish(id: number, value: boolean): void {
   setConfirmRequests((prev) => prev.filter((r) => r.id !== id))
 }
 
-export function showConfirm(message: string, options?: ConfirmOptions): Promise<boolean> {
+export function showConfirm(
+  message: string | readonly string[],
+  options?: ConfirmOptions
+): Promise<boolean> {
   return new Promise((resolve) => {
     const id = ++nextId
     setConfirmRequests((prev) => [
       ...prev,
       {
         id,
+        title: options?.title ?? null,
         message,
         confirmText: options?.confirmText ?? 'Confirm',
         cancelText: options?.cancelText ?? 'Cancel',

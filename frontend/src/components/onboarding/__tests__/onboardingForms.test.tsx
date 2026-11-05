@@ -93,6 +93,7 @@ const successToasts = () =>
     .map((t) => t.message)
 
 const nameField = () => byTestId('onboarding-profile-name') as HTMLInputElement
+const NAME_HINT = 'It shows as a profile in the menu.'
 const continueButton = () => byTestId('onboarding-next') as HTMLButtonElement
 const aboutScreen = () => byTestId('onboarding-step-about')
 
@@ -110,6 +111,15 @@ async function storedProfile(id: number): Promise<Row | undefined> {
 }
 
 describe('naming your space', () => {
+  // Review M20: setup says "space", the word it was given; the field, the default name and the
+  // menu say "profile". The field's hint says once how the two meet.
+  it('says under the name that the space shows as a profile in the menu', async () => {
+    await openAt('space')
+    expect(byTestId('onboarding-step-space')?.textContent).toContain('your space')
+    expect(host.querySelector(`label[for="${nameField().id}"]`)?.textContent).toBe('Profile name')
+    expect(describedBy(nameField())).toBe(NAME_HINT)
+  })
+
   it("marks a blank name in the rules' words, focuses it, and stays on the step", async () => {
     await openAt('space')
     type(nameField(), '  ')
@@ -118,7 +128,8 @@ describe('naming your space', () => {
     await settle()
 
     expect(nameField().getAttribute('aria-invalid')).toBe('true')
-    expect(describedBy(nameField())).toBe(PROFILE_MESSAGES.name)
+    // The message first, then the field's hint (Field.tsx).
+    expect(describedBy(nameField())).toBe(`${PROFILE_MESSAGES.name} | ${NAME_HINT}`)
     expect(document.activeElement).toBe(nameField())
     expect(onboardingStep()).toBe('space')
     expect(aboutScreen()).toBeNull()
@@ -133,7 +144,7 @@ describe('naming your space', () => {
     continueButton().click()
 
     await vi.waitFor(() => {
-      expect(describedBy(nameField())).toBe(profileNameTaken('Household').name)
+      expect(describedBy(nameField())).toBe(`${profileNameTaken('Household').name} | ${NAME_HINT}`)
     })
     expect(nameField().getAttribute('aria-invalid')).toBe('true')
     expect(onboardingStep()).toBe('space')
@@ -299,7 +310,7 @@ describe('creating your first account', () => {
     const name = field('onboarding-account-name')
     expect(describedBy(name)).toBe(ACCOUNT_MESSAGES.name)
     expect(describedBy(field('onboarding-account-balance'))).toBe(
-      `${ACCOUNT_MESSAGES.balance} | It becomes the account's opening balance.`
+      `${ACCOUNT_MESSAGES.balance} | What your bank shows now. Entries you import here are worked back from it.`
     )
     expect(document.activeElement).toBe(name)
     expect(await accounts()).toEqual([])
@@ -414,7 +425,7 @@ describe('adding the subscriptions the scan found', () => {
     await openAt('subscriptions')
     const addContinue = () => byTestId('onboarding-subs-add-continue') as HTMLButtonElement | null
     await vi.waitFor(() => {
-      expect(addContinue()?.textContent).toBe('Track 2 subscriptions')
+      expect(addContinue()?.textContent).toBe('Track 2 on Bills')
     })
     const netflixPrice = host.querySelector<HTMLInputElement>(
       '[data-name="Netflix"] [data-test-id="sub-scan-price"]'
@@ -440,8 +451,12 @@ describe('adding the subscriptions the scan found', () => {
     await openAt('subscriptions')
     const addContinue = () => byTestId('onboarding-subs-add-continue') as HTMLButtonElement | null
     await vi.waitFor(() => {
-      expect(addContinue()?.textContent).toBe('Track 2 subscriptions')
+      expect(addContinue()?.textContent).toBe('Track 2 on Bills')
     })
+    // Review M13: the step lists rent and phone bills too, so it is not headed "Subscriptions".
+    expect(
+      byTestId('onboarding-step-subscriptions')?.querySelector('h2')?.textContent?.trim()
+    ).toBe('Regular payments we spotted')
     // The wizard scans once, after its import: no Rescan, and its own Add is the footer's.
     const buttons = [...host.querySelectorAll('button')].map((b) => b.textContent?.trim())
     expect(buttons).not.toContain('Rescan')
@@ -459,7 +474,7 @@ describe('adding the subscriptions the scan found', () => {
     expect(successToasts()).toEqual([])
     await vi.waitFor(() => {
       expect(byTestId('onboarding-done-summary')?.textContent).toBe(
-        'Personal has 2 tracked subscriptions.'
+        'Personal has 2 regular payments tracked on Bills.'
       )
     })
   })

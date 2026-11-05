@@ -11,6 +11,7 @@
  * LOCAL_SETUP_PENDING_KEY), where the person names a space of their own and chooses whether the
  * examples stay (examplesChoiceNote).
  */
+import { apiFetch } from '../../core/apiFetch'
 import { isExampleProfileName } from '../../core/demoMode'
 
 /** The local database, as core/storage/idb.ts names it. */
@@ -137,17 +138,111 @@ function ownProfiles(names: readonly string[]): string {
   return `your profiles ${names.slice(0, 3).map(quoted).join(', ')} and ${String(more)} more`
 }
 
-/** What the switch asks, for what this browser's local workspace holds. */
-export function localOnlyQuestion(found: LocalWorkspace): string {
+/** A profile as GET /api/profiles counts what is in it, in both runtimes. */
+export interface ProfileCounts {
+  transaction_count?: number | null
+  account_count?: number | null
+  budget_count?: number | null
+}
+
+/**
+ * Whether a signed-in account holds anything of the person's: an account, a transaction or a
+ * budget in any of its profiles. The switch to local-only leaves all of it on the Worker and
+ * reloads into a local workspace that shows none of it, until Settings switches back to the cloud.
+ * "Run setup again" over an account with data offered the switch all the same, so setup now
+ * offers it only to an account that holds nothing yet.
+ */
+export function accountHoldsData(profiles: readonly ProfileCounts[]): boolean {
+  return profiles.some(
+    (p) => (p.transaction_count ?? 0) > 0 || (p.account_count ?? 0) > 0 || (p.budget_count ?? 0) > 0
+  )
+}
+
+/** The local-only confirm: the question as its heading, and a short line each for the rest. */
+export interface LocalOnlyQuestion {
+  title: string
+  lines: string[]
+}
+
+/**
+ * What the switch asks, for what this browser's local workspace holds. Only a signed-in account is
+ * asked, and only while it holds nothing (accountHoldsData), and the account stays: the switch
+ * turns its first-week mails off (stopFirstWeekMails), so the question says both (3 Nov review
+ * A3). `accountEmpty` is whether this is the account's first setup with nothing made yet; run again,
+ * it stays as it is. On a phone it was one paragraph of six lines (review D5): the question heads
+ * the dialog, and over a fresh workspace two short lines say the rest.
+ */
+export function localOnlyQuestion(found: LocalWorkspace, accountEmpty: boolean): LocalOnlyQuestion {
+  const title = 'Keep your data in this browser only?'
+  const cloud = 'Nothing syncs to the cloud, and Settings can switch back.'
+  const account = accountEmpty
+    ? 'Your account stays empty and sends no first-week mails.'
+    : 'Your account stays as it is and sends no first-week mails.'
   switch (found.kind) {
     case 'none':
-      return 'Keep your data in this browser only? It never leaves this device and no account is needed. Settings can switch back.'
+      return { title, lines: [cloud, account] }
     case 'examples':
-      return 'Keep your data in this browser only? This browser has the example profiles from the demo. Next you name a space of your own and choose whether the examples stay. Nothing syncs to the cloud, and Settings can switch back.'
+      return {
+        title,
+        lines: [
+          "This browser has the demo's example profiles. Next you name a space of your own and choose whether they stay.",
+          cloud,
+          account,
+        ],
+      }
     case 'own':
-      return `Keep your data in this browser only? This browser already has a local workspace with ${ownProfiles(found.names)}. You carry on with it, and nothing syncs to the cloud. Settings can switch back.`
+      return {
+        title,
+        lines: [
+          `This browser already has a local workspace with ${ownProfiles(found.names)}. You carry on with it.`,
+          cloud,
+          account,
+        ],
+      }
     default:
-      return 'Keep your data in this browser only? It stays on this device and nothing syncs to the cloud. If this browser already has a local workspace, you carry on with that one. Settings can switch back.'
+      return {
+        title,
+        lines: [
+          'If this browser already has a local workspace, you carry on with that one.',
+          cloud,
+          account,
+        ],
+      }
+  }
+}
+
+/** How long the switch waits for the Worker to turn the first-week mails off. */
+export const FIRST_WEEK_OFF_WAIT_MS = 5000
+
+/**
+ * Turn the signed-in account's first-week mails off, before the switch leaves it: the account
+ * stays, and without this its day-2 and day-7 mails still came (3 Nov review A3). Through the
+ * Settings switch's own request, which no plan gates. Best effort: true when the Worker took it,
+ * false when it refused, could not be reached or took longer than `waitMs`; it never throws, and
+ * the switch goes ahead either way. Sent while the app still talks to the Worker: after
+ * setStorageMode('serverless') the same request would go to the browser's own router.
+ */
+export async function stopFirstWeekMails(
+  send: (url: string, init?: RequestInit) => Promise<Response> = apiFetch,
+  waitMs: number = FIRST_WEEK_OFF_WAIT_MS
+): Promise<boolean> {
+  const stop = new AbortController()
+  const timer = setTimeout(() => {
+    stop.abort()
+  }, waitMs)
+  try {
+    const answer = await send('/api/notifications/settings', {
+      method: 'PUT',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ weekOneMails: false }),
+      signal: stop.signal,
+    })
+    return answer.ok
+  } catch {
+    return false
+  } finally {
+    clearTimeout(timer)
   }
 }
 

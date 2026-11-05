@@ -12,6 +12,8 @@
  * the account's setup.
  */
 import { expect, test } from '@playwright/test'
+import { sqlRows } from './db'
+import { viaApp } from './form-errors-helpers'
 import { bootSignedIn, deleteAccount, signIn, signUpAndIn } from './own-account'
 import { paintedContrast } from './painted-contrast'
 import { E2E_BASE } from './test-helpers'
@@ -147,6 +149,31 @@ const YNAB_REGISTER = [
 ]
   .map((cells) => cells.map((c) => `"${c}"`).join(','))
   .join('\n')
+
+/** The same plan with a card YNAB tracks: it starts 640.00 below zero, and a purchase goes on it. */
+const YNAB_REGISTER_WITH_CARD = [
+  YNAB_REGISTER,
+  ...[
+    ['Test Card', '', '01/02/2026', 'Starting Balance', 'Inflow: Ready to Assign', 'Inflow'],
+    ['Test Card', '', '01/16/2026', 'Corner Grocer', 'Everyday: Groceries', 'Everyday'],
+  ].map(([account, flag, date, payee, both, group], i) =>
+    [
+      account,
+      flag,
+      date,
+      payee,
+      both,
+      group,
+      i === 0 ? 'Ready to Assign' : 'Groceries',
+      '',
+      i === 0 ? '$640.00' : '$32.10',
+      '$0.00',
+      'Cleared',
+    ]
+      .map((c) => `"${c}"`)
+      .join(',')
+  ),
+].join('\n')
 
 test.describe('the setup wizard on the account @smoke', () => {
   test.beforeEach(() => {
@@ -332,6 +359,35 @@ test.describe('the setup wizard on the account @smoke', () => {
       )
       expect(listed.ok(), `GET /api/transactions: ${String(listed.status())}`).toBeTruthy()
       expect(((await listed.json()) as { total: number }).total).toBe(7)
+      // What was typed is what the bank shows now (review M2): the statement's +1,888.85 is worked
+      // back from it, and the account still reads 1,500.
+      await expect
+        .poll(
+          async () =>
+            (
+              (await (await ctx.request.get(`${E2E_BASE}/api/accounts`)).json()) as {
+                balance: number
+                starting_balance: number
+              }[]
+            ).map((a) => [a.balance, Math.round(a.starting_balance * 100) / 100]),
+          { timeout: 15000 }
+        )
+        .toEqual([[1500, -388.85]])
+
+      // A reload on the subscriptions step: setup reopens there, and Done says what the profile
+      // holds, word for word what local-first says for the statement (onboarding.spec.ts). It
+      // counted this visit's work, which a reload forgets (review M20).
+      await page.reload({ waitUntil: 'domcontentloaded' })
+      await expect(page.getByTestId('onboarding-step-subscriptions')).toBeVisible({
+        timeout: 30_000,
+      })
+      const track = page.getByTestId('onboarding-subs-add-continue')
+      await expect(track).toHaveText('Track 2 on Bills', { timeout: 15_000 })
+      await track.click()
+      await expect(page.getByTestId('onboarding-done-summary')).toHaveText(
+        'Personal Profile has 1 account, 7 transactions and 2 regular payments tracked on Bills.',
+        { timeout: 15_000 }
+      )
     } finally {
       await deleteAccount(ctx, email)
     }
@@ -408,6 +464,53 @@ test.describe('the setup wizard on the account @smoke', () => {
     }
   })
 
+  test('a Register account that starts below zero is asked about, and made a card on the Worker', async ({
+    page,
+  }) => {
+    const ctx = page.context()
+    const { email } = await signUpAndIn(ctx)
+    try {
+      await bootSignedIn(ctx)
+      await page.goto(`${E2E_BASE}/#dashboard`, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+      await expect(page.getByTestId('onboarding-step-space')).toBeVisible({ timeout: 30_000 })
+      await page.getByTestId('onboarding-next').click()
+      await expect(page.getByTestId('onboarding-step-about')).toBeVisible({ timeout: 30_000 })
+      await page.getByTestId('onboarding-next').click()
+      await expect(page.getByTestId('onboarding-step-account')).toBeVisible({ timeout: 30_000 })
+      await page.getByTestId('onboarding-account-skip').click()
+      await expect(page.getByTestId('onboarding-step-import')).toBeVisible({ timeout: 30_000 })
+      await page.getByTestId('onboarding-import-input').setInputFiles({
+        name: 'Test Plan as of 2026-01-31 Register.csv',
+        mimeType: 'text/csv',
+        buffer: Buffer.from(YNAB_REGISTER_WITH_CARD),
+      })
+      await expect(page.getByTestId('onboarding-import-file')).toHaveAttribute(
+        'data-state',
+        'ready',
+        { timeout: 30_000 }
+      )
+      // Only the card is asked about, with Credit Card chosen.
+      await expect(page.getByTestId('onboarding-import-type-name')).toHaveText(['Test Card'])
+      await expect(page.getByTestId('onboarding-import-type')).toHaveValue('credit')
+      await page.getByTestId('onboarding-import-selected').click()
+      await expect(page.getByTestId('onboarding-step-subscriptions')).toBeVisible({
+        timeout: 30_000,
+      })
+
+      const accounts = (await (await ctx.request.get(`${E2E_BASE}/api/accounts`)).json()) as {
+        name: string
+        type: string
+      }[]
+      expect(Object.fromEntries(accounts.map((a) => [a.name, a.type]))).toEqual({
+        'Test Card': 'credit',
+        'Test Checking': 'giro',
+        'Test Savings': 'giro',
+      })
+    } finally {
+      await deleteAccount(ctx, email)
+    }
+  })
+
   test('a skip is kept on the account, and another browser on it opens no wizard', async ({
     page,
     browser,
@@ -445,6 +548,45 @@ test.describe('the setup wizard on the account @smoke', () => {
       } finally {
         await elsewhere.close()
       }
+    } finally {
+      await deleteAccount(ctx, email)
+    }
+  })
+
+  // Keeping the data in this browser leaves the account's data on the Worker, out of sight until
+  // Settings switches back, so "Run setup again" over an account with data does not offer it.
+  test('run again over an account that holds data, setup leaves out keeping it in this browser', async ({
+    page,
+  }) => {
+    const ctx = page.context()
+    const { email } = await signUpAndIn(ctx)
+    try {
+      await bootSignedIn(ctx)
+      await page.goto(`${E2E_BASE}/#dashboard`, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+      await expect(page.getByTestId('onboarding-step-space')).toBeVisible({ timeout: 30_000 })
+      // A new account, with nothing in it, is offered the choice.
+      await expect(page.getByTestId('onboarding-local-only')).toBeVisible()
+      await page.getByTestId('onboarding-skip').click()
+      await page.getByTestId('confirm-accept').click()
+      await expect(page.getByTestId('onboarding-wizard')).toHaveCount(0)
+      await viaApp(page, 'POST', '/api/accounts', {
+        name: 'zz-main',
+        type: 'checking',
+        starting_balance: 1200,
+      })
+
+      await page.getByTestId('whats-new-btn').click()
+      const asked = page.waitForResponse(
+        (res) =>
+          new URL(res.url()).pathname === '/api/profiles' && res.request().method() === 'GET',
+        { timeout: 30_000 }
+      )
+      await page.getByTestId('tour-open-onboarding').click()
+      await expect(page.getByTestId('onboarding-step-space')).toBeVisible({ timeout: 30_000 })
+      await asked
+      // Nothing says "not offered" on screen, so give the answer time to show before looking.
+      await page.waitForTimeout(1000)
+      await expect(page.getByTestId('onboarding-local-only')).toHaveCount(0)
     } finally {
       await deleteAccount(ctx, email)
     }
@@ -562,6 +704,14 @@ async function localWorkspace(
   }, gone)
 }
 
+/** The account's first-week mails switch, as the Worker stores it: 1 on, 0 off. */
+function mailsOn(email: string): number | null {
+  const rows = sqlRows<{ on: number }>(
+    `SELECT week_one_mails AS "on" FROM users WHERE email = '${email.replace(/'/g, "''")}'`
+  )
+  return rows[0]?.on ?? null
+}
+
 test.describe('keeping the data in this browser, over the demo @smoke', () => {
   test('setup opens on a space of your own over the examples, and the dashboard is that space alone', async ({
     page,
@@ -595,10 +745,20 @@ test.describe('keeping the data in this browser, over the demo @smoke', () => {
       await expect(page.getByTestId('onboarding-examples-choice')).toHaveCount(0)
 
       await page.getByTestId('onboarding-local-only').click()
+      // The question heads the confirm and names it (review D5).
+      await expect(
+        page.getByRole('alertdialog', { name: 'Keep your data in this browser only?' })
+      ).toBeVisible()
       await expect(page.getByRole('alertdialog')).toContainText(
-        'This browser has the example profiles from the demo.'
+        "This browser has the demo's example profiles."
       )
+      await expect(page.getByRole('alertdialog')).toContainText(
+        'Your account stays empty and sends no first-week mails.'
+      )
+      expect(mailsOn(email), 'first-week mails before the switch').toBe(1)
       await page.getByTestId('confirm-accept').click()
+      // The account stays, and the switch turned its first-week mails off on the way out.
+      await expect.poll(() => mailsOn(email), { timeout: 30_000 }).toBe(0)
 
       // The reload lands on the local workspace, and setup opens on its space over the examples.
       await expect(page.getByTestId('onboarding-examples-choice')).toBeVisible({ timeout: 60_000 })

@@ -10,7 +10,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- **Getting started: three next steps from your own data.** When you finish or skip the setup wizard, its last step and a Getting started card on Dashboard list up to three next steps, each with its reason in your own counts and months and a link to the page where it's done: import the rest of your year, review the subscriptions the scan spotted, sort the entries without a category, set a budget for your biggest category without one, see what put last month in the red, or compare paying a loan off faster. A step goes once it's done. Hide the card and it stays hidden, signed in on every device.
+- **Getting started: three next steps from your own data.** When you finish or skip the setup wizard, its last step and a Getting started card on Dashboard list up to three next steps, each with its reason in your own counts and months and a link to the page where it's done: import the rest of your year, review the subscriptions the scan spotted, sort the entries without a category, set a budget for your biggest category without one (a catch-all like Other doesn't count), see what put last month in the red, or compare paying a loan off faster. A step goes once it's done. Hide the card and it stays hidden, signed in on every device.
 - **Getting started can suggest a one-month cushion** when the money you can reach covers less than a month of what you need.
 - **Categories say what they hold.** Each expense category has a kind, like groceries or eating out, and a "Needed every month" tick, both guessed from its name until you pick. The default categories have Groceries and Eating out instead of Food, and resetting your categories turns Food into Groceries, entries and all.
 - **Credit cards are an account type.** A card, and a Giro account's overdraft, can carry a limit and an interest rate.
@@ -35,6 +35,8 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **A deduction lowers income** instead of counting as spending, in the rainy-day badge, the year in review and the advice about a month in the red.
 - **The savings rate covers your last 12 months** and sits under the totals. A goal you set stays with the profile instead of the browser.
 - **Each advice card on Progress says which circle it counts toward**, and that line opens the circle.
+- **A statement from a bank the app knows opens on what it brings in.** Import shows the bank, how many entries and from when to when, the new categories and how many are already here, with one button to import them. Check the columns is still there for a closer look.
+- **After an import, Import lists each account it changed with its balance today**, and a field to set it to what your bank shows.
 
 ### Fixed
 
@@ -43,6 +45,8 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **The plan name on a subscription the scan finds is easier to read.** In the light theme, "Standard" beside Netflix was blue on a pale blue tint at 4.0:1. It's a darker blue now, on Bills and in setup.
 - **A first bank import files restaurants, cafes and takeaways under Eating out**, instead of a new Restaurant or Dining category. If you already have one of those, its rows keep going there.
 - **Setup after the demo makes a space of your own.** Keeping your data in this browser after running the demo opened Example Low Income's dashboard, and running setup again in the demo renamed that example. Setup now makes your space a new profile and lets you remove the three example profiles or keep them. Where the browser already has a profile of yours beside the examples, the switch opens on yours.
+- **New accounts and profiles start with the default categories.** They started empty, so a quick add like "coffee 4.50" was saved without a category.
+- **Starting balances stay with their file.** Cancel an import or remove a file in setup, and the next file's accounts could open on the starting balances of the one you set aside, like a YNAB register's, instead of their own.
 
 ## [5.17.6] — 2026-11-01
 

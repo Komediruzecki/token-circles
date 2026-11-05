@@ -222,6 +222,12 @@ export interface ImportFlowOptions {
   autoResetAfterImport?: boolean
   /** Fired once per successful (non-dry-run) execute with the result summary. */
   onImported?: (summary: ImportSummary) => void
+  /**
+   * Awaited as an import starts, before anything is sent: the Import page reads what the accounts
+   * hold, to tell afterwards which ones the import touched (ImportBalances.tsx). A failure here
+   * stops nothing.
+   */
+  beforeImport?: () => Promise<void>
 }
 
 /**
@@ -780,6 +786,19 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     setError(null)
     setResultMessage(null)
     setImportId('')
+    // The starting balances and dates belong to the file they were offered or typed for. Kept,
+    // they went to the next file's accounts of the same name, and blocked that file's own offer
+    // (offerStartingBalances fills only empty fields), where setup shows no field to check.
+    setAccountBalances({})
+    setAccountBalanceDates({})
+    // So do the rest of the preview's options. The bank summary goes straight from a file to its
+    // import and never shows the preview, so a date range, a budget backfill, an account type or
+    // a tracking start date kept from one file was applied to the next where nobody could see it.
+    setAccountTypes({})
+    setUniversalStartDate('')
+    setImportStartDate('')
+    setImportEndDate('')
+    setSetBudgetsFromSpending(false)
     // Clear Bank Imports state so a fresh import doesn't inherit stale files/warnings
     // and the preview's rules editor is gated correctly by bankFiles().length.
     setBankFiles([])
@@ -1533,6 +1552,9 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     setResultMessage(null)
 
     try {
+      await opts.beforeImport?.().catch((err: unknown) => {
+        console.error('Before the import:', err)
+      })
       const mapping = columnMapping()
       const types = categoryTypes()
 

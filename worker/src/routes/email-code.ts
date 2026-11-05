@@ -37,6 +37,7 @@ import { clearRateLimit, clientIp, enforce } from '../ratelimit';
 import { getTotpForLogin, issueTwofaChallengeCookie } from '../twofa';
 import { claimWelcomeOnConfirm, welcomeAfterAnswer, welcomeClaimed } from '../welcome';
 import { captchaRejection, verifyTurnstileDetailed } from '../turnstile';
+import { aboutOrigin } from '../reminders';
 import { CAPTCHA_ACTIONS } from '../../../shared/captchaActions';
 import { refusalOf } from '../../../shared/refusal';
 import {
@@ -76,7 +77,13 @@ async function mailCodeIfAccount(
     .first<{ id: number }>();
   if (!user) return;
   const { code } = await createLoginCode(env, user.id, email, handle);
-  const mail = renderLoginCode({ code, ttlMinutes: LOGIN_CODE_TTL_MINUTES, assetOrigin: base });
+  const mail = renderLoginCode({
+    code,
+    ttlMinutes: LOGIN_CODE_TTL_MINUTES,
+    appUrl: base,
+    aboutUrl: aboutOrigin(env),
+    assetOrigin: base,
+  });
   await sendMail(env, email, mail.subject, mail.html, { text: mail.text });
 }
 

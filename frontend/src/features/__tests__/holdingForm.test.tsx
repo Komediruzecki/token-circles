@@ -152,7 +152,7 @@ async function answerMerge(merge: boolean): Promise<string> {
   })
   const [request] = confirmRequests()
   resolveConfirm(request.id, merge)
-  return request.message
+  return typeof request.message === 'string' ? request.message : request.message.join(' ')
 }
 
 const failureToasts = () =>

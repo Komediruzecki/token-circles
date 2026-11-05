@@ -28,6 +28,11 @@
   line-height: 1.45;
 }
 
+/* A row that is the switch's label (wholeRow): the whole of it takes a tap (review D11). */
+.rowTarget {
+  cursor: pointer;
+}
+
 @media (max-width: 420px) {
   .row {
     gap: 12px;

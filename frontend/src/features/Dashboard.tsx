@@ -2,7 +2,7 @@
  * Dashboard Component
  */
 
-import { batch, createEffect, createSignal, For, Show } from 'solid-js'
+import { batch, createEffect, createMemo, createSignal, For, Show, untrack } from 'solid-js'
 import BadgeRail from '../components/BadgeRail'
 import CalcTracer, { isCalcTracerEnabled } from '../components/CalcTracer'
 import { getCategorySvg } from '../components/CategoryIcon'
@@ -27,22 +27,33 @@ import {
   getLocalCurrency,
   toast,
 } from '../core/api'
-import { useAppState } from '../core/appStore'
-import { loadWidgetPrefs } from '../core/dashboardWidgets'
+import { householdProfileIds } from '../core/apiProfileScope'
+import { getProfileVersion, useAppState } from '../core/appStore'
+import { circlesProfileName } from '../core/circlesProfile'
+import { gaugeInTail, loadWidgetPrefs } from '../core/dashboardWidgets'
 import { entityVersion } from '../core/dataVersions'
+import { gettingStartedKnown, gettingStartedRecord } from '../core/gettingStarted'
 import { useGuidance } from '../core/guidance'
 import { refetchOnActive } from '../core/pageVisibility'
 import { usePeriod } from '../core/periodStore'
 import { adoptBrowserGoal } from '../core/savingsGoal'
 import { spotlightActive, spotlightStep, tourSteps } from '../core/spotlightStore'
 import { theme } from '../core/theme'
-import { toRange, toYYYYMM } from '../utils/period'
+import { localToday, monthPeriod, periodsEqual, toRange, toYYYYMM } from '../utils/period'
 import { daysToDue, dueDateLabel, dueInWords, nextDue } from './billDue'
+import {
+  emptyMonthNote,
+  latestMonthWithEntries,
+  monthChange,
+  takeWeekOneMonth,
+} from './dashboardMonth'
 import styles from './DashboardPage.module.css'
 import { matchBrand } from './subscriptionBrands'
 import type { CalcTrace } from '../components/CalcTracer'
 import type * as Models from '../types/models'
 import type { SankeyData } from '../types/models'
+import type { Period } from '../utils/period'
+import type { ChartMonth } from './dashboardMonth'
 
 // Format money in the user's selected currency (not the EUR default of formatCurrency).
 const money = (amount: number) => formatCurrency(amount, getLocalCurrency())
@@ -53,7 +64,7 @@ const money = (amount: number) => formatCurrency(amount, getLocalCurrency())
 // before.
 export default function Dashboard() {
   const state = useAppState()
-  const { period, helpers } = usePeriod()
+  const { period, helpers, setPeriod } = usePeriod()
   // Month/year and the "all time" flag derive from the global focus period.
   const focus = () => {
     const [y, m] = toYYYYMM(period()).split('-').map(Number)
@@ -64,6 +75,8 @@ export default function Dashboard() {
   const [metrics, setMetrics] = createSignal<Models.DashboardMetrics | null>(null)
   const [monthlyData, setMonthlyData] = createSignal<Models.DashboardChartData | null>(null)
   const [initialLoad, setInitialLoad] = createSignal(true)
+  /** The charts' months, each present once it holds an entry: what the week-one month reads. */
+  const [chartMonths, setChartMonths] = createSignal<ChartMonth[] | null>(null)
 
   // Human-readable label for the currently selected dashboard period
   const periodText = () => helpers.label(period())
@@ -109,11 +122,49 @@ export default function Dashboard() {
 
   // The circles: Your next step in Getting started's place, and the savings gauge's 12 months.
   const guidance = useGuidance('dashboard')
+  // Both are the active profile's, while the cards around them add up the profiles selected: with
+  // more than one, they name theirs. The selection is stored, and every change to it bumps the
+  // profile version (App's applyProfileSelection, Settings > Household).
+  const circlesProfile = createMemo(() => {
+    void getProfileVersion()
+    const view = guidance()
+    return view ? circlesProfileName(view.profileId, householdProfileIds(), state.profiles) : null
+  })
   // A goal this browser kept before goals were the profile's moves to the first profile here.
   createEffect(() => {
     const view = guidance()
     if (view) void adoptBrowserGoal(view)
   })
+
+  // Week one (review M6): while Getting started shows, a Dashboard opened on this month with
+  // nothing in it opens on the latest month that has entries instead, and says so. Decided once a
+  // session, and only on the month the app opened on: a month the person chose stays. Nothing is
+  // decided while Getting started is not showing (setup still open), nor while no month has an
+  // entry yet (the import's figures still on their way). The period is the app's, so the other
+  // pages follow, as when the person moves it.
+  const [emptyMonth, setEmptyMonth] = createSignal<{ note: string; shown: Period } | null>(null)
+  createEffect(() => {
+    const months = chartMonths()
+    const view = guidance()
+    if (months === null || view === null || !gettingStartedKnown()) return
+    if (gettingStartedRecord()?.hidden !== false || view.facts.firm) return
+    untrack(() => {
+      const current = localToday().slice(0, 7)
+      const p = period()
+      const chosen = p.mode !== 'month' || toYYYYMM(p) !== current
+      const latest = chosen ? null : latestMonthWithEntries(months, current)
+      const hasThisMonth = months.some((m) => m.month === current)
+      if (!chosen && latest === null && !hasThisMonth) return
+      if (!takeWeekOneMonth() || latest === null) return
+      const shown = monthPeriod(Number(latest.slice(0, 4)), Number(latest.slice(5, 7)) - 1)
+      setEmptyMonth({ note: emptyMonthNote(current, latest), shown })
+      setPeriod(shown)
+    })
+  })
+  const emptyMonthLine = () => {
+    const jumped = emptyMonth()
+    return jumped && periodsEqual(period(), jumped.shown) ? jumped.note : null
+  }
 
   // Everything follows the global focus period (and profile) — but only while this
   // page is visible. A hidden Dashboard is marked stale and refetches once when next
@@ -142,7 +193,10 @@ export default function Dashboard() {
     ])
     batch(() => {
       if (dash) setMetrics(dash)
-      if (monthly) setMonthlyData(monthly)
+      if (monthly) {
+        setMonthlyData(monthly)
+        setChartMonths(monthly.months ?? null)
+      }
       setInitialLoad(false)
     })
   }
@@ -199,6 +253,7 @@ export default function Dashboard() {
       // net change, which zeroes out whichever side is smaller).
       const monthly = chartsData.monthly || []
       return {
+        months: monthly,
         labels,
         monthlyLabels: monthly.map((m) => fmtMonth(m.month)),
         income: monthly.map((m) => m.income || 0),
@@ -208,6 +263,34 @@ export default function Dashboard() {
     } catch {
       return null /* optional */
     }
+  }
+
+  /**
+   * A card's change against the month before, in money and named (review M6): "↓€2,350.00 vs
+   * October" for a month, where it read "↓2350.00 vs last month". A range or a year compares its
+   * last month with the one before, as it did, under the words it had.
+   */
+  const MonthChangeLine = (props: { delta: number }) => {
+    const change = () => monthChange(props.delta, toYYYYMM(period()), getLocalCurrency())
+    return (
+      <div class={styles.metricDelta} data-test-id="dashboard-metric-change">
+        <span
+          class={
+            change().direction === 'up'
+              ? styles.positive
+              : change().direction === 'down'
+                ? styles.negative
+                : styles.neutral
+          }
+        >
+          {change().arrow}
+          {change().amount}
+        </span>
+        <span class={styles.metricDeltaLabel}>
+          {period().mode === 'month' ? change().against : 'vs last month'}
+        </span>
+      </div>
+    )
   }
 
   const showSettings = () => setShowSettingsModal(true)
@@ -257,6 +340,11 @@ export default function Dashboard() {
 
   const renderWidget = (id: string) => {
     switch (id) {
+      // Here only where the order puts it among these widgets; otherwise under the metrics.
+      case 'savings-gauge':
+        return gaugeInTail(widgetOrder()) ? (
+          <SavingsGauge view={guidance()} profile={circlesProfile()} />
+        ) : null
       case 'budget-alerts':
         return (
           <div class={styles.widgetCard}>
@@ -517,7 +605,14 @@ export default function Dashboard() {
         bar pins it for zero pixels — which is exactly what a row holding the bar and the rail did.
       */}
       <PeriodBar tourAnchor="dashboard-period" class={styles.periodBarSlot} />
-      <DashboardNextStep view={guidance} />
+      <Show when={emptyMonthLine()}>
+        {(line) => (
+          <p class={styles.emptyMonth} data-test-id="dashboard-empty-month" role="status">
+            {line()}
+          </p>
+        )}
+      </Show>
+      <DashboardNextStep view={guidance} profile={circlesProfile} />
       <Show when={isWidgetVisible('badges')}>
         <BadgeRail />
       </Show>
@@ -562,25 +657,7 @@ export default function Dashboard() {
                 <div class={styles.metricSubtext}>Total account balances</div>
                 {/* eslint-disable-next-line eqeqeq */}
                 {metrics()!.momBalanceDelta != null && (
-                  <div class={styles.metricDelta}>
-                    <span
-                      class={
-                        metrics()!.momBalanceDelta! > 0
-                          ? styles.positive
-                          : metrics()!.momBalanceDelta! < 0
-                            ? styles.negative
-                            : styles.neutral
-                      }
-                    >
-                      {metrics()!.momBalanceDelta! > 0
-                        ? '↑'
-                        : metrics()!.momBalanceDelta! < 0
-                          ? '↓'
-                          : '→'}
-                      {Math.abs(metrics()!.momBalanceDelta!).toFixed(2)}
-                    </span>
-                    <span class={styles.metricDeltaLabel}>vs last month</span>
-                  </div>
+                  <MonthChangeLine delta={metrics()!.momBalanceDelta!} />
                 )}
                 <Show when={monthlyData()}>
                   <div class={styles.metricSpark}>
@@ -614,25 +691,7 @@ export default function Dashboard() {
                 <div class={styles.metricSubtext}>For this period</div>
                 {/* eslint-disable-next-line eqeqeq */}
                 {metrics()!.momIncomeDelta != null && (
-                  <div class={styles.metricDelta}>
-                    <span
-                      class={
-                        metrics()!.momIncomeDelta! > 0
-                          ? styles.positive
-                          : metrics()!.momIncomeDelta! < 0
-                            ? styles.negative
-                            : styles.neutral
-                      }
-                    >
-                      {metrics()!.momIncomeDelta! > 0
-                        ? '↑'
-                        : metrics()!.momIncomeDelta! < 0
-                          ? '↓'
-                          : '→'}
-                      {Math.abs(metrics()!.momIncomeDelta!).toFixed(2)}
-                    </span>
-                    <span class={styles.metricDeltaLabel}>vs last month</span>
-                  </div>
+                  <MonthChangeLine delta={metrics()!.momIncomeDelta!} />
                 )}
                 <Show when={monthlyData()}>
                   <div class={styles.metricSpark}>
@@ -663,25 +722,7 @@ export default function Dashboard() {
                 <div class={styles.metricSubtext}>For this period</div>
                 {/* eslint-disable-next-line eqeqeq */}
                 {metrics()!.momExpenseDelta != null && (
-                  <div class={styles.metricDelta}>
-                    <span
-                      class={
-                        metrics()!.momExpenseDelta! > 0
-                          ? styles.positive
-                          : metrics()!.momExpenseDelta! < 0
-                            ? styles.negative
-                            : styles.neutral
-                      }
-                    >
-                      {metrics()!.momExpenseDelta! > 0
-                        ? '↑'
-                        : metrics()!.momExpenseDelta! < 0
-                          ? '↓'
-                          : '→'}
-                      {Math.abs(metrics()!.momExpenseDelta!).toFixed(2)}
-                    </span>
-                    <span class={styles.metricDeltaLabel}>vs last month</span>
-                  </div>
+                  <MonthChangeLine delta={metrics()!.momExpenseDelta!} />
                 )}
                 <Show when={monthlyData()}>
                   <div class={styles.metricSpark}>
@@ -726,9 +767,10 @@ export default function Dashboard() {
           </Show>
 
           {/* The savings rate over the last 12 months, at its own spot like the metrics: it reads
-              the circles' facts, not the period above. */}
-          <Show when={isWidgetVisible('savings-gauge')}>
-            <SavingsGauge view={guidance()} />
+              the circles' facts, not the period above. Placed among the widgets under Show more,
+              as a layout saved with the old Savings rate card has it, it is drawn there. */}
+          <Show when={isWidgetVisible('savings-gauge') && !gaugeInTail(widgetOrder())}>
+            <SavingsGauge view={guidance()} profile={circlesProfile()} />
           </Show>
 
           {/* Direction A overview deck — the default "mission control" view.
