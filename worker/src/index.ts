@@ -74,6 +74,7 @@ export interface Env {
   STRIPE_PRICE_ULTIMATE_ANNUAL?: string;
   RESEND_API_KEY?: string; // secret — Resend API key for reminder emails (unset → emails skip)
   EMAIL_FROM?: string; // var — From address, e.g. "Token Circles <hello@tokencircles.com>" (repliable, not no-reply)
+  DEV_MAIL_SINK?: string; // var — development only: a loopback mailbox URL mails go to without a Resend key (email.ts devMailSink)
   SUPPORT_EMAIL?: string; // secret — private inbox the contact form relays to (unset → disabled)
   TURNSTILE_SECRET?: string; // secret — Cloudflare Turnstile secret; unset → captcha gate disabled
   EMAIL_INGEST_SECRET?: string; // secret — token in the ingest address +tag (ingest+<secret>@…); unset → email-in disabled
@@ -228,8 +229,12 @@ export default {
     // it: an invocation has a budget of D1 queries (1,000 on Workers Paid), and the reminders and
     // sheet syncs of the 08:00 run spend from the same one. Half an hour apart, the two senders
     // never call Resend at the same time either.
+    //
+    // The run counts each mail's window from the time its event was scheduled for, so a late
+    // invocation sends what the 08:30 run would have, and a run fired locally for a chosen instant
+    // (`/cdn-cgi/handler/scheduled?cron=...&time=<ms>` on `wrangler dev`) sees that instant.
     if (event.cron === WEEK_ONE_CRON) {
-      ctx.waitUntil(runWeekOneMails(event.cron, env));
+      ctx.waitUntil(runWeekOneMails(event.cron, env, new Date(event.scheduledTime)));
       return;
     }
     ctx.waitUntil(

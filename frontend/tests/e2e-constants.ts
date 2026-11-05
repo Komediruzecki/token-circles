@@ -14,6 +14,14 @@ export const E2E_BASE = `http://127.0.0.1:${E2E_PORT}`
 export const E2E_API_PORT = Number(env?.E2E_API_PORT || 8787)
 export const E2E_API_BASE = `http://127.0.0.1:${E2E_API_PORT}`
 
+/**
+ * The mailbox the Worker's mails go to instead of Resend (scripts/mailbox.mjs, DEV_MAIL_SINK in
+ * worker/src/email.ts), and the folder it keeps a copy of each mail in.
+ */
+export const E2E_MAIL_PORT = Number(env?.E2E_MAIL_PORT || 8797)
+export const E2E_MAIL_BASE = `http://127.0.0.1:${E2E_MAIL_PORT}`
+export const E2E_MAILBOX_DIR = env?.E2E_MAILBOX_DIR || 'test-results/mailbox'
+
 // A real account on a throwaway local database. Not a secret; nothing outside this suite can
 // reach the database it exists in.
 export const E2E_EMAIL = 'e2e@tokencircles.test'

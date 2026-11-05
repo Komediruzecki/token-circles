@@ -23,6 +23,10 @@ that are not negotiable.
 - [Deploy-Update Pipeline](deploy-update-pipeline.md) — How open tabs cross a release: service worker, version.json, reload bounds, manual verification
 - [PWA Install Assets](pwa-install-assets.md) — The maskable icon and the install-dialog screenshots: what they are, why they fail silently, and how to regenerate them
 
+## Testing
+
+- [The time machine](time-machine.md): a new account's first week lived in minutes on a local stack, with its mails read from a local mailbox; what it moves, what it keeps, and what it cannot simulate
+
 ## Marketing
 
 - [Marketing Screenshots](marketing-screenshots.md) — Re-shooting the product stills the landing sites bundle: seeding, profiles, and the traps that produce a plausible wrong image
