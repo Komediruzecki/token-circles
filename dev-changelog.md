@@ -349,6 +349,10 @@ All notable changes to Token Circles are documented here. The format is based on
   seconds.
 - Docs: [docs/time-machine.md](docs/time-machine.md), with the clock map, the frame and what it
   cannot simulate.
+- **The first-week spec expects the mails as #693 wrote them**: the welcome's subject is "Welcome to
+  Token Circles: start with a year", and the day-2 mail's import link is `BANK_IMPORT_HASH` from
+  `shared/importRoute.ts`, as the mail's own is. Both server tests failed on main after #691 and #693
+  merged: the spec is not `@smoke`, so neither PR ran it, and each passed on its own.
 
 ### Onboarding
 
