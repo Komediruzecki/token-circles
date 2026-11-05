@@ -17,6 +17,15 @@ so adding a theme means adding one file here, importing it from
 (`.instrument-deck` on a page container, dark theme only) that re-grounds
 analytics/portfolio surfaces in graphite terminal colors.
 
+**Signed out is dark.** The sign-in screens (sign-in, Confirm your email, the password-reset
+link) stay dark whatever the system theme (the brand's choice: keep it), unless this browser
+stored `finance-theme`; the app behind sign-in follows the system. One rule decides both,
+`themeFor` in `src/core/screenTheme.ts`: `public/theme-init.js` stamps its answer before first
+paint, reading the screen App recorded last time (`finance-screen`, or with none yet whether a
+`currentProfileId` is kept), and App applies it again once
+it knows who is signed in, so the screen does not change theme after it paints.
+`src/__tests__/themeFirstPaint.test.ts` holds the script to the rule.
+
 ## Token contract
 
 Grounds: `--bg --bg-secondary --surface --surface-hover --card-bg --stat-bg

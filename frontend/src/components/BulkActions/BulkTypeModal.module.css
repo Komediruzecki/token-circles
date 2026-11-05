@@ -259,12 +259,12 @@
 }
 
 .confirmButton {
-  background: #6366f1;
-  color: white;
+  background: var(--primary);
+  color: var(--on-primary);
 }
 
 .confirmButton:hover:not(.disabled) {
-  background: #4f46e5;
+  background: var(--primary-hover);
 }
 
 .confirmButton.disabled {

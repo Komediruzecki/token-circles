@@ -53,7 +53,7 @@
   transition: all 0.15s;
 }
 .todayBtn:hover {
-  color: var(--primary);
+  color: var(--primary-text);
   border-color: var(--primary);
 }
 
@@ -86,7 +86,7 @@
   color: var(--text);
 }
 .calSummaryPaid {
-  color: var(--success, #10b981);
+  color: var(--success-text);
 }
 
 /* ---- Calendar Grid ---- */
@@ -138,7 +138,7 @@
   color: var(--text-secondary);
 }
 .today .dayNumber {
-  color: var(--primary);
+  color: var(--primary-text);
   font-weight: 700;
 }
 
@@ -319,7 +319,7 @@
   white-space: nowrap;
 }
 .amountOverdue {
-  color: var(--danger, #ef4444);
+  color: var(--danger-text);
 }
 .popoverMarkPaid {
   padding: 4px 10px;

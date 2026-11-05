@@ -387,7 +387,7 @@ export default function Categories() {
                           class={`${styles.btnSm} ${styles.btnGhost}`}
                           onConfirm={() => deleteCategory(category.id)}
                           message="Delete this category? This can’t be undone."
-                          aria-label="Delete category"
+                          aria-label={`Delete the ${category.name} category`}
                           label={
                             <svg
                               width="16"

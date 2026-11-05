@@ -2589,6 +2589,321 @@ check')` first, as the cushion and debt cases do.
     the two import cases for a space that has Restaurant pass before and after, as the guard that
     the fold keeps it. `categoryGroups.test.ts` expects Eating out for `UBER EATS`.
 
+### Accessibility pass from the 3 Nov design review
+
+- **Words in a brand colour take a text token** (D1). The light theme set text in the colours its
+  fills and marks use, and those fail 4.5:1 as small text: the azure #3b6fe0 was 4.40:1 on the page
+  (`--bg`) and 3.84:1 on a tinted button, the money green #14985a 3.52:1 on the page and 3.31:1 on
+  the Income chip, the red #d64550 4.13:1 on the page and 3.67:1 on the Expense chip, the warm
+  accent 2.58:1 on "PDF reports moved to Exports", and the indigo letter of a subscription with no
+  brand 3.75:1 on its tint. The theme files now carry a text token beside each:
+  `--primary-text` (#2f5bc4: 5.84:1 on the page, 5.11:1 on the button tint), `--income-text` and a
+  retuned `--text-positive` (#0e7a47: 5.12:1, 4.81:1 on the chip), `--expense-text` and a retuned
+  `--text-negative` (#b93842, the existing `--danger-text`: 5.38:1, 4.77:1 on the chip),
+  `--warning-text` (#9c5416: 4.90:1 on the tag) and `--avatar-letter` (#4f46e5: 5.29:1). Every
+  stylesheet rule that set `color:` from `--primary`, `--income`, `--expense`, `--success` or
+  `--warning` reads the text token now (133 rules, and the shared tinted button's
+  `--btn-primary-fg`), apart from 18 rules that colour an icon, a glyph or a mark, which keep the
+  brand colour. The Import page's required asterisk and Expense pill take `--danger-text`. In the
+  dark theme every new token equals the colour it replaces, so dark pages read as before, with two
+  exceptions that fail there today: the avatar letter (#6366f1, 3.23:1 on its tint, is #a5b4fc,
+  7.23:1) and the Expense pill and asterisk (#ef4444 to #ff9d9d). The `instrument-deck` variant
+  keeps its own azure as `--primary-text`. The light and dark themes' unused legacy
+  `--income-text` (#0e5c38 and #b8ffd6, read by nothing) is gone, since the new token has its
+  name.
+- **The sidebar's group labels are 5.4:1** (D1): `--sidebar-text` at 0.65 opacity was 4.30:1 on
+  the sidebar in both themes; at 0.75 it is 5.41:1 (light) and 5.46:1 (dark).
+- **"primary" in the profile menu is 12px in `--primary-text`**, at full opacity: it was 10px
+  `--primary` at 0.7, 2.58:1. **The sign-in footer's version** is 12px `--text-secondary` with no
+  fade: it was 11px at 0.7 opacity.
+- Tests: `brandTextContrast.test.ts` measures each token on the page grounds and the tints the
+  review found it on, in all three themes; reads the rules the review named; and fails when any
+  stylesheet sets `color:` from a brand colour outside its list of icon rules, or when a listed
+  rule is gone. With the light `--primary-text` back at #3b6fe0, three of its cases fail; with the
+  avatar letter back on the brand colour, its rule check fails.
+
+- **The phone Dashboard's controls are a fingertip** (D2). At 390 they were under 44px: Toggle
+  sidebar 36x36, Views and Refresh 98x39 and 107x39, the period arrows 34x34 and the month 193x34,
+  the period pills 65x33 with "All" (33x33) lifted alone onto the month row, "See all" 58x25, the
+  info buttons 24x24, the card links ("November 2026 →", "View all →") 18 tall and Show more 36.
+  Under `@media (max-width: 768px), (pointer: coarse)` they are 44px: Views, Refresh and Show more
+  take a 44px minimum height (`DashboardPage.module.css`); the arrows are 44x44 and the month and
+  pills 44 tall (`PeriodBar.module.css`); "See all" is 44 tall (`BadgeRail.module.css`); a card
+  link keeps its place in the header line and takes a 44px box with negative margins
+  (`OverviewDeck.module.css`); an info button keeps its 24px look and its hit area grows to 44px
+  through a `::before` ring (`InfoTip.module.css`). Toggle sidebar stays 36px, so `.main`'s top
+  padding and the period bar's pinned offset are unchanged, and a `::before` gives it a 46px hit
+  area on every page (`Layout.module.css`). "All" stays in the pill row at 640 and under: the
+  steppers take a row of their own and the six pills share the next, each 52 to 57px wide.
+  Desktop sizes are unchanged. Measured at 390 by hit-testing (pixels across the middle where a
+  tap lands): Toggle sidebar 46x46, Views 98x44, Refresh 107x44, arrows 44x44, the month 193x44,
+  pills 52-57x44, See all 66x44, info buttons 44x44, card links 44 tall, Show more 138x44.
+  Test: `tests/a11y-phone.spec.ts` (`@smoke`) measures each of them at 390x844 and checks the six
+  pills share one row; `sticky-period-bar.spec.ts`, which asserted "All" beside the steppers, now
+  expects it in the pill row, below them. A card link is also at least 44px wide: the year card's
+  "2026 →" measured 42.1x44 in CI, whose fallback font is narrower than a desktop's, and the spec
+  failed there on it (run 41826883292); it now takes `min-width: 44px` with its words at the right
+  edge.
+
+- **The Import page's columns view is a fingertip on a phone** (D3, the part PR A's summary left).
+  At 390 the mapping selects were 370x38, the Expense, Income and Account toggles 28 tall and the
+  row checkboxes 13x13 in 30px rows. Under `@media (pointer: coarse), (max-width: 768px)` the
+  selects and toggles take a 44px minimum height, and a row's checkbox, and the select-all one,
+  sit in a label that fills their cell (`.selectHit`, 44x44), so a tap anywhere in the cell ticks
+  it; the label is in place at every width, with the cell's padding moved into it on a phone
+  (`ImportPreviewStep.tsx`). The expected-columns samples ("2024-01-15 (today's date, and the row
+  is flagged)") ended in an ellipsis at 200px; that table now wraps them in their cells
+  (`.expectedColumns` in `ImportDataEntry.tsx`). Measured at 390: selects 370x44, toggles 71-77x44,
+  checkbox cells 44x44, and no sample cell's content wider than the cell. Test:
+  `tests/a11y-phone.spec.ts` (`@smoke`).
+
+- **Every sign-in step is a fingertip on a phone** (D6, the stages after Check your inbox, which
+  PR A did first). At 390 the buttons were 300x37, "Create one" 70x22, "Continue with no account"
+  162x22, "Forgot password?" 113x20, "Back to sign in" 90x20, and the footer's Privacy and Terms
+  38x17 and 32x17. Under `@media (max-width: 768px), (pointer: coarse)` the form's button and the
+  other ways in (Continue with Google, Email me a sign-in code, a passkey) take a 44px minimum
+  height, the links in and under the form 44x44 at least (`LoginScreen.module.css`), and the
+  footer's links 44 tall, with Privacy and Terms as wide, on every stage: the footer no longer
+  needs Check your inbox's `footerRoomy`, and `SignInSteps.module.css` sets its `.submit` and
+  `.link` for every step that uses them (email code, two-step, finish sign-up), not only inside
+  `.inbox`. Measured at 390 on sign in, forgot password, create account and email code: buttons
+  300x44, Create one 70x44, Continue with no account 162x44, Forgot password? 113x44, Back to sign
+  in 90x44, Privacy and Terms 44x44, Contact support 121x44. The footer's version stays on one
+  line. The screens stay dark whatever the system theme, which is decided; why they are dark is a
+  rule in `frontend/src/styles/themes/README.md`. Tests: `tests/a11y-phone.spec.ts` (`@smoke`)
+  measures each stage; `loginScreen.refusals.test.tsx` reads the phone rules and fails if a stage
+  class comes back.
+
+- **A toast's action is 44px tall on a phone**: "See my prints" and "See badges" were 27px tall
+  (PR A's hand-back). `Toast.module.css` gives `.actionBtn` a 44px minimum height under
+  `@media (max-width: 768px), (pointer: coarse)`; measured at 390, "See badges" is 90x44. Test:
+  `tests/a11y-phone.spec.ts` (`@smoke`) raises a toast with an action through the app's own toast
+  store and measures it.
+
+- **Every confirm has an accessible name** (PR A's hand-back). A confirm with a title is named by
+  it, as `1fb2c645` made it; one without a title had no `aria-labelledby` and was announced as
+  "alert dialog" alone. It is named by its message now, and not described by the same text a
+  second time (`ConfirmDialog.tsx`). Tests: `ConfirmDialog.test.tsx` reads the name a confirm
+  with a title, one without, and one without and with several lines gets; without the change, the
+  last two fail.
+
+- **Every ToggleField row flips its switch** (PR A's hand-back; `03f7c60f` made it the first-week
+  switch's opt-in `wholeRow`). The row is always the switch's `<label>` now, so a tap on its
+  title, its description or the space around them flips it once, and a disabled switch takes no
+  tap anywhere on the row. The `wholeRow` prop is gone, and with it `WeekOneMails.tsx`'s use of
+  it; the other rows are Autopay on Bills and Housing, and Adjust for inflation and the
+  allocation switch on Retirement. Tests: `ToggleField.test.tsx` taps the title, the description,
+  the row and the switch and expects four flips, one each, and none on a disabled row; the first
+  fails on the old opt-in row.
+
+- **A 12px floor on the first-week surfaces** (D8). Badge names were 11px and their dates 10px on
+  the Dashboard's badge rail (`BadgeRail.module.css`), and 10.5px and 11.5px on Progress's
+  timeline (`BadgeTimeline.module.css`); the sidebar's tagline was 11px (`Layout.module.css`);
+  the Settings section labels ("General", "Exports", "API access", "Billing", "About") 9.5px
+  (`SettingsPage.module.css`). All are 12px. A Settings section button is as wide as its label
+  needs and never under 52px, and the column rail stretches every button to the widest, so "API
+  access" fits on one line. "primary" in the profile menu went to 12px with the brand-text fix
+  above. Test: `tests/a11y-phone.spec.ts` (`@smoke`) reads the size of every badge name and date
+  on the Dashboard and Progress, the tagline, "primary" and every Settings section label.
+
+- **A solid fill that carries words reads 4.5:1** (round 2, item 1). White on the light theme's
+  green #14985a was 3.70:1 on the "On Track" and "Fully Allocated" budget badges and an account's
+  "savings" badge, and the other worded fills were no better: white on the red #d64550 4.35:1
+  (Over budget, the import's "err", the transaction form's Expense when picked), on the amber
+  #f59e0b and #d97f2e 2.15:1 and 2.99:1 (Warning, the import's "dup"). In the dark theme white sat
+  on light hues: 2.28:1 on #22c55e, 1.99:1 on the expense pink and 1.25:1 on the income mint the
+  transaction form's Income used. Each theme now has `--success-fill`, `--danger-fill`,
+  `--warning-fill` and `--info-fill`, and `--on-fill` for the words: in light, white on #0e7a47
+  (5.39:1), #b93842 (5.66:1), #9c5416 (5.69:1) and #3b6fe0 (4.63:1); in dark, the night ink
+  #0a0e1c on #22c55e (8.44:1), #ef4444 (5.11:1), #f0a860 (9.59:1) and #6e9bff (7.14:1).
+  `Badge.module.css` (`.badge-over`, `.badge-warning`, `.badge-ok`, `.badgeSuccess`,
+  `.badgeInfo`), `Import.module.css` (`.dupBadge`, `.errorBadge`) and the transaction form's
+  Expense and Income (`TransactionsPage.module.css`) use them. Fills without words (bars, dots,
+  strips) keep the brand colour. Tests: `brandTextContrast.test.ts` measures `--on-fill` on each
+  fill in all three themes and fails when any stylesheet rule pairs a solid semantic fill with a
+  text colour other than a fill token under `--on-fill`; with the light `--success-fill` back at
+  #14985a it fails (3.70:1).
+
+- **The savings rate's period reads 5.6:1** (round 2, item 2). "across 2026" under the savings
+  rate on Analytics was `--text-secondary` at 0.8 opacity, 3.68:1 in the light theme and 4.26:1
+  in the graphite deck; at full strength it is 5.63:1 and 6.00:1 (`AnalyticsPage.module.css`).
+  Test: `brandTextContrast.test.ts` reads the rule for the token and no opacity, and measures
+  `--text-secondary` on every page ground in all three themes.
+
+- **A toast's title and action read in the hue's text token** (round 2, item 3). The title and
+  the action button were `--toast-accent`, the brand colour the icon and the border use: in a
+  warning toast #d97f2e on the light surface, 2.99:1, and in an error toast #d64550, 4.35:1 (dark:
+  #ef4444, 4.45:1). Each kind now also sets `--toast-accent-text` (`--primary-text`,
+  `--success-text`, `--warning-text`, `--danger-text`: 5.69:1 for warning and 5.66:1 for error in
+  light, 8.43:1 for error in dark), and `.title` and `.actionBtn` read it; the success toast's
+  one-off rule is gone (`Toast.module.css`). Tests: `brandTextContrast.test.ts` reads each kind's
+  token and both rules; `successTextContrast.test.ts` now reads the success toast through
+  `--toast-accent-text`.
+
+- **Words in a component's inline style take the text token** (round 2, item 4). Inline styles
+  set words in the brand colours the stylesheet scan could not see: Transactions' required
+  asterisk and two buttons, Settings' billing status line and two more, the Import history's
+  delete button, the import preview's skipped-rows note, Reconciliation's matched and unmatched counts, the reset page's
+  "Finance." full stop, Two-factor's Enabled pill and link, Billing's "2 months free" and
+  LoginModal's four links. They read `--primary-text`, `--success-text`, `--warning-text` and
+  `--danger-text` now. The overview's sparkline series colours and the plan list's check mark
+  keep the brand colour. Test: `brandTextContrast.test.ts` scans every `.tsx` under `src/` for a
+  `color:` that names a brand colour, in a style object or a style string, and fails on any that
+  is not in its list of four marks, or on a listed one that is gone; with `ResetPassword.tsx` back
+  on `--primary` it fails.
+
+- **The hovered primary button reads 4.8:1** (round 2, item 5). A hovered tinted button laid
+  `--primary` at 20% over its ground, and `--primary-text` on that was 4.43:1 on the dark theme's
+  cards and 4.29:1 on the light theme's `--bg-secondary`. At 16% (`--btn-primary-bg-hover`,
+  `styles/index.css`) the worst case is 4.77:1 in dark and 4.51:1 in light; measured in the
+  browser, Add Account, Add Bill and Refresh hovered are 5.69:1 (dark) and 4.77:1 (light) on the
+  page. Test: `brandTextContrast.test.ts` reads the alpha from the stylesheet and measures
+  `--primary-text` on the hovered tint over every page ground in all three themes; at 20% three
+  cases fail.
+
+- **Quick entry is a fingertip on a phone** (round 2, item 6). The quick-entry bar's fields were
+  19 to 24px tall at 390 (Quick entry 288x24, Category and Account 19, Date 19.5), its Expense and
+  Income 28 and Add entry 35. They are 44 under `@media (max-width: 768px), (pointer: coarse)`,
+  with the chips' vertical padding given to the field inside (`CommandBar.module.css`). The guided
+  sheet a tap on the plus opens had Close 30x30, Expense and Income 40, Cancel 36, Next 40, Back
+  40x44 and the date and note fields 20; Close and Back are 44x44, the rest 44 tall, and the
+  summary row holding the date or the note gives its padding to the field, so the row keeps its
+  height (`GuidedOrbit.module.css`). Test: `tests/a11y-phone.spec.ts` (`@smoke`) walks the sheet
+  to its summary and opens the bar with Ctrl+K, and measures every field and button's hit area;
+  without the bar's select rule, Category measures 132x19 and fails.
+
+- **The Import preview's checkboxes say which row** (round 2, item 7). The select-all box and
+  each row's box had no accessible name. Select-all is "Select all rows", and a row's box says
+  "Import row 3: 2026-07-02 · A11y Test Groceries · -52.30": its row in the file and the date,
+  description and amount the duplicate hint already summarises (`ImportPreviewStep.tsx`). Test:
+  `tests/a11y-phone.spec.ts` finds both names in the preview of a pasted CSV.
+
+- **The profile menu's checkboxes are a fingertip** (round 2, item 8). Each was a bare 16x16 box
+  with no name. It sits in a 44x44 label now, whose negative margins take the row's padding, so the
+  row stays 44 tall and the name starts where the label ends (a tap on the name still picks the
+  primary profile); the box is named "Include <profile name>" (`App.tsx`, `Profile.module.css`).
+  Test: `tests/a11y-phone.spec.ts` opens the menu at 390 and measures each profile's label and
+  reads its box's name; with the label overlapping the name by 4px, the right edge landed on the
+  name and the test failed.
+
+- **The first paint is the theme the screen settles on** (round 2, item 9). `public/theme-init.js`
+  stamped the system theme before first paint, then App's start-up set dark (signed-out screens
+  stay dark), then on a signed-in boot `core/theme.ts` set the system theme back. Measured with a
+  watcher on `data-theme`, with the system on light and no stored choice: signed out went light
+  then dark at 57 ms, signed in light, dark at 52 ms and light at 163 ms; the other ten
+  combinations of signed in or out, system light or dark and stored light, dark or none were
+  stamped once. Now one rule, `themeFor` in the new `core/screenTheme.ts` (a stored choice wins, a
+  signed-out screen is dark, the app follows the system), decides both: App applies it once it
+  knows who is signed in, and on every sign-in state change after, and records the screen it
+  settled on (`finance-screen`); theme-init.js reads that record before first paint, or with none
+  yet a kept `currentProfileId`, and treats the password-reset link as signed out and local-first
+  as the app. All twelve combinations are now stamped once and never change. The stamp can still
+  be wrong once when the answer changed since the last visit (a session that expired; a first
+  visit to a local-first build). App's old dark default in `onMount` is gone. The themes README's
+  "Signed out is dark" paragraph says how it works now. Tests: `themeFirstPaint.test.ts` runs
+  theme-init.js for 288 combinations of stored choice, system theme, storage mode, recorded
+  screen, kept profile and reset link against `themeFor` (26 fail on the old script), and checks
+  `applyScreenTheme` records the screen and leaves a fitting theme alone;
+  `tests/theme-first-paint.spec.ts` boots each of the twelve combinations twice as a returning
+  visitor, plus a signed-in first visit since the record began, and requires one theme from the
+  first stamp on (on the old code the two system-light, no-choice cases fail).
+
+- **Words on any fill read 4.5:1, whatever colour the fill names** (round 3, item 1). White on
+  the legacy indigo #6366f1 was 4.47:1 on the tag filter's count (`TagFilter.module.css`
+  `.filterCount`, now `--info-fill` under `--on-fill`) and on the bulk modals' confirm button
+  (`.confirmButton` in `BulkTypeModal.module.css` and `BulkCategoryModal.module.css`, now
+  `--primary` under `--on-primary` with `--primary-hover` hovered: 4.63:1 light, 7.14:1 dark).
+  The widened guard found seven more, all fixed:
+  - `--danger` words on `--bg`, 4.13:1 in light, on Reset on the tour menu (`.resetBtn:hover`),
+    the filter bar's Clear (`.clearBtn:hover`) and the bulk bar's danger button
+    (`.btnDanger`). They now take `--danger-text`, 5.38:1.
+  - The legacy hex hovers in `BulkActions/BulkActionBar.module.css` and `TagFilter.module.css`
+    (indigo on #f5f3ff 4.07:1, red on #fef2f2 3.44:1, both on the dark-mode grey 2.31:1 and
+    2.74:1). They now take #4f46e5, #b91c1c, #a5b4fc and #fca5a5, 5.17:1 to 5.91:1.
+
+  `components/BulkActions/` and `components/Tags/TagFilter.tsx` are imported by nothing in `src/`.
+  Test: `brandTextContrast.test.ts` resolves the background and the text colour of every
+  stylesheet rule that sets both: hex, `white`, `black`, or `var()` through each theme with its
+  fallback. It requires 4.5:1 in all three themes, and checks that the resolver measured more than
+  200 pairs. With `.filterCount` back on #6366f1 it fails in all three themes at 4.47:1.
+
+- **The guided sheet's date and note fields are named** (round 3, item 2). The words "Date" and
+  "Note" sat beside the fields as plain text. Each summary row is now the field's `<label>`, so
+  the field is named by its word and a tap anywhere on the row lands in it (`GuidedOrbit.tsx`).
+  Test: `tests/a11y-phone.spec.ts` finds both fields with `getByLabel` and measures them. On the
+  old markup it fails ("the sheet's date": element not found).
+
+- **An OS theme change keeps a signed-out screen dark** (round 3, item 3). `core/theme.ts`
+  followed a system change with the raw system theme, so after a sign-out in the same tab the
+  sign-in screen turned light when the OS did. Its resolution and its listener now go through
+  `themeFor` with the screen App last recorded (`recordedScreen` in `core/screenTheme.ts`; no
+  record there means the app, since `core/theme.ts` loads behind sign-in). Tests:
+  `core/__tests__/theme.test.ts` checks three things: signed out, the OS turning light leaves
+  the screen dark; signed back in, the app follows the system again; and a chosen light theme
+  holds on the sign-in screen. With the old `theme.ts`, the first fails.
+
+- **Why theme-init.js is a separate file** (round 3, item 4). Its header and the comment beside
+  its `<script>` in `index.html` gave the deleted Express server's helmet `script-src 'self'` as
+  the reason. Nothing requires it today: the enforcing `Content-Security-Policy` in
+  `public/_headers` sets no `script-src`, the report-only policy allows `'unsafe-inline'`, and the
+  Worker's own CSP covers only API responses. Both comments now say it is external by choice:
+  a strict `script-src 'self'` can be enforced without moving it, the service worker precaches
+  it, and tests run it as the browser does.
+
+- **Red words take `--danger-text`** (round 4). 24 stylesheet rules set words in `--danger`
+  (some with a hex fallback): form and dialog errors (`ConfirmDialog .error`,
+  `ImportBalances .error`, `Import .resultMessage.error` and `.statValue.invalid`,
+  `SubscriptionCatalogModal .priceError`, `SpaceQuestions .problem`, Settings' unsubscribe
+  alert), overdue and over-budget amounts (Bills, the bill calendar, subscriptions, Budgets,
+  Categories, the Dashboard's budget alerts), Bills' Unpaid tag, API access's Revoked and
+  Revoke, Tags' delete and negative, the overflow menu's danger item, and two hovered remove
+  buttons. Before and after:
+
+  | Where                              | Before | After  |
+  | ---------------------------------- | ------ | ------ |
+  | Light, on `--bg`                   | 4.13:1 | 5.38:1 |
+  | Light, on white                    | 4.35:1 | 5.66:1 |
+  | Dark, on `--surface`               | 4.45:1 | 8.43:1 |
+  | Unpaid tag on its pink tint, light | 3.89:1 | 5.06:1 |
+  | Unpaid tag on its pink tint, dark  | 3.72:1 | 7.04:1 |
+
+  No stylesheet sets text in `--info`, so `--info-text` was not added. `BulkActions/` and
+  `TagFilter` are left as they are. Test: `brandTextContrast.test.ts`'s stylesheet scan now
+  covers every semantic colour (primary, income, expense, success, warning, danger and info).
+  With `ConfirmDialog .error` back on `--danger` it fails.
+
+- **A category card's buttons name their category** (round 5, item 1). On a Budgets card, Set
+  Budget and Edit were icons named only by their `title`, and the delete button said "Delete
+  category" on every card. On Categories every delete said the same. Each now names the category
+  it acts on: "Set budget for Groceries", "Edit Groceries", "Delete the Groceries category"
+  (`Budgets.tsx`, `Categories.tsx`). A Budgets card's delete removes the category, the same call
+  as on Categories, so it is named for the category, not the budget. Categories' edit button is
+  left to fix/older-papercuts, which names it "Edit <name>". Test: `tests/icon-button-names.spec.ts`
+  (`@smoke`), at 390 and 1280, requires every visible button on Budgets and Categories to have an
+  accessible name (Categories' edit button excepted until that branch lands) and no "Delete
+  category" anywhere, and finds the first card's buttons by their category names. With the
+  Budgets delete back on "Delete category", both Budgets cases fail. `actionFailureToasts` and
+  `pagesFollowWrites` find the delete button by the new name.
+
+- **The Tours menu is a dialog named by its heading** (round 5, item 2). `TourSelectionModal` had
+  no role and no name, and its close button was an icon with no name. The panel is now
+  `role="dialog"` and `aria-modal="true"`, labelled by its heading (`aria-labelledby`), and the
+  close button is "Close". The heading's text is unchanged. Test:
+  `TourSelectionModal.dialog.test.tsx` checks the role, the modal flag, the label pointing at the
+  heading's id, and the close button's name; both cases fail on the old component.
+
+- **The phone checks measure with no toast up** (round 5, CI). `a11y-phone.spec.ts:145` failed all
+  three tries in CI on #694 with "Toggle sidebar: hit area 0x0". The cover is the badge toast. On
+  a fresh database the fixture earns its badges on the first page it opens, and on a phone the
+  toast is a 9 s banner across the top, over Toggle sidebar and the period bar. Locally, with the
+  stored badges cleared and the run pinned to one core (`taskset -c 0`), the same test read "pill
+  Oct: hit area 0x0". Each signed-in and local-first test now waits for the app's badge
+  evaluation (`refreshAchievements`, which joins the run in flight) and clears its toasts before
+  it measures. The hit-area rule is unchanged, and a toast's own action is still measured in its
+  own test. The same runs found the badge rail's and the timeline's font-size reads failing with
+  NaN when the list re-rendered between the list and the read; both now read every size in one
+  pass. Three one-core runs with the badges cleared each passed 9 of 9.
+
 ### Found in the first-week test run (3 Nov)
 
 What the 3 Nov test run and the functionality review after it found in the first week's changes,

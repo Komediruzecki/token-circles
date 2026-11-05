@@ -175,7 +175,7 @@
 }
 
 .yearStep:hover {
-  color: var(--primary);
+  color: var(--primary-text);
   background: color-mix(in oklab, var(--primary) 14%, transparent);
 }
 

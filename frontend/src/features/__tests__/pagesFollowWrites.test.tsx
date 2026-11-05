@@ -548,7 +548,7 @@ const OWN_WRITES: OwnWrite[] = [
     module: '../Categories',
     reads: '/api/categories',
     act: (root) => {
-      click(root, 'button[aria-label="Delete category"]')
+      click(root, 'button[aria-label^="Delete the "][aria-label$=" category"]')
     },
     helper: 'apiDelete',
     method: 'DELETE',

@@ -96,15 +96,15 @@
 }
 
 .summary-value.success {
-  color: var(--success);
+  color: var(--success-text);
 }
 
 .summary-value.warning {
-  color: var(--warning);
+  color: var(--warning-text);
 }
 
 .verdict .summary-title {
-  color: var(--primary);
+  color: var(--primary-text);
 }
 
 .chart-section {

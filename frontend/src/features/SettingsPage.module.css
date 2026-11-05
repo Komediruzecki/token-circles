@@ -57,8 +57,11 @@
 }
 
 .rail-btn {
-  width: 52px;
+  /* As wide as its caption needs, never under 52px; the column rail stretches every button to
+     the widest. */
+  min-width: 52px;
   height: 52px;
+  padding: 0 6px;
   border-radius: 15px;
   border: 1px solid transparent;
   background: transparent;
@@ -79,8 +82,10 @@
 }
 
 .rail-caption {
-  font-size: 9.5px;
+  /* The 12px floor for labels (review D8); it was 9.5px. */
+  font-size: 12px;
   letter-spacing: 0.2px;
+  white-space: nowrap;
 }
 
 .rail-btn:hover {
@@ -91,7 +96,7 @@
 .rail-btn-active,
 .rail-btn-active:hover {
   background: var(--primary-bg);
-  color: var(--primary);
+  color: var(--primary-text);
   border-color: color-mix(in oklab, var(--primary) 45%, transparent);
   box-shadow: var(--glow-primary);
 }
@@ -151,7 +156,7 @@
   margin-left: auto;
   align-self: flex-start;
   font-size: 11px;
-  color: var(--accent-warm);
+  color: var(--warning-text);
   background: color-mix(in oklab, var(--accent-warm) 14%, transparent);
   padding: 3px 9px;
   border-radius: 999px;
@@ -254,7 +259,7 @@
 .icon-action-primary {
   background: var(--primary-bg);
   border-color: color-mix(in oklab, var(--primary) 45%, transparent);
-  color: var(--primary);
+  color: var(--primary-text);
   box-shadow: var(--glow-primary);
   font-weight: 600;
 }
@@ -303,7 +308,7 @@
 
 .reminders-unsubscribed p[role='alert'] {
   margin-top: 8px;
-  color: var(--danger);
+  color: var(--danger-text);
 }
 
 .pending-email-actions {
@@ -338,7 +343,7 @@
 }
 
 .warning-box strong {
-  color: var(--warning);
+  color: var(--warning-text);
 }
 
 /* ── Form primitives (used by cards + the Reports subcomponent) ── */

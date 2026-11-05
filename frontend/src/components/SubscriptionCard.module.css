@@ -97,10 +97,10 @@
   color: var(--text-muted);
 }
 .dueSoon {
-  color: var(--warning, #d9822b);
+  color: var(--warning-text);
 }
 .dueOverdue {
-  color: var(--danger, #e5484d);
+  color: var(--danger-text);
 }
 
 .actions {
@@ -128,7 +128,7 @@
 }
 .payBtn:hover:not(:disabled) {
   background: color-mix(in srgb, var(--success, #2f9e6e) 14%, transparent);
-  color: var(--success, #2f9e6e);
+  color: var(--success-text);
 }
 .payBtn:disabled {
   cursor: default;
@@ -159,7 +159,7 @@
   line-height: 1.2;
 }
 .paidBadge {
-  color: var(--success, #2f9e6e);
+  color: var(--success-text);
   background: color-mix(in srgb, var(--success, #2f9e6e) 14%, transparent);
 }
 .pausedBadge {

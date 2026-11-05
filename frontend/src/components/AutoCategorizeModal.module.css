@@ -175,7 +175,7 @@
 .selectBtn:hover:not(:disabled) {
   border-color: var(--primary);
   background: var(--primary-light, rgba(99, 102, 241, 0.1));
-  color: var(--primary);
+  color: var(--primary-text);
 }
 
 .selectBtn:disabled {
@@ -317,12 +317,12 @@
 }
 
 .metaExpense {
-  color: var(--expense, var(--danger));
+  color: var(--expense-text);
   font-weight: 600;
 }
 
 .metaIncome {
-  color: var(--income, var(--success));
+  color: var(--income-text);
   font-weight: 600;
 }
 
@@ -346,7 +346,7 @@
   border-radius: 999px;
   border: 1px solid var(--border);
   background: transparent;
-  color: var(--primary);
+  color: var(--primary-text);
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;

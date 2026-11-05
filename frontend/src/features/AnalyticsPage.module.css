@@ -94,7 +94,7 @@
   font-size: 24px;
   font-weight: 700;
   position: relative;
-  color: var(--primary);
+  color: var(--primary-text);
 }
 
 .rate-change {
@@ -104,11 +104,11 @@
 }
 
 .rate-change.positive {
-  color: var(--success);
+  color: var(--success-text);
 }
 
 .rate-change.negative {
-  color: var(--expense);
+  color: var(--expense-text);
 }
 
 /* legend classes */
@@ -127,13 +127,13 @@
 
 /* stat value variants */
 .analytics-page .stat-value.positive {
-  color: var(--income);
+  color: var(--income-text);
 }
 .analytics-page .stat-value.warning {
-  color: var(--warning);
+  color: var(--warning-text);
 }
 .analytics-page .stat-value.negative {
-  color: var(--expense);
+  color: var(--expense-text);
 }
 .analytics-page .stat-desc {
   font-size: 12px;
@@ -242,10 +242,10 @@
   font-size: 12px;
 }
 .analytics-page .bar-income-label {
-  color: var(--income);
+  color: var(--income-text);
 }
 .analytics-page .bar-expense-label {
-  color: var(--expense);
+  color: var(--expense-text);
 }
 .analytics-page .savings-rate-display {
   display: flex;
@@ -276,7 +276,7 @@
   position: relative;
   font-size: 24px;
   font-weight: 700;
-  color: var(--primary);
+  color: var(--primary-text);
 }
 .analytics-page .rate-label {
   position: relative;
@@ -300,13 +300,13 @@
   color: var(--text);
 }
 .analytics-page .rate-status.good {
-  color: var(--success);
+  color: var(--success-text);
 }
 .analytics-page .rate-status.fair {
-  color: var(--warning);
+  color: var(--warning-text);
 }
 .analytics-page .rate-status.poor {
-  color: var(--expense);
+  color: var(--expense-text);
 }
 .analytics-page .savings-tips {
   padding: 16px;
@@ -377,10 +377,10 @@
   text-align: right;
 }
 .analytics-page .transaction-amount.income {
-  color: var(--income);
+  color: var(--income-text);
 }
 .analytics-page .transaction-amount.expense {
-  color: var(--expense);
+  color: var(--expense-text);
 }
 
 .heatmap-header {
@@ -433,7 +433,7 @@
   border-radius: var(--radius);
   background: var(--bg);
   border: 1px solid var(--primary);
-  color: var(--primary);
+  color: var(--primary-text);
   cursor: pointer;
   transition: all 0.15s;
 }
@@ -572,15 +572,15 @@
 }
 
 .stat-value.positive {
-  color: var(--income);
+  color: var(--income-text);
 }
 
 .stat-value.warning {
-  color: var(--warning);
+  color: var(--warning-text);
 }
 
 .stat-value.negative {
-  color: var(--expense);
+  color: var(--expense-text);
 }
 
 .stat-desc {
@@ -675,7 +675,7 @@
   font-size: 36px;
   font-weight: 700;
   line-height: 1;
-  color: var(--primary);
+  color: var(--primary-text);
   font-variant-numeric: tabular-nums;
 }
 
@@ -687,10 +687,10 @@
   letter-spacing: 0.5px;
 }
 
+/* The theme's muted text at full strength: at 0.8 opacity it was 3.7:1. */
 .rate-hero-period {
   font-size: 11px;
   color: var(--text-secondary);
-  opacity: 0.8;
 }
 
 .rate-info {
@@ -713,15 +713,15 @@
 }
 
 .rate-status.good {
-  color: var(--success);
+  color: var(--success-text);
 }
 
 .rate-status.fair {
-  color: var(--warning);
+  color: var(--warning-text);
 }
 
 .rate-status.poor {
-  color: var(--expense);
+  color: var(--expense-text);
 }
 
 .savings-tips {
@@ -806,11 +806,11 @@
 }
 
 .transaction-amount.income {
-  color: var(--income);
+  color: var(--income-text);
 }
 
 .transaction-amount.expense {
-  color: var(--expense);
+  color: var(--expense-text);
 }
 
 .view-all-link {
@@ -819,7 +819,7 @@
 }
 
 .view-all-link a {
-  color: var(--primary);
+  color: var(--primary-text);
   text-decoration: none;
   font-size: 14px;
 }

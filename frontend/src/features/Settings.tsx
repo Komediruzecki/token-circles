@@ -522,12 +522,12 @@ export default function Settings() {
       }
     if (b.cancel_at_period_end)
       return {
-        color: 'var(--warning, #f59e0b)',
+        color: 'var(--warning-text)',
         text: `Your ${name} plan is canceled — you keep access until ${fmtBillingDate(b.renews_at)}, then move to Free.`,
       }
     if (b.status === 'past_due')
       return {
-        color: 'var(--danger, #ef4444)',
+        color: 'var(--danger-text)',
         text: `Your ${name} plan payment is past due — update your card to keep access.`,
       }
     // Which interval, now that the status route returns it. Worth saying: monthly and annual are
@@ -1501,7 +1501,7 @@ export default function Settings() {
                       Email alerts are a Premium feature.{' '}
                       <button
                         onclick={() => setActiveTab('billing')}
-                        style="background:none; border:none; padding:0; color:var(--primary); cursor:pointer; text-decoration:underline; font:inherit;"
+                        style="background:none; border:none; padding:0; color:var(--primary-text); cursor:pointer; text-decoration:underline; font:inherit;"
                       >
                         See plans
                       </button>{' '}
@@ -1934,7 +1934,7 @@ export default function Settings() {
                                   class={styles.iconBtn}
                                   busy={renameForm.submitting()}
                                   unchanged={renameForm.unchanged()}
-                                  style="padding: 2px 6px; font-size: 11px; color: var(--primary);"
+                                  style="padding: 2px 6px; font-size: 11px; color: var(--primary-text);"
                                 >
                                   Save
                                 </SubmitButton>

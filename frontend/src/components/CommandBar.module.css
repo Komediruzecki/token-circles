@@ -138,7 +138,7 @@
 .retry {
   border: 0;
   background: transparent;
-  color: var(--primary);
+  color: var(--primary-text);
   font-family: var(--font-mono, monospace);
   font-size: 12px;
   text-decoration: underline;
@@ -175,7 +175,7 @@
 }
 .toggle button.on {
   background: color-mix(in oklab, var(--primary) 20%, transparent);
-  color: var(--primary);
+  color: var(--primary-text);
 }
 
 .footer {
@@ -247,6 +247,21 @@
   .toggle button {
     transition: none;
     animation: none;
+  }
+}
+
+/* A fingertip needs 44px. The chips keep their look and the fields inside
+   them take the height, so a tap anywhere on the row lands on a field. */
+@media (max-width: 768px), (pointer: coarse) {
+  .input,
+  .select,
+  .date,
+  .toggle button,
+  .add {
+    min-height: 44px;
+  }
+  .chip {
+    padding-block: 0;
   }
 }
 

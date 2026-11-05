@@ -95,11 +95,11 @@
 }
 
 .summary-value.positive {
-  color: var(--income);
+  color: var(--income-text);
 }
 
 .summary-value.negative {
-  color: var(--expense);
+  color: var(--expense-text);
 }
 
 .profile-group-header {
@@ -266,11 +266,11 @@
 }
 
 .activity-amount.income {
-  color: var(--income);
+  color: var(--income-text);
 }
 
 .activity-amount.expense {
-  color: var(--expense);
+  color: var(--expense-text);
 }
 
 .activity-amount.transfer {
@@ -314,7 +314,7 @@
 }
 
 .btn-link {
-  color: var(--primary);
+  color: var(--primary-text);
   font-size: 13px;
   font-weight: 500;
   text-decoration: none;

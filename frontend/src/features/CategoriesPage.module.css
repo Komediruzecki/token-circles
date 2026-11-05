@@ -63,7 +63,7 @@
 }
 
 .categories-page .tab.active {
-  color: var(--primary);
+  color: var(--primary-text);
   border-bottom-color: var(--primary);
 }
 
@@ -147,11 +147,11 @@
 }
 
 .categories-page .spending-amount.income {
-  color: var(--income);
+  color: var(--income-text);
 }
 
 .categories-page .spending-amount.expense {
-  color: var(--expense);
+  color: var(--expense-text);
 }
 
 .categories-page .spending-label {
@@ -266,7 +266,7 @@
 }
 
 .tab.active {
-  color: var(--primary);
+  color: var(--primary-text);
   border-bottom-color: var(--primary);
 }
 
@@ -368,11 +368,11 @@
 }
 
 .spending-amount.income {
-  color: var(--income);
+  color: var(--income-text);
 }
 
 .spending-amount.expense {
-  color: var(--expense);
+  color: var(--expense-text);
 }
 
 /*
@@ -430,7 +430,7 @@
 }
 
 .meter-note.over {
-  color: var(--danger);
+  color: var(--danger-text);
   font-weight: 600;
 }
 
@@ -539,7 +539,7 @@
 }
 
 .over {
-  color: var(--danger);
+  color: var(--danger-text);
 }
 
 .page-header {

@@ -482,7 +482,7 @@
 }
 
 .goalCategory {
-  color: var(--primary);
+  color: var(--primary-text);
   font-weight: 500;
 }
 
@@ -584,7 +584,7 @@
  */
 .goals-page .btn-link {
   font-size: 13px;
-  color: var(--primary);
+  color: var(--primary-text);
   background: transparent;
   border: none;
   padding: 0;

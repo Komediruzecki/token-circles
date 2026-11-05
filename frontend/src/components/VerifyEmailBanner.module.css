@@ -51,7 +51,7 @@
 
 .close:hover {
   border-color: var(--primary);
-  color: var(--primary);
+  color: var(--primary-text);
   background: color-mix(in oklab, var(--primary) 12%, transparent);
 }
 

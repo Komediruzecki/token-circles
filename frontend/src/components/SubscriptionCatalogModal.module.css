@@ -259,7 +259,7 @@
 }
 .priceError {
   margin: 6px 31px 0 43px;
-  color: var(--danger, #ef4444);
+  color: var(--danger-text);
   font-size: 11px;
   line-height: 1.35;
 }

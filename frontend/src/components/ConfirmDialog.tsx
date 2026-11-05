@@ -34,8 +34,10 @@ export default function ConfirmDialog() {
               class={styles.dialog}
               role="alertdialog"
               aria-modal="true"
-              aria-labelledby={req().title ? titleId() : undefined}
-              aria-describedby={bodyId()}
+              // Named by its title, or by its message when it has none: a dialog with no name
+              // is announced as "alert dialog" and nothing else.
+              aria-labelledby={req().title ? titleId() : bodyId()}
+              aria-describedby={req().title ? bodyId() : undefined}
               aria-busy={req().busy}
               onClick={(e) => {
                 e.stopPropagation()
