@@ -73,8 +73,8 @@ gh run list --branch main --limit 5   # the head commit must be green
       Re-run `migrations apply` afterwards; it must say `No migrations to apply!`, which is what
       makes a re-deploy safe. Then **delete `$SP`** — it is a full copy of production.
 
-      The deploy takes its own `d1 export` backup before migrating, but a rehearsal is what
-      stops you needing it.
+      The deploy records a D1 Time Travel restore point before migrating, but a rehearsal is
+      what stops you needing it.
 
 ## Filling the changelogs
 
@@ -160,13 +160,13 @@ gh run watch <frontend-run-id> --exit-status
 **Deploy API Worker** must show these steps in this order:
 
 1. `Typecheck`
-2. `Back up remote D1 before migrations (prod)` — a full `d1 export`
-3. `Upload D1 backup artifact` — artifact `d1-backup-prod-<sha>`, 30-day retention
+2. `Record the D1 restore point before migrations (prod)`: a D1 Time Travel bookmark
+3. `Show the restore point in the job summary`: the bookmark a rollback needs
 4. `Apply D1 migrations (prod)` — every migration must report ✅
 5. `Deploy worker (prod)`
 
-If the backup step did not run before the migration step, stop and investigate before doing
-anything else.
+If the restore point was not recorded before the migration step, stop and investigate before
+doing anything else.
 
 ## 4. Verify live
 
@@ -183,8 +183,18 @@ top.
 
 The worker and the frontend deploy independently, so roll back whichever broke:
 
-- **Data**: download the `d1-backup-prod-<sha>` artifact from the deploy run. It is the full
-  pre-migration SQL dump.
+- **Data**: restore prod to the bookmark in the deploy run's job summary, from before its
+  migrations:
+
+  ```sh
+  pnpm exec wrangler d1 time-travel restore finance-manager --config worker/wrangler.jsonc \
+    --env prod --bookmark=<bookmark>
+  ```
+
+  It overwrites the database in place. Time Travel reaches back 30 days on Workers Paid (7 on
+  Free). Never put a dump of the database in a workflow artifact: the repository is public, and
+  any signed-in GitHub account can download its artifacts.
+
 - **Code**: tag the previous good commit as a new patch version and let the pipeline run
   forward. Re-pointing an existing tag is worse — it makes the version stamp lie about which
   code is live.
