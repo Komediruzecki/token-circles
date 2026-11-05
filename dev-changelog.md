@@ -11,6 +11,11 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ### Deploy notes
 
+- `deploy-worker.yml` no longer exports the database before migrating. It records a D1 Time Travel
+  bookmark (`wrangler d1 time-travel info`) and writes it to the job summary; a bad migration is
+  undone with `wrangler d1 time-travel restore <db> --env <env> --bookmark=<bookmark>`, up to 30 days
+  back on Workers Paid. The data stays inside Cloudflare. The prod-update skill lists the new steps
+  and the rollback.
 - `0033_welcome_once.sql` is data only: it adds a `reminder_dedup` row `(user_id, 'welcome')` for
   every account, so no account that exists before it gets the new Welcome. The migration runs
   before the deploy, so a password account that signs up in between gets the old welcome, with its
@@ -174,6 +179,38 @@ All notable changes to Token Circles are documented here. The format is based on
   action, the box, a held press, a refused send), and clears the waiting link it notes;
   "draws the widget for its form" fails without the action. `finishSignUp.test.tsx` "marks an
   address not in the format" fails before the change.
+- **An address the app keeps and mails holds no control characters, format characters or angle
+  brackets** (`STORED_EMAIL_PATTERN` and `storedEmailProblem` in `shared/signInSchema.ts`). The
+  older `EMAIL_PATTERN`, `/^[^@\s]+@[^@\s]+\.[^@\s]+$/`, let `"a\x1b]0;T\x07@example.test"` and
+  `"<b>x</b>@example.test"` through. The mail templates and the app escape both, so nothing
+  rendered wrong, but neither belongs in a stored address. The new pattern is the old one with
+  `<`, `>`, `\p{Cc}` (C0, DEL, C1) and `\p{Cf}` (bidi overrides and isolates, zero-width
+  characters, the soft hyphen) refused in every part, under the `u` flag; plus addressing, dots,
+  hyphens, apostrophes, digits, subdomains and letters in any script still pass. A refusal is
+  the answer any badly formed address gets: `emailFormat` with a 400 on registration and support,
+  and the email change's own 400 `A valid email is required`.
+  - **Stored, so strict:** `registrationProblems` (POST `/api/auth/register` and the sign-up form,
+    through `signInChecks('register')`); `requestEmailChange` in `worker/src/email-change.ts` (PUT
+    `/api/notifications/settings`), which had its own copy of the old pattern, `EMAIL_RE`, and now
+    imports the shared one; `supportProblems` (POST `/api/support/contact` and `SupportContact`),
+    whose reply address is not stored but goes into the relay's Reply-To and gets the
+    acknowledgement mail.
+  - **Looked up, so lenient as before:** `emailProblem` and `addressProblems` (forgot password,
+    confirm-link resend, sign-in code request, and the sign-in, forgot and confirm modes of the
+    form, `EmailCodeLogin` and `FinishSignUp`), `emailCodeProblems` (sign-in code verify), and
+    `signInProblems` (password sign-in, no format at all). An account created before this change
+    with an address the strict pattern refuses can still sign in, ask for a reset link and get a
+    sign-in code; refusing it there would lock it out with no way to move to another address,
+    since the email change needs a session.
+  - **Tests:** `frontend/src/core/__tests__/signInSchema.test.ts` (the two examples and one address
+    per refused kind, 13 real-shaped addresses accepted, the lookup pattern unchanged and still
+    taking them), `worker/test/sign-in-refusals.test.ts` (registration refuses each kind with the
+    usual 400 and stores nothing; an account seeded with each still signs in and gets a reset
+    link; support refuses markup), `worker/test/email-change.test.ts` (each kind refused like any
+    non-address, no mail, no link), `loginScreen.refusals.test.tsx` (the sign-up form marks markup
+    with `emailFormat` and sends nothing). The email change test that saved `<b>new</b>@example.com`
+    to check the notice escapes it now expects the 400 and checks the escaping on
+    `renderEmailChangeNotice` directly.
 
 ### Mails
 
@@ -262,6 +299,56 @@ All notable changes to Token Circles are documented here. The format is based on
   plan gate. The switch sits in the Email reminders card outside the plan lock, shows only while
   `weekOneAhead`, and saves by itself when flipped. After a general unsubscribe it shows off and
   disabled. `ToggleField` takes `disabled`.
+
+### The first week, lived locally
+
+- **The week-one run counts from its scheduled time** (`worker/src/index.ts`, scheduled): the
+  handler passes `new Date(event.scheduledTime)` to `runWeekOneMails` instead of letting it read
+  the time it starts. A late invocation now sends what the 08:30 run would have, and a run fired
+  locally for a chosen instant sees that instant. In production the two differ by the invocation's
+  delay, so no window moves by more than that; there is no CHANGELOG.md entry, as nothing a person
+  sees changes. `worker/test/week-one-cron.test.ts` fails without it.
+- **A development mail sink** (`worker/src/email.ts`, `devMailSink`, var `DEV_MAIL_SINK`): a Worker
+  with no `RESEND_API_KEY`, `APP_ENV` exactly `development` and `DEV_MAIL_SINK` a plain `http:` URL
+  on `127.0.0.1`, `localhost` or `[::1]` (no user or password) posts each mail there instead of
+  skipping it. Any other value is refused with a `[email] DEV_MAIL_SINK is not used: <reason>`
+  warning. `sendMail` builds the Resend body once, and the sink gets that same body; a 2xx with an
+  id reads as Resend's acceptance (`{ sent: true, id }`), a refusal as
+  `{ sent: false, error, status }`, and a mailbox that is down throws, so each caller behaves as in
+  production: a week-one claim stays. The sink does not follow redirects: a 3xx is a refusal.
+  Neither the body nor the links are logged. Deployed Workers
+  are unaffected: dev and prod have `APP_ENV` `dev` and `production` and a Resend key.
+  `worker/test/dev-mail-sink.test.ts` covers each condition, the refused hosts (`example.com`,
+  `10.0.0.1`, `127.0.0.1.evil.test`, `localhost.evil.test`, `127.0.0.1@evil.test`, https, garbage
+  and more) and the kept claim.
+- **A local mailbox** (`frontend/scripts/mailbox.mjs`): listens on 127.0.0.1 only, answers only
+  requests addressed to this machine by their Host header, takes `POST /emails` as Resend does and
+  serves `GET /mails?to=`, `/mails/<id>`, `.html` (strict CSP), `.txt` and an index page. Each mail
+  is kept in memory and as `<id>.json`, `.html` and `.txt` in its folder under an id it makes; it
+  logs only `[mailbox] took <id>`. It takes only the Worker's JSON posts (no `Origin` or
+  `Sec-Fetch-Site`), keeps the known fields with its own id and time, and keeps the newest 1,000
+  mails or 64 MiB. Its ids only increase, so mails from one millisecond sort in the order they
+  came. `playwright.config.ts` starts it first on `E2E_MAIL_PORT` (8797) with its folder in
+  `E2E_MAILBOX_DIR`, and gives the Worker `WORKER_VARS` (`CORS_ORIGIN` and
+  `API_PUBLIC_ORIGIN` on localhost at the run's ports, and `DEV_MAIL_SINK`), which
+  `serve-worker.mjs` passes to `wrangler dev` as `--var` on every start (`WorkerSupervisor` option
+  `vars`).
+- **The time machine** (`worker/scripts/time-machine.ts`, `frontend/tests/time-machine/`): puts an
+  account on day N of its first week by moving the instants of its own use back (data back), with
+  every clock left real; sessions, links, limits, logs and chosen dates stay. One D1 batch, worked
+  out from day 0 and checked against it in every statement, so the same move twice lands once.
+  `worker/test/time-machine.test.ts` fails when a migration adds a time column that none of its
+  lists names. The daily job is fired through `wrangler dev`'s own
+  `/cdn-cgi/handler/scheduled?cron=30+8+*+*+*&time=<ms>`, always at the real now.
+  `pnpm -C frontend run time-machine` (`up`, `day`, `fire`, `state`, `mails`, `mail`) drives it by
+  hand.
+- **A first-week spec** (`frontend/tests/first-week-journey.spec.ts`, not `@smoke`): sign-up
+  confirmed through the mail, setup and Progress on day 0, nothing on day 1, the day-2 mail once
+  with this run's links, an import, the day-7 mail and the Settings switch gone, a stop link that
+  keeps the day-7 mail away, and local-first on `page.clock` across the end of October. About 50
+  seconds.
+- Docs: [docs/time-machine.md](docs/time-machine.md), with the clock map, the frame and what it
+  cannot simulate.
 
 ### Onboarding
 
@@ -3551,6 +3638,94 @@ true, or is too small for one.
   logged poll call started at three rows as the card changed and ended 29,085 ms later. `stepsIn`
   in `orientation.spec.ts` now reads every row in one `evaluateAll`. Test change only: all four
   cushion cases, 8 repeats each on one core, 32 passed.
+- **An imported row files under a category of its own type.** Every new profile now starts with
+  the income categories Gifts and Investments (94586cf6), and an import matched a row's category
+  by name alone, so an expense row under "Gifts" (a present bought) went into the income Gifts and
+  no expense category was made for it. Before, it got an expense Gifts with the kind gifts. Both
+  runtimes now match by name and type, with one rule in `shared/importCategories.ts`: an expense
+  row files under the expense category of its name, made if there is none; an income row under
+  the income one, and with none under the expense category of that name, as money back (a refund
+  in Groceries stays Groceries', as `shared/guidance/facts.ts` reads it); a transfer row by name
+  alone, as before. An income category is made only when no category of either type has the
+  name, so an income row and an expense row of a new name share the one expense category, in
+  whatever order they come. The preview lists each name once. On the Worker a new category now
+  takes its row's type, as it already did in local-first, instead of the type set for its name or
+  a guess from words in it (the guess, `INCOME_KEYWORDS`, is gone). Test: the contract scenario "a
+  new profile's import files each row under a category of its own type", on D1 and IndexedDB.
+  With the old matching it fails in both, at the preview (`new_categories` empty); without the
+  money-back rule it fails at the preview too, offering an income Groceries.
+- **A file set aside takes all its preview options with it.** `resetForm` cleared the starting
+  balances and dates (2ae16fd0) but kept the date range (`importStartDate`, `importEndDate`), the
+  budgets from spending, the account types and the tracking start date. The bank summary
+  (89b13585) goes from a file straight to its import without the preview step that shows them,
+  so a second file was imported with the first one's date range or budget backfill where nobody
+  could see it. `resetForm` now clears all five, on the Import page and in setup. Tests:
+  `resetFormOptions.test.ts`, one per option; leaving out any one of the five resets fails its
+  test.
+- **A loan adds back only the principal its own payments spent.** The savings rate counts loan
+  principal repaid as kept where its payments were spending (review A5). The add-back was pooled:
+  every expense under the Debt payments kind counted, plus any other expense within 1% of a
+  payment due, and the cap was on the total. So a mortgage paid by transfer, beside a card paid as
+  a Debt payments expense of the same 1,000, or a 995 childcare fee, still counted its principal
+  as kept on top of `cash` (the review's probe: 0 added for the transfer alone, 1,000 and 995 with
+  the other expense). `principalKeptIn` now works loan by loan: a loan's payments are the entries
+  the size of a payment its schedule has due that month, a transfer first, then a Debt payments
+  expense (within 5%, since the kind says it is a loan's: Jordan's personal loan is due 103.57 and
+  paid at 105), then an expense under Housing, Other, no kind or no category (within 1%). A
+  payment found as a transfer was never spending and adds nothing; each loan adds its principal
+  in the window up to what its own payments spent. Childcare, groceries and the other kinds are
+  never taken for a payment. Tests in `guidanceFacts.test.ts` ("a loan paid by transfer, beside an
+  expense of its payment size"): all three fail on the old code; looking for transfers last fails
+  the Debt payments case; taking any kind fails the childcare case with no transfer; a 1% leeway
+  for Debt payments fails the Jordan example in `guidanceExamples.test.ts`.
+- **Setting today's balance after an import reads the account at Save.** `ImportBalances` worked
+  the starting balance back from the account as its list read it, when the import finished. An
+  entry saved on that account while the list was up (Quick entry, another tab) had moved the
+  stored balance since, so the starting balance came out off by that entry. Save now reads the
+  account as stored first and works back from that. Test: `importBalances.test.tsx`, "works back
+  from the account as stored at Save, not as the list read it", which fails without the read. The
+  test that reads the figure back now has the stored account change when the figure is set, as it
+  does, rather than before Save.
+- **A file setup hands to the Import page keeps the balance typed in setup.** "Open in Import"
+  finishes setup, and finishing forgot setup's "Balance today" figures (`forgetTypedBalances`)
+  before the handed file was imported, so that import added up on top of the typed balance, the
+  double count M2 removed. The figures now go with the file (`HandedImportFile.typed`), and the
+  Import page works the file's import back from them, once, before it lists the balances. Setup
+  left any other way still forgets them, and the Import page drops them after the next import
+  finishes. Tests: `onboardingFirstImport.test.tsx` ("goes with a file handed to the Import page")
+  fails without the figures in the hand-off; `importOpensHandedFile.test.tsx` ("works the handed
+  file's import back from the balance typed in setup") fails without the page taking them, the
+  account reading 1,228.00 instead of 1,240.50.
+- **One rule says what a catch-all category is.** Getting started's "Set a budget for ..." step
+  (`biggestUnbudgeted` in `monthFacts.ts`) passed over any category named Other or Misc, by its
+  name alone, while the circles' facts take one as a catch-all only when nothing gives it a kind:
+  Other with a kind set on it, or under a parent with one, is that kind's. The rule is now one
+  function, `isCatchAllCategory` in `shared/guidance/kinds.ts`, read by both. Test:
+  `monthFacts.test.ts`, "is no catch-all once something gives it a kind, as the circles read it",
+  which fails with the name-only rule.
+- **A profile switch does not count the new profile's entries as uncategorised.** On
+  Transactions, `categoriesLoaded` stayed true across a switch, so until the new profile's
+  categories came in, its filed entries were checked against the old profile's list and counted
+  as without a category: the "entries without a category" list from Getting started showed them,
+  briefly or, with a slow read, for as long as it took. The page now keeps which profiles the
+  category list answers for (`categoriesAnsweredFor`, as the account list already did) and reads
+  it as loaded only for the profiles read now. Test: `transactionsUncategorisedLink.test.tsx`,
+  "takes no filed entry for uncategorised while the new profile's categories load", which fails
+  without it.
+- **Reset to defaults matches each default by name and type.** After the import fix above, an
+  import can leave an expense Gifts beside the default income Gifts. The reset keyed its kept
+  categories by name alone, so it folded the expense Gifts into the income one, its expenses with
+  it: the import's bug again, through the Danger Zone. Both runtimes now reset by one plan,
+  `planCategoryReset` in `shared/defaultCategories.ts`. Each default is set back on the lowest-id
+  category of its reset name and its own type, or, with none of that type, the lowest-id one of
+  that name, so a default whose type was changed comes back as before. Another category of that
+  name is folded into it, entries and budgets, only when it has the default's type; otherwise it
+  goes as any category that is no default does, its entries left with no category. Tests: the
+  contract scenario "resetting the categories matches each default by name and type", on D1 and
+  IndexedDB, fails on the old reset in both (the present landed in the income Gifts); it also
+  checks that Salary made an expense category comes back as income with its entry.
+  `categoryResetPlan.test.ts` covers the plan; preferring the lowest id whatever its type fails
+  its first case, and folding in whatever the type fails the contract scenario.
 
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 

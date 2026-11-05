@@ -30,6 +30,13 @@ error message, a formatted currency value. Even then, scope it to a `data-test-i
 (`page.getByTestId('dashboard-metric-networth-value')` then check its text) rather than searching
 the whole page.
 
+## Mails and the first week
+
+A run's Worker sends its mails to a local mailbox (`scripts/mailbox.mjs`) instead of skipping them,
+so a spec reads the mail a person would get: `tests/time-machine/harness.ts` lists and reads them,
+moves an account to day N of its first week and fires the daily job. The how and the limits are in
+[docs/time-machine.md](../../docs/time-machine.md); `first-week-journey.spec.ts` is the example.
+
 ## Naming
 
 Kebab-case, hierarchical, stable across redesigns:

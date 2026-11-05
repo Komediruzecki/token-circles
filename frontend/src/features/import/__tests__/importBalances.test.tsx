@@ -79,13 +79,35 @@ describe('the balances after an import', () => {
       input.dispatchEvent(new Event('input', { bubbles: true }))
       expect(document.activeElement).toBe(input)
     }
-    calls.stored.mockResolvedValue([{ ...MAIN, balance: 1240.5, starting_balance: -625.37 }])
+    // What is stored once the figure is set.
+    calls.set.mockImplementation(async () => {
+      calls.stored.mockResolvedValue([{ ...MAIN, balance: 1240.5, starting_balance: -625.37 }])
+      return true
+    })
     byTestId('import-balance-save')[0].click()
     await vi.waitFor(() => {
       expect(byTestId('import-balance-today')[0].textContent).toBe('€1240.50')
     })
     expect(calls.set).toHaveBeenCalledWith(MAIN, 1240.5)
     expect(byTestId('import-balance-input')).toHaveLength(0)
+  })
+
+  it('works back from the account as stored at Save, not as the list read it', async () => {
+    calls.set.mockResolvedValue(true)
+    dispose = render(() => <ImportBalances accounts={[MAIN]} />, host)
+    await settle()
+    // An entry of 50 saved on Main while the list was up.
+    const moved = { ...MAIN, balance: MAIN.balance - 50 }
+    calls.stored.mockResolvedValue([moved, CARD])
+    byTestId('import-balance-set')[0].click()
+    await settle()
+    const input = byTestId('import-balance-input')[0] as HTMLInputElement
+    input.value = '1240.5'
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+    byTestId('import-balance-save')[0].click()
+    await vi.waitFor(() => {
+      expect(calls.set).toHaveBeenCalledWith(moved, 1240.5)
+    })
   })
 
   it('says what it could not read, and writes nothing', async () => {

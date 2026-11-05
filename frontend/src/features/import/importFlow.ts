@@ -791,6 +791,14 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     // (offerStartingBalances fills only empty fields), where setup shows no field to check.
     setAccountBalances({})
     setAccountBalanceDates({})
+    // So do the rest of the preview's options. The bank summary goes straight from a file to its
+    // import and never shows the preview, so a date range, a budget backfill, an account type or
+    // a tracking start date kept from one file was applied to the next where nobody could see it.
+    setAccountTypes({})
+    setUniversalStartDate('')
+    setImportStartDate('')
+    setImportEndDate('')
+    setSetBudgetsFromSpending(false)
     // Clear Bank Imports state so a fresh import doesn't inherit stale files/warnings
     // and the preview's rules editor is gated correctly by bankFiles().length.
     setBankFiles([])

@@ -3,7 +3,7 @@
  * Implements StorageAdapter for serverless/client-only operation using IndexedDB
  */
 import { openDB } from 'idb'
-import { resetKeepsIcon, resetName } from '../../../../shared/defaultCategories'
+import { planCategoryReset, resetKeepsIcon } from '../../../../shared/defaultCategories'
 import {
   isImportSourceKind,
   isImportSourceSchedule,
@@ -826,31 +826,35 @@ export class IndexedDBAdapter implements StorageAdapter {
       }
     }
 
-    for (const category of profileCategories) {
-      // A replaced default (Food) is matched to the default that replaced it (Groceries), and so
-      // is renamed to it with its entries instead of being deleted (shared/defaultCategories.ts).
-      const name = typeof category.name === 'string' ? resetName(category.name) : ''
-      const defaultCategory = defaultsByName.get(name)
-      const canonicalId = canonicalIds.get(name)
-
-      if (defaultCategory && canonicalId === undefined) {
-        canonicalIds.set(name, category.id as number)
-        await categoryStore.put({
-          ...category,
-          ...defaultCategory,
-          // An icon the person chose for Food stays as it becomes Groceries.
-          ...(resetKeepsIcon(String(category.name), category.icon as string | null)
-            ? { icon: category.icon }
-            : {}),
-          essential: null,
-          parent_id: null,
-          profile_id: profileId,
-        })
-        continue
-      }
-
-      await replaceCategoryReferences(category.id as number, canonicalId ?? null)
-      await categoryStore.delete(category.id as number)
+    // Matched by name and type (shared/defaultCategories.ts `planCategoryReset`). A replaced
+    // default (Food) is matched to the default that replaced it (Groceries), and so is renamed to
+    // it with its entries instead of being deleted.
+    const { kept, removed } = planCategoryReset(
+      profileCategories.map((category) => ({
+        id: category.id as number,
+        name: typeof category.name === 'string' ? category.name : '',
+        type: typeof category.type === 'string' ? category.type : null,
+      })),
+      DEFAULT_CATEGORIES
+    )
+    for (const [key, id] of kept) {
+      canonicalIds.set(key, id)
+      const category = profileCategories.find((row) => row.id === id)!
+      await categoryStore.put({
+        ...category,
+        ...defaultsByName.get(key)!,
+        // An icon the person chose for Food stays as it becomes Groceries.
+        ...(resetKeepsIcon(String(category.name), category.icon as string | null)
+          ? { icon: category.icon }
+          : {}),
+        essential: null,
+        parent_id: null,
+        profile_id: profileId,
+      })
+    }
+    for (const [id, into] of removed) {
+      await replaceCategoryReferences(id, into)
+      await categoryStore.delete(id)
     }
 
     for (const category of DEFAULT_CATEGORIES) {

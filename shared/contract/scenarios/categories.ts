@@ -1,4 +1,4 @@
-import { addTransaction, rowsOf, transactionForm } from '../helpers';
+import { addTransaction, listTransactions, rowsOf, transactionForm } from '../helpers';
 import { CATEGORY_MAPPING_MESSAGES } from '../../categoryMappingSchema';
 import { CATEGORY_MESSAGES } from '../../categorySchema';
 import { kindForName } from '../../guidance/kinds';
@@ -232,6 +232,77 @@ export const categories = [
       });
       // A default matched by its own name is set back to the default's icon.
       expect(list.find((row) => row.name === 'Eating out')).toMatchObject({ icon: 'utensils' });
+    }
+  ),
+
+  scenario(
+    'resetting the categories matches each default by name and type',
+    async (api, expect) => {
+      const list = async () => (await api.get('/api/categories')).body as Json[];
+      // The income Gifts every new profile starts with, and an expense Gifts an import made beside
+      // it for a present bought (shared/importCategories.ts).
+      if (!(await list()).some((row) => row.name === 'Gifts' && row.type === 'income')) {
+        await added(api, expect, '/api/categories', {
+          name: 'Gifts',
+          type: 'income',
+          color: '#86efac',
+        });
+      }
+      const ran = await api.post('/api/import/execute', {
+        rows: [['2026-07-01', 'Birthday present', '-50', 'Gifts']],
+        mapping: { date: 0, description: 1, amount: 2, category: 3 },
+        defaultCurrency: 'EUR',
+      });
+      expectOk(expect, ran, 'POST /api/import/execute');
+      const expenseGifts = (await list()).find(
+        (row) => row.name === 'Gifts' && row.type === 'expense'
+      );
+      expect(expenseGifts).toBeDefined();
+      const present = await listTransactions(api, expect);
+      const presentId = present.find((row) => row?.description === 'Birthday present')?.id;
+      expect(presentId).toEqual(expect.any(Number));
+      // Salary, a default, made an expense category, with an entry in it.
+      const salary = (await list()).find((row) => row.name === 'Salary');
+      const salaryId =
+        salary === undefined
+          ? await added(api, expect, '/api/categories', {
+              name: 'Salary',
+              type: 'expense',
+              color: '#22c55e',
+            })
+          : (salary.id as number);
+      if (salary !== undefined) {
+        expectOk(
+          expect,
+          await api.put(`/api/categories/${salaryId}`, { type: 'expense' }),
+          'PUT /api/categories/:id'
+        );
+      }
+      const pay = await addTransaction(api, expect, {
+        description: 'Pay',
+        category_id: salaryId,
+      });
+
+      expectOk(expect, await api.delete('/api/categories'), 'DELETE /api/categories');
+
+      const after = await list();
+      // The present is in no income category: the expense Gifts was no default, so it went, and
+      // its entry with no category, as any other category's does.
+      const moved = (await api.get(`/api/transactions/${presentId}`)).body as Json;
+      const filed = after.find((row) => row.id === moved.category_id);
+      expect(filed?.type).not.toBe('income');
+      expect(moved.category_id ?? null).toBeNull();
+      expect(after.filter((row) => row.name === 'Gifts')).toEqual([
+        expect.objectContaining({ type: 'income' }),
+      ]);
+      // Salary, whose type was changed, is set back to income, the same category, entry and all.
+      expect(after.find((row) => row.name === 'Salary')).toMatchObject({
+        id: salaryId,
+        type: 'income',
+      });
+      expect((await api.get(`/api/transactions/${pay}`)).body).toMatchObject({
+        category_id: salaryId,
+      });
     }
   ),
 

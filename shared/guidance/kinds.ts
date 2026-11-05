@@ -209,6 +209,18 @@ export function isCatchAll(name: unknown): boolean {
   return readName(name) === 'catch-all';
 }
 
+/**
+ * Whether a category holds only what the others don't: its name says so (`isCatchAll`) and
+ * nothing gives it a kind of its own. Other with a kind set on it, or under a parent with one, is
+ * that kind's. The one rule for the circles' facts and Getting started's biggest category without
+ * a budget.
+ */
+export function isCatchAllCategory(category: KindedCategory, lookup?: CategoryLookup): boolean {
+  if (!isCatchAll(category.name)) return false;
+  const kind = effectiveKind(category, lookup);
+  return kind === null || kind === 'other';
+}
+
 /** A category as far as its kind goes: what both runtimes store, and what the app reads. */
 export interface KindedCategory {
   id?: unknown;

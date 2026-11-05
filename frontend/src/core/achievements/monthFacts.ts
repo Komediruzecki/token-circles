@@ -4,9 +4,10 @@
  * next, so the two can never disagree about a number.
  */
 import { flowsOf } from '../../../../shared/guidance/flows'
-import { isCatchAll } from '../../../../shared/guidance/kinds'
+import { categoryLookup, isCatchAllCategory } from '../../../../shared/guidance/kinds'
 import { budgetsForMonth } from './budgets'
 import { baseAmount } from './evaluate'
+import type { KindedCategory } from '../../../../shared/guidance/kinds'
 import type { BudgetRow } from './budgets'
 import type { Tx } from './evaluate'
 
@@ -41,22 +42,24 @@ export function monthInTheRed(list: Tx[] | undefined): { income: number; out: nu
  * has lapsed. Progress's advice passes this month's entries; Getting started passes the last full
  * month's, still with this month, so setting the budget the step asks for takes the step away.
  *
- * A catch-all such as Other (`isCatchAll`, by its name in `categories`) is never the one: a budget
- * for what no other category holds says nothing about where the money goes. When one spent more
- * than the category named, `notCounting` is its id, so the words can say it was left out.
+ * A catch-all such as Other is never the one (`isCatchAllCategory`, the circles' rule: by its name,
+ * and only while nothing gives it a kind): a budget for what no other category holds says nothing
+ * about where the money goes. When one spent more than the category named, `notCounting` is its
+ * id, so the words can say it was left out.
  */
 export function biggestUnbudgeted(
   list: Tx[],
   month: string,
   budgets: BudgetRow[],
   bills: Array<{ category_id?: number | null }>,
-  categories: ReadonlyArray<{ id: number; name: string }>
+  categories: ReadonlyArray<KindedCategory & { id: number; name: string }>
 ): { categoryId: number; spent: number; notCounting?: number } | null {
   const budgeted = new Set(budgetsForMonth(budgets, month).map((b) => b.category_id))
   const billed = new Set(
     bills.map((b) => b.category_id).filter((id): id is number => id !== null && id !== undefined)
   )
-  const catchAll = new Set(categories.filter((c) => isCatchAll(c.name)).map((c) => c.id))
+  const lookup = categoryLookup(categories)
+  const catchAll = new Set(categories.filter((c) => isCatchAllCategory(c, lookup)).map((c) => c.id))
   const spent = new Map<number, number>()
   for (const t of list) {
     if (t.type !== 'expense' || t.category_id === null) continue

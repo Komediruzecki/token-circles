@@ -41,11 +41,32 @@ const MONITOR_INTERVAL_MS = 400
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
+/**
+ * The run's own vars, as a JSON object of strings in WORKER_VARS (playwright.config.ts sets it):
+ * the origins the Worker's mail links name and the mailbox its mails go to. wrangler.jsonc's own
+ * values stand for anything it leaves out.
+ */
+function runVars() {
+  const raw = process.env.WORKER_VARS
+  if (!raw) return {}
+  const vars = JSON.parse(raw)
+  if (!vars || typeof vars !== 'object' || Array.isArray(vars)) {
+    throw new Error('WORKER_VARS must be a JSON object of strings')
+  }
+  for (const [key, value] of Object.entries(vars)) {
+    if (!/^[A-Z][A-Z0-9_]*$/.test(key) || typeof value !== 'string') {
+      throw new Error(`WORKER_VARS: ${key} must be an upper-case name with a string value`)
+    }
+  }
+  return vars
+}
+
 const worker = new WorkerSupervisor({
   port: API_PORT,
   workerDir: fileURLToPath(new URL('../../worker/', import.meta.url)),
   // Crash recovery only — never a proactive restart under a running spec. See the header.
   maxUptimeMs: 0,
+  vars: runVars(),
 })
 
 // The supervisor installs its own SIGINT/SIGTERM cleanup (it kills wrangler's process group and

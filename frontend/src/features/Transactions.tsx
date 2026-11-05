@@ -192,8 +192,19 @@ export default function Transactions() {
     Array<{ id: number; name: string; type: string; profile_id: number }>
   >([])
   const [categories, setCategories] = createSignal<Category[]>([])
-  /** Whether `categories` is a list the server answered, rather than the empty one before it. */
-  const [categoriesLoaded, setCategoriesLoaded] = createSignal(false)
+  /** The profiles `categories` is the server's answer for: null before one has come in. */
+  const [categoriesAnsweredFor, setCategoriesAnsweredFor] = createSignal<string | null>(null)
+  /**
+   * Whether `categories` is the answer for the profiles read now, rather than the empty list
+   * before one, or the profile's before a switch: until the new one's list is in, its entries are
+   * not taken for uncategorised against the old profile's categories.
+   */
+  const categoriesLoaded = createMemo(
+    on(
+      [() => state.profileVersion, () => state.currentProfile?.id, categoriesAnsweredFor],
+      ([, , answeredFor]) => answeredFor !== null && answeredFor === profileReadScope()
+    )
+  )
   /**
    * The active profile: where a write lands (X-Profile-Id), read where apiFetch reads it. Followed
    * on every profile notice: a switch bumps profileVersion, and creating a profile makes it the
@@ -1349,7 +1360,7 @@ export default function Transactions() {
       categoriesShown = asked
       categoriesShownFor = scope
       setCategories(cats as Category[])
-      setCategoriesLoaded(true)
+      setCategoriesAnsweredFor(scope)
       if (!categoryHashApplied) {
         categoryHashApplied = true
         applyCategoryFromHash(cats as Category[])
@@ -1359,7 +1370,7 @@ export default function Transactions() {
       categoriesShown = asked
       categoriesShownFor = scope
       setCategories([])
-      setCategoriesLoaded(false)
+      setCategoriesAnsweredFor(null)
     }
   }
 

@@ -63,11 +63,11 @@ afterEach(async () => {
   await remove();
 });
 
-/** The Worker's own scheduled handler, run for `cron`. */
-async function fire(cron: string): Promise<void> {
+/** The Worker's own scheduled handler, run for `cron`, as the event scheduled for `at`. */
+async function fire(cron: string, at: number = Date.now()): Promise<void> {
   const ctx = createExecutionContext();
   await worker.scheduled(
-    createScheduledController({ cron, scheduledTime: Date.now() }),
+    createScheduledController({ cron, scheduledTime: at }),
     env as unknown as Env,
     ctx
   );
@@ -82,6 +82,27 @@ describe('the week-one trigger', () => {
   it('sends a due day-2 mail from the scheduled handler', async () => {
     await fire(WEEK_ONE_CRON);
     expect(mailed).toEqual([EMAIL]);
+  });
+
+  // The run counts each window from the instant its event was scheduled for, not from the moment
+  // the handler happens to run: a late invocation sends what the 08:30 run would have, and a run
+  // fired locally for a chosen instant (/cdn-cgi/handler/scheduled?time=) sees that instant.
+  it('counts the windows from the time its event was scheduled for', async () => {
+    const DAY = 86_400_000;
+    // Confirmed an hour ago: not due now, due once two days have passed.
+    await env.DB.prepare(
+      "UPDATE reminder_dedup SET sent_at = datetime('now', '-1 hour') WHERE user_id = ? AND dedup_key = 'welcome'"
+    )
+      .bind(ID)
+      .run();
+    await fire(WEEK_ONE_CRON, Date.now() + 2 * DAY);
+    expect(mailed).toEqual([EMAIL]);
+  });
+
+  it('sends nothing for an event scheduled before the mail was due', async () => {
+    // Due now (two days and an hour in), but not yet a day before now.
+    await fire(WEEK_ONE_CRON, Date.now() - 86_400_000);
+    expect(mailed).toEqual([]);
   });
 
   it('is the only trigger that does', async () => {

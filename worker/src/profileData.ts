@@ -1,6 +1,6 @@
 import type { AppEnv } from './index';
 import * as db from './db';
-import { resetKeepsIcon, resetName } from '../../shared/defaultCategories';
+import { planCategoryReset, resetKeepsIcon } from '../../shared/defaultCategories';
 import type { Kind } from '../../shared/guidance/kinds';
 
 /**
@@ -436,54 +436,46 @@ export async function deleteProfileCategory(
 }
 
 export async function resetProfileCategories(DB: D1Database, profileId: number): Promise<void> {
-  const existing = await db.all<CategoryRow>(
+  const existing = await db.all<CategoryRow & { type: string | null }>(
     DB,
-    'SELECT id, name, icon FROM categories WHERE profile_id = ? ORDER BY id',
+    'SELECT id, name, icon, type FROM categories WHERE profile_id = ? ORDER BY id',
     profileId
   );
   const defaultsByName = new Map(
     DEFAULT_CATEGORIES.map((category) => [category.name.toLocaleLowerCase(), category])
   );
-  const canonicalIds = new Map<string, number>();
+  // Matched by name and type (shared/defaultCategories.ts `planCategoryReset`). A replaced default
+  // (Food) is matched to the default that replaced it (Groceries), and so is renamed to it with
+  // its entries instead of being deleted.
+  const { kept: canonicalIds, removed } = planCategoryReset(existing, DEFAULT_CATEGORIES);
   const statements: D1PreparedStatement[] = [];
 
-  for (const category of existing) {
-    // A replaced default (Food) is matched to the default that replaced it (Groceries), and so is
-    // renamed to it with its entries instead of being deleted (shared/defaultCategories.ts).
-    const normalizedName = resetName(category.name);
-    const defaultCategory = defaultsByName.get(normalizedName);
-    const canonicalId = canonicalIds.get(normalizedName);
-
-    if (defaultCategory && canonicalId === undefined) {
-      canonicalIds.set(normalizedName, category.id);
-      statements.push(
-        DB.prepare(
-          `UPDATE categories
-           SET name = ?, color = ?, icon = ?, type = ?, tax_deductible = ?, kind = ?,
-               essential = NULL, parent_id = NULL
-           WHERE id = ? AND profile_id = ?`
-        ).bind(
-          defaultCategory.name,
-          defaultCategory.color,
-          resetKeepsIcon(category.name, category.icon) ? category.icon : defaultCategory.icon,
-          defaultCategory.type,
-          defaultCategory.taxDeductible,
-          defaultCategory.kind,
-          category.id,
-          profileId
-        )
-      );
-      continue;
-    }
-
+  for (const [key, id] of canonicalIds) {
+    const category = existing.find((row) => row.id === id)!;
+    const defaultCategory = defaultsByName.get(key)!;
     statements.push(
-      ...categoryReferenceStatements(DB, profileId, category.id, canonicalId ?? null)
-    );
-    statements.push(
-      DB.prepare('DELETE FROM categories WHERE id = ? AND profile_id = ?').bind(
+      DB.prepare(
+        `UPDATE categories
+         SET name = ?, color = ?, icon = ?, type = ?, tax_deductible = ?, kind = ?,
+             essential = NULL, parent_id = NULL
+         WHERE id = ? AND profile_id = ?`
+      ).bind(
+        defaultCategory.name,
+        defaultCategory.color,
+        resetKeepsIcon(category.name, category.icon) ? category.icon : defaultCategory.icon,
+        defaultCategory.type,
+        defaultCategory.taxDeductible,
+        defaultCategory.kind,
         category.id,
         profileId
       )
+    );
+  }
+
+  for (const [id, into] of removed) {
+    statements.push(...categoryReferenceStatements(DB, profileId, id, into));
+    statements.push(
+      DB.prepare('DELETE FROM categories WHERE id = ? AND profile_id = ?').bind(id, profileId)
     );
   }
 

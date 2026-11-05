@@ -485,7 +485,9 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
   const openInImport = () => {
     const handed = firstImport.handOver()
     if (!handed) return
-    handFileToImport(handed.file, handed.tab)
+    // The balances typed here go with the file: finishing forgets setup's copy, and the file's
+    // import on the Import page works back from them, as setup's own import would have (M2).
+    handFileToImport(handed.file, handed.tab, typedBalances())
     completeOnboarding()
     window.location.hash = 'import'
   }

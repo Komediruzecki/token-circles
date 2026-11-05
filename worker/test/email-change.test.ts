@@ -14,9 +14,11 @@ import { hashPassword } from '../src/auth';
 import { sessionCookie, unconfirmedSessionCookie } from './helpers/session';
 import { whileConfirmed } from './helpers/account-access';
 import { pendingEmailChange } from '../src/email-change';
+import { renderEmailChangeNotice } from '../src/emailTemplates';
 import { createLoginCode, newCodeHandle } from '../src/login-codes';
 import { issueLoginCodeCookie } from '../src/routes/email-code';
 import { fetchSettled } from './helpers/after-answer';
+import { REFUSED_WHEN_STORED } from './helpers/refused-addresses';
 
 const UID = 9500;
 const OTHER = 9510;
@@ -326,6 +328,20 @@ describe('saving a new address', () => {
     expect(sent).toEqual([]);
     expect(await unusedLinks()).toEqual([]);
   });
+
+  for (const [kind, address] of REFUSED_WHEN_STORED) {
+    it(`refuses an address with ${kind} as it refuses something that is not an address`, async () => {
+      await seed(1);
+
+      const res = await save(address);
+
+      expect(res.status).toBe(400);
+      expect(await res.json()).toMatchObject({ error: 'A valid email is required' });
+      expect(sent).toEqual([]);
+      expect(await unusedLinks()).toEqual([]);
+      expect(await pendingEmailChange(env.DB, UID)).toBeNull();
+    });
+  }
 
   it('treats the address the account already has as no change', async () => {
     await seed(1);
@@ -721,13 +737,16 @@ describe('the current address', () => {
     expect(mailsTo(OLD)).toEqual([]);
   });
 
-  it('gets the new address as text, never as markup', async () => {
+  it('never names an address with markup in it, and would write one as text', async () => {
     await seed(1);
     const odd = '<b>new</b>@example.com';
 
-    expect((await save(odd)).status).toBe(200);
+    // The change is refused (shared/signInSchema.ts, STORED_EMAIL_PATTERN), so no notice goes.
+    expect((await save(odd)).status).toBe(400);
+    expect(mailsTo(OLD)).toEqual([]);
 
-    const html = mailsTo(OLD)[0].html;
+    // Behind the refusal, the notice still escapes the address it is given.
+    const { html } = renderEmailChangeNotice({ newEmail: odd });
     expect(html).toContain('&lt;b&gt;new&lt;/b&gt;@example.com');
     expect(html).not.toContain(odd);
   });

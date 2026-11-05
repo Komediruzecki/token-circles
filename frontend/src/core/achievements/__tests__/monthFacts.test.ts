@@ -128,6 +128,32 @@ describe('biggestUnbudgeted', () => {
       expect(biggestUnbudgeted(list, '2026-09', [], [], categories)).toBeNull()
     })
 
+    // One rule with the circles (shared/guidance/kinds.ts `isCatchAllCategory`): Other given a
+    // kind of its own, or under a parent with one, is that kind's, and worth a budget.
+    it('is no catch-all once something gives it a kind, as the circles read it', () => {
+      const kinded = [
+        { id: 5, name: 'Other', type: 'expense', kind: 'groceries' },
+        { id: 6, name: 'Car', type: 'expense', kind: 'transport' },
+        { id: 7, name: 'Other', type: 'expense', kind: null, parent_id: 6 },
+        { id: 8, name: 'Other', type: 'expense', kind: 'other' },
+      ]
+      const list = [
+        tx('2026-09-01', { category_id: 8, amount: 900 }),
+        tx('2026-09-02', { category_id: 5, amount: 400 }),
+        tx('2026-09-03', { category_id: 7, amount: 200 }),
+      ]
+      expect(biggestUnbudgeted(list, '2026-09', [], [], kinded)).toEqual({
+        categoryId: 5,
+        spent: 400,
+        notCounting: 8,
+      })
+      const underCar = [tx('2026-09-01', { category_id: 7, amount: 200 })]
+      expect(biggestUnbudgeted(underCar, '2026-09', [], [], kinded)).toEqual({
+        categoryId: 7,
+        spent: 200,
+      })
+    })
+
     it('is known by its name: a category of its own name is counted', () => {
       const list = [tx('2026-09-01', { category_id: 4, amount: 80 })]
       expect(biggestUnbudgeted(list, '2026-09', [], [], categories)).toEqual({

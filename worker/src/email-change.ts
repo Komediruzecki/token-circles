@@ -17,8 +17,8 @@ import { HttpError } from './http';
 import { clientIp, enforce } from './ratelimit';
 import { aboutOrigin } from './reminders';
 import { claimWelcomeOnMove, welcomeClaimed } from './welcome';
+import { STORED_EMAIL_PATTERN } from '../../shared/signInSchema';
 
-const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 // The longest address SMTP carries (RFC 5321). The address is written into mail, so it is bounded.
 const MAX_EMAIL_LENGTH = 254;
 
@@ -178,7 +178,7 @@ export async function requestEmailChange(
   email: string,
   current: { email: string | null; confirmed: boolean }
 ): Promise<Response | null> {
-  if (!EMAIL_RE.test(email) || email.length > MAX_EMAIL_LENGTH) {
+  if (!STORED_EMAIL_PATTERN.test(email) || email.length > MAX_EMAIL_LENGTH) {
     throw new HttpError(400, 'A valid email is required');
   }
   const limited = await sendEmailChangeLink(c, userId, email);

@@ -304,7 +304,7 @@ export function createFirstImport(options: FirstImportOptions) {
   }
 
   /** The file and the Import page tab that reads it, for the way out. */
-  const handOver = (): HandedImportFile | null => {
+  const handOver = (): Omit<HandedImportFile, 'typed'> | null => {
     const chosen = file()
     if (!chosen) return null
     return { file: chosen, tab: statement()?.bankId ? 'bank-imports' : 'file-upload' }

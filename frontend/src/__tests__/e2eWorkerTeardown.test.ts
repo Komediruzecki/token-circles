@@ -16,6 +16,9 @@
  * This runs the real serve-worker.mjs and supervisor, stops them the way Playwright stops the entry
  * configured in playwright.config.ts, and checks that nothing is left. Only wrangler is a stand-in:
  * the real one takes seconds to start and needs a D1.
+ *
+ * The same stand-in shows what wrangler is started with: the entry's WORKER_VARS (the origins the
+ * mail links name, and the mailbox the mails go to) reach it as `--var` flags.
  */
 /* eslint-disable security/detect-non-literal-fs-filename -- every path is this test's own: its
    mkdtemp, the scripts/ it copies, and /proc. */
@@ -52,13 +55,15 @@ const port = Number(process.argv[process.argv.indexOf('--port') + 1])
 const workerd = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1 << 30)'], { stdio: 'ignore' })
 createServer((_req, res) => {
   res.setHeader('content-type', 'application/json')
-  res.end(JSON.stringify({ wrangler: process.pid, workerd: workerd.pid }))
+  res.end(JSON.stringify({ wrangler: process.pid, workerd: workerd.pid, args: process.argv.slice(2) }))
 }).listen(port, '127.0.0.1')
 `
 
 interface Pids {
   wrangler: number
   workerd: number
+  /** What the stand-in was started with, after the script's own path. */
+  args: string[]
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
@@ -168,12 +173,12 @@ function killGroup(pgid: number | undefined) {
  * Start the command the way Playwright starts a webServer: through a shell, and `detached`, which
  * makes it the leader of a new process group, the group that teardown signals.
  */
-function launch(command: string, cwd: string, port: number) {
+function launch(command: string, cwd: string, port: number, env: Record<string, string> = {}) {
   const child = spawn(command, {
     shell: true,
     detached: true,
     cwd,
-    env: { ...process.env, E2E_API_PORT: String(port) },
+    env: { ...process.env, ...env, E2E_API_PORT: String(port) },
     stdio: ['pipe', 'pipe', 'pipe'],
   })
   let output = ''
@@ -262,5 +267,35 @@ describe.skipIf(process.platform === 'win32')('the e2e Worker webServer', () => 
         `scripts/lib/worker-supervisor.mjs has to stop wrangler on that signal.\n${output()}`
     ).toEqual([])
     expect(await health(port), `something still answers on :${port}`).toBeNull()
+  }, 30_000)
+
+  it("starts wrangler with the run's vars, from the entry's WORKER_VARS", async () => {
+    const root = mkdtempSync(join(tmpdir(), 'e2e-worker-vars-'))
+    cleanups.push(() => {
+      rmSync(root, { recursive: true, force: true })
+    })
+    stage(root)
+    const port = await freePort()
+
+    const entry = workerEntry()
+    const vars = JSON.parse(entry.env?.WORKER_VARS ?? '{}') as Record<string, string>
+    expect(Object.keys(vars).sort()).toEqual(['API_PUBLIC_ORIGIN', 'CORS_ORIGIN', 'DEV_MAIL_SINK'])
+    const command = entry.command!.replace(/^.*&&/, 'true &&')
+    const { child, output } = launch(command, join(root, 'frontend'), port, entry.env)
+    cleanups.push(() => {
+      killGroup(child.pid)
+    })
+    const pids = await waitForHealth(port, child, output)
+    cleanups.push(() => {
+      killGroup(pids.wrangler)
+    })
+
+    const passed = Object.entries(vars).map(([key, value]) => `${key}:${value}`)
+    for (const pair of passed) {
+      const at = pids.args.indexOf(pair)
+      expect(at, `${pair} in ${pids.args.join(' ')}`).toBeGreaterThan(0)
+      expect(pids.args[at - 1]).toBe('--var')
+    }
+    await stopLikePlaywright(child, entry.gracefulShutdown)
   }, 30_000)
 })
