@@ -7,6 +7,7 @@
  * five years of history rather than as one very busy afternoon.
  */
 import { createMemo, For, onCleanup, Show } from 'solid-js'
+import { formatDate } from '../../../shared/dateFormat'
 import { achievementById } from '../core/achievements/definitions'
 import { unlocks } from '../core/achievementsStore'
 import { scrollHorizontallyOnWheel } from '../utils/horizontalWheel'
@@ -15,12 +16,7 @@ import styles from './BadgeTimeline.module.css'
 import type { JSX } from 'solid-js'
 import type { UnlockRecord } from '../core/achievements/records'
 
-const monthLabel = (ymd: string): string =>
-  new Date(`${ymd.slice(0, 7)}-15T00:00:00Z`).toLocaleDateString(undefined, {
-    month: 'short',
-    year: 'numeric',
-    timeZone: 'UTC',
-  })
+const monthLabel = (ymd: string): string => formatDate(ymd.slice(0, 7), 'month')
 
 interface Stop {
   month: string

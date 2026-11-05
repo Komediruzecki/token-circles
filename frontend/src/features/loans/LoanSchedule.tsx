@@ -3,6 +3,7 @@
  * rows come from the shared engine on the page, the same schedule the calculate route returns.
  */
 import { createMemo, For, Show } from 'solid-js'
+import { calendarDay, formatDate } from '../../../../shared/dateFormat'
 import { getLocalCurrency } from '../../core/api'
 import styles from './Loans.module.css'
 import type { ScheduleRow } from '../../../../shared/loanSchedule'
@@ -22,18 +23,12 @@ const amount = new Intl.NumberFormat('en-US', {
 })
 
 /**
- * A YYYY-MM-DD due date as written, e.g. "Feb 28, 2026". `new Date('2026-02-28')` is midnight UTC,
- * so it is formatted in UTC: in the local zone it would read Feb 27 anywhere west of Greenwich.
+ * A YYYY-MM-DD due date as written, e.g. "28 Feb 2026", read without a clock:
+ * `new Date('2026-02-28')` is midnight UTC, which west of Greenwich is still the 27th.
  */
 export function dayLabel(date: string): string {
-  const d = new Date(date)
-  if (!date || Number.isNaN(d.getTime())) return '–'
-  return d.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    timeZone: 'UTC',
-  })
+  if (!calendarDay(date)) return '–'
+  return formatDate(date)
 }
 
 /** The schedule as CSV, in the columns the export has always had. */

@@ -313,7 +313,7 @@ async function resetPage() {
 await resetPage()
 
 async function openTourModal() {
-  // The "What's New" button collapses the sidebar on click, so it needs re-opening for
+  // The "Tours" button collapses the sidebar on click, so it needs re-opening for
   // every tour. On mobile the sidebar is a drawer: its nav stays in the DOM but sits
   // off-screen, so Playwright reports the button as visible while the click lands outside
   // the viewport and times out. Open the drawer explicitly there rather than trusting
@@ -325,7 +325,7 @@ async function openTourModal() {
    * Is the drawer open? Horizontally only.
    *
    * A closed drawer parks the whole nav at a negative x (-240), so x is what actually says
-   * open or shut. Vertical position says nothing: the nav scrolls, and "What's New" is near
+   * open or shut. Vertical position says nothing: the nav scrolls, and "Tours" is near
    * the bottom of it — on a phone it sits at y ≈ 1182 in an 844-tall viewport, open or not.
    * An earlier version required the button to be inside the viewport vertically too, which no
    * amount of toggling could ever make true; it walked four tours and then hung on the fifth,

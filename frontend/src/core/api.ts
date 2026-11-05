@@ -1354,29 +1354,13 @@ export const formatWholeCurrency = (
   }).format(whole)
 }
 
-export const formatDate = (dateStr: string): string => {
-  let date = new Date(dateStr)
-  // Handle Google Viz Date(Y,M,D) format where month is 0-indexed
-  if (isNaN(date.getTime())) {
-    const m = dateStr.match(/^Date\((\d{4}),\s*(\d{1,2}),\s*(\d{1,2})\)$/)
-    if (m) {
-      date = new Date(parseInt(m[1]), parseInt(m[2]), parseInt(m[3]))
-    }
-  }
-  // Handle dd/mm/yyyy
-  if (isNaN(date.getTime())) {
-    const m = dateStr.match(/^(\d{1,2})[/\-. ](\d{1,2})[/\-. ](\d{4})$/)
-    if (m) {
-      date = new Date(parseInt(m[3]), parseInt(m[2]) - 1, parseInt(m[1]))
-    }
-  }
-  if (isNaN(date.getTime())) return dateStr
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  })
-}
+/**
+ * A date day first, with the month's name ("4 Nov 2026"): every page writes its dates through this
+ * one (shared/dateFormat.ts, which the Worker's labels use too), in a style each place picks. A
+ * stored 'YYYY-MM-DD' is read without a clock, so west of UTC it is no longer a day early.
+ */
+export { formatDate, formatMoment } from '../../../shared/dateFormat'
+export type { DateStyle } from '../../../shared/dateFormat'
 
 import { addToast } from './toastStore'
 import type { ToastOptions } from './toastStore'

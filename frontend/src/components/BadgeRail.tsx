@@ -4,6 +4,7 @@
  * appear rather than showing an empty strip.
  */
 import { createMemo, For, onCleanup, Show } from 'solid-js'
+import { formatDate } from '../../../shared/dateFormat'
 import { achievementById } from '../core/achievements/definitions'
 import { streak, unlocks } from '../core/achievementsStore'
 import { setPage } from '../core/appStore'
@@ -20,12 +21,7 @@ import type { JSX } from 'solid-js'
 export const streakLabel = (n: number): string =>
   n === 0 ? 'Start a streak' : n === 1 ? '1 month in a row' : `${n} months in a row`
 
-const monthLabel = (ymd: string): string =>
-  new Date(`${ymd.slice(0, 7)}-15T00:00:00Z`).toLocaleDateString(undefined, {
-    month: 'short',
-    year: 'numeric',
-    timeZone: 'UTC',
-  })
+const monthLabel = (ymd: string): string => formatDate(ymd.slice(0, 7), 'month')
 
 export default function BadgeRail(): JSX.Element {
   // Newest first: the badge just earned is the one worth seeing.

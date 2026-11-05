@@ -386,12 +386,19 @@ export default function Portfolio() {
           <div
             data-test-id="portfolio-modal"
             class={styles.modal}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="portfolio-modal-heading"
             onclick={(e) => {
               e.stopPropagation()
             }}
           >
             <div class={styles.modalHeader}>
-              <h3 data-test-id="portfolio-modal-title" class={styles.modalTitle}>
+              <h3
+                id="portfolio-modal-heading"
+                data-test-id="portfolio-modal-title"
+                class={styles.modalTitle}
+              >
                 {holdingForm.editing() ? 'Edit Holding' : 'Add Holding'}
               </h3>
               <button

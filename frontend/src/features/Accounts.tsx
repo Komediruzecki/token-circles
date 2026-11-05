@@ -33,6 +33,7 @@
 
 import { createEffect, createMemo, createResource, createSignal, For, Show } from 'solid-js'
 import { takesCreditLine } from '../../../shared/accountSchema'
+import { formatDate } from '../../../shared/dateFormat'
 import AccountConstellation from '../components/AccountConstellation'
 import Badge from '../components/Badge'
 import ConfirmButton from '../components/ConfirmButton'
@@ -40,10 +41,12 @@ import { Field, FormNotice, SubmitButton } from '../components/form'
 import OrbitalDivider from '../components/OrbitalDivider'
 import { accountActivityPresentation } from '../core/accountActivity'
 import {
+  ACCOUNT_TYPE_NAMES,
   accountTypeBadge,
   accountTypeIcon,
   accountTypeTone,
   knownAccountType,
+  PLAIN_ACCOUNT,
 } from '../core/accountTypes'
 import { apiDelete, apiGet, formatCurrency, getLocalCurrency, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
@@ -417,7 +420,7 @@ export default function Accounts() {
                                         {tx.description}
                                       </div>
                                       <div data-test-id="activity-date" class={styles.activityDate}>
-                                        {new Date(tx.date).toLocaleDateString()}
+                                        {formatDate(tx.date)}
                                       </div>
                                     </div>
                                     <div
@@ -454,12 +457,15 @@ export default function Accounts() {
         >
           <div
             class={styles.modal}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="account-modal-heading"
             onclick={(e) => {
               e.stopPropagation()
             }}
           >
             <div class={styles.modalHeader}>
-              <h3 class={styles.modalTitle}>
+              <h3 id="account-modal-heading" class={styles.modalTitle}>
                 {modalMode() === 'edit' ? 'Edit Account' : 'Add Account'}
               </h3>
               <button class={styles.modalClose} onClick={closeModal}>
@@ -507,14 +513,15 @@ export default function Accounts() {
                         sends it back, which writes nothing (core/accountTypes.ts). */}
                     <Show when={knownAccountType(accountForm.values.type) === null}>
                       <option value={accountForm.values.type} selected disabled>
-                        Other account
+                        {PLAIN_ACCOUNT}
                       </option>
                     </Show>
-                    <option value="giro">Giro / Checking</option>
-                    <option value="savings">Savings</option>
-                    <option value="ib">Investment / Brokerage</option>
-                    <option value="cash">Cash</option>
-                    <option value="credit">Credit Card</option>
+                    {/* The names the type badge shows on each card (core/accountTypes.ts). */}
+                    <option value="giro">{ACCOUNT_TYPE_NAMES.giro}</option>
+                    <option value="savings">{ACCOUNT_TYPE_NAMES.savings}</option>
+                    <option value="ib">{ACCOUNT_TYPE_NAMES.ib}</option>
+                    <option value="cash">{ACCOUNT_TYPE_NAMES.cash}</option>
+                    <option value="credit">{ACCOUNT_TYPE_NAMES.credit}</option>
                   </select>
                 )}
               </Field>

@@ -1,0 +1,73 @@
+/**
+ * The Transactions list writes each date day first with the month's name ("4 Nov 2026"), as
+ * setup's import summary does (first-week test run, B6). It wrote
+ * `toLocaleDateString()` with the browser's own locale, so an English (US) browser showed
+ * "11/4/2026" for 4 November. Every other page now writes its dates the same way
+ * (shared/dateFormat.ts; core/__tests__/dateFormat.test.ts holds the styles and the zones).
+ *
+ * The date fields are the browser's own control (`<input type="date">`): their order follows the
+ * browser's language, and the app cannot set it. That is reported, not changed.
+ */
+import { render } from 'solid-js/web'
+import { afterEach, describe, expect, it } from 'vitest'
+import { formatDate } from '../../core/api'
+import TransactionTable from '../TransactionTable'
+import type { Transaction } from '../../types/models'
+
+let host: HTMLDivElement | undefined
+let dispose: (() => void) | undefined
+
+afterEach(() => {
+  dispose?.()
+  host?.remove()
+})
+
+const row = (date: string): Transaction =>
+  ({
+    id: 1,
+    profile_id: 1,
+    description: 'Corner Grocer',
+    type: 'expense',
+    amount: 10,
+    amount_local: 10,
+    currency: 'EUR',
+    exchange_rate: 1,
+    date,
+    account_id: null,
+    transfer_account_id: null,
+    category_name: null,
+    category_color: null,
+    reconciled: false,
+  }) as unknown as Transaction
+
+describe('dates on the Transactions list', () => {
+  it('reads day, month name and year, as setup writes a date', () => {
+    host = document.createElement('div')
+    document.body.appendChild(host)
+    dispose = render(
+      () => (
+        <TransactionTable
+          transactions={[row('2026-11-04')]}
+          selectedTransactions={[]}
+          onSelectionChange={() => {}}
+        />
+      ),
+      host
+    )
+    const cell = host.querySelector('[data-test-id="transactions-row"] td:nth-child(2)')
+    expect(cell?.textContent?.trim()).toBe('4 Nov 2026')
+  })
+})
+
+describe('formatDate, shared by the list and the transaction lines on the Dashboard', () => {
+  it.each([
+    ['2026-11-04', '4 Nov 2026'],
+    ['2026-01-31', '31 Jan 2026'],
+  ])('%s reads %s', (stored, shown) => {
+    expect(formatDate(stored)).toBe(shown)
+  })
+
+  it('leaves what it cannot read as it is', () => {
+    expect(formatDate('someday')).toBe('someday')
+  })
+})

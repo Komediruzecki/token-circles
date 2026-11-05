@@ -4,6 +4,7 @@
  * with HTML tooltip and click drill-down
  */
 import { createEffect, onCleanup, onMount } from 'solid-js'
+import { formatDate } from '../../../shared/dateFormat'
 import { formatCurrency } from '../core/api'
 import { theme } from '../core/theme'
 import type * as D3 from 'd3'
@@ -136,7 +137,7 @@ export default function D3HeatmapChart(props: Props) {
       .on('mouseover', (event: MouseEvent, d: Date) => {
         if (!tooltipEl) return
         const val = getValue(d)
-        const dateLabel = d3.timeFormat('%b %d, %Y')(d)
+        const dateLabel = formatDate(d)
         const amountLabel = formatCurrency(val)
         tooltipEl.innerHTML =
           val > 0 ? `${dateLabel}: ${amountLabel} ${props.type}` : `${dateLabel}: No ${props.type}`

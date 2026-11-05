@@ -250,10 +250,23 @@
   border-left: 1px solid rgba(255, 255, 255, 0.1);
 }
 
+/* Room under the last line of every page for the quick add button (.fab: 56 px at 22 px from the
+   bottom, its 6 px ring, and 12 px to spare), above a phone's home indicator when it has one: the
+   button stands on the safe-area inset, so the strip grows with it. With less, the end of a page
+   could never be scrolled out from under it. The root keeps the same strip for anything scrolled
+   into view from below. */
+:global(:root) {
+  --fab-clearance: calc(96px + env(safe-area-inset-bottom, 0px));
+}
+
+:global(html) {
+  scroll-padding-bottom: var(--fab-clearance);
+}
+
 .main {
   flex: 1;
   margin-left: 240px;
-  padding: 24px 32px;
+  padding: 24px 32px var(--fab-clearance);
   min-height: 100vh;
   /* clip (not auto): keeps the no-horizontal-page-scroll rule but, unlike auto/scroll/hidden,
      does NOT make .main a scroll container — so position: sticky children (e.g. the Settings
@@ -335,7 +348,7 @@
     margin-left: 0;
     /* Clear the fixed hamburger toggle (top: ~12px + 36px tall) so page titles
        are never rendered underneath it. */
-    padding: calc(56px + env(safe-area-inset-top, 0px)) 16px 16px;
+    padding: calc(56px + env(safe-area-inset-top, 0px)) 16px var(--fab-clearance);
     /* clip, matching the base rule — `hidden` here would make .main a scroll container on a phone
        and unpin every sticky child, which is the whole reason the base rule says clip. */
     overflow-x: clip;
@@ -361,7 +374,7 @@
 
 @media (max-width: 480px) {
   .main {
-    padding: calc(56px + env(safe-area-inset-top, 0px)) 10px 12px;
+    padding: calc(56px + env(safe-area-inset-top, 0px)) 10px var(--fab-clearance);
     overflow-x: clip;
   }
 
@@ -429,7 +442,7 @@
 
 @media (max-width: 380px) {
   .main {
-    padding: calc(56px + env(safe-area-inset-top, 0px)) 8px 12px;
+    padding: calc(56px + env(safe-area-inset-top, 0px)) 8px var(--fab-clearance);
   }
 
   .page-header h2 {
@@ -488,7 +501,8 @@
 .fab {
   position: fixed;
   right: 22px;
-  bottom: 22px;
+  /* Above the home indicator on a phone with one (viewport-fit=cover lets the page run under it). */
+  bottom: calc(22px + env(safe-area-inset-bottom, 0px));
   z-index: 1400;
   width: 56px;
   height: 56px;
@@ -538,7 +552,7 @@
 @media (max-width: 620px) {
   .fab {
     right: 16px;
-    bottom: 16px;
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
     width: 52px;
     height: 52px;
   }

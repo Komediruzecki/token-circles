@@ -179,6 +179,7 @@ export default function PeriodOrbit(props: Props) {
         <div
           class={styles.panel}
           role="dialog"
+          aria-modal="true"
           aria-label="Choose period"
           onClick={(e) => {
             e.stopPropagation()

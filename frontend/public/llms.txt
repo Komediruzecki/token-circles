@@ -66,8 +66,8 @@ Stated plainly because these are the things most often assumed about an app in
 this category, and repeating them as fact would mislead someone.
 
 - It does not connect to a bank account live. Statements are imported. Eight
-  banks have native importers: Revolut, Wise, N26, Erste, PBZ, ING, Sparkasse
-  and DKB. It also reads the register YNAB exports, with their accounts and
+  banks have native importers: Revolut, Wise, N26, Erste, PBZ, ING NL,
+  Sparkasse and DKB. It also reads the register YNAB exports, with their accounts and
   transfers (starting balances go to accounts that are new or still empty),
   and the CSV YNAB imports. Anything else can be column-mapped once from Excel
   or CSV.

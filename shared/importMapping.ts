@@ -10,7 +10,9 @@
 // Column field names for mapping.
 export const FIELD_NAMES = [
   { key: 'date', label: 'Date', required: true },
-  { key: 'description', label: 'Description', required: true },
+  // A blank description imports (worker/test/import-blank-description.test.ts), so Map columns
+  // does not star it; the Expected columns table says the same.
+  { key: 'description', label: 'Description', required: false },
   { key: 'amount', label: 'Amount', required: true },
   { key: 'category', label: 'Category', required: false },
   { key: 'currency', label: 'Currency', required: false },

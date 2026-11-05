@@ -38,6 +38,7 @@
  */
 
 import { createEffect, createSignal, For, on, onMount, Show, untrack } from 'solid-js'
+import { formatMoment } from '../../../shared/dateFormat'
 import { OrbitSpinner } from '../components/OrbitSpinner'
 import { SubscriptionScanModal } from '../components/SubscriptionScan'
 import { useAppState } from '../core/appStore'
@@ -162,8 +163,8 @@ export default function Import() {
             }}
           >
             <p style={{ margin: 0, 'font-size': '13.5px', color: 'var(--text-secondary)' }}>
-              {scanOfferCount()} transactions imported — want to check them for known subscriptions
-              like Netflix or Spotify?
+              {scanOfferCount()} transactions imported. Want to check them for subscriptions like
+              Netflix or Spotify?
             </p>
             <div style={{ display: 'flex', gap: '8px' }}>
               <button
@@ -252,7 +253,7 @@ export default function Import() {
                     <summary style={{ cursor: 'pointer', 'font-size': '14px' }}>
                       <strong>{log.source || 'Import'}</strong>
                       <span style={{ color: 'var(--text-secondary)', 'margin-left': '8px' }}>
-                        {new Date(log.created_at).toLocaleString()} — {log.imported} imported
+                        {formatMoment(log.created_at)} · {log.imported} imported
                         {log.duplicates_skipped > 0 &&
                           `, ${log.duplicates_skipped} duplicates skipped`}
                       </span>

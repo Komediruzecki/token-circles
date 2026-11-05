@@ -9,6 +9,289 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ## [Unreleased]
 
+### Older papercuts (found in the first-week test run, 3 Nov)
+
+- **The edit button on a category card says what it edits** (B4). It was an icon with no name,
+  so a screen reader announced only "button" between Budget and Delete category. It is now "Edit
+  Groceries", and so on for each card (`frontend/src/features/Categories.tsx`). Test:
+  `categoryForms.test.tsx`, which reads `aria-label` off the card's `edit-category-btn`.
+- **The Danger Zone calls the categories reset a reset, from its title to its last button** (B5).
+  The item was "Delete All Categories" with a "Delete Categories" button, its confirm asked
+  "Delete all categories for ...?" and its button said "Yes, Reset Categories", for an action that
+  puts the defaults back and keeps every transaction. Now the title, the button, the question and
+  its progress text ("Resetting...") all say reset, and the line under the title reads "Remove your
+  own categories and bring back the defaults for the profile ...". `DangerZone.tsx`; test:
+  `dangerZoneCategoriesReset.test.tsx` (no "Delete" in the item or its confirm; both cases fail on
+  the old component).
+- **Ten older strings rewritten** (B9, and the design review's M22). Eight said their second half
+  after an em dash, and two told a mouse user to tap:
+  - Import, after an import: "25 transactions imported. Want to check them for subscriptions like
+    Netflix or Spotify?" (was "... imported — want to check them for known subscriptions ..."; the
+    scan also finds payments it has no name for, so "known" went too).
+  - Recent Imports: "4.11.2026, 09:12:03 · 25 imported" (was "—").
+  - Paste CSV: "Paste a table straight from Excel, Google Sheets or any spreadsheet app. It's read
+    right here in your browser."
+  - Dashboard, Portfolio panel with none: "No holdings yet. Add one on the Portfolio page."
+  - Import preview, date range: "Rows outside this period are skipped. Leave a side blank for no
+    bound." (was "Only import transactions within this period — rows outside it are skipped.").
+  - Import preview, new categories: "... Untick any you don't want created. Their rows import
+    without a category."
+  - Settings, Storage: "Local mode: your data stays in this browser and works offline."
+  - The note on a bank row read as a transfer to an account the import cannot name:
+    "Possible transfer: the other account wasn't found." (`shared/bankImport/classify.ts`; was
+    "possible transfer — counterpart not resolved"). Rows imported before keep the old note.
+    Duplicate detection does not read notes, so a statement imported again still finds its rows.
+  - Prints: "Choose a petal to see its month." (was "Tap a petal ...").
+  - Add subscriptions: "Pick the ones you have · choose a plan or type your price" (was "Tap the
+    ones you have · pick a plan ...").
+  - Tests: `frontend/src/__tests__/oldCopyRewrites.test.ts` reads each file with its line breaks
+    collapsed and checks the new wording is there and the old is gone (all ten fail before the
+    change); `bankImport.test.ts`, `printsShelf.test.tsx`, `prints.spec.ts` and
+    `settings-email-change.spec.ts` now expect the new words.
+  - Not in this list, so left: other em dashes in older UI copy (Connected sources' "Nothing new
+    — ...", Recent Imports' delete question, the preview's duplicate notes, "No new transactions —
+    ...", "No date in this row — ...").
+- **The sidebar's tour button and the menu it opens are both "Tours"** (B2). The button said
+  "What's New" and opened a menu titled "Take a Tour", while the changelog, which "What's New"
+  suggests, is "Changelog" under Settings' "View Changelog". The menu holds the page tours, their
+  count and Run setup again, so both are named for it. Setup's last step names the button too:
+  "take a page tour any time from Tours in the sidebar." The button keeps its
+  `data-test-id="whats-new-btn"`. Files: `App.tsx`, `TourSelectionModal.tsx`,
+  `OnboardingWizard.tsx` (the tip gains `data-test-id="onboarding-done-tip"`), and two comments in
+  `scripts/walk-tours.mjs`. Tests: `TourSelectionModal.account.test.tsx` (the menu's heading),
+  `onboardingDoneStep.test.tsx` (the tip, and the label in `App.tsx`), and in e2e
+  `onboarding.spec.ts` (the button reads Tours and opens a menu headed Tours).
+- **Account cards name the type as the account form does** (B7). The type badge showed the stored
+  id: "giro", "credit", "ib". It now reads Giro / Checking, Savings, Investment / Brokerage, Cash
+  or Credit Card, and an account of a type this build does not have reads "Other account", as the
+  form says, where it said "account". The names live once, in `ACCOUNT_TYPE_NAMES`
+  (`frontend/src/core/accountTypes.ts`), which the badge (`accountTypeBadge`) and the form's
+  options in `Accounts.tsx` both read. The add-transaction form's account select uses the same
+  badge, so it reads "Everyday (Giro / Checking)". Tests: `accountTypes.test.ts`,
+  `accountsPageTypes.test.tsx`, `accountForm.test.tsx`, `transactionsAccountTypeWord.test.tsx`,
+  and in e2e `accounts-crud.spec.ts` (every badge is one of the form's names). With the badge back
+  on the raw id, 5 unit tests fail.
+- **Every page writes dates day first, with the month's name** (B6). The Transactions list printed
+  `new Date(date).toLocaleDateString()`, the browser's own numeric form ("11/4/2026" for 4 November
+  in an English (US) browser), and the other pages each had a formatter of their own: Goals, the
+  bill calendar, recurring payments, Retirement, Analytics, Budgets, Loans, Housing and Tags wrote
+  the month first in `en-US` ("Nov 4, 2026", Tags "Nov 26" for November 2026); Accounts, Analytics'
+  transaction lines, the API tokens and the PDF reports used the browser's own form; Housing's and
+  Settings' month lists, the badges, Progress and the billing dates followed the browser's
+  language. They all go through `shared/dateFormat.ts` now, which the Worker's month labels (the
+  bill calendar, budget history and forecast) use too: "4 Nov 2026", in the styles the pages need
+  ("4 November 2026", "4 Nov", "Nov 2026", "November 2026", the month's name alone), and moments
+  with their time on a 24-hour clock ("4 Nov 2026, 15:30": Recent Imports, a receipt's upload).
+  Month names are written out, so September is "Sep" in every browser (`en-GB` writes "Sept"), as
+  the period bar and the charts already wrote it. `core/api.ts` `formatDate` is the shared one.
+  - A stored 'YYYY-MM-DD' is read without a clock. `new Date('2026-11-04')` is midnight UTC,
+    which west of Greenwich is still 3 November, so Goals, the bill calendar, recurring payments,
+    Retirement, Accounts, Housing's due dates, Analytics' heatmap and transaction lines, and its
+    by-month chart (a 'YYYY-MM', 31 October there) were a day or a month early in the Americas. A
+    stamp with no zone, as D1 writes `datetime('now')`, is read as UTC.
+  - `formatDate` no longer guesses. Its dd/mm branch never ran for a slash date
+    (`new Date('04/11/2026')` had already read 11 April, US order), and Google Sheets'
+    `Date(2026,10,4)` never reaches a page (both imports turn such values into 'YYYY-MM-DD'
+    before they are stored), so both branches are gone and such a value shows as stored.
+  - Test: `core/__tests__/dateFormat.test.ts` runs under `TZ=America/Los_Angeles`; on the old
+    `formatDate` 9 of its cases fail ("3 Nov 2026" for 2026-11-04, "3 Sept 2026", "31 Oct 2026"
+    for 2026-11, "11 Apr 2026" for 04/11/2026). The tests that held a page's old form now hold the
+    new one: billCards, billDue, dashboardUpcomingBills, goalsUndated, loansFigures, loanDates,
+    loansPage, subscriptionCard, AutoCategorizeModal, moneyFollowsBaseCurrency, oldCopyRewrites,
+    `TransactionTable.dates.test.tsx`, and the release cases s05 (the goal card, "23 May 2027") and
+    s12.
+  - `AutoCategorizeModal.test.tsx` keeps the row's date as stored, '2026-07-22', and expects
+    "22 Jul 2026"; with the row's date shown as stored it fails. Its fixture had held "22 Jul 2026"
+    itself, which `formatDate` passes through as it is, so it passed either way (PR #695 review).
+  - On the demo at 1280, across 18 pages, dates written month first went from 10 to none (the
+    bill calendar's "Nov 1, 2026", Housing's "Nov 5") and numeric dates from 3 to none (Accounts'
+    "11/26/2026"); day-first dates went from 13 to 26.
+  - Not changed: the date fields are the browser's own control (`<input type="date">`), whose order
+    follows the browser's language. The mails keep their formats (`worker/src/reminders.ts`,
+    `emailTemplates.ts`), and the log viewer keeps the browser's time of day beside its date.
+- **A PDF report ends with the same line from either runtime: "Generated by Token Circles on 4 Nov
+  2026".** The Worker's PDFs (`/api/reports/*-pdf`) ended with "Generated 2026-11-04" and the
+  browser's with "Generated by Token Circles — 4 Nov 2026" (PR #695 review). The line is
+  `shared/reportFooter.ts` now, its day through `formatDate`. The Worker still dates it with the
+  reader's today (`localToday`), and the browser with its own.
+  - Test: `worker/test/local-today.test.ts` reads the four Worker PDFs for "Generated by Token
+    Circles on 8 Oct 2026", and `clientPdfFooter.test.ts` draws the browser's tax summary and reads
+    it for "Generated by Token Circles on 4 Nov 2026". Both fail on the old lines, and both fail
+    with the shared line changed.
+  - Not changed: the browser's annual, tax and P&L reports also give the day under their title
+    ("Token Circles | Generated: 4 Nov 2026", "4 Nov 2026", "Token Circles | 4 Nov 2026"), day
+    first already, and the P&L's foot holds its totals instead of this line. The Worker's
+    subtitles name the period; its monthly one is the stored "2026-11".
+  - `worker/src/pdf.ts` had never been through Prettier, and the pre-commit hook formats a staged
+    file whole, so its diff is wider than the two lines that changed.
+- **llms.txt names the banks as the importer does.** It listed "ING" among the eight native
+  importers; the Bank Imports tab and the mails call it "ING NL" (`shared/bankImport/adapters/ing.ts`),
+  the Dutch bank's export. DKB was already there. Test: `ynabRegister.test.ts` now reads the list
+  in `frontend/public/llms.txt` and checks it against every adapter's label except YNAB, and the
+  count in words, so a bank added to the importer has to be added there too.
+- **Import's Google Sheets "Expected columns" table marks Date as required, as Map columns does.** It
+  said No while the next step starred it. Date's sample still says what a blank cell does: the row
+  imports as today and is flagged. Description stays optional there, because a blank one imports
+  (Map columns no longer stars it either; see below).
+  - Test: `expectedColumnsTable.test.ts` expects Date and Amount as the required columns, every
+    required column to be one Map columns stars, and Date's row to name the blank-cell rule.
+- **Dashboard Views gives drag handles only to the widgets under Show more.** The badge rail, the
+  metrics, the savings gauge and the overview deck's panels have a fixed spot on the page, so a
+  drag there was saved and changed nothing. Those rows now have no handle and take no drop, the
+  list shows them first in page order, and the hint says which rows move. `FIXED_SPOT_WIDGETS` in
+  `core/dashboardWidgets.ts` is the one list both the page and the dialog read.
+  - Test: `dashboardViewsFixedSpots.test.tsx` checks the handles, the order shown for a layout
+    saved with a Show more widget at the top, a drop on a fixed row (refused, order unchanged), a
+    drop among the Show more rows, and that the page's ordered tail renders exactly the widgets
+    without a fixed spot. `dashboard.spec.ts` counts the draggable rows in the real dialog.
+- **The Dashboard shows no month-over-month change for a range, a year or All time.** The cards
+  show the window's totals there, but the change under them was those totals minus the month before
+  the window's first month, labelled "vs last month": for Last 90 days on 4 Nov, 90 days of income
+  minus July's; for a year, the year minus the December before; for All time, the whole total
+  against December 1969, so all of it read as a rise. Both runtimes now return the three deltas as
+  null when the request names a window (`date_from` and `date_to`, or `all`), and skip the previous
+  month's query; the Dashboard already shows a change only when one comes back. A month is still
+  compared with the month before it.
+  - Test: the contract scenario "the dashboard of a month, of a range and of all time"
+    (`shared/contract/scenarios/dashboard.ts`, run on the Worker and on local-first) expects null
+    deltas for the range and for all time; before the fix the range came back -2400 for income
+    and all time 1600.5 for expenses. Dropping either half of the window rule fails it on both.
+- **The end of every page scrolls out from under the quick add button** (B1). The button floats at
+  the bottom right at every width, and pages ended 12 to 24 px below their last line, so whatever
+  sat at the bottom right of a page's end stayed under it: Import's "No saved sheets yet" note at
+  1280 and 390, Settings' last line, Accounts' "View All", a bill's Edit, Portfolio's last value.
+  Pages now end `--fab-clearance` (96 px: the button, its ring and 12 px) below their last line, and
+  the root keeps the same strip as `scroll-padding-bottom`, so anything scrolled into view from
+  below stops above the button. The Spotlight counts that strip as no room, as it already did the
+  menu button's. On the demo, across 15 pages at 1280 and 390, the button covered text or a control
+  at a page's end 14 times before (on 13 of the 30 page and width pairs) and none after. At the top
+  of a page the menu button covered nothing but the history toast ("20 badges and 26 prints from
+  your history ..."), on four pages at 390 while it showed; on a phone toasts now stand above the
+  quick add button instead (below).
+  - Test: `menu-button-clearance.spec.ts` scrolls Import and Settings to their end at 390 and 1280
+    and expects nothing under the quick add button, and brings Settings' last control into view
+    from below and expects it above the button; `spotlightTipWiring.test.tsx` opens a target that
+    fits under the top strip but not between the two at its start. Without the bottom padding the
+    first fails at both widths, without the scroll padding the second, without the Spotlight's
+    change the third.
+  - Not changed: content a person scrolls up under the menu button on a phone still passes under
+    it, as under any floating button.
+- **Map columns no longer stars Description.** A blank description imports (the Worker pins that
+  in `import-blank-description.test.ts`), and the Expected columns table already said No, so the
+  star asked people to map a column they can leave out. Date and Amount keep theirs
+  (`shared/importMapping.ts`; the star is all `required` drives).
+  - Test: `expectedColumnsTable.test.ts` now holds the table's required columns and the starred
+    fields to the same list both ways. With Description starred again it fails.
+- **The quick add button stands above a phone's home indicator.** The page runs under the
+  indicator (`viewport-fit=cover`), and the button sat 16 px from the screen's bottom edge, inside
+  the 34 px strip an iPhone keeps for its swipe home. It now stands on the safe-area inset, and
+  `--fab-clearance` grows by the same amount, so whatever is scrolled into view from below still
+  stops above the button. At 390 with a 34 px inset the button's bottom edge was 16 px above the
+  screen's and is 50 px now.
+  - Test: `menu-button-clearance.spec.ts` sets a 34 px bottom inset through Chromium's safe-area
+    override and expects the button at least 50 px up, Settings' last control brought into view
+    from below above it, and nothing under it at the page's end. Without the inset on the button
+    the first fails (16 px); without it in `--fab-clearance` the second (the control's bottom at
+    748, the button's top at 742). The page's end stays clear either way, since the body's own
+    safe-area padding already lifts it.
+  - On such a phone a page now ends 96 px plus twice the inset below its last line (the body's
+    padding and the clearance each add one), 34 px more than it needs.
+- **On a phone, toasts stand above the quick add button.** Up to 768 px they lay across the top of
+  the screen, so on a first run the history toast ("20 badges and 26 prints from your history so
+  far") lay over the menu button for its 9 s, and a toast lay over each page's own buttons beside
+  it: Views and Refresh, Add account, Budgets' period controls, the Settings and Import tabs, the
+  period bar once it pins. Toasts now run the width of the screen above the quick add button
+  (`Toast.module.css`, `bottom: var(--fab-clearance)`), where a phone's screen holds nothing else
+  of the app's, and while the drawer is open they sit under it and its overlay. On the demo at 390,
+  with a badge toast and the history toast up, the old placement lay over a page's header
+  controls on 14 of 18 pages at rest and over the pinned period bar on Dashboard, Transactions and
+  Budgets; the new one lies over none of them, nor over the menu or quick add button. Wider, the
+  two toasts are shorter too: 42 and 58 px tall instead of 58 and 80.
+  - Test: `menu-button-clearance.spec.ts` puts a badge toast beside the demo's history toast at 390
+    and checks what is topmost at each control's centre and corners: neither toast may lie over the
+    menu or quick add button, Dashboard's header and period bar (at rest and pinned), Add account,
+    or the open drawer's links and toggle, and both must be on screen and on top. On the old rule
+    it fails at once (Views and Refresh). Without the drawer rule, or with the container never
+    taking its class, the drawer's links fail; with the stack in the quick add button's row, the
+    button does.
+  - Not changed: while it shows, the stack still lies over whatever page content is under it,
+    which scrolls; at rest on the demo that is a control on 8 of the 18 pages, such as a bill's
+    Mark paid and Edit. With a dialog open the toasts go back to the top: the next entry.
+- **On a phone, toasts go to the top while a dialog is open.** Above the quick add button they lay
+  over the lower half of whatever was open over the page (PR #695 review). On the quick add sheet
+  one toast covered ".", "0" and Delete and two covered 7, 8 and 9 as well, so 1, 8, 0 tapped just
+  after a save read €18.00; the sheet's own failed-save toast covered "Add €42.00", at 360 too; on
+  the Add transaction form a toast covered the account and "Show advanced options". While a dialog
+  is open the stack now runs across the top again, under the safe-area inset and above the
+  dialog's overlay, and goes back above the quick add button when it closes. One signal decides
+  it, `aria-modal="true"`: `html:has([aria-modal='true'])` in `Toast.module.css`.
+  - Every dialog laid over the app now says it is a modal dialog. 22 overlays had no `aria-modal`
+    (Add account, Bills' bill and category forms, Budgets' three, Categories' two, Dashboard
+    Views, Add holding, the receipt viewer, Recurring, the three bulk dialogs, Auto Categorize,
+    Reconciliation, Changelog, Sign in, Keyboard shortcuts, the period picker, Contact support);
+    each has `role="dialog"`, `aria-modal` and a name, 20 of them from their heading (Keyboard
+    shortcuts and the period picker kept their label). Seven stay in the page while closed (the
+    quick add sheet, the command bar, Transactions' form, Auto Categorize, Reconciliation, Bills'
+    subscription catalog and scan) and say it only while open; five of them said it while closed.
+    A screen reader now keeps to an open dialog, and the update reload (`userIsMidEntry`) waits
+    while one of them is open, as it did for the others. It reads a dialog's own computed style,
+    and a closed Reconciliation is hidden by its parent's `display: none`, which does not reach
+    the dialog: with the role alone, an update waited for good once Transactions had been opened.
+    The parent now sets `visibility: hidden` as well, which does.
+  - Measured at 390x844 on the demo, main / 02690f8a / now: with the Add transaction form open one
+    toast covers its close button, two cover it and the Expense type button / the account and
+    Show advanced options / as on main. The sheet's keypad and last step: nothing / up to six keys
+    and Add / nothing. The setup wizard: 2 of 5 points of Leave setup / nothing / as on main.
+  - Test: in `menu-button-clearance.spec.ts`, with "Entry added" up the sheet opened again takes
+    1, 8, 0 as €180.00 (€18.00 on 02690f8a), its failed-save toast (IndexedDB refusing the write)
+    covers none of its last step's buttons and fields, and two toasts cover none of the Add
+    transaction form's lower controls; five forms on five pages send a toast to the top; and with
+    all 20 pages mounted none holds an `aria-modal="true"` at rest, and on none does an update
+    wait. Without the CSS rule the first three and the five fail; with the sheet, the command bar,
+    the Transactions form, Reconciliation or the subscription scan saying it while closed, an
+    at-rest check fails; without Reconciliation's `visibility: hidden` an update waits on 19 of
+    the 20 pages. `dialogsSayTheyAreModal.test.ts` reads the source for an overlay with no
+    `aria-modal` before its heading: on 02690f8a's source it lists the 22.
+  - Left alone: the Tours menu, which #694 makes a modal dialog; until both are merged it keeps
+    the toasts above the quick add button.
+- **Views on Dashboard reorders from the keyboard.** A drag was the only way to move a widget under
+  Show more. Each of those rows now has Move up and Move down after its toggle, named for the
+  widget ("Move Budget Alerts up"). Up is off on the first row and down on the last, and focus
+  stays on the button pressed, or goes to the row's other one when the row reaches an end. The
+  hint reads "Drag a handle or use the arrows to reorder the widgets under Show more. The others
+  have a fixed spot." Rows with a fixed spot keep a blank of the same width, so every toggle ends
+  at one edge. Up to 480 px the two stack in a 28 px column and the handle's picture goes (the row
+  still drags): side by side they took 68 px from every toggle, and at 390 twelve of the fifteen
+  names went onto a second line and the other three onto a third. Stacked, the rows are as tall as before the arrows (twelve at 52
+  px, three at 68).
+  - Test: `dashboardViewsMoveButtons.test.tsx` checks the twelve names, the ends, two moves and the
+    saved order, and the focus; `dashboard.spec.ts` tabs from Budget Alerts' toggle to its Move up
+    and presses Enter twice in Chromium. Without the line that puts focus back, both fail
+    (Chromium reports the button no longer focused); with the buttons never off, the ends test;
+    with the move dropped, the order test. `dashboard.spec.ts` also opens Views at 390 and expects
+    the arrows to take at most 28 px across a row and stay 24 px each way; without the phone rules
+    they take 92.
+- **The change under Net Worth is how far the balances moved that month.** It was the month's
+  income less spending set against the month before's, a change of a change, so a month that grew
+  the balances could read as a fall: on the demo this month the card read "↓772.00 vs last month"
+  while the month added 1,191.00 to the accounts, and now reads "↑1191.00". The figure is now what
+  that month's entries did to the accounts Net Worth sums, by each runtime's own balance rule
+  (`balanceDeltasFor` on the Worker, now exported, and `computeBalanceDeltas` in local-first),
+  counted on those accounts only and rounded to cents. A transfer between two of them moves
+  nothing, and neither does an entry that names no account. A range or all time still has none.
+  - Test: the contract scenario "the change under Net Worth is how far its balances moved that
+    month" (Worker and local-first) expects 1654.5 for a March with pay, spending from two
+    accounts, a transfer between them and an entry with no account, and checks February, April,
+    an empty May, the other profile and both profiles. Before the fix March came back -65.5 on
+    both runtimes. The first dashboard scenario's March now expects 0, since none of its entries
+    names an account (it was -100.5). `dashboard-net-worth-change.test.ts` (Worker) and
+    `localHandlers.dashboard.test.ts` add an entry whose account is gone and two of 0.1 and 0.2:
+    without the filter to the summed accounts both return -50.3, without the rounding
+    -0.30000000000000004.
+  - Not changed: the card's total is today's, so a past month shows today's balances beside that
+    month's change. The runtimes still differ on a transfer with no destination (the Worker takes
+    it off the account, local-first leaves the balance alone), and this figure follows each.
+
 ### Deploy notes
 
 - `deploy-worker.yml` no longer exports the database before migrating. It records a D1 Time Travel

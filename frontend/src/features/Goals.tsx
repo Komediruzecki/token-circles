@@ -31,6 +31,7 @@
  * Handles savings goals with progress tracking
  */
 import { createMemo, createSignal, For } from 'solid-js'
+import { formatDate } from '../../../shared/dateFormat'
 import Chart from '../components/Chart'
 import ConfirmButton from '../components/ConfirmButton'
 import { Field, FormNotice, SubmitButton } from '../components/form'
@@ -202,15 +203,6 @@ export default function Goals() {
     return `Due in ${diff} days`
   }
 
-  // Format date
-  const formatDate = (dateStr: string): string => {
-    return new Date(dateStr).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    })
-  }
-
   // Load on mount, and reload on a profile change or a goal write from anywhere (including
   // resume revalidation) — but only while visible. A hidden page defers its refetch until it is
   // next shown (keep-alive fan-out guard). This page's own writes, contributions included, bump
@@ -249,7 +241,7 @@ export default function Goals() {
     const now = new Date()
     return Array.from({ length: projectionMaxMonths() + 1 }, (_, i) => {
       const d = new Date(now.getFullYear(), now.getMonth() + i, 1)
-      return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+      return formatDate(d, 'month')
     })
   })
 
@@ -521,11 +513,10 @@ export default function Goals() {
                     const achieveLabel =
                       monthsNeeded <= 0
                         ? 'reached'
-                        : new Date(
-                            now.getFullYear(),
-                            now.getMonth() + monthsNeeded,
-                            1
-                          ).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+                        : formatDate(
+                            new Date(now.getFullYear(), now.getMonth() + monthsNeeded, 1),
+                            'month'
+                          )
                     return {
                       label: `${g.name} — target ${achieveLabel}`,
                       data,

@@ -36,6 +36,54 @@
   opacity: 1;
 }
 
+/* Where a fixed-spot widget would have its handle, so every row's toggle starts at one edge. */
+.handle-space {
+  width: 24px;
+  flex-shrink: 0;
+}
+
+/* Move up and Move down, after the toggle: reordering from the keyboard, or with a tap. */
+.move-buttons {
+  display: flex;
+  gap: 4px;
+  margin-left: 8px;
+  flex-shrink: 0;
+}
+
+/* Where a fixed-spot widget would have them, so every row's toggle ends at one edge. */
+.move-space {
+  width: 68px;
+  flex-shrink: 0;
+}
+
+.move-btn {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.move-btn:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--primary);
+}
+
+.move-btn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.move-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
 .dragging {
   opacity: 0.5;
 }
@@ -125,4 +173,33 @@
 
 .btn-primary:hover {
   background: var(--primary-hover);
+}
+
+/* A phone: the arrows stack in a 28 px column and the handle's picture goes (the row still drags),
+   so the toggles keep the width they had before the arrows and their names one line. */
+@media (max-width: 480px) {
+  .drag-handle,
+  .handle-space {
+    display: none;
+  }
+
+  .move-buttons {
+    flex-direction: column;
+    gap: 2px;
+    margin-left: 4px;
+  }
+
+  .move-btn {
+    width: 24px;
+    height: 24px;
+  }
+
+  .move-space {
+    width: 28px;
+  }
+
+  /* The 4 px the column takes beyond the handle's 24, back from the toggle's own padding. */
+  .widget-toggle {
+    padding: 12px 14px;
+  }
 }

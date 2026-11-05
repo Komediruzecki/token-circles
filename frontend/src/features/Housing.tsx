@@ -27,6 +27,7 @@
  * Manages housing-related expenses and property information
  */
 import { createMemo, createSignal, For } from 'solid-js'
+import { formatDate, MONTHS_LONG } from '../../../shared/dateFormat'
 import Badge from '../components/Badge'
 import ConfirmButton from '../components/ConfirmButton'
 import { Field, FormNotice, SubmitButton } from '../components/form'
@@ -288,8 +289,7 @@ export default function HousingForm() {
                               : sub.frequency === 'weekly'
                                 ? 'Weekly'
                                 : 'Biweekly'}
-                            {sub.due_date &&
-                              ` · Due ${new Date(sub.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}
+                            {sub.due_date && ` · Due ${formatDate(sub.due_date, 'dayMonth')}`}
                           </div>
                         </div>
                       </div>
@@ -502,7 +502,7 @@ export default function HousingForm() {
                           value={String(i + 1)}
                           selected={housingForm.values.due_month === String(i + 1)}
                         >
-                          {new Date(0, i).toLocaleString('default', { month: 'long' })}
+                          {MONTHS_LONG[i]}
                         </option>
                       ))}
                     </select>

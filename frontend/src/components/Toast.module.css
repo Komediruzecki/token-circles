@@ -1,5 +1,6 @@
 /* Toasts: a plain rounded rectangle, one row, stacked in the top-right corner.
-   Phones get edge-to-edge banners at the top, safe-area aware.
+   Phones get banners across the screen above the quick add button, safe-area aware,
+   and across the top while a dialog is open.
 
    Deliberately plain — the icon, the message and a border tinted by severity are
    what carry information; the surface and shadow come from the app's own theme
@@ -150,7 +151,7 @@
 @keyframes toastInMobile {
   from {
     opacity: 0;
-    transform: translateY(-10px);
+    transform: translateY(10px);
   }
   to {
     opacity: 1;
@@ -163,12 +164,36 @@
    pointer-events: none so clicks between toasts fall through, and a scroller under that
    setting could never receive the scroll gesture anyway. */
 @media (max-width: 768px) {
+  /* Above the quick add button, the width of the screen. Across the top a toast lay over the
+     menu button, then over each page's own buttons beside it (Views and Refresh, Add account,
+     the period bar once it pins), for the 9 s a badge toast stays. The bottom of a phone's screen
+     holds only the quick add button, and --fab-clearance (Layout.module.css) clears it and its
+     ring, on a phone with a home indicator too. */
   .toastContainer {
-    top: calc(env(safe-area-inset-top) + 0.5rem);
-    right: 0.5rem;
-    left: 0.5rem;
+    top: auto;
+    bottom: var(--fab-clearance);
+    right: calc(env(safe-area-inset-right, 0px) + 0.5rem);
+    left: calc(env(safe-area-inset-left, 0px) + 0.5rem);
     width: auto;
     gap: 0.35rem;
+  }
+
+  /* The drawer open: it and its overlay (z-index 100 and 99) lie over the toasts, so no toast
+     lies over its links or its toggle. */
+  .toastContainer.underDrawer {
+    z-index: 98;
+  }
+
+  /* A dialog open, the quick add sheet among them: then the bottom of the screen is its own, the
+     sheet's keypad and Add button, a form's last fields, and the toasts show across the top
+     instead, above its overlay, with the drawer open too. A dialog says it is open with
+     aria-modal="true"; the seven that stay in the page while closed (GuidedOrbit, CommandBar,
+     Transactions' form, Auto Categorize, Reconciliation, Bills' subscription catalog and scan)
+     carry it only while open. */
+  html:has([aria-modal='true']) .toastContainer {
+    top: calc(env(safe-area-inset-top, 0px) + 0.5rem);
+    bottom: auto;
+    z-index: 10000;
   }
 
   .toast {

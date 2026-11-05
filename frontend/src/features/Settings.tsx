@@ -27,6 +27,7 @@
  * Application configuration and preferences with storage switching
  */
 import { createEffect, createMemo, createSignal, For, on, onCleanup, onMount, Show } from 'solid-js'
+import { formatMoment, MONTHS_LONG } from '../../../shared/dateFormat'
 import AccountDeletion from '../components/AccountDeletion'
 import BillingPlans from '../components/BillingPlans'
 import ChangelogModal from '../components/ChangelogModal'
@@ -224,9 +225,7 @@ function Reports() {
           >
             <option value="0">All Months (Full Year)</option>
             {Array.from({ length: 12 }, (_, i) => (
-              <option value={i + 1}>
-                {new Date(2024, i, 1).toLocaleDateString('en-US', { month: 'long' })}
-              </option>
+              <option value={i + 1}>{MONTHS_LONG[i]}</option>
             ))}
           </select>
         </div>
@@ -494,13 +493,7 @@ export default function Settings() {
     return 'Free'
   }
   const fmtBillingDate = (iso: string | null | undefined): string =>
-    iso
-      ? new Date(iso).toLocaleDateString(undefined, {
-          year: 'numeric',
-          month: 'short',
-          day: 'numeric',
-        })
-      : ''
+    iso ? formatMoment(iso, { time: false }) : ''
   // One-line plan status for the billing card. Canceled-but-not-yet-expired and past-due get their
   // own colour/message; otherwise show the tier (and renewal date for an active paid plan).
   const billingStatusLine = (): { color: string; text: string } => {
@@ -1471,7 +1464,7 @@ export default function Settings() {
                 )}
                 {!showStorageWarning() && storageMode() === 'serverless' && (
                   <p style="margin-top: 12px; color: var(--text-secondary); font-size: 13px;">
-                    Running in Local mode — data stays in this browser, fully offline.
+                    Local mode: your data stays in this browser and works offline.
                   </p>
                 )}
                 {!showStorageWarning() && storageMode() === 'self-hosted' && (

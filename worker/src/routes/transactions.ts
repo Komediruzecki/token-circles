@@ -43,7 +43,7 @@ interface TxRow {
 }
 
 /** Base-currency value used for all account-balance math (amount_local first). */
-function baseAmount(tx: { amount: number; amount_local?: number | null }): number {
+export function baseAmount(tx: { amount: number; amount_local?: number | null }): number {
   return typeof tx.amount_local === 'number' ? tx.amount_local : tx.amount;
 }
 
@@ -52,7 +52,7 @@ function baseAmount(tx: { amount: number; amount_local?: number | null }): numbe
  * Mirrors the create/update/delete convention in this file (and the client's
  * computeBalanceDeltas). Returns a per-account delta map.
  */
-function balanceDeltasFor(
+export function balanceDeltasFor(
   row: { account_id: number | null; transfer_account_id: number | null },
   type: string | null,
   value: number

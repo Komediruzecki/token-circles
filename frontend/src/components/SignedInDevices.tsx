@@ -11,6 +11,7 @@
  * deliberate, separate choice it always should have been.
  */
 import { createSignal, For, onMount, Show } from 'solid-js'
+import { formatDate } from '../../../shared/dateFormat'
 import { toast } from '../core/api'
 import { apiFetch } from '../core/apiFetch'
 import { showConfirm } from '../core/confirmStore'
@@ -53,7 +54,7 @@ export function timeAgo(value: string, now: Date = new Date()): string {
   if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`
   const days = Math.floor(hours / 24)
   if (days < 7) return `${days} day${days === 1 ? '' : 's'} ago`
-  return then.toLocaleDateString()
+  return formatDate(then)
 }
 
 const IconDevice = (): JSX.Element => (

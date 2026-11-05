@@ -173,7 +173,7 @@ describe('when it is due', () => {
     vi.setSystemTime(new Date(2026, 9, 8, 12))
     await mount(sub({ due_date: '2026-08-20', next_due_date: '2026-10-20' }))
 
-    expect(host.textContent).toContain('Oct 20')
+    expect(host.textContent).toContain('20 Oct')
     expect(host.textContent).toContain('Due in 12d')
     expect(host.textContent).not.toContain('overdue')
   })

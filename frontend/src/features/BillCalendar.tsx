@@ -18,6 +18,7 @@
  * THEN: The bill dot shows in red (--danger color) with an overdue indicator
  */
 import { createEffect, createMemo, createResource, createSignal, For, Show } from 'solid-js'
+import { formatDate } from '../../../shared/dateFormat'
 import PeriodBar from '../components/PeriodBar'
 import { apiHouseholdGet, apiPost, formatCurrency, showToast } from '../core/api'
 import { plainMessage } from '../core/apiError'
@@ -190,17 +191,6 @@ const BillCalendar: Component = () => {
       next.delete(billId)
       setMarkingPaid(next)
     }
-  }
-
-  // Format date for display
-  const formatDate = (dateStr: string): string => {
-    const date = new Date(dateStr)
-    if (isNaN(date.getTime())) return dateStr
-    return date.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    })
   }
 
   // Day status class

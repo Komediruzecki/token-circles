@@ -104,7 +104,7 @@ describe('money follows the base currency', () => {
     cell.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
 
     expect(document.getElementById('heatmap-tooltip')?.textContent).toBe(
-      'Mar 14, 2026: £12.50 expense'
+      '14 Mar 2026: £12.50 expense'
     )
   })
 

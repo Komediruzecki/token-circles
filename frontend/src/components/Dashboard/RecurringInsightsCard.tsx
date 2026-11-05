@@ -3,6 +3,7 @@
  * Shows insights about recurring transactions
  */
 import { createMemo, createSignal, For } from 'solid-js'
+import { formatDate } from '../../../../shared/dateFormat'
 import { api, getLocalCurrency } from '../../core/api'
 import { useAppState } from '../../core/appStore'
 import { entityVersion } from '../../core/dataVersions'
@@ -60,9 +61,6 @@ export default function RecurringInsightsCard() {
       amount
     )
 
-  const formatDate = (dateStr: string) =>
-    new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-
   const freqCounts = createMemo(() => {
     const counts: Record<string, number> = {}
     for (const i of items()) {
@@ -104,7 +102,7 @@ export default function RecurringInsightsCard() {
                   <div class={styles.insightContent}>
                     <div class={styles.insightTitle}>{item.description}</div>
                     <div class={styles.insightDescription}>
-                      {formatDate(item.next_date!)} • {item.frequency}
+                      {formatDate(item.next_date!, 'dayMonth')} • {item.frequency}
                     </div>
                   </div>
                   <span class={`${styles.amount} ${styles[item.type]}`}>

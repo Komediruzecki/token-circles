@@ -473,7 +473,7 @@ describe('reading a month', () => {
     el.dispatchEvent(Object.assign(new Event(type), { pointerType }))
   const faded = (c: HTMLElement) =>
     [...q(c, 'prints-seal')!.querySelectorAll('[data-dim]')].map((g) => g.getAttribute('data-slot'))
-  const HINT = 'Tap a petal to see its month.'
+  const HINT = 'Choose a petal to see its month.'
   const JUNE = 'June 2026 spent the fourth most of these 6 months, and kept money.'
   const APRIL = 'April 2026 spent the least of these 6 months, and kept money.'
   const SEPTEMBER = 'September 2026 spent the most of these 6 months, and kept money.'

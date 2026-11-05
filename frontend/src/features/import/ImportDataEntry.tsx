@@ -141,11 +141,13 @@ export function ImportDataEntry(props: { flow: ImportFlow; compact?: boolean }) 
             <div class={styles.settingsCard} style={{ 'margin-bottom': '16px' }}>
               <h3 class={styles.settingsCardTitle}>Expected columns</h3>
               {/*
-                This table is the import's contract, so it has to tell the truth. Only Amount
-                hard-fails a row. A missing Date imports as today and is flagged; a blank
-                Description imports (bank exports are full of them — a rule that rejected blanks
-                once silently dropped 291 rows). Everything else is optional with the default
-                shown beside the sample, so "optional" never reads as "mysterious".
+                This table is the import's contract, so it has to tell the truth. Date is marked
+                required because Map columns stars it (decided 4 Nov 2026); only Amount
+                hard-fails a row, so Date's sample says what a blank cell does: it imports as
+                today and is flagged. Description is optional here and in Map columns, because a
+                blank Description imports (bank exports are full of them; a rule that
+                rejected blanks once silently dropped 291 rows). Everything else is optional with
+                the default shown beside the sample, so "optional" never reads as "mysterious".
               */}
               <div class={styles.tableWrapper} style={{ 'margin-bottom': 0 }}>
                 <table class={styles.previewTable} data-test-id="import-expected-columns">
@@ -159,8 +161,8 @@ export function ImportDataEntry(props: { flow: ImportFlow; compact?: boolean }) 
                   <tbody>
                     <tr>
                       <td>Date</td>
-                      <td>No</td>
-                      <td>2024-01-15 (today's date, and the row is flagged)</td>
+                      <td>Yes</td>
+                      <td>2024-01-15 (a blank cell imports as today, and the row is flagged)</td>
                     </tr>
                     <tr>
                       <td>Description</td>
@@ -412,8 +414,8 @@ export function ImportDataEntry(props: { flow: ImportFlow; compact?: boolean }) 
       {flow.activeImportTab() === 'paste-csv' && (
         <>
           <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 12px;">
-            Paste tabular data straight from Excel, Google Sheets, or any spreadsheet app — it's
-            parsed right in your browser.
+            Paste a table straight from Excel, Google Sheets or any spreadsheet app. It's read right
+            here in your browser.
           </p>
           <form {...pasteForm.attrs} data-test-id="import-paste-form">
             <FormNotice form={pasteForm} />

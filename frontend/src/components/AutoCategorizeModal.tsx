@@ -20,6 +20,7 @@
  * turned up uncategorized again.
  */
 import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from 'solid-js'
+import { formatDate } from '../../../shared/dateFormat'
 import { api, getLocalCurrency, toast } from '../core/api'
 import { asOneWrite } from '../core/dataVersions'
 import autoCategorizeModalStyles from './AutoCategorizeModal.module.css'
@@ -195,9 +196,17 @@ export function AutoCategorizeModal(props: AutoCategorizeModalProps) {
       class={autoCategorizeModalStyles.overlay}
       classList={{ [autoCategorizeModalStyles.isOpen]: props.isOpen() }}
     >
-      <div class={autoCategorizeModalStyles.modal}>
+      {/* Modal only while open: it stays in the page when closed. */}
+      <div
+        class={autoCategorizeModalStyles.modal}
+        role="dialog"
+        aria-modal={props.isOpen() ? 'true' : undefined}
+        aria-labelledby="auto-categorize-heading"
+      >
         <div class={autoCategorizeModalStyles.header}>
-          <h2 class={autoCategorizeModalStyles.title}>Auto Categorize</h2>
+          <h2 class={autoCategorizeModalStyles.title} id="auto-categorize-heading">
+            Auto Categorize
+          </h2>
           <button
             class={autoCategorizeModalStyles.closeButton}
             onClick={props.onClose}
@@ -272,7 +281,7 @@ export function AutoCategorizeModal(props: AutoCategorizeModalProps) {
                             much, and which account it touched. */}
                         <p class={autoCategorizeModalStyles.txMeta} data-test-id="auto-cat-meta">
                           <Show when={tx.date}>
-                            <span>{tx.date}</span>
+                            <span>{formatDate(tx.date)}</span>
                           </Show>
                           <Show when={money(tx)}>
                             <span

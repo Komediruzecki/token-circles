@@ -101,6 +101,7 @@ afterEach(() => {
   Object.defineProperty(window, 'innerHeight', { configurable: true, value: saved.h })
   vi.restoreAllMocks()
   document.documentElement.style.scrollPaddingTop = ''
+  document.documentElement.style.scrollPaddingBottom = ''
 })
 
 describe('Spotlight measures its tip', () => {
@@ -212,6 +213,18 @@ describe('Spotlight opens a target that does not fit at its top', () => {
     start([step('almost')])
     await settle(150)
     expect(scrollBlocks.almost).toBe('start')
+  })
+
+  it('does not count the strip kept clear for the quick add button as room either', async () => {
+    // The root keeps 96px above the bottom edge for the quick add button too, so a 750px target
+    // fits under the menu button's strip (796px) but not between the two (700px). Centred there,
+    // its top would sit 25px above that room, under the menu button.
+    document.documentElement.style.scrollPaddingTop = '48px'
+    document.documentElement.style.scrollPaddingBottom = '96px'
+    anchor('between', { top: 600, left: 25, width: 340, height: 750 })
+    start([step('between')])
+    await settle(150)
+    expect(scrollBlocks.between).toBe('start')
   })
 })
 

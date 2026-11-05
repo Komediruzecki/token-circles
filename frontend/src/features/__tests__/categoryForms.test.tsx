@@ -405,3 +405,16 @@ describe.each(SURFACES.filter((s) => s.edit))('editing on $page', (surface) => {
     ])
   })
 })
+
+describe('the category card on Categories', () => {
+  it('names its edit button for the category it edits', async () => {
+    await mount(SURFACES[0], async () => {})
+    let edit: HTMLElement | null = null
+    await vi.waitFor(() => {
+      edit = host.querySelector<HTMLElement>('[data-test-id="edit-category-btn"]')
+      expect(edit).toBeTruthy()
+    })
+    // An icon-only button: without a name a screen reader announces just "button".
+    expect(edit!.getAttribute('aria-label')).toBe('Edit Groceries')
+  })
+})

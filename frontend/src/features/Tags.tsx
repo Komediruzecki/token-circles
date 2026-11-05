@@ -13,6 +13,7 @@
  *    bulk write happens.
  */
 import { createEffect, createMemo, createResource, createSignal, For, on, Show } from 'solid-js'
+import { formatDate } from '../../../shared/dateFormat'
 import {
   describeTagRuleCriteria,
   EMPTY_TAG_RULE_CRITERIA,
@@ -70,10 +71,7 @@ function newDraft(tagId: number): RuleDraft {
 }
 
 function monthLabel(month: string): string {
-  const [year, m] = month.split('-')
-  if (!year || !m) return month
-  const date = new Date(Number(year), Number(m) - 1, 1)
-  return date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' })
+  return formatDate(month, 'month')
 }
 
 export default function Tags() {
@@ -1160,7 +1158,7 @@ export default function Tags() {
                               <For each={result().sample}>
                                 {(row) => (
                                   <li>
-                                    <span>{row.date}</span>
+                                    <span>{formatDate(row.date)}</span>
                                     <span class={styles.sampleDesc}>{row.description}</span>
                                     <span class={styles.sampleAmount}>
                                       {formatCurrency(row.amount)}

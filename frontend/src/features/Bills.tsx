@@ -786,13 +786,16 @@ export default function Bills() {
         >
           <div
             class={styles.modal}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="bill-modal-heading"
             data-test-id="bill-modal"
             onclick={(e) => {
               e.stopPropagation()
             }}
           >
             <div class={styles.modalHeader}>
-              <h3 class={styles.modalTitle} data-test-id="bill-modal-title">
+              <h3 id="bill-modal-heading" class={styles.modalTitle} data-test-id="bill-modal-title">
                 {editingBill() ? 'Edit' : 'Add'}{' '}
                 {billForm.values.type === 'subscription' ? 'Subscription' : 'Bill'}
               </h3>
@@ -984,12 +987,17 @@ export default function Bills() {
         >
           <div
             class={styles.modal}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="bill-category-modal-heading"
             onclick={(e) => {
               e.stopPropagation()
             }}
           >
             <div class={styles.modalHeader}>
-              <h3 class={styles.modalTitle}>Add Category</h3>
+              <h3 id="bill-category-modal-heading" class={styles.modalTitle}>
+                Add Category
+              </h3>
               <button class={styles.modalClose} onClick={() => setShowCategoryModal(false)}>
                 <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path d="M6 18L18 6M6 6l12 12" />

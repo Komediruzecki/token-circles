@@ -7,6 +7,7 @@
  * answer's own words when it has them; both used to fail without a word.
  */
 import { createSignal, For, Show } from 'solid-js'
+import { formatDate } from '../../../shared/dateFormat'
 import { RECURRING_FREQUENCIES, RECURRING_TYPES } from '../../../shared/recurringSchema'
 import { api, errorStatus, formatCurrency, toast } from '../core/api'
 import { plainMessage } from '../core/apiError'
@@ -140,15 +141,6 @@ export default function RecurringSection(props: RecurringSectionProps) {
     }
   }
 
-  const formatDate = (dateStr: string | null) => {
-    if (!dateStr) return '-'
-    return new Date(dateStr).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    })
-  }
-
   return (
     <div class={styles.section}>
       <div class={styles.sectionHeader} onClick={() => setExpanded(!expanded())}>
@@ -220,7 +212,9 @@ export default function RecurringSection(props: RecurringSectionProps) {
                       {item.type === 'expense' ? '-' : '+'}
                       {formatCurrency(item.amount)}
                     </span>
-                    <span class={styles.itemNext}>{formatDate(item.next_date)}</span>
+                    <span class={styles.itemNext}>
+                      {item.next_date ? formatDate(item.next_date) : '-'}
+                    </span>
                     <button
                       class={styles.itemAction}
                       onClick={() => handlePopulate(item)}
@@ -291,13 +285,18 @@ export default function RecurringSection(props: RecurringSectionProps) {
         >
           <div
             class={styles.modal}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="recurring-modal-heading"
             data-test-id="recurring-modal"
             onClick={(e) => {
               e.stopPropagation()
             }}
           >
             <div class={styles.modalHeader}>
-              <h3>{ruleForm.editing() ? 'Edit Recurring' : 'Add Recurring'}</h3>
+              <h3 id="recurring-modal-heading">
+                {ruleForm.editing() ? 'Edit Recurring' : 'Add Recurring'}
+              </h3>
               <button
                 type="button"
                 class={styles.closeBtn}

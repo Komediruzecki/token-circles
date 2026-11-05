@@ -11,6 +11,7 @@ import {
   checkBudgetMonth,
   checkRollover,
 } from '../../../../../shared/budgetSchema'
+import { formatDate } from '../../../../../shared/dateFormat'
 import { toCents } from '../../../../../shared/money'
 import { localMonth } from '../../../utils/period'
 import { getDB } from '../idb'
@@ -1130,7 +1131,7 @@ export async function budgetsForecast(query: URLSearchParams): Promise<Response>
         // Local midnight on the 1st, so the local month: toISOString() is the UTC one, which east
         // of UTC is the month before and named this month as the first month ahead.
         month: localMonth(date),
-        label: date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+        label: formatDate(date, 'month'),
       })
     }
 

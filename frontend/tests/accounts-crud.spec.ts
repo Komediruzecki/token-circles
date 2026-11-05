@@ -165,7 +165,11 @@ test.describe('Accounts CRUD Operations', () => {
 
   test('should have account type badge text', async ({ page }) => {
     const cardCount = await page.getByTestId('account-card').count()
-    expect(await page.getByTestId('account-type').count()).toBe(cardCount)
+    const words = (await page.getByTestId('account-type').allTextContents()).map((w) => w.trim())
+    expect(words).toHaveLength(cardCount)
+    // The names the account form lists, never the stored id ("giro", "credit").
+    const names = ['Giro / Checking', 'Savings', 'Investment / Brokerage', 'Cash', 'Credit Card']
+    for (const word of words) expect([...names, 'Other account']).toContain(word)
   })
 
   test('should have account actions button', async ({ page }) => {

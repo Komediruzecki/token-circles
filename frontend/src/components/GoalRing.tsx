@@ -6,6 +6,7 @@
  * budget radar and account constellation, tuned for one goal.
  */
 import { createMemo, Show } from 'solid-js'
+import { calendarDay, formatDate } from '../../../shared/dateFormat'
 import { formatCurrency, getLocalCurrency } from '../core/api'
 import styles from './GoalRing.module.css'
 
@@ -37,9 +38,8 @@ export default function GoalRing(props: GoalRingProps) {
   const remaining = () => Math.max(0, props.target - props.current)
   const deadlineLabel = createMemo(() => {
     if (!props.deadline) return null
-    const d = new Date(props.deadline)
-    if (Number.isNaN(d.getTime())) return null
-    return d.toLocaleDateString(undefined, { month: 'short', year: 'numeric' })
+    if (!calendarDay(props.deadline)) return null
+    return formatDate(props.deadline, 'month')
   })
 
   return (

@@ -118,10 +118,10 @@ describe("the Dashboard's Upcoming Bills", () => {
 
     await vi.waitFor(() => {
       expect(host.textContent).toContain('Upcoming Bills')
-      expect(host.textContent).toContain('Oct 20, 2026 • Due in 12 days')
+      expect(host.textContent).toContain('20 Oct 2026 • Due in 12 days')
     })
-    expect(host.textContent).toContain('Oct 8, 2026 • Due today')
+    expect(host.textContent).toContain('8 Oct 2026 • Due today')
     expect(host.textContent).not.toContain('Due in Due in')
-    expect(host.textContent).not.toContain('Aug 20')
+    expect(host.textContent).not.toContain('20 Aug')
   })
 })

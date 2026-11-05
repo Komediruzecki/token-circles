@@ -15,6 +15,7 @@
  * file (importHandoff.ts), or setup goes on without it.
  */
 import { createSignal, createUniqueId, For, onCleanup, Show } from 'solid-js'
+import { formatDate } from '../../../../shared/dateFormat'
 import { listAdapters } from '../../core/bankImport'
 import { createImportFlow, namesItsAccounts } from '../../features/import/importFlow'
 import styles from './Onboarding.module.css'
@@ -73,15 +74,10 @@ export function dateRangeText(
   thisYear = new Date().getFullYear()
 ): string {
   const sameYear = from.slice(0, 4) === to.slice(0, 4) && Number(from.slice(0, 4)) === thisYear
-  const format = new Intl.DateTimeFormat('en-GB', {
-    day: 'numeric',
-    month: 'short',
-    ...(sameYear ? {} : { year: 'numeric' }),
-    timeZone: 'UTC',
-  })
   // Each date holds together (no-break spaces): a narrow card wraps between the dates, never
   // inside one.
-  const day = (iso: string) => format.format(new Date(`${iso}T00:00:00Z`)).replace(/ /g, '\u00a0')
+  const day = (iso: string) =>
+    formatDate(iso, sameYear ? 'dayMonth' : 'day').replace(/ /g, '\u00a0')
   return from === to ? day(from) : `${day(from)} to ${day(to)}`
 }
 

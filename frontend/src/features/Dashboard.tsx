@@ -28,7 +28,7 @@ import {
   toast,
 } from '../core/api'
 import { useAppState } from '../core/appStore'
-import { loadWidgetPrefs } from '../core/dashboardWidgets'
+import { hasFixedSpot, loadWidgetPrefs } from '../core/dashboardWidgets'
 import { entityVersion } from '../core/dataVersions'
 import { useGuidance } from '../core/guidance'
 import { refetchOnActive } from '../core/pageVisibility'
@@ -186,13 +186,7 @@ export default function Dashboard() {
           return tDate >= fromKey && tDate <= toKey
         })
       }
-      const fmtMonth = (month: string) => {
-        const [y, m] = month.split('-')
-        return new Date(parseInt(y), parseInt(m) - 1).toLocaleDateString('en-US', {
-          month: 'short',
-          year: 'numeric',
-        })
-      }
+      const fmtMonth = (month: string) => formatDate(month, 'month')
       const labels = timeline.map((t) => fmtMonth(t.month))
       const netWorth = timeline.map((t) => t.balance)
       // Real monthly income/expense stats (the net-worth timeline only knows
@@ -851,14 +845,13 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Dynamic Widgets — rendered in saved order, only visible widgets shown */}
+            {/* Dynamic Widgets — rendered in saved order, only visible widgets shown. The ones
+                with a fixed spot are placed above, so the order skips them (and Views gives
+                them no drag handle). */}
             <For each={widgetOrder()}>
               {(widgetId) => (
                 <>
-                  {isWidgetVisible(widgetId) &&
-                  widgetId !== 'metrics' &&
-                  widgetId !== 'badges' &&
-                  !widgetId.startsWith('deck-')
+                  {isWidgetVisible(widgetId) && !hasFixedSpot(widgetId)
                     ? renderWidget(widgetId)
                     : null}
                 </>
@@ -871,12 +864,17 @@ export default function Dashboard() {
             <div class={styles.modalOverlay} onClick={() => setShowSettingsModal(false)}>
               <div
                 class={`${styles.modal} ${styles.modalMd}`}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="dashboard-views-heading"
                 onClick={(e) => {
                   e.stopPropagation()
                 }}
               >
                 <div class={styles.modalHeader}>
-                  <div class={styles.modalTitle}>Dashboard Views</div>
+                  <div id="dashboard-views-heading" class={styles.modalTitle}>
+                    Dashboard Views
+                  </div>
                   <div class={styles.modalHeaderActions}>
                     <button class={styles.headerResetBtn} onClick={() => resetViews()?.()}>
                       Reset Default

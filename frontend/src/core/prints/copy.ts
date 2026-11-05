@@ -3,31 +3,18 @@
  * line is tested as written. Months are named in English, as the advice cards name them, because
  * they sit inside English sentences.
  */
+import { formatDate } from '../../../../shared/dateFormat'
 import { addMonths } from '../achievements/months'
 import type { SealWords } from '../../../../shared/prints/describe'
 import type { PrintView, ShelfView } from './shelf'
 
 /**
- * One formatter, and each month named once: `toLocaleDateString` builds a formatter on every call,
- * and a shelf of 26 prints names months hundreds of times (30 ms of a 6x-throttled phone's first
- * render of Progress, measured in the built app).
+ * "October 2026". The shared formatter writes the name from a list and builds no Intl formatter:
+ * `toLocaleDateString` built one on every call, and a shelf of 26 prints names months hundreds of
+ * times (30 ms of a 6x-throttled phone's first render of Progress, measured in the built app).
  */
-const MONTH_YEAR = new Intl.DateTimeFormat('en-GB', {
-  month: 'long',
-  year: 'numeric',
-  timeZone: 'UTC',
-})
-const named = new Map<string, string>()
-
 export const printWords: SealWords = {
-  monthName: (month) => {
-    let name = named.get(month)
-    if (name === undefined) {
-      name = MONTH_YEAR.format(new Date(`${month}-15T00:00:00Z`))
-      named.set(month, name)
-    }
-    return name
-  },
+  monthName: (month) => formatDate(month, 'monthLong'),
 }
 
 const monthName = printWords.monthName
@@ -56,7 +43,7 @@ export const LEGEND =
 export const SHAPE_LINE = 'Only the shape of your year is on it.'
 export const NEXT_HEADING = 'Next print'
 export const EVERY_HEADING = 'Every print'
-export const READOUT_IDLE = 'Tap a petal to see its month.'
+export const READOUT_IDLE = 'Choose a petal to see its month.'
 export const SHARE_LABEL = 'Share'
 export const SHARE_TEXT = 'Twelve months of my money, drawn as a seal by Token Circles.'
 export const shareTitle = (first: boolean): string => (first ? 'My first print' : 'My print')

@@ -1,12 +1,15 @@
 /**
- * The "Expected columns" table is the import's contract, and it lied: Date and Description were
- * listed as required when only Amount hard-fails a row — a missing date imports as today (with a
- * warning) and a blank description imports outright, a contract the worker pins in
- * `import-blank-description.test.ts` precisely because a stricter local rule once silently
- * dropped 291 rows.
+ * The "Expected columns" table is the import's contract. It once listed Date and Description as
+ * required when only Amount hard-fails a row: a blank description imports outright, a contract
+ * the worker pins in `import-blank-description.test.ts` because a stricter local rule once
+ * silently dropped 291 rows, and a blank date imports as today, with a warning.
  *
- * This reads the rendered claims out of the source and holds them to that reality, and keeps the
- * table's column list in step with the downloadable template so the two cannot drift apart.
+ * Date is marked required again, by decision (4 Nov 2026), because Map columns stars it: a sheet
+ * without dates would put every row on today. Its row still says what a blank date cell does.
+ * Description is optional in both places: Map columns starred it although a blank one imports.
+ *
+ * This reads the rendered claims out of the source and holds them to that, and keeps the table's
+ * column list in step with the downloadable template so the two cannot drift apart.
  */
 /* eslint-disable security/detect-non-literal-fs-filename -- fixed repo paths only */
 import { readFileSync } from 'node:fs'
@@ -29,13 +32,32 @@ function tableClaims(): Array<[string, string]> {
 }
 
 describe('the Expected columns table', () => {
-  it('marks Amount, and only Amount, as required', () => {
+  it('marks Date and Amount as required, and nothing else', () => {
     const required = tableClaims()
       .filter(([, req]) => req === 'Yes')
       .map(([col]) => col)
-    // Amount is the one field whose absence skips the row. Date falls back to today (flagged),
-    // a blank Description imports, and everything else has a default or is plain optional.
-    expect(required).toEqual(['Amount'])
+    // Amount is the one field whose absence skips the row. Date is the column Map columns stars
+    // with it; a blank Description imports, and everything else has a default or is optional.
+    expect(required).toEqual(['Date', 'Amount'])
+  })
+
+  it('requires exactly the columns Map columns stars', async () => {
+    const { FIELD_NAMES } = await import('../../../../../shared/importMapping')
+    const starred = FIELD_NAMES.filter((f) => f.required).map((f) => f.label)
+    const required = tableClaims()
+      .filter(([, req]) => req === 'Yes')
+      .map(([col]) => col)
+    // Both ways: a starred Description told people to map a column whose blanks import.
+    expect(starred).toEqual(required)
+  })
+
+  it("says what a blank date cell does, in Date's row", () => {
+    const tsx = readFileSync(resolve(SRC, 'ImportDataEntry.tsx'), 'utf8')
+    const row = tsx.slice(
+      tsx.indexOf('<td>Date</td>'),
+      tsx.indexOf('</tr>', tsx.indexOf('<td>Date</td>'))
+    )
+    expect(row).toContain('a blank cell imports as today, and the row is flagged')
   })
 
   it('lists exactly the columns the downloadable template has', () => {
@@ -53,7 +75,7 @@ describe('the Expected columns table', () => {
     const claims = new Map(tableClaims().map(([col, req]) => [col, req] as const))
     const tsx = readFileSync(resolve(SRC, 'ImportDataEntry.tsx'), 'utf8')
     // The columns whose behaviour-when-missing is non-obvious must say it in parentheses.
-    for (const col of ['Date', 'Currency', 'Type', 'Amount Local']) {
+    for (const col of ['Currency', 'Type', 'Amount Local']) {
       expect(claims.get(col), `${col} should be listed`).toBe('No')
       const row = tsx.slice(
         tsx.indexOf(`<td>${col}</td>`),

@@ -1,7 +1,7 @@
 /**
  * The Transactions form's account select names each account's type in brackets, as the Accounts
- * page's badge does: a type v4 renamed as the type that replaced it, and a type this build does not
- * have as a plain "account" (core/accountTypes.ts).
+ * page's badge does, in the names the account form uses: a type v4 renamed as the type that
+ * replaced it, and a type this build does not have as "Other account" (core/accountTypes.ts).
  *
  * The list here comes from a mocked api.getAccounts that hands rows over as stored, so the select
  * is what reads the type, not the reader in front of it.
@@ -73,10 +73,10 @@ describe("the add-transaction form's account select", () => {
 
     const select = host.querySelector<HTMLSelectElement>('[data-test-id="tx-account"]')!
     expect(Array.from(select.options, (o) => o.textContent?.trim()).slice(1)).toEqual([
-      'Everyday (giro)',
-      'Old current (giro)',
-      'Visa (credit)',
-      'Sock drawer (account)',
+      'Everyday (Giro / Checking)',
+      'Old current (Giro / Checking)',
+      'Visa (Credit Card)',
+      'Sock drawer (Other account)',
     ])
   })
 })

@@ -13,6 +13,7 @@
  * "Failed to allocate budget" and "Failed to set budget" in a toast said nothing about which.
  */
 import { checkAllocation } from '../../../shared/budgetSchema'
+import { formatDate } from '../../../shared/dateFormat'
 import { toCents } from '../../../shared/money'
 import { fieldErrorsOf } from '../../../shared/refusal'
 import { createForm } from '../components/form'
@@ -61,11 +62,7 @@ export function budgetBody(values: BudgetFormValues): Record<string, unknown> {
 
 /** "October 2026", from "2026-10". */
 export function monthName(month: string): string {
-  const [year, mon] = month.split('-').map(Number)
-  return new Date(year!, mon! - 1, 1).toLocaleDateString('en-US', {
-    month: 'long',
-    year: 'numeric',
-  })
+  return formatDate(month, 'monthLong')
 }
 
 export function createBudgetForm(options: BudgetFormOptions): BudgetForm {

@@ -184,7 +184,7 @@ test('local-first Settings shows no account email', async ({ page }) => {
   await gotoServerless(page, 'settings', 'settings-header')
 
   // The rest of the General tab is there, so the email card's absence is not a page still loading.
-  await expect(page.getByText('Running in Local mode')).toBeVisible()
+  await expect(page.getByText('Local mode: your data stays in this browser')).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Base Currency' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Email reminders' })).toHaveCount(0)
   await expect(getByTestId(page, 'settings-email-input')).toHaveCount(0)

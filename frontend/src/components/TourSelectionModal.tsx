@@ -32,7 +32,7 @@ export default function TourSelectionModal() {
       >
         <div class={styles.header}>
           <div>
-            <h2>Take a Tour</h2>
+            <h2>Tours</h2>
             <p>
               {completedCount()}/{totalCount()} tours completed
             </p>

@@ -312,7 +312,7 @@ describe('an account of a type this build does not know', () => {
     await db.put('accounts', { ...(await db.get('accounts', EVERYDAY)), type: 'sock_drawer' })
     await mountPage()
     const card = host.querySelector<HTMLElement>('[data-test-id="account-card"]')!
-    expect(card.querySelector('[data-test-id="account-type"]')?.textContent).toBe('account')
+    expect(card.querySelector('[data-test-id="account-type"]')?.textContent).toBe('Other account')
 
     await openEdit('Everyday')
     type(field('Account Name'), 'Sock drawer')
@@ -375,7 +375,9 @@ describe('a credit card and an overdraft', () => {
       )!
     const icon = (name: string) =>
       card(name).querySelector('[data-test-id="account-icon"] path')?.getAttribute('d')
-    expect(card('Visa').querySelector('[data-test-id="account-type"]')?.textContent).toBe('credit')
+    expect(card('Visa').querySelector('[data-test-id="account-type"]')?.textContent).toBe(
+      'Credit Card'
+    )
     expect(new Set([icon('Visa'), icon('Wallet'), icon('Everyday')]).size).toBe(3)
   })
 

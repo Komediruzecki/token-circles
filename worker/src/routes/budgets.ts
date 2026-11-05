@@ -16,6 +16,7 @@ import { getProfileId, getProfileIds } from '../profile';
 import { accept, HttpError, refuse } from '../http';
 import * as db from '../db';
 import { localMonth, localNow } from '../local-date';
+import { formatDate } from '../../../shared/dateFormat';
 
 // Port of backend/routes/budgets.js + backend/repositories/budgetsRepo.js.
 // Both the CRUD routes and the analytical/zero-based/forecast endpoints are
@@ -668,7 +669,7 @@ budgetsRoutes.get('/api/budgets/forecast', requireAuth, async (c) => {
     const date = new Date(now.getFullYear(), now.getMonth() + i, 1);
     forecastMonths.push({
       month: date.toISOString().slice(0, 7),
-      label: date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+      label: formatDate(date, 'month'),
     });
   }
 
@@ -740,10 +741,7 @@ budgetsRoutes.get('/api/budgets/forecast', requireAuth, async (c) => {
 
   const history = historyData.map((h) => ({
     month: h.month,
-    label: new Date(h.month + '-01').toLocaleDateString('en-US', {
-      month: 'short',
-      year: 'numeric',
-    }),
+    label: formatDate(h.month, 'month'),
     total_budget: h.total_budget || 0,
     total_spent: h.total_spent || 0,
     adherence:

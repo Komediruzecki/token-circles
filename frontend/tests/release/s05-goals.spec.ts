@@ -51,19 +51,18 @@ async function expectUndated(page: Page, name: string): Promise<void> {
   for (const text of await rings.allInnerTexts()) expect(text).not.toMatch(BY_MONTH)
 }
 
-/** The card shows the date as the page formats it, and the full ring says "by <Mon YYYY>". */
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+/**
+ * The card writes the date day first ("23 May 2027"), and the full ring says "by May 2027". Read
+ * from the stored YYYY-MM-DD as written, with no clock.
+ */
 async function expectDated(page: Page, name: string, iso: string): Promise<void> {
-  const shown = await page.evaluate(
-    (d) => ({
-      card: new Date(d).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-      }),
-      ring: new Date(d).toLocaleDateString(undefined, { month: 'short', year: 'numeric' }),
-    }),
-    iso
-  )
+  const [year, month, day] = iso.slice(0, 10).split('-').map(Number)
+  const shown = {
+    card: `${day} ${MONTHS[month - 1]} ${year}`,
+    ring: `${MONTHS[month - 1]} ${year}`,
+  }
   await expect(goalCard(page, name).getByTestId('goal-date')).toContainText(shown.card)
   const rings = goalRings(page, name)
   await expect(rings).toHaveCount(2)

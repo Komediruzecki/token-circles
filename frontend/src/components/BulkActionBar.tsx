@@ -156,12 +156,17 @@ export default function BulkActionBar(props: BulkActionBarProps) {
         >
           <div
             class={styles.modal}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="bulk-category-heading"
             onClick={(e) => {
               e.stopPropagation()
             }}
           >
             <div class={styles.modalHeader}>
-              <div class={styles.modalTitle}>Change Category</div>
+              <div id="bulk-category-heading" class={styles.modalTitle}>
+                Change Category
+              </div>
               <button
                 class={styles.modalClose}
                 onClick={() => {
@@ -234,12 +239,17 @@ export default function BulkActionBar(props: BulkActionBarProps) {
         >
           <div
             class={styles.modal}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="bulk-type-heading"
             onClick={(e) => {
               e.stopPropagation()
             }}
           >
             <div class={styles.modalHeader}>
-              <div class={styles.modalTitle}>Change Type</div>
+              <div id="bulk-type-heading" class={styles.modalTitle}>
+                Change Type
+              </div>
               <button
                 class={styles.modalClose}
                 onClick={() => {
@@ -304,13 +314,18 @@ export default function BulkActionBar(props: BulkActionBarProps) {
         >
           <div
             class={styles.modal}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="bulk-tag-heading"
             data-test-id="bulk-tag-modal"
             onClick={(e) => {
               e.stopPropagation()
             }}
           >
             <div class={styles.modalHeader}>
-              <div class={styles.modalTitle}>Tag transactions</div>
+              <div id="bulk-tag-heading" class={styles.modalTitle}>
+                Tag transactions
+              </div>
               <button
                 class={styles.modalClose}
                 onClick={() => {

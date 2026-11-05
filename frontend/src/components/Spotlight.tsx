@@ -32,13 +32,16 @@ const PHONE_TIP_INSET = 16
  *
  * Centring a target taller than the screen opened it at its middle, with its heading and first
  * rows scrolled off the top: Retirement's assumptions, the category list and, on a phone,
- * Holdings. 'start' shows where it begins. The room is what is left under the root's
- * scroll-padding-top, the strip a phone keeps clear for the menu button (Layout.module.css):
- * scrollIntoView stops below it, so that strip is no room to show the target in.
+ * Holdings. 'start' shows where it begins. The room is what is left between the root's
+ * scroll-padding-top, the strip a phone keeps clear for the menu button, and its
+ * scroll-padding-bottom, the one kept for the quick add button (Layout.module.css):
+ * scrollIntoView stops inside them, so those strips are no room to show the target in.
  */
 function revealBlock(targetHeight: number): ScrollLogicalPosition {
-  const padTop = parseFloat(window.getComputedStyle(document.documentElement).scrollPaddingTop) || 0
-  return targetHeight > window.innerHeight - padTop ? 'start' : 'center'
+  const root = window.getComputedStyle(document.documentElement)
+  const padTop = parseFloat(root.scrollPaddingTop) || 0
+  const padBottom = parseFloat(root.scrollPaddingBottom) || 0
+  return targetHeight > window.innerHeight - padTop - padBottom ? 'start' : 'center'
 }
 
 export default function Spotlight() {

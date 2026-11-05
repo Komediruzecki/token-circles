@@ -77,7 +77,8 @@ export const dashboard = [
       // Against February.
       momIncomeDelta: 100,
       momExpenseDelta: 200.5,
-      momBalanceDelta: -100.5,
+      // How far the balances moved in March: no entry here names an account, so none did.
+      momBalanceDelta: 0,
     });
     expect(march.recentTransactions.map((t: Json) => t.description)).toEqual([
       'Salary',
@@ -106,13 +107,22 @@ export const dashboard = [
     // The bills due in the next 30 days.
     expect(march.upcomingBills.map((b: Json) => b.name)).toEqual(['Water']);
 
-    // A range, and all time.
+    // A range, and all time. Their totals cover the window, and no window before it is summed,
+    // so there is no change to report: the month before the window's first month is not one.
+    // The Dashboard sends its focus month along with a range, and shows a delta only when one
+    // comes back.
+    const noChange = { momIncomeDelta: null, momExpenseDelta: null, momBalanceDelta: null };
     expect(
-      await read(api, expect, '/api/dashboard?date_from=2025-03-10&date_to=2025-03-22')
-    ).toMatchObject({ totalIncome: 0, totalExpenses: 100.5 });
-    expect(await read(api, expect, '/api/dashboard?all=true')).toMatchObject({
+      await read(
+        api,
+        expect,
+        '/api/dashboard?month=3&year=2025&date_from=2025-03-10&date_to=2025-03-22'
+      )
+    ).toMatchObject({ totalIncome: 0, totalExpenses: 100.5, ...noChange });
+    expect(await read(api, expect, '/api/dashboard?month=1&year=1970&all=true')).toMatchObject({
       totalIncome: 4900,
       totalExpenses: 1600.5,
+      ...noChange,
     });
 
     // The other profile sees its own; both profiles selected, both.
@@ -130,6 +140,86 @@ export const dashboard = [
       1005
     );
   }),
+
+  scenario(
+    'the change under Net Worth is how far its balances moved that month',
+    async (api, expect) => {
+      // Net Worth is the sum of the balances, so its change over a month is what that month's
+      // entries did to them: pay in, spending out, a transfer between two of the accounts nothing,
+      // and an entry that names no account nothing. It was the month's income less spending set
+      // against the month before's, a change of a change.
+      const everyday = await account(api, expect, 'Everyday', 1000);
+      const savings = await account(api, expect, 'Savings', 500);
+      const entry = (fields: Record<string, unknown>) => addTransaction(api, expect, fields);
+      await entry({ description: 'Rent', amount: 700, date: '2025-02-01', account_id: everyday });
+      await entry({
+        description: 'Salary',
+        type: 'income',
+        amount: 2400,
+        date: '2025-02-25',
+        account_id: everyday,
+      });
+      await entry({ description: 'Rent', amount: 800, date: '2025-03-01', account_id: everyday });
+      await entry({
+        description: 'Groceries',
+        amount: 45.5,
+        date: '2025-03-10',
+        account_id: savings,
+      });
+      await entry({ description: 'Cash', amount: 20, date: '2025-03-15' });
+      await entry({
+        description: 'Salary',
+        type: 'income',
+        amount: 2500,
+        date: '2025-03-25',
+        account_id: everyday,
+      });
+      await entry({
+        description: 'To savings',
+        type: 'transfer',
+        amount: 300,
+        date: '2025-03-26',
+        account_id: everyday,
+        transfer_account_id: savings,
+      });
+      await entry({
+        description: 'Groceries',
+        amount: 100,
+        date: '2025-04-02',
+        account_id: everyday,
+      });
+      const theirs = await account(api.other, expect, 'Theirs', 5);
+      await addTransaction(api.other, expect, {
+        description: 'Fuel',
+        amount: 60,
+        date: '2025-03-10',
+        account_id: theirs,
+      });
+
+      const month = (m: number, who: ContractApi = api) =>
+        read(who, expect, `/api/dashboard?month=${m}&year=2025`);
+      // Today: Everyday 4000, Savings 754.5.
+      expect(await month(2)).toMatchObject({ balance: 4754.5, momBalanceDelta: 1700 });
+      // 2500 in, 800 and 45.5 out. The old figure was -65.5.
+      expect(await month(3)).toMatchObject({ balance: 4754.5, momBalanceDelta: 1654.5 });
+      expect(await month(4)).toMatchObject({ momBalanceDelta: -100 });
+      expect(await month(5)).toMatchObject({ momBalanceDelta: 0 });
+      // A profile's own accounts; both profiles, all of them.
+      expect(await month(3, api.other)).toMatchObject({ balance: -55, momBalanceDelta: -60 });
+      expect(await month(3, api.household)).toMatchObject({
+        balance: 4699.5,
+        momBalanceDelta: 1594.5,
+      });
+      // A range has no change, like the figures beside it.
+      expect(
+        await read(
+          api,
+          expect,
+          '/api/dashboard?month=3&year=2025&date_from=2025-03-01&date_to=2025-03-31'
+        )
+      ).toMatchObject({ momBalanceDelta: null });
+    }
+  ),
 
   scenario("the dashboard's charts, and the net worth month by month", async (api, expect) => {
     // The base currency is chosen before any money is entered; after that it is locked.

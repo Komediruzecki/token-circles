@@ -83,8 +83,17 @@ export default function ReconciliationModal(props: ReconciliationModalProps) {
     document.removeEventListener('keydown', handleKeyDown)
   })
 
+  // Closed, it is hidden as well as out of the layout. The update reload waits while a dialog is
+  // open and reads the dialog's own computed style (appVersion.ts userIsMidEntry): visibility
+  // reaches the dialog from here, display does not, and with display alone an update would wait
+  // for good once Transactions had been opened.
   return (
-    <div style={{ display: props.isOpen() ? 'block' : 'none' }}>
+    <div
+      style={{
+        display: props.isOpen() ? 'block' : 'none',
+        visibility: props.isOpen() ? undefined : 'hidden',
+      }}
+    >
       <div
         style={{
           position: 'fixed',
@@ -97,7 +106,11 @@ export default function ReconciliationModal(props: ReconciliationModalProps) {
         }}
         onClick={props.onClose}
       >
+        {/* Modal only while open: it stays in the page, hidden, when closed. */}
         <div
+          role="dialog"
+          aria-modal={props.isOpen() ? 'true' : undefined}
+          aria-labelledby="reconciliation-heading"
           style={{
             background: 'var(--card-bg)',
             'border-radius': 'var(--radius)',
@@ -119,7 +132,12 @@ export default function ReconciliationModal(props: ReconciliationModalProps) {
               'margin-bottom': '20px',
             }}
           >
-            <h2 style={{ margin: 0, 'font-size': '18px', 'font-weight': 700 }}>Reconciliation</h2>
+            <h2
+              id="reconciliation-heading"
+              style={{ margin: 0, 'font-size': '18px', 'font-weight': 700 }}
+            >
+              Reconciliation
+            </h2>
             <button
               onClick={props.onClose}
               style={{

@@ -128,6 +128,9 @@ export default function SupportContact(props: { label?: string; prefillEmail?: s
           }}
         >
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="support-contact-heading"
             style={{
               width: '100%',
               'max-width': '420px',
@@ -138,7 +141,10 @@ export default function SupportContact(props: { label?: string; prefillEmail?: s
               'text-align': 'left',
             }}
           >
-            <h3 style={{ margin: '0 0 4px', 'font-size': '18px', color: 'var(--text)' }}>
+            <h3
+              id="support-contact-heading"
+              style={{ margin: '0 0 4px', 'font-size': '18px', color: 'var(--text)' }}
+            >
               Contact support
             </h3>
             <Show
