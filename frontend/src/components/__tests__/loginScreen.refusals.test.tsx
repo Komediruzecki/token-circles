@@ -396,6 +396,20 @@ describe('creating an account', () => {
     expect(sent).toEqual([])
   })
 
+  it('refuses an address with markup in it, in the words of any address that is not one, and sends nothing', async () => {
+    await mount()
+    button('Create one').click()
+    await settle()
+    type(email(), '<b>x</b>@example.test')
+    type(password(), 'a-new-password')
+    await submit()
+
+    expect(marked(email())).toBe(true)
+    expect(describedBy(email())).toEqual([SAY.emailFormat])
+    expect(document.activeElement).toBe(email())
+    expect(sent).toEqual([])
+  })
+
   it('says on Check your inbox where the link signs in by itself, and where it asks for the password', async () => {
     answers['/api/auth/register'] = () => json({ ok: true })
     await mount()

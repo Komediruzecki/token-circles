@@ -179,6 +179,38 @@ All notable changes to Token Circles are documented here. The format is based on
   action, the box, a held press, a refused send), and clears the waiting link it notes;
   "draws the widget for its form" fails without the action. `finishSignUp.test.tsx` "marks an
   address not in the format" fails before the change.
+- **An address the app keeps and mails holds no control characters, format characters or angle
+  brackets** (`STORED_EMAIL_PATTERN` and `storedEmailProblem` in `shared/signInSchema.ts`). The
+  older `EMAIL_PATTERN`, `/^[^@\s]+@[^@\s]+\.[^@\s]+$/`, let `"a\x1b]0;T\x07@example.test"` and
+  `"<b>x</b>@example.test"` through. The mail templates and the app escape both, so nothing
+  rendered wrong, but neither belongs in a stored address. The new pattern is the old one with
+  `<`, `>`, `\p{Cc}` (C0, DEL, C1) and `\p{Cf}` (bidi overrides and isolates, zero-width
+  characters, the soft hyphen) refused in every part, under the `u` flag; plus addressing, dots,
+  hyphens, apostrophes, digits, subdomains and letters in any script still pass. A refusal is
+  the answer any badly formed address gets: `emailFormat` with a 400 on registration and support,
+  and the email change's own 400 `A valid email is required`.
+  - **Stored, so strict:** `registrationProblems` (POST `/api/auth/register` and the sign-up form,
+    through `signInChecks('register')`); `requestEmailChange` in `worker/src/email-change.ts` (PUT
+    `/api/notifications/settings`), which had its own copy of the old pattern, `EMAIL_RE`, and now
+    imports the shared one; `supportProblems` (POST `/api/support/contact` and `SupportContact`),
+    whose reply address is not stored but goes into the relay's Reply-To and gets the
+    acknowledgement mail.
+  - **Looked up, so lenient as before:** `emailProblem` and `addressProblems` (forgot password,
+    confirm-link resend, sign-in code request, and the sign-in, forgot and confirm modes of the
+    form, `EmailCodeLogin` and `FinishSignUp`), `emailCodeProblems` (sign-in code verify), and
+    `signInProblems` (password sign-in, no format at all). An account created before this change
+    with an address the strict pattern refuses can still sign in, ask for a reset link and get a
+    sign-in code; refusing it there would lock it out with no way to move to another address,
+    since the email change needs a session.
+  - **Tests:** `frontend/src/core/__tests__/signInSchema.test.ts` (the two examples and one address
+    per refused kind, 13 real-shaped addresses accepted, the lookup pattern unchanged and still
+    taking them), `worker/test/sign-in-refusals.test.ts` (registration refuses each kind with the
+    usual 400 and stores nothing; an account seeded with each still signs in and gets a reset
+    link; support refuses markup), `worker/test/email-change.test.ts` (each kind refused like any
+    non-address, no mail, no link), `loginScreen.refusals.test.tsx` (the sign-up form marks markup
+    with `emailFormat` and sends nothing). The email change test that saved `<b>new</b>@example.com`
+    to check the notice escapes it now expects the 400 and checks the escaping on
+    `renderEmailChangeNotice` directly.
 
 ### Mails
 

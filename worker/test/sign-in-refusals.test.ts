@@ -10,6 +10,8 @@ import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { hashPassword } from '../src/auth';
 import { SIGN_IN_MESSAGES as SAY } from '../../shared/signInSchema';
+import { fetchSettled } from './helpers/after-answer';
+import { REFUSED_WHEN_STORED, TAKEN_BY_LOOKUPS } from './helpers/refused-addresses';
 
 const BASE = 'https://api.example.com';
 const EMAIL = 'refusals@example.com';
@@ -65,6 +67,21 @@ describe('creating an account', () => {
     });
   });
 
+  for (const [kind, address] of REFUSED_WHEN_STORED) {
+    it(`refuses an address with ${kind} as it refuses any address that is not one, and stores nothing`, async () => {
+      expect(
+        await answer(await post('/api/auth/register', { email: address, password: PASSWORD }))
+      ).toEqual({
+        status: 400,
+        body: { error: SAY.emailFormat, fields: { email: SAY.emailFormat } },
+      });
+      const stored = await env.DB.prepare('SELECT COUNT(*) AS n FROM users WHERE email = ?')
+        .bind(address)
+        .first<{ n: number }>();
+      expect(stored?.n).toBe(0);
+    });
+  }
+
   it('names both, in the order of the form', async () => {
     expect(await answer(await post('/api/auth/register', {}))).toEqual({
       status: 400,
@@ -111,6 +128,58 @@ describe('asking for a reset link or a sign-in code', () => {
         status: 400,
         body: { error: SAY.emailFormat, fields: { email: SAY.emailFormat } },
       });
+    });
+  }
+});
+
+describe('an account whose address the stored check would refuse now', () => {
+  // Created before the check, as the lookup pattern let them be: each still signs in and resets.
+  const seedAt = async (address: string) =>
+    env.DB.prepare(
+      "INSERT INTO users (email, password_hash, email_verified, auth_provider) VALUES (?, ?, 1, 'password')"
+    )
+      .bind(address, await hashPassword(PASSWORD))
+      .run();
+
+  beforeEach(async () => {
+    for (const [, address] of TAKEN_BY_LOOKUPS) {
+      await env.DB.prepare('DELETE FROM users WHERE email = ?').bind(address).run();
+    }
+  });
+
+  for (const [kind, address] of TAKEN_BY_LOOKUPS) {
+    it(`signs in with an address with ${kind}, as an ordinary address does`, async () => {
+      const ordinary = await post('/api/auth/login', { email: EMAIL, password: PASSWORD });
+      await seedAt(address);
+      const res = await post('/api/auth/login', { email: address, password: PASSWORD });
+      expect(res.status).toBe(200);
+      expect(ordinary.status).toBe(200);
+      expect(Object.keys((await res.json()) as object).sort()).toEqual(
+        Object.keys((await ordinary.json()) as object).sort()
+      );
+    });
+
+    it(`answers a wrong password for an address with ${kind} as it always has`, async () => {
+      await seedAt(address);
+      expect(
+        await answer(await post('/api/auth/login', { email: address, password: 'a-wrong-one' }))
+      ).toEqual({ status: 401, body: { error: 'Invalid email or password' } });
+    });
+
+    it(`sends a reset link to an address with ${kind}, with the answer every address gets`, async () => {
+      await seedAt(address);
+      const res = await fetchSettled(`${BASE}/api/auth/forgot-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'CF-Connecting-IP': '10.78.0.1' },
+        body: JSON.stringify({ email: address }),
+      });
+      expect(await answer(res)).toEqual({ status: 200, body: { ok: true } });
+      const minted = await env.DB.prepare(
+        'SELECT COUNT(*) AS n FROM password_resets r JOIN users u ON u.id = r.user_id WHERE u.email = ?'
+      )
+        .bind(address)
+        .first<{ n: number }>();
+      expect(minted?.n).toBe(1);
     });
   }
 });
@@ -162,6 +231,20 @@ describe('writing to support', () => {
         error: `${SAY.emailFormat} ${SAY.supportMessage}`,
         fields: { email: SAY.emailFormat, message: SAY.supportMessage },
       },
+    });
+  });
+
+  it('refuses a reply address with markup in it, in the words of any address that is not one', async () => {
+    expect(
+      await answer(
+        await post('/api/support/contact', {
+          email: '<b>x</b>@example.test',
+          message: 'Hello, a question.',
+        })
+      )
+    ).toEqual({
+      status: 400,
+      body: { error: SAY.emailFormat, fields: { email: SAY.emailFormat } },
     });
   });
 
