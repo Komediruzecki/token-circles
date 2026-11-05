@@ -19,6 +19,7 @@
 import { expect, test } from '@playwright/test'
 import { randomBytes } from 'node:crypto'
 import { articleUrl } from '../../shared/articles'
+import { BANK_IMPORT_HASH } from '../../shared/importRoute'
 import { bootApp, openSignIn } from './boot'
 import { sql } from './db'
 import { E2E_API_BASE, E2E_API_PORT, E2E_BASE, E2E_MAIL_BASE, E2E_PORT } from './e2e-constants'
@@ -33,7 +34,7 @@ const machine = timeMachine({ apiBase: E2E_API_BASE, mailBase: E2E_MAIL_BASE })
 // eslint-disable-next-line sonarjs/no-hardcoded-passwords -- local throwaway accounts
 const PASSWORD = 'first-week-journey-1'
 const CONFIRM = 'Confirm your email for Token Circles'
-const WELCOME = 'Token Circles is ready for your first statement'
+const WELCOME = 'Welcome to Token Circles: start with a year'
 const DAY2 = 'How to get a year of statements out of your bank'
 const DAY7 = 'Your first week in Token Circles'
 
@@ -183,7 +184,7 @@ test.describe('the first week of a new account', () => {
       await machine.fire()
       const day2 = await machine.waitForMail(email, DAY2, { after: before })
       const links = machine.links(day2)
-      expect(links).toContain(`${APP_LINK}/#import`)
+      expect(links).toContain(`${APP_LINK}/${BANK_IMPORT_HASH}`)
       expect(links).toContain(articleUrl('bank-year'))
       const stop = links.find((l) => l.startsWith(`${API_LINK}/api/notifications/unsubscribe?`))
       expect(stop, 'the day-2 mail has its stop link').toBeTruthy()
