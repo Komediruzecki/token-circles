@@ -86,7 +86,7 @@
   border: none;
   background: none;
   cursor: pointer;
-  color: var(--primary);
+  color: var(--primary-text);
   font: inherit;
   font-weight: 600;
   text-align: left;
@@ -96,14 +96,14 @@
   color: var(--text-secondary);
 }
 
-/* Check your inbox on a phone: its button and its link a fingertip tall (review D6). This screen
-   first: the other sign-in steps follow with the accessibility pass. */
+/* Every sign-in step on a phone: its button and its links a fingertip tall (review D6). */
 @media (max-width: 768px), (pointer: coarse) {
-  .inbox .submit {
+  .submit {
     min-height: 44px;
   }
 
-  .inbox .link {
+  .link {
     min-height: 44px;
+    min-width: 44px;
   }
 }

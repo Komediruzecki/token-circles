@@ -91,7 +91,7 @@
 
 .panelMore {
   font-size: 12px;
-  color: var(--primary);
+  color: var(--primary-text);
   text-decoration: none;
   white-space: nowrap;
 }
@@ -387,4 +387,19 @@
   font-variant-numeric: tabular-nums;
   font-size: 12.5px;
   white-space: nowrap;
+}
+
+/* A card's link ("November 2026 →", "View all →") was 18px tall on a phone (review D2). It keeps
+   its place in the header line and takes a 44px row of its own height to be tapped by. The year
+   card's "2026 →" is narrower than 44px in some fonts (42px in CI's), so the box has a 44px floor
+   across too, with the words kept at its right edge. */
+@media (max-width: 768px), (pointer: coarse) {
+  .panelMore {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    min-height: 44px;
+    min-width: 44px;
+    margin: -13px 0;
+  }
 }

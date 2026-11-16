@@ -28,7 +28,7 @@
   line-height: 1.45;
 }
 
-/* A row that is the switch's label (wholeRow): the whole of it takes a tap (review D11). */
+/* Every row is the switch's label: the whole of it takes a tap (review D11). */
 .rowTarget {
   cursor: pointer;
 }

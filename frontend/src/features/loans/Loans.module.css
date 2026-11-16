@@ -62,7 +62,7 @@
 
 .button-outline {
   border-color: var(--primary);
-  color: var(--primary);
+  color: var(--primary-text);
   background: transparent;
 }
 
@@ -111,7 +111,7 @@
 }
 
 .link {
-  color: var(--primary);
+  color: var(--primary-text);
   text-decoration: none;
   font-weight: 500;
 }

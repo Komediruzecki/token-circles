@@ -185,7 +185,9 @@ export default function ReconciliationModal(props: ReconciliationModalProps) {
                 >
                   Reconciled
                 </div>
-                <div style={{ 'font-size': '20px', 'font-weight': 700, color: 'var(--success)' }}>
+                <div
+                  style={{ 'font-size': '20px', 'font-weight': 700, color: 'var(--success-text)' }}
+                >
                   {summary()!.reconciled_count}
                 </div>
               </div>
@@ -206,7 +208,9 @@ export default function ReconciliationModal(props: ReconciliationModalProps) {
                 >
                   Unreconciled
                 </div>
-                <div style={{ 'font-size': '20px', 'font-weight': 700, color: 'var(--warning)' }}>
+                <div
+                  style={{ 'font-size': '20px', 'font-weight': 700, color: 'var(--warning-text)' }}
+                >
                   {summary()!.unreconciled_count}
                 </div>
               </div>

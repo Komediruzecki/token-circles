@@ -190,7 +190,9 @@ test.describe('on a phone', () => {
 test.describe('the bar on a phone', () => {
   test.use({ viewport: { width: 390, height: 780 } })
 
-  test('lays out in two rows, with "All" beside the steppers', async ({ page }) => {
+  // "All" used to go up beside the steppers, 33px wide and apart from the other pills (review D2).
+  // It stays in the pill row now: the steppers have the first row, the six pills the second.
+  test('lays out in two rows: the steppers, then all six pills', async ({ page }) => {
     await login(page)
     await navigateToRoute(page, 'budgets')
     const bar = barIn(page, 'budgets-page')
@@ -206,13 +208,11 @@ test.describe('the bar on a phone', () => {
       thisMonth.boundingBox(),
     ])
 
-    // "All" shares the steppers' row: same vertical centre, and to their right.
+    // "All" shares the other pills' row, to their right, below the steppers.
     const centre = (b: { y: number; height: number }) => b.y + b.height / 2
-    expect(Math.abs(centre(allBox!) - centre(step!))).toBeLessThan(12)
-    expect(allBox!.x).toBeGreaterThan(step!.x)
-
-    // The remaining pills are on a second row, below both.
-    expect(monthBox!.y).toBeGreaterThan(allBox!.y + allBox!.height - 4)
+    expect(Math.abs(centre(allBox!) - centre(monthBox!))).toBeLessThan(4)
+    expect(allBox!.x).toBeGreaterThan(monthBox!.x)
+    expect(monthBox!.y).toBeGreaterThan(step!.y + step!.height - 4)
 
     // Exactly two rows: count the distinct vertical centres of every control in the bar.
     const rows = await bar.evaluate((root: HTMLElement) => {

@@ -103,7 +103,7 @@
   font-weight: 600;
 }
 .retirement-page .detail-value.positive {
-  color: var(--income);
+  color: var(--income-text);
 }
 .retirement-page .retirement-content {
   display: grid;
@@ -679,7 +679,7 @@
 
 .mode-active {
   background: var(--primary-bg);
-  color: var(--primary);
+  color: var(--primary-text);
 }
 
 .mode-hint {

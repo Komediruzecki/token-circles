@@ -362,7 +362,7 @@ export function ImportPreviewStep(props: { flow: ImportFlow; embedded?: boolean 
               </button>
             </Show>
             <Show when={flow.dateSkippedCount() > 0}>
-              <span style={{ 'font-size': '13px', color: 'var(--warning, #f59e0b)' }}>
+              <span style={{ 'font-size': '13px', color: 'var(--warning-text)' }}>
                 {flow.dateSkippedCount()} of {total()} rows outside this range will be skipped
               </span>
             </Show>
@@ -455,13 +455,16 @@ export function ImportPreviewStep(props: { flow: ImportFlow; embedded?: boolean 
           <thead>
             <tr>
               <th class={styles.selectCol}>
-                <input
-                  type="checkbox"
-                  checked={selectableTotal() > 0 && selected() === selectableTotal()}
-                  onChange={(e) => {
-                    flow.toggleAll(e.currentTarget.checked)
-                  }}
-                />
+                <label class={styles.selectHit}>
+                  <input
+                    type="checkbox"
+                    aria-label="Select all rows"
+                    checked={selectableTotal() > 0 && selected() === selectableTotal()}
+                    onChange={(e) => {
+                      flow.toggleAll(e.currentTarget.checked)
+                    }}
+                  />
+                </label>
               </th>
               <For each={headers()}>{(h) => <th>{h}</th>}</For>
             </tr>
@@ -475,16 +478,24 @@ export function ImportPreviewStep(props: { flow: ImportFlow; embedded?: boolean 
                   flow.previewValidationIssues().find((issue) => issue.index === actualIndex)
                 // The earlier row this one duplicates, summarised (date · description · amount)
                 // from the mapped columns, so the user can see WHY it's flagged.
-                const counterpart = () => {
-                  const mi = flow.duplicateMatches().get(actualIndex) ?? -1
-                  if (mi < 0) return null
-                  const r = flow.currentRows()[mi]
+                const summarise = (index: number) => {
+                  const r = flow.currentRows()[index]
                   const m = flow.columnMapping()
-                  const summary = [m.date, m.description, m.amount]
+                  return [m.date, m.description, m.amount]
                     .map((ci) => (ci !== undefined ? r?.[ci] : undefined))
                     .filter((v): v is string => v !== undefined && v.trim() !== '')
                     .join(' · ')
-                  return { rowNo: sourceRowNumber(mi), summary }
+                }
+                const counterpart = () => {
+                  const mi = flow.duplicateMatches().get(actualIndex) ?? -1
+                  if (mi < 0) return null
+                  return { rowNo: sourceRowNumber(mi), summary: summarise(mi) }
+                }
+                // A screen reader hears which row the box imports: its row number in the file
+                // and the same date, description and amount summary the duplicate hint uses.
+                const rowName = () => {
+                  const summary = summarise(actualIndex)
+                  return `Import row ${sourceRowNumber(actualIndex)}${summary ? `: ${summary}` : ''}`
                 }
                 const dupTitle = () => {
                   if (!isDuplicate()) return undefined
@@ -503,14 +514,17 @@ export function ImportPreviewStep(props: { flow: ImportFlow; embedded?: boolean 
                     title={validationIssue()?.reason || dupTitle()}
                   >
                     <td class={styles.selectCol}>
-                      <input
-                        type="checkbox"
-                        checked={flow.selectedRows().has(actualIndex)}
-                        disabled={Boolean(validationIssue())}
-                        onChange={() => {
-                          flow.toggleRow(actualIndex)
-                        }}
-                      />
+                      <label class={styles.selectHit}>
+                        <input
+                          type="checkbox"
+                          aria-label={rowName()}
+                          checked={flow.selectedRows().has(actualIndex)}
+                          disabled={Boolean(validationIssue())}
+                          onChange={() => {
+                            flow.toggleRow(actualIndex)
+                          }}
+                        />
+                      </label>
                       <Show when={isDuplicate()}>
                         <span class={styles.dupBadge}>dup</span>
                         <Show when={counterpart()}>

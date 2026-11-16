@@ -13,19 +13,20 @@
   font-weight: 500;
 }
 
+/* A solid badge takes a fill token and --on-fill, which read 4.5:1 together in each theme. */
 .badge-over {
-  background: var(--expense);
-  color: white;
+  background: var(--danger-fill);
+  color: var(--on-fill);
 }
 
 .badge-warning {
-  background: #f59e0b;
-  color: white;
+  background: var(--warning-fill);
+  color: var(--on-fill);
 }
 
 .badge-ok {
-  background: var(--success);
-  color: white;
+  background: var(--success-fill);
+  color: var(--on-fill);
 }
 
 .badge-income {
@@ -49,13 +50,13 @@
 }
 
 .badgeSuccess {
-  background: var(--success);
-  color: #fff;
+  background: var(--success-fill);
+  color: var(--on-fill);
 }
 
 .badgeInfo {
-  background: var(--info, #3b82f6);
-  color: #fff;
+  background: var(--info-fill);
+  color: var(--on-fill);
 }
 
 .badgeDefault {

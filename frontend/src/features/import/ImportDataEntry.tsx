@@ -156,7 +156,10 @@ export function ImportDataEntry(props: {
                 shown beside the sample, so "optional" never reads as "mysterious".
               */}
               <div class={styles.tableWrapper} style={{ 'margin-bottom': 0 }}>
-                <table class={styles.previewTable} data-test-id="import-expected-columns">
+                <table
+                  class={`${styles.previewTable} ${styles.expectedColumns}`}
+                  data-test-id="import-expected-columns"
+                >
                   <thead>
                     <tr>
                       <th>Column</th>

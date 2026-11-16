@@ -99,3 +99,18 @@
     transform: translateY(0);
   }
 }
+
+/* On a phone the glyph keeps its 24px look and its hit area grows to 44px around it (review D2):
+   a ring of 10px the tap still lands on, drawn by nothing. */
+@media (max-width: 768px), (pointer: coarse) {
+  .trigger {
+    position: relative;
+  }
+
+  .trigger::before {
+    content: '';
+    position: absolute;
+    inset: -10px;
+    border-radius: 50%;
+  }
+}

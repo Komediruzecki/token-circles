@@ -152,9 +152,9 @@
   transition: all 0.15s;
 }
 .transactions-page .type-selector .expense.active {
-  border-color: var(--expense);
-  background: var(--expense);
-  color: #fff;
+  border-color: var(--danger-fill);
+  background: var(--danger-fill);
+  color: var(--on-fill);
 }
 .transactions-page .type-selector .income {
   flex: 1;
@@ -166,9 +166,9 @@
   transition: all 0.15s;
 }
 .transactions-page .type-selector .income.active {
-  border-color: var(--income);
-  background: var(--income);
-  color: #fff;
+  border-color: var(--success-fill);
+  background: var(--success-fill);
+  color: var(--on-fill);
 }
 .transactions-page .type-selector .transfer {
   flex: 1;

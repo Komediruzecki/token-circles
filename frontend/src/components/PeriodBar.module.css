@@ -269,39 +269,36 @@
 
 /* Compact pills on narrow screens: swap full labels for the short ones. */
 /*
- * Two rows on a phone, not three.
+ * Two rows on a phone: the steppers, then all six pills.
  *
- * Six pills at `flex: 1 1 auto` wrap to two lines and strand the sixth alone, where
- * `justify-content: space-between` then stretches it across the whole width -- an entire row
- * spent on "All". The trailing pill goes up onto the stepper row instead, which has spare
- * width beside the steppers, and the remaining five divide one row evenly.
+ * "All" used to go up onto the stepper row, which left it 33px wide and apart from the other
+ * five (review D2). It stays in the pill row now, and the six divide that row evenly.
  */
 @media (max-width: 640px) {
   .bar {
-    column-gap: 8px;
+    column-gap: 6px;
     row-gap: 8px;
   }
   .stepperGroup {
-    /* Takes the space the trailing pill does not, rather than the two splitting it evenly. */
-    flex: 1 1 auto;
+    /* A row of its own, so the pills below it share theirs. */
+    flex: 1 1 100%;
     min-width: 0;
-    order: 1;
-  }
-  .pillsTrailing {
-    order: 2;
-    flex: 0 0 auto;
   }
   .pills {
-    order: 3;
-    /* Full width forces the wrap: without it the five try to squeeze onto the stepper row. */
-    width: 100%;
+    /* Five of the six pills; the trailing one is the sixth, and the gap between the two groups
+       matches the gap inside this one. */
+    flex: 5 1 0;
+    min-width: 0;
     margin-left: 0;
     flex-wrap: nowrap;
-    justify-content: space-between;
+  }
+  .pillsTrailing {
+    flex: 1 1 0;
+    min-width: 0;
   }
   .pill {
     /* Narrower padding buys the text a few more pixels before the ellipsis does. */
-    padding: 6px 8px;
+    padding: 6px 4px;
     flex: 1 1 0;
     min-width: 0;
     text-align: center;
@@ -311,5 +308,19 @@
   }
   .pillShort {
     display: inline;
+  }
+}
+
+/* A fingertip on a phone (review D2): the arrows were 34x34, the month 34px tall and the pills 33. */
+@media (max-width: 768px), (pointer: coarse) {
+  .step {
+    width: 44px;
+    height: 44px;
+  }
+  .label {
+    height: 44px;
+  }
+  .pill {
+    min-height: 44px;
   }
 }

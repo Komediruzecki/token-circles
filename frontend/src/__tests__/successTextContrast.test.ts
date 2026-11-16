@@ -10,7 +10,7 @@
  *
  * A badge's toast has the same small green text: its "See badges" or "See my prints" button, 12px
  * on the toast's surface, was 3.7:1 in `--success` (review D1). Toast.module.css sets it in
- * `--success-text` too.
+ * `--toast-accent-text`, which a success toast points at `--success-text`.
  */
 /* eslint-disable security/detect-non-literal-fs-filename -- the paths are the theme files and the
    one stylesheet named below, not anything supplied from outside this file. */
@@ -93,7 +93,8 @@ describe("a met circle check's word", () => {
 describe("a success toast's button", () => {
   it('is set in --success-text, and the icon and border keep --success', () => {
     const rule = (selector: string) => ruleIn(TOAST_CSS, selector)
-    expect(rule('.toast.success .actionBtn')).toMatch(/color:\s*var\(--success-text\)/)
+    expect(rule('.actionBtn')).toMatch(/(?<![-\w])color:\s*var\(--toast-accent-text\)/)
+    expect(rule('.toast.success')).toMatch(/--toast-accent-text:\s*var\(--success-text\)/)
     expect(rule('.toast.success')).toMatch(/--toast-accent:\s*var\(--success\)/)
   })
 })

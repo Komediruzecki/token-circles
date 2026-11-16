@@ -140,7 +140,7 @@
   border: 1px solid var(--border);
   border-radius: 10px;
   background: transparent;
-  color: var(--primary);
+  color: var(--primary-text);
   font-size: 10px;
   font-weight: 600;
   line-height: 1.6;
@@ -178,7 +178,7 @@
   display: inline-flex;
   align-items: center;
   margin-left: 4px;
-  color: var(--warning, #f59e0b);
+  color: var(--warning-text);
   vertical-align: middle;
   cursor: help;
 }
@@ -217,7 +217,7 @@
 
 .action-btn:hover {
   background: var(--table-hover);
-  color: var(--primary);
+  color: var(--primary-text);
 }
 
 /* Gated action (row owned by another profile) — inert and visibly muted. */
@@ -280,11 +280,11 @@
 }
 
 .amount.income {
-  color: var(--income);
+  color: var(--income-text);
 }
 
 .amount.expense {
-  color: var(--expense);
+  color: var(--expense-text);
 }
 
 .amount.transfer {

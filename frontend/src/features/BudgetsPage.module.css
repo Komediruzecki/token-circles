@@ -56,13 +56,13 @@
   margin-top: 4px;
 }
 .budget-summary .summary-value.positive {
-  color: var(--income);
+  color: var(--income-text);
 }
 .budget-summary .summary-value.negative {
-  color: var(--expense);
+  color: var(--expense-text);
 }
 .budget-summary .summary-value.status-ok {
-  color: var(--success);
+  color: var(--success-text);
 }
 .budget-summary .forecast-toggle-section {
   margin-bottom: 16px;
@@ -136,7 +136,7 @@
 }
 
 .stat-item .stat-value.positive {
-  color: var(--income);
+  color: var(--income-text);
 }
 
 /* category chart section */
@@ -336,15 +336,15 @@
 }
 
 .summary-value-positive {
-  color: var(--income);
+  color: var(--income-text);
 }
 
 .summary-value-negative {
-  color: var(--expense);
+  color: var(--expense-text);
 }
 
 .summary-value-status-ok {
-  color: var(--success);
+  color: var(--success-text);
 }
 
 /* modal small */
@@ -636,7 +636,7 @@
 }
 
 .selected {
-  color: var(--primary);
+  color: var(--primary-text);
   font-weight: 600;
 }
 
@@ -715,11 +715,11 @@
 }
 
 .budget-val {
-  color: var(--primary);
+  color: var(--primary-text);
 }
 
 .actual-val {
-  color: var(--expense);
+  color: var(--expense-text);
 }
 
 .chart-status {
@@ -732,17 +732,17 @@
 
 .chart-status-over {
   background: rgba(255, 157, 157, 0.15);
-  color: var(--danger);
+  color: var(--danger-text);
 }
 
 .chart-status-warning {
   background: rgba(240, 168, 96, 0.15);
-  color: var(--warning);
+  color: var(--warning-text);
 }
 
 .chart-status-ok {
   background: rgba(125, 255, 176, 0.15);
-  color: var(--success);
+  color: var(--success-text);
 }
 
 /* empty state */
@@ -775,7 +775,7 @@
 
 .rollover-on {
   background: rgba(125, 255, 176, 0.15);
-  color: var(--success);
+  color: var(--success-text);
 }
 
 .rollover-on:hover {
@@ -971,7 +971,7 @@
 }
 
 .catOver {
-  color: var(--danger, #ef4444);
+  color: var(--danger-text);
 }
 
 .catProgressBar {
@@ -1009,7 +1009,7 @@
 }
 
 .catRemaining.catOver {
-  color: var(--danger, #ef4444);
+  color: var(--danger-text);
 }
 
 .catColorPicker {

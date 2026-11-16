@@ -111,7 +111,7 @@ function AccountsDidNotLoad(props: {
         onClick={() => {
           props.onRetry()
         }}
-        style="padding: 6px 12px; background: transparent; color: var(--primary); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 500"
+        style="padding: 6px 12px; background: transparent; color: var(--primary-text); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 500"
       >
         Try again
       </button>
@@ -1810,9 +1810,7 @@ export default function Transactions() {
                   label={
                     <>
                       {type() === 'transfer' ? 'From account' : 'Account'}
-                      {type() !== 'transfer' && (
-                        <span style="color: var(--danger, #ef4444)"> *</span>
-                      )}
+                      {type() !== 'transfer' && <span style="color: var(--danger-text)"> *</span>}
                     </>
                   }
                   class={styles.formGroup}
@@ -1893,7 +1891,7 @@ export default function Transactions() {
                 type="button"
                 data-test-id="tx-advanced-toggle"
                 onClick={() => setShowAdvanced(!showAdvanced())}
-                style="display: inline-flex; align-items: center; gap: 6px; background: none; border: none; padding: 8px 0; margin: 4px 0; color: var(--primary); cursor: pointer; font-size: 13px; font-weight: 500"
+                style="display: inline-flex; align-items: center; gap: 6px; background: none; border: none; padding: 8px 0; margin: 4px 0; color: var(--primary-text); cursor: pointer; font-size: 13px; font-weight: 500"
               >
                 <svg
                   width="14"

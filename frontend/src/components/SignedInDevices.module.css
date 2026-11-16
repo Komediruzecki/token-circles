@@ -102,7 +102,7 @@
 .endButton:hover:not(:disabled),
 .allButton:hover:not(:disabled) {
   border-color: var(--expense);
-  color: var(--expense);
+  color: var(--expense-text);
   background: color-mix(in oklab, var(--expense) 12%, transparent);
 }
 
@@ -116,7 +116,7 @@
   padding: 0;
   border: 0;
   background: none;
-  color: var(--primary);
+  color: var(--primary-text);
   font: inherit;
   font-weight: 600;
   text-decoration: underline;

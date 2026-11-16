@@ -139,7 +139,7 @@ export default function ResetPassword() {
         }}
       >
         <h1 style={{ 'font-size': '28px', 'font-weight': 700, margin: '0 0 16px' }}>
-          Finance<span style={{ color: 'var(--primary)' }}>.</span>
+          Finance<span style={{ color: 'var(--primary-text)' }}>.</span>
         </h1>
 
         <Show when={status() === 'checking'}>

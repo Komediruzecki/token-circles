@@ -19,7 +19,7 @@
 }
 
 .stepLabel.active {
-  color: var(--primary);
+  color: var(--primary-text);
 }
 
 .stepLine {
@@ -52,7 +52,7 @@
 }
 
 .tab.active {
-  color: var(--primary);
+  color: var(--primary-text);
   border-bottom-color: var(--primary);
 }
 
@@ -335,7 +335,7 @@
 }
 
 .mappingLabel .required {
-  color: var(--danger);
+  color: var(--danger-text);
 }
 
 .mappingSelect {
@@ -466,19 +466,19 @@
 
 .pill.expenseActive {
   background: rgba(239, 68, 68, 0.12);
-  color: var(--danger);
+  color: var(--danger-text);
   font-weight: 600;
 }
 
 .pill.incomeActive {
   background: rgba(34, 197, 94, 0.12);
-  color: var(--success);
+  color: var(--success-text);
   font-weight: 600;
 }
 
 .pill.accountActive {
   background: color-mix(in oklab, var(--primary) 12%, transparent);
-  color: var(--primary);
+  color: var(--primary-text);
   font-weight: 600;
 }
 
@@ -560,11 +560,11 @@
 }
 
 .statValue.duplicate {
-  color: var(--warning);
+  color: var(--warning-text);
 }
 
 .statValue.invalid {
-  color: var(--danger);
+  color: var(--danger-text);
 }
 
 .previewActions {
@@ -634,8 +634,8 @@
   font-size: 10px;
   padding: 1px 5px;
   border-radius: 4px;
-  background: var(--warning);
-  color: #fff;
+  background: var(--warning-fill);
+  color: var(--on-fill);
   font-weight: 600;
 }
 
@@ -644,8 +644,8 @@
   margin-left: 4px;
   padding: 1px 5px;
   border-radius: 4px;
-  background: var(--danger);
-  color: #fff;
+  background: var(--danger-fill);
+  color: var(--on-fill);
   font-size: 10px;
   font-weight: 600;
 }
@@ -808,19 +808,19 @@
 .resultMessage.success {
   background: rgba(34, 197, 94, 0.1);
   border: 1px solid rgba(34, 197, 94, 0.3);
-  color: var(--success);
+  color: var(--success-text);
 }
 
 .resultMessage.error {
   background: rgba(239, 68, 68, 0.1);
   border: 1px solid rgba(239, 68, 68, 0.3);
-  color: var(--danger);
+  color: var(--danger-text);
 }
 
 .resultMessage.info {
   background: rgba(59, 130, 246, 0.1);
   border: 1px solid rgba(59, 130, 246, 0.3);
-  color: var(--primary);
+  color: var(--primary-text);
 }
 
 /* Loading */
@@ -935,6 +935,41 @@
   }
 }
 
+/* The columns view on a phone (review D3): the mapping selects were 38px tall, the Expense, Income
+   and Account toggles 28px and the row checkboxes 13px in rows of 30. Each is a fingertip now; a
+   row's checkbox takes a tap anywhere in its 44px cell. */
+@media (pointer: coarse), (max-width: 768px) {
+  .mappingSelect,
+  .pill {
+    min-height: 44px;
+  }
+
+  .previewTable .selectCol {
+    padding: 0;
+  }
+
+  .selectHit {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+/* A row's checkbox, and the whole cell around it as its label. */
+.selectHit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+/* The expected columns are read, not scanned: a sample wraps in its cell rather than ending in an
+   ellipsis (review D3). */
+.expectedColumns td {
+  max-width: none;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 /* Template download */
 .templateSection {
   text-align: center;
@@ -1006,7 +1041,7 @@
 
 .btnOutline {
   background: transparent;
-  color: var(--primary);
+  color: var(--primary-text);
   border: 1px solid var(--primary);
 }
 
@@ -1060,5 +1095,5 @@
   gap: 5px;
   font-size: 12px;
   font-weight: 600;
-  color: var(--success);
+  color: var(--success-text);
 }

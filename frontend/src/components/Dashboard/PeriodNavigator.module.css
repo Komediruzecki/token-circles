@@ -99,7 +99,7 @@
 }
 
 .dropdownItem.selected {
-  color: var(--primary);
+  color: var(--primary-text);
   font-weight: 600;
   background: var(--primary) 10;
 }

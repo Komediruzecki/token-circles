@@ -82,22 +82,22 @@
 }
 
 .amount.incoming {
-  color: var(--income);
+  color: var(--income-text);
 }
 
 .amount.outgoing {
-  color: var(--expense);
+  color: var(--expense-text);
 }
 
 .netPositive {
-  color: var(--income);
+  color: var(--income-text);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
 .netNegative {
-  color: var(--expense);
+  color: var(--expense-text);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -120,7 +120,7 @@
 }
 
 .clickable:hover {
-  color: var(--primary);
+  color: var(--primary-text);
 }
 
 .emptyState {
@@ -193,11 +193,11 @@
 }
 
 .summaryValue.positive {
-  color: var(--income);
+  color: var(--income-text);
 }
 
 .summaryValue.negative {
-  color: var(--expense);
+  color: var(--expense-text);
 }
 
 @media (max-width: 768px) {

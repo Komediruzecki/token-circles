@@ -96,6 +96,12 @@
   height: 18px;
 }
 
+/* The letter a payee no brand matched shows. The tint behind it is the brand indigo; the letter is
+   text, so it takes --avatar-letter, which reads 4.5:1 on that tint where the indigo does not. */
+.badge > b {
+  color: var(--avatar-letter);
+}
+
 .info {
   display: flex;
   flex-direction: column;

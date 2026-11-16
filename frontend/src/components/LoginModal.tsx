@@ -180,7 +180,7 @@ export default function LoginModal(props: LoginModalProps) {
                   border: 'none',
                   padding: 0,
                   cursor: 'pointer',
-                  color: 'var(--primary)',
+                  color: 'var(--primary-text)',
                   'font-weight': 600,
                   'font-size': '13px',
                 }}
@@ -286,7 +286,7 @@ export default function LoginModal(props: LoginModalProps) {
               onClick={() => {
                 switchTo(mode() === 'login' ? 'register' : 'login')
               }}
-              style={{ cursor: 'pointer', color: 'var(--primary)', 'font-weight': 600 }}
+              style={{ cursor: 'pointer', color: 'var(--primary-text)', 'font-weight': 600 }}
             >
               {mode() === 'login'
                 ? 'Create one'
@@ -352,7 +352,7 @@ export default function LoginModal(props: LoginModalProps) {
                 switchTo(mode())
                 setStage('email-code')
               }}
-              style={{ cursor: 'pointer', color: 'var(--primary)', 'font-weight': 600 }}
+              style={{ cursor: 'pointer', color: 'var(--primary-text)', 'font-weight': 600 }}
             >
               Email me a sign-in code
             </a>
@@ -370,7 +370,7 @@ export default function LoginModal(props: LoginModalProps) {
                     else if (!result.aborted) setElsewhere(result.error)
                   })
                 }}
-                style={{ cursor: 'pointer', color: 'var(--primary)', 'font-weight': 600 }}
+                style={{ cursor: 'pointer', color: 'var(--primary-text)', 'font-weight': 600 }}
               >
                 Use a passkey
               </a>

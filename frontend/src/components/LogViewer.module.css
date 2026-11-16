@@ -138,7 +138,7 @@
 .levelBtn.active {
   border-color: var(--primary);
   background: var(--primary) 15;
-  color: var(--primary);
+  color: var(--primary-text);
 }
 
 .logContainer {

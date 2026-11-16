@@ -1084,6 +1084,7 @@ export default function Budgets() {
                               openCatBudgetModal(category)
                             }}
                             title="Set Budget"
+                            aria-label={`Set budget for ${category.name}`}
                           >
                             <svg
                               width="16"
@@ -1101,6 +1102,7 @@ export default function Budgets() {
                               editCategory(category)
                             }}
                             title="Edit"
+                            aria-label={`Edit ${category.name}`}
                           >
                             <svg
                               width="16"
@@ -1116,7 +1118,7 @@ export default function Budgets() {
                             class={styles.catActionBtn}
                             onConfirm={() => deleteCategory(category.id)}
                             message="Delete this category? This can’t be undone."
-                            aria-label="Delete category"
+                            aria-label={`Delete the ${category.name} category`}
                             label={
                               <svg
                                 width="16"

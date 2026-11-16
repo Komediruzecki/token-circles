@@ -277,7 +277,7 @@
 .clearBtn:hover {
   background: var(--bg);
   border-color: var(--danger);
-  color: var(--danger);
+  color: var(--danger-text);
 }
 
 .customDates {

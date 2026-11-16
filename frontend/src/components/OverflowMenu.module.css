@@ -68,7 +68,7 @@
 }
 
 .danger {
-  color: var(--danger, #e5484d);
+  color: var(--danger-text);
 }
 .danger .icon {
   color: inherit;

@@ -167,7 +167,7 @@ export default function TwofaSettings() {
               'font-weight': 600,
               padding: '2px 8px',
               'border-radius': '999px',
-              color: 'var(--success, #22c55e)',
+              color: 'var(--success-text)',
               border: '1px solid color-mix(in oklab, var(--success, #22c55e) 45%, transparent)',
               background: 'color-mix(in oklab, var(--success, #22c55e) 12%, transparent)',
             }}
@@ -254,7 +254,7 @@ export default function TwofaSettings() {
             <a
               data-test-id="twofa-otpauth"
               href={otpauth()}
-              style={{ color: 'var(--primary)', 'font-weight': 600 }}
+              style={{ color: 'var(--primary-text)', 'font-weight': 600 }}
             >
               open it directly
             </a>

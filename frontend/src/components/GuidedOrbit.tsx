@@ -460,7 +460,9 @@ export function GuidedOrbit(props: GuidedOrbitProps) {
                   </Show>
                 </span>
               </button>
-              <div class={styles.sumRow}>
+              {/* A label, so the field is named by the word beside it and a tap anywhere on the
+                  row lands in it. */}
+              <label class={styles.sumRow}>
                 <span class={styles.sumK}>Date</span>
                 <input
                   class={styles.dateInput}
@@ -468,8 +470,8 @@ export function GuidedOrbit(props: GuidedOrbitProps) {
                   value={date()}
                   onChange={(e) => setDate(e.currentTarget.value || todayIso())}
                 />
-              </div>
-              <div class={styles.sumRow}>
+              </label>
+              <label class={styles.sumRow}>
                 <span class={styles.sumK}>Note</span>
                 <input
                   class={styles.noteInput}
@@ -478,7 +480,7 @@ export function GuidedOrbit(props: GuidedOrbitProps) {
                   value={note()}
                   onInput={(e) => setNote(e.currentTarget.value)}
                 />
-              </div>
+              </label>
             </div>
             <button
               class={styles.addBtn}

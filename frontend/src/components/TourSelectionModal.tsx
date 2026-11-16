@@ -26,19 +26,23 @@ export default function TourSelectionModal() {
     <div class={styles.overlay} onClick={() => setShowTourSelection(false)}>
       <div
         class={styles.modal}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="tour-selection-title"
         onClick={(e) => {
           e.stopPropagation()
         }}
       >
         <div class={styles.header}>
           <div>
-            <h2>Take a Tour</h2>
+            <h2 id="tour-selection-title">Take a Tour</h2>
             <p>
               {completedCount()}/{totalCount()} tours completed
             </p>
           </div>
           <button
             class={styles.closeBtn}
+            aria-label="Close"
             onClick={() => {
               setShowTourSelection(false)
             }}

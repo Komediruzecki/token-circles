@@ -78,11 +78,11 @@
 }
 
 .amount.income {
-  color: var(--income);
+  color: var(--income-text);
 }
 
 .amount.expense {
-  color: var(--expense);
+  color: var(--expense-text);
 }
 
 .amount.transfer {

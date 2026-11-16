@@ -8,6 +8,8 @@
  * up from the registry.
  */
 
+import { recordedScreen, themeFor } from './screenTheme'
+
 const THEME_STORAGE_KEY = 'finance-theme'
 
 export interface ThemeDefinition {
@@ -103,9 +105,9 @@ export class ThemeStore {
   private resolveTheme(): Theme {
     const saved = localStorage.getItem(THEME_STORAGE_KEY)
     if (saved && THEMES.some((t) => t.id === saved)) return saved
-    const sys = this.systemPrefers()
-    if (sys) return sys
-    return DEFAULT_THEME
+    // No choice stored: the screen's rule (core/screenTheme.ts), so a signed-out screen stays dark
+    // whatever the system says, and the app follows the system.
+    return themeFor(null, recordedScreen(), this.systemPrefers() === 'light')
   }
 
   /**
@@ -145,8 +147,9 @@ export class ThemeStore {
     if (!mq.addEventListener) return
     mq.addEventListener('change', () => {
       if (this.hasExplicitChoice()) return
-      const sys = this.systemPrefers()
-      if (sys) this.applyTheme(sys)
+      // Through the screen's rule, not the raw system: after a sign-out in this tab the sign-in
+      // screen stays dark when the OS turns light.
+      this.applyTheme(this.resolveTheme())
     })
   }
 

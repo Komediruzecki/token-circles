@@ -549,10 +549,7 @@ export default function LoginScreen() {
           </p>
         </Show>
 
-        <div
-          class={`${styles.footer} ${stage() === 'inbox' ? styles.footerRoomy : ''}`}
-          data-test-id="sign-in-footer"
-        >
+        <div class={styles.footer} data-test-id="sign-in-footer">
           <SupportContact />
           <LegalLinks />
           <span class={styles.version}>v{displayVersion()}</span>

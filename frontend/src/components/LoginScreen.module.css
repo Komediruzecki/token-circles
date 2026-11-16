@@ -211,7 +211,7 @@
 
 .accountLink {
   cursor: pointer;
-  color: var(--primary);
+  color: var(--primary-text);
   font-weight: 600;
   background: none;
   border: none;
@@ -271,24 +271,39 @@
 }
 
 .version {
+  /* Full --text-secondary at 12px: at 11px and 0.7 opacity it was 4.5:1 only just, and under it on
+     some grounds (review D1). */
   color: var(--text-secondary);
-  font-size: 11px;
-  opacity: 0.7;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
 
-/* Check your inbox on a phone: each footer link a fingertip tall, and Privacy and Terms as wide,
-   as the screen's own button and link are (review D6). The sign-in and create stages follow with
-   the accessibility pass, so only that stage sets the class. */
+/* Every sign-in step on a phone (review D6): the buttons, the links in the form and under it, and
+   the footer's links a fingertip tall, and Privacy and Terms as wide. They were 37px, about 20px
+   and 17px. */
 @media (max-width: 768px), (pointer: coarse) {
-  .footerRoomy > a,
-  .footerRoomy nav a {
+  .submit,
+  .altBtn {
+    min-height: 44px;
+  }
+
+  .accountLink {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    min-width: 44px;
+    vertical-align: middle;
+  }
+
+  .footer > a,
+  .footer nav a {
     display: inline-flex;
     align-items: center;
     min-height: 44px;
   }
 
-  .footerRoomy nav a {
+  .footer nav a {
     justify-content: center;
     min-width: 44px;
   }
