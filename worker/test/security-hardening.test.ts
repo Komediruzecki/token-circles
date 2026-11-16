@@ -108,4 +108,19 @@ describe('security — response headers (audit S2)', () => {
     expect(res.headers.get('Strict-Transport-Security')).toContain('max-age=');
     expect(res.headers.get('Content-Security-Policy')).toContain("frame-ancestors 'none'");
   });
+
+  // Every 404 gets the app-wide headers, including one for a path holding an encoded line break.
+  // From hono 4.4.0 until 4.13.16, RegExpRouter ran none of the `*` middleware for such a path
+  // (GHSA-h7mg-cq63-vhpq). This app is served by TrieRouter, which Hono's default router falls
+  // back to for these routes, so it was never affected; this pins the behaviour if that changes.
+  it.each(['%0A', '%0D', '%E2%80%A8', '%E2%80%A9'])(
+    'sets them on the 404 for a path holding %s',
+    async (lineBreak) => {
+      const res = await SELF.fetch(`https://example.com/api/no-such-route${lineBreak}`);
+      expect(res.status).toBe(404);
+      expect(res.headers.get('X-Frame-Options')).toBe('DENY');
+      expect(res.headers.get('Content-Security-Policy')).toContain("frame-ancestors 'none'");
+      expect(res.headers.get('X-Robots-Tag')).toBe('noindex, nofollow');
+    }
+  );
 });
