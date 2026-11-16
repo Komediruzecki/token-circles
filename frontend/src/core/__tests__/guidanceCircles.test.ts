@@ -491,7 +491,7 @@ describe('what is not known', () => {
     expect(check(placement, 4, 'no-expensive-debt')).toMatchObject({ met: true, unknown: null })
   })
 
-  it('with a card too new to say whether it is carried, asks the card question', () => {
+  it('with a card too new to show it cleared, counts it as carried and asks nothing', () => {
     const card: GuidanceInput = {
       ...year,
       // Opened in September: 300 spent on it, 100 paid in.
@@ -508,16 +508,24 @@ describe('what is not known', () => {
       ],
       accounts: [...(year.accounts ?? []), { id: 3, type: 'credit', balance: -200 }],
     }
-    const asked = placeCircle(guidanceFacts(card))
-    expect(asked.current).toBe(4)
-    expect(asked.provisional).toBe(true)
-    expect(asked.next).toEqual({ circle: 4, check: 'no-expensive-debt', unknown: 'not-on-file' })
-    // Answered, the answer decides.
-    const answered = (carriesCardBalance: boolean) =>
-      placeCircle(guidanceFacts({ ...card, answers: { freeMoney: 'taken', carriesCardBalance } }))
-    expect(answered(false).current).toBe(5)
-    expect(answered(true).next).toEqual({ circle: 4, check: 'no-expensive-debt', unknown: null })
-    expect(answered(true).provisional).toBe(false)
+    // With no rate set, a carried card counts as debt at 10% or more: known, not waiting on anything.
+    const placed = (carriesCardBalance: boolean | null) =>
+      placeCircle(
+        guidanceFacts({
+          ...card,
+          // A "No" stored before the card question was dropped (16 Nov 2026) changes nothing.
+          answers: { freeMoney: 'taken', carriesCardBalance } as GuidanceInput['answers'],
+        })
+      )
+    for (const answer of [null, false, true]) {
+      expect(placed(answer).current, String(answer)).toBe(4)
+      expect(placed(answer).next, String(answer)).toEqual({
+        circle: 4,
+        check: 'no-expensive-debt',
+        unknown: null,
+      })
+      expect(placed(answer).provisional, String(answer)).toBe(false)
+    }
   })
 
   it('reads a figure without the accounts as unknown below its target, and as met above it', () => {

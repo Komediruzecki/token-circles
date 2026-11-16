@@ -26,6 +26,7 @@ export const ANSWERS = JSON.stringify({
   region: 'HR',
   adults: 2,
   children: 0,
+  // No longer asked or read (16 Nov 2026), still accepted: a stored row keeps validating.
   carriesCardBalance: false,
   freeMoney: { region: 'HR', answer: 'not-sure' },
   setsAsideYearly: true,

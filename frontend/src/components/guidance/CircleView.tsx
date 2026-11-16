@@ -28,8 +28,6 @@ import {
 import { categoryLookup, takesEssential } from '../../../../shared/guidance/kinds'
 import { CIRCLE_LINES } from '../../../../shared/guidance/ledger'
 import {
-  CARD_OPTIONS,
-  CARD_QUESTION,
   ENOUGH_QUESTION,
   ESSENTIALS_HINT,
   ESSENTIALS_QUESTION,
@@ -127,7 +125,6 @@ export interface CircleViewProps {
 
 /** The question a check row asks, by the check it settles. */
 const ASKED_UNDER: Partial<Record<CheckRow['id'], CircleQuestion>> = {
-  'no-expensive-debt': 'card',
   'yearly-bills': 'yearly-bills',
   'free-money': 'free-money',
   enough: 'enough',
@@ -488,7 +485,7 @@ export default function CircleView(props: CircleViewProps): JSX.Element {
   )
 }
 
-/** The question under a check: the card, yearly bills, free money or the own number. */
+/** The question under a check: yearly bills, free money or the own number. */
 function CheckQuestion(props: {
   question: CircleQuestion
   view: GuidanceView
@@ -499,19 +496,6 @@ function CheckQuestion(props: {
   const region = () => props.view.region.region
   return (
     <>
-      <Show when={props.question === 'card'}>
-        <Question question={CARD_QUESTION} testId="circle-question-card">
-          <AnswerChips
-            name="circle-card"
-            question={CARD_QUESTION}
-            options={CARD_OPTIONS}
-            answered={answers().carriesCardBalance}
-            disabled={props.disabled}
-            testId="circle-card-choice"
-            onChoose={(answer) => props.onSave({ carriesCardBalance: answer })}
-          />
-        </Question>
-      </Show>
       <Show when={props.question === 'yearly-bills'}>
         <Question question={YEARLY_BILLS_ASIDE} testId="circle-question-yearly-bills">
           <AnswerChips

@@ -165,9 +165,9 @@ function reaching(
 
 /**
  * No debt at EXPENSIVE_DEBT_RATE or more. A card or an overdraft is only known of when the accounts
- * are (`'unread'`), and a card whose entries cannot say whether its balance is carried leaves it
- * not known until the person answers the card question (`'not-on-file'`). One expensive debt is
- * enough to know it is not met.
+ * are (`'unread'`). A debt whose `expensive` is null leaves it not known (`'not-on-file'`), but
+ * debtsOf no longer gives one: since the card question went, a card too new to say counts as
+ * carried. One expensive debt is enough to know it is not met.
  */
 function noExpensiveDebt(facts: GuidanceFacts): Check {
   const expensive = facts.debts.map((debt) => debt.expensive);

@@ -11,7 +11,6 @@ import { createSignal, createUniqueId, For, Show } from 'solid-js'
 import { Dynamic } from 'solid-js/web'
 import { stepCircleName } from '../../../../shared/guidance/nextStep'
 import {
-  CARD_OPTIONS,
   ENOUGH_ABOVE_ZERO,
   freeMoneyQuestion,
   GUIDANCE_LINE,
@@ -199,16 +198,6 @@ export default function NextStepCard(props: NextStepCardProps): JSX.Element {
         {(article) => <ArticleLink article={article()} class={styles.article} />}
       </Show>
 
-      <Show when={question() === 'card'}>
-        <Choices
-          name={`${headingId}-card`}
-          question={props.step.title}
-          options={CARD_OPTIONS}
-          chosen={picked() as boolean | undefined}
-          disabled={saving()}
-          onChoose={(pick) => void answer({ carriesCardBalance: pick }, pick)}
-        />
-      </Show>
       <Show when={question() === 'yearly-bills'}>
         <Choices
           name={`${headingId}-yearly`}

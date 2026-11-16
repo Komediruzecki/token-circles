@@ -171,11 +171,6 @@ export type FreeMoney = FreeMoneyAnswer;
 export interface FactsAnswers {
   /** Categories whose income is support the person expects to stop (circle 2). */
   supportCategoryIds?: readonly number[] | null;
-  /**
-   * "Do you carry a balance on a credit card or overdraft?" No leaves both out of the debts; yes
-   * counts every card below zero as carried. Either beats what a card's entries suggest.
-   */
-  carriesCardBalance?: boolean | null;
   /** Whether the employer's or the state's free money is taken (circle 4). */
   freeMoney?: FreeMoney | null;
   /** Pension and investment savings held outside the app, in the base currency (circle 5). */
@@ -221,9 +216,9 @@ export interface Debt {
    */
   payment: number | null;
   /**
-   * The balance is carried from month to month: a loan's and an overdraft's always, a card's as its
-   * entries show (`cardCarried`) or as the person says. Null for a card whose entries are too few
-   * to say and the person has not said.
+   * The balance is carried from month to month: a loan's and an overdraft's always, a card's
+   * unless its entries show it cleared each month (`cardCarried`). Null is not produced since the
+   * card question went (16 Nov 2026); the type keeps it for a debt read from elsewhere.
    */
   carried: boolean | null;
   /**
@@ -337,11 +332,6 @@ export interface GuidanceFacts {
   windowCategories?: WindowCategory[];
   /** Expenses in the window with no category. */
   uncategorisedEntries?: number;
-  /**
-   * Credit cards and current accounts below zero today, whatever the card answer says (`debts`
-   * leaves them out after a "No"): circle 4's view asks the card question while there is one.
-   */
-  belowZero?: number;
   /**
    * The window's month that spent the most, and its largest category by name (null for spending
    * with no category): what the savings card names when more went out than came in. Null with too
@@ -873,12 +863,15 @@ export function isExpensive(kind: Debt['kind'], rate: number | null): boolean {
 
 /**
  * The debts: each loan with a balance left on `today`, at the rate its schedule charges for the
- * next payment, and each credit card and current account below zero, unless the person said they
- * carry no balance on either. A card cleared each month is left out (`cardCarried`), unless the
- * person said they carry a balance.
+ * next payment, and each credit card and current account below zero. An overdraft counts as
+ * carried. A card counts as carried unless what went into it over the last CARD_PAYMENT_MONTHS
+ * full months covers what it owes (`cardCarried`): then it is cleared each month and left out.
+ *
+ * No answer is read here. The card question ("Do you carry a balance on a credit card or
+ * overdraft?") was dropped on 16 Nov 2026, and a stored `carriesCardBalance` changes nothing.
  */
 export function debtsOf(
-  input: Pick<GuidanceInput, 'today' | 'transactions' | 'accounts' | 'loans' | 'answers'>
+  input: Pick<GuidanceInput, 'today' | 'transactions' | 'accounts' | 'loans'>
 ): Debt[] {
   const debts: Debt[] = [];
   for (const loan of input.loans ?? []) {
@@ -898,8 +891,6 @@ export function debtsOf(
       ends: status.payoff_date,
     });
   }
-  const answer = input.answers?.carriesCardBalance;
-  if (answer === false) return debts;
   for (const account of accountsToday(input.accounts ?? [], input.transactions, input.today)) {
     const type = storedAccountType(account.type);
     if ((type !== 'credit' && type !== 'giro') || !(account.balance < 0)) continue;
@@ -908,11 +899,12 @@ export function debtsOf(
     const rate = finite(account.credit_rate) ? account.credit_rate : null;
     const payment =
       kind === 'card' ? cardPayment(account.id, input.transactions, input.today) : null;
+    // A card too new for its entries to say (null) counts as carried, as an overdraft does.
     const carried =
-      kind === 'card' && answer !== true
-        ? cardCarried(account.id, owed, payment, input.transactions, input.today)
+      kind === 'card'
+        ? cardCarried(account.id, owed, payment, input.transactions, input.today) !== false
         : true;
-    if (carried === false) continue;
+    if (!carried) continue;
     debts.push({
       kind,
       id: account.id,
@@ -1084,7 +1076,6 @@ export function guidanceFacts(input: GuidanceInput): GuidanceFacts {
     liquidParts: liquidPartsOf(input.accounts, input.transactions, today),
     windowCategories: averaged ? windowCategoriesOf(input.categories, sums, months.length) : [],
     uncategorisedEntries: sums.uncategorisedEntries,
-    belowZero: belowZeroOf(accountsNow),
     heaviestMonth: averaged ? heaviestMonthOf(sums, input.categories) : null,
     spendingByKind: averaged ? perKind(sums.byKind, months.length) : null,
   };
@@ -1118,16 +1109,6 @@ function heaviestMonthOf(
     spent: heaviest[1].spent,
     category: typeof name === 'string' && name !== '' ? name : null,
   };
-}
-
-/** Credit cards and current accounts below zero, as `accountsToday` gives them. */
-function belowZeroOf(accounts: readonly FactsAccount[] | null): number {
-  let count = 0;
-  for (const account of accounts ?? []) {
-    const type = storedAccountType(account.type);
-    if ((type === 'credit' || type === 'giro') && account.balance < 0) count += 1;
-  }
-  return count;
 }
 
 /**

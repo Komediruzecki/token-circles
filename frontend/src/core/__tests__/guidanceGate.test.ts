@@ -70,7 +70,9 @@ describe('the copy it holds back', () => {
     expect(words.SPACE_QUESTIONS_LEAD).toBe('')
     expect(words.COMPARE_TITLE).toBe('')
     // What every build asks stays.
-    expect(questions.CARD_QUESTION).toBe('Do you carry a balance on a credit card or overdraft?')
+    expect(questions.YEARLY_BILLS_QUESTION).toBe(
+      'Do you set aside money for yearly bills each month?'
+    )
   })
 
   it('is there where the build opens the gate, and where nothing defines it (tests, the Worker)', async () => {
