@@ -110,7 +110,7 @@ describe('security — response headers (audit S2)', () => {
   });
 
   // Every 404 gets the app-wide headers, including one for a path holding an encoded line break.
-  // Before hono 4.13.16, RegExpRouter ran none of the `*` middleware for such a path
+  // From hono 4.4.0 until 4.13.16, RegExpRouter ran none of the `*` middleware for such a path
   // (GHSA-h7mg-cq63-vhpq). This app is served by TrieRouter, which Hono's default router falls
   // back to for these routes, so it was never affected; this pins the behaviour if that changes.
   it.each(['%0A', '%0D', '%E2%80%A8', '%E2%80%A9'])(

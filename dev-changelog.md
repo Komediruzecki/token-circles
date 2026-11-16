@@ -3418,13 +3418,17 @@ true, or is too small for one.
 
 ### Dependencies
 
-- hono 4.13.18 in `worker/` (from 4.13.14), for the five advisories published on 12 November
-  (GHSA-h7mg-cq63-vhpq, GHSA-4m76-xfj5-7975, GHSA-4h7h-rv7c-7m2v, GHSA-3gg2-335m-rxc6,
-  GHSA-46wx-v44x-9hh2, all fixed in 4.13.16) and the four security fixes 4.13.18 lists that have no
-  advisory yet. None of them reached this Worker: it uses none of `csrf()`, `mount()`, `css`,
-  `validator()`, `bodyLimit()` or `serveStatic()`, and Hono's default router serves these routes
-  with TrieRouter (RegExpRouter rejects one of them), which the router advisory does not affect.
-  Checked on both versions by asking the running Worker which router it chose.
+- hono 4.13.18 in `worker/` (from 4.13.14). It fixes the five advisories in the GitHub Advisory
+  Database since 12 November (GHSA-h7mg-cq63-vhpq, GHSA-4m76-xfj5-7975, GHSA-4h7h-rv7c-7m2v,
+  GHSA-3gg2-335m-rxc6, GHSA-46wx-v44x-9hh2, all fixed in 4.13.16), and four that hono published on
+  11 November and fixed in 4.13.18 (GHSA-92p4-j3wq-jmqx, GHSA-39q9-qp46-w8xg, GHSA-h25j-2p75-qj33,
+  GHSA-74fm-fwc7-3fwp), which the database does not list yet, so Dependabot has not raised them.
+  None of them reached this Worker: it uses none of `csrf()`, `mount()`, `css`, `validator()`,
+  `bodyLimit()` or `serveStatic()`, and Hono's default router serves its routes with TrieRouter,
+  which the router advisory does not affect. RegExpRouter refuses 24 of the 239 distinct method and
+  path pairs, for example `/api/accounts/:id` after `/api/accounts/history/timeline` (a fixed
+  segment and a parameter in the same place), so renaming one route would not change the router.
+  Checked on 4.13.14 and 4.13.18 by asking the running Worker which router it chose.
   `security-hardening.test.ts` now pins that a 404 for a path holding an encoded line break carries
   the app-wide headers. The worker lockfile moved only hono, under pnpm 10.
 
