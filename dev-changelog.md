@@ -3416,6 +3416,18 @@ true, or is too small for one.
   `categoryResetPlan.test.ts` covers the plan; preferring the lowest id whatever its type fails
   its first case, and folding in whatever the type fails the contract scenario.
 
+### Dependencies
+
+- hono 4.13.18 in `worker/` (from 4.13.14), for the five advisories published on 12 November
+  (GHSA-h7mg-cq63-vhpq, GHSA-4m76-xfj5-7975, GHSA-4h7h-rv7c-7m2v, GHSA-3gg2-335m-rxc6,
+  GHSA-46wx-v44x-9hh2, all fixed in 4.13.16) and the four security fixes 4.13.18 lists that have no
+  advisory yet. None of them reached this Worker: it uses none of `csrf()`, `mount()`, `css`,
+  `validator()`, `bodyLimit()` or `serveStatic()`, and Hono's default router serves these routes
+  with TrieRouter (RegExpRouter rejects one of them), which the router advisory does not affect.
+  Checked on both versions by asking the running Worker which router it chose.
+  `security-hardening.test.ts` now pins that a 404 for a path holding an encoded line break carries
+  the app-wide headers. The worker lockfile moved only hono, under pnpm 10.
+
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
 The production build holds back the benchmarks and the questions that choose their figures
