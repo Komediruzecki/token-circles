@@ -2709,6 +2709,15 @@ check')` first, as the cushion and debt cases do.
   checks that the Chart.js defaults read the tokens off the canvas and fall back to Chart.js's own
   colours, that `Chart` and `ChartWrapper` install them, and that `ChartWrapper`'s defaults leave
   the surface and the edge to them.
+- **Compare's what-if chart no longer sets off a resize loop.** `loans/LoanBalanceChart.tsx` took
+  its width inside its `ResizeObserver` callback. A new width gives the chart a new height (its
+  payoff labels wrap into more rows when it is narrow), so the box it watched resized in the same
+  frame, and Chromium reported "ResizeObserver loop completed with undelivered notifications" on
+  every opening of Compare: 12 of 12 in a headless run at 390, 600, 820 and 1440 px, and as an
+  unhandled error in the e2e log of `loans.spec.ts`. It now measures its box once on mount, before
+  the first paint, and takes each later width a frame after the observer reports it, as
+  `LoanPayoffChart` does: 0 of 12. `loans/__tests__/loanBalanceChartResize.test.tsx` fails when a
+  width is set inside the callback, or when the chart first paints at its made-up 640 px.
 - **The unused `components/BulkActions/` tree is deleted.** Its `BulkActionBar`, `BulkCategoryModal`
   and `BulkTypeModal`, with their stylesheets, had no importer anywhere in the repository;
   Transactions uses `components/BulkActionBar.tsx`. The 2026-07-23 integrity audit

@@ -51,14 +51,23 @@ export default function LoanBalanceChart(props: Props) {
   let wrap!: HTMLDivElement
 
   onMount(() => {
+    // Measured before the first paint, so the chart never shows at a made-up width.
+    const measured = Math.round(wrap.clientWidth)
+    if (measured > 0) setWidth(measured)
     if (typeof ResizeObserver === 'undefined') return
+    let frame = 0
     const observer = new ResizeObserver(([entry]) => {
       const w = Math.round(entry.contentRect.width)
-      if (w > 0) setWidth(w)
+      cancelAnimationFrame(frame)
+      // A frame later: a new width gives the chart a new height (its payoff labels wrap into more
+      // rows when narrow), and a size changed inside this callback is a resize loop the browser
+      // reports as an error.
+      if (w > 0) frame = requestAnimationFrame(() => setWidth(w))
     })
     observer.observe(wrap)
     onCleanup(() => {
       observer.disconnect()
+      cancelAnimationFrame(frame)
     })
   })
 
