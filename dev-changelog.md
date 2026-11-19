@@ -2846,8 +2846,33 @@ check')` first, as the cushion and debt cases do.
   buttons in `.footer-row`, the notice's margin 10 px), directly above the buttons, in the modal
   and embedded in setup alike. Test: `SubscriptionScan.test.tsx` "says a failed add in the pinned
   footer, directly above the buttons" (in the footer, not the scroll block, before Add), which
-  fails on the old place. In the browser: `RUN3/evidence/setup-2/scan-notice-*.png`, sixteen
-  rows and a refused add (listed in the hand-back).
+  fails on the old place. Checked in headless Chromium with sixteen rows and a refused add (a
+  routed 400 on `POST /api/bills`): the notice in the footer, the sixteen rows still listed, at
+  1440, 820 and 390 px, light and dark.
+- **What the setup and Import captures showed out of line.** Review of 19 Nov, every capture
+  opened at full size. Sheets tab: Fetch 42 px like the link's field (39 and 43 px; the input's
+  `flex: 1` sized its height in the field's column), the help line in the form 8 px under the
+  field (the page's 24 px gap and the row's 16 px margin put it 40 px down, and 60 px above
+  Expected columns, now 24). At 480 px and under: each tab one line (13 px, 6 px padding; they were
+  64 px tall in two lines at 390), the link's field the row's width with Fetch under it, so its
+  message wraps in two lines instead of leaving "with" alone, and Expected columns' cells wrap
+  (`min-width: 540px` at 768 and under gave it a sideways scroll in a 334 px box). The card said
+  "Use the downloadable template below", which was on File Upload only: the button is in the card.
+  Map columns: a line instead of a Category types table with a header and no rows, "2 rows · 3 of
+  12 columns mapped" instead of "Total rows: 2 | Mapped: 3/12", and Cancel neutral rather than
+  outlined like Continue. Connected sources: the row's line says when it synced (it led with six
+  characters of the sheet id and "gid 0"), and on a phone Remove stays beside the name (order) at
+  40 px. Recent Imports keeps its date on one line. Setup: the
+  subscriptions step reads "Regular payments" with no lead until the scan found some
+  (`found` on the scan's exposed API), a file card with only a name has no 24 px band under it
+  (Remove's negative margins), and the link buttons sit on the paragraph's edge. Tests:
+  `onboardingForms.test.tsx` "does not say it spotted payments when the scan found none",
+  `mappingSource.test.tsx` "says what Category types needs instead of an empty table", both seen
+  failing first. The Sheets tab's numbers are from headless Chromium at 1440, 820 and 390 px.
+- **Import's messages have no em dashes.** Each is a full stop, a colon or parentheses: the
+  preview's notes, the paste help, the bank tab's "no accounts yet", Recent Imports' line and its
+  delete confirm, Connected sources' toast and remove confirm, two errors, and a skipped row's
+  reason in both runtimes (`${invariant}: ${detail}`).
 - **A workbook's sheets are chosen on Map columns, and the Google Sheets tab lists no tabs.**
   maff, 19 Nov: what choosing an "Available sheets" chip did was unclear, and the label sat above
   the chips' line. File Upload drew a workbook's sheets as chips, but an upload that reads goes
