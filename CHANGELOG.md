@@ -37,6 +37,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Each advice card on Progress says which circle it counts toward**, and that line opens the circle.
 - **A statement from a bank the app knows opens on what it brings in.** Import shows the bank, how many entries and from when to when, the new categories and how many are already here, with one button to import them. Check the columns is still there for a closer look.
 - **After an import, Import lists each account it changed with its balance today**, and a field to set it to what your bank shows.
+- **The welcome mail's Find your subscriptions opens the scan.** It opened the list of bills. With nothing imported yet, the scan says so and offers an import.
 
 ### Fixed
 

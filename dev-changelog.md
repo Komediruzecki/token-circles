@@ -300,6 +300,23 @@ All notable changes to Token Circles are documented here. The format is based on
   `weekOneAhead`, and saves by itself when flipped. After a general unsubscribe it shows off and
   disabled. `ToggleField` takes `disabled`.
 
+- **The Welcome's Find your subscriptions opens the scan.** Its link was `#bills`, the list of
+  bills, with the scan one tab and one button away. It is `#bills?scan=1` now, the address Getting
+  started's subscription step already used: Bills opens on Subscriptions with the scan running
+  (`openScanFromLink`, `takeHashFlag`). New `shared/billsRoute.ts` holds `SUBSCRIPTION_SCAN_HASH`
+  for both (`WELCOME_STEPS` in `worker/src/emailTemplates.ts`, and `shared/orientation.ts`), as
+  `shared/importRoute.ts` does for `#import/bank`, and the step's link reads Scan for subscriptions
+  instead of Open Bills. `SubscriptionScanPanel` (`frontend/src/components/SubscriptionScan.tsx`)
+  now tells no transactions at all from none that recur: with none it says "No transactions to scan
+  yet." and, given `onImport` (the modal passes its `onClose`), offers Import a statement, a link to
+  `#import/bank` that closes the modal as it goes. The setup wizard passes no `onImport`. Guards:
+  `worker/test/email-templates.test.ts`, `welcome-once.test.ts` and `email-verification.test.ts`
+  (the step links `#bills?scan=1`, in the html and the text), and
+  `frontend/src/features/__tests__/billsScanLink.test.tsx` (an empty space gets the nothing-to-scan
+  state and the link to `#import/bank`, which closes the scan; a space with one transaction and no
+  subscription keeps the old empty state with no import offer, as the control). Each guard fails
+  with its change taken out.
+
 ### The first week, lived locally
 
 - **The week-one run counts from its scheduled time** (`worker/src/index.ts`, scheduled): the
