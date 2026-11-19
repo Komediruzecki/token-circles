@@ -10,7 +10,8 @@
   border: none;
   border-radius: 8px;
   background: transparent;
-  color: var(--text-muted);
+  /* --text-muted is no theme's token: without the fallback the dots took the card's ink. */
+  color: var(--text-muted, var(--text-secondary));
   cursor: pointer;
   transition:
     background 0.15s,
@@ -64,7 +65,14 @@
 
 .icon {
   display: inline-flex;
-  color: var(--text-muted);
+  color: var(--text-muted, var(--text-secondary));
+}
+
+/* A finger, not a pointer: each item is a full touch target. */
+@media (pointer: coarse) {
+  .item {
+    min-height: 44px;
+  }
 }
 
 .danger {
