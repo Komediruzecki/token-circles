@@ -55,6 +55,12 @@
   --surface-floating: #222b47;
   --border-floating: #5b698c;
 
+  /* A dialog's edge: the floating edge, 3.44:1 at worst against a ground under a dialog's backdrop
+     (--card-bg under 40% black) and 3.07:1 on the dialog's --card-bg. The sidebar-navy dialogs
+     (sign-in, Create Profile) take it too: 3.52:1 beside them, 3.60:1 on the navy. */
+  --border-dialog: #5b698c;
+  --border-dialog-sidebar: #5b698c;
+
   /* Action — azure */
   --primary: #6e9bff;
   --primary-hover: #93b4ff;

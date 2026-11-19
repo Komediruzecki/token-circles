@@ -248,7 +248,7 @@
 
 .modal {
   background: var(--card-bg);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-dialog);
   border-radius: 12px;
   width: 100%;
   max-width: min(480px, calc(100vw - 2rem));

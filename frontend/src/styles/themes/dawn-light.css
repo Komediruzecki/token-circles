@@ -56,6 +56,16 @@
   --surface-floating: #ffffff;
   --border-floating: #a1a9bd;
 
+  /* A dialog's edge. A dialog opens over a backdrop that dims the page to a mid grey, where the
+     floating edge all but vanishes (1.07:1), so this one stays light: the first step past --border
+     that clears 2:1 against every ground under every dialog backdrop in use (2.02:1 at worst, a
+     white card under --modal-overlay), a 1.25:1 hairline on the white surface. */
+  --border-dialog: #e0e6f6;
+  /* Sign-in and Create Profile are painted in the sidebar's navy. This is the colour their 22% mix
+     of --sidebar-text drew on it: 2.97:1 at worst on the page under their backdrop, 1.48:1 on the
+     navy. */
+  --border-dialog-sidebar: #2a3144;
+
   /* Action — azure (deep on light ground for contrast) */
   --primary: #3b6fe0;
   --primary-hover: #2f5cc4;

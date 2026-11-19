@@ -2768,6 +2768,54 @@ check')` first, as the cushion and debt cases do.
   background with a visible border, and `Analytics.tsx` must use it.
   `src/__tests__/floatingEdges.test.ts` lists it in `NOT_FLOATING` as a dialog, which that test
   leaves to `dialogEdges.test.ts`.
+- **Every dialog's edge is measured, in every theme.** "Every dialog has a visible edge", above,
+  gave each dialog an edge but no number for it, and a dialog opens over a backdrop that dims the
+  page, so its edge has to stand against the dimmed page, not the page at rest. Measured on 19 Nov
+  at 1440x900, 2 px outside each dialog's edge (the median of nine points along it), on the 19
+  dialogs a script could open: in Orbit Dark the `--border` edge, #26324f, stood 1.54 to 1.59:1
+  beside the dialog, and the subscription scan's and catalog's tinted edge 2.06 and 2.09:1; in the
+  deck, Analytics' day detail and Portfolio's Add Holding stood 1.24 and 1.34:1. The card-coloured
+  box itself stands 1.08 to 1.2:1 on the dimmed page in both, so nothing marked where a dialog
+  ended. A new token, `--border-dialog`, carries the edge and is set where each theme sets its
+  grounds, at the floating edge where that clears the numbers: #5b698c in Orbit and #5e656d in the
+  deck. After the change the edge stands 3.59 to 3.69:1 beside the dialog in Orbit (4.13 and 4.2:1
+  tinted) and 3.36 and 3.45:1 in the deck, and 3.07 and 3.12:1 on the dialog's own surface. At full
+  size it reads as a 1px line, not a frame, on the largest of them too (Add a loan, Add
+  Transaction). Dawn Light could not take its floating edge: its 40% navy backdrop dims a white card
+  to a grey that #a1a9bd matches at 1.07:1. A 2:1 edge against that grey is either light or
+  near-black, and a near-black line round a white box is a frame, so Dawn's `--border-dialog` is
+  #e0e6f6, the first step past `--border` (#dde4f5, 1.98:1) that clears 2:1 against every ground
+  under every dialog backdrop in use: 2.02:1 at worst, and 1.25:1 on the white surface, a hairline.
+  In the browser the old edge already stood 2.08:1 or more, and the change is small: the weakest is
+  now 2.18:1 (Add a loan, Add Retirement Goal). In Dawn the white box, 2.72 to 5.74:1 on the dimmed
+  page, is what separates a dialog from the page, not the line. Analytics' day detail opened over
+  its own 30% black, which left the page light enough that no edge short of white cleared 2:1 beside
+  it (#e0e6f6 measures 1.68:1 against a white card under it). Its `.day-backdrop` now takes
+  `--modal-overlay`, as the feature pages' dialogs do, so the page behind it dims more: to Dawn's
+  40% navy and to the deck's 72% near-black. Beside its edge in Dawn: 2.08:1 before, 2.46:1 after.
+  Sign-in and Create Profile are painted in the sidebar's navy in both themes and keep their own
+  edge where it passes. In Dawn their 22% mix of `--sidebar-text` drew #2a3144, 2.5:1 beside Create
+  Profile in the browser (2.97:1 at worst against the grounds) and 1.48:1 on the navy, so
+  `--border-dialog-sidebar` keeps that colour there. In Orbit it drew #282f40, 1.46:1 beside the
+  dialog, and the token takes the floating edge instead: #5b698c, 3.57:1 beside and 3.6:1 on the
+  navy. They need a token of their own because `--border-dialog` would draw a near-white line on
+  navy in Dawn. The guided entry sheet (`GuidedOrbit .sheet`), the subscription scan and the catalog
+  keep their tint of `--primary`, now mixed into `--border-dialog`. 26 border declarations changed,
+  one per stylesheet, and the day backdrop; no surface, radius, shadow, spacing or layout did. Not
+  opened by script, and covered by the stylesheet test only: the changelog (Settings' View Changelog
+  was not reached), the guided entry sheet, sign-in, API access's token reveal (cloud only), the
+  import preview (cloud connected sources), Add Recurring and Dashboard Views.
+- **Tests:** `src/__tests__/dialogEdges.test.ts` fails when a dialog surface it covers draws its
+  edge with anything but `var(--border-dialog)`, or, for sign-in and Create Profile,
+  `var(--border-dialog-sidebar)`. It reads every backdrop in the stylesheets that hold a dialog,
+  resolves `var(--modal-overlay)` per theme, and fails when Dawn, Orbit or the deck sets no
+  `--border-dialog` of its own, or one under 2:1 (light) or 3:1 (dark) against any of its six
+  grounds dimmed by any of those backdrops, or under 1.2:1 or 2:1 on its `--card-bg` and
+  `--surface`; and when a theme's `--border-dialog-sidebar` fails the same numbers beside the navy
+  dialogs or on `--sidebar-bg`. Taken out one at a time, each of these fails one test: the token in
+  `AccountsPage`'s modal, the deck's token, Dawn's value (put back to #a1a9bd), the day backdrop
+  (put back to 30%), Create Profile's token (put back to its own mix) and Orbit's
+  `--border-dialog-sidebar`.
 - **The unused `PeriodNavigator` and Budgets' unused dropdown rules are deleted.**
   `components/Dashboard/PeriodNavigator.tsx`, a month and year picker with arrows either side, and
   its stylesheet lost their last importer when `PeriodBar` took their place on Dashboard in #316
