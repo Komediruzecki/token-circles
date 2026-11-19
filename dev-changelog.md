@@ -779,9 +779,9 @@ All notable changes to Token Circles are documented here. The format is based on
     no other bank, and B is the bank it takes; else a new account named for B and the base currency
     ("N26 EUR"). A statement in another currency is set aside (round 3, below). The main account is
     the one setup's account step made; with none (setup reopened at the statement, or its account
-    step skipped), the newest account in the base currency named for no bank. The bank it takes is the first it received earlier in this
-    setup, else the first picked into it by hand, else the first statement in the list that fits
-    it. maff's decision reads "the first bank of this setup"; taken as the first whose statement
+    step skipped), the newest account in the base currency named for no bank. The bank it takes is
+    the first it received earlier in this setup, else the first picked into it by hand, else the
+    first statement in the list that fits it. maff's decision reads "the first bank of this setup"; taken as the first whose statement
     fits the main account, so a USD statement picked first leaves a EUR main account to the EUR
     bank after it.
   - **Placed again** (`FirstImport.tsx`, `placeStatements`) whenever a file is added or removed,
@@ -800,13 +800,14 @@ All notable changes to Token Circles are documented here. The format is based on
     `statements` for bank imports). After Back to setup the step says "Imported N transactions."
     where it offered the handed-over file's Open in Import, Back then Skip goes on to the
     subscriptions, and Done counts both imports.
-  - **Tests:** `statementTargets.test.ts` (12) and `setupStatements.test.tsx` (7: one after
-    another, Remove, two currencies of one bank, a hand pick that stays, and three on what setup
-    counts). Round 3 took out the cases that gave a statement in another currency an account. `onboardingFirstImport.test.tsx` "says when nothing in it is new" starts a fresh run
-    before its second import, as within one run the first import counts and Continue goes to the
-    subscriptions. With the old `defaultTarget` back, 4 placement cases fail; with the old wizard
-    and step, all 7 of `setupStatements.test.tsx`; without the currency in the main account's
-    choice, "reopened with several accounts, picks the newest in the statement's currency".
+  - **Tests:** `statementTargets.test.ts`, and in `setupStatements.test.tsx` one after another,
+    Remove, a hand pick that stays and three on what setup counts. Round 3 replaced the cases that
+    gave a statement in another currency an account (below). `onboardingFirstImport.test.tsx` "says
+    when nothing in it is new" starts a fresh run before its second import, as within one run the
+    first import counts and Continue goes to the subscriptions. Measured in round 2: with the old
+    `defaultTarget` back, 4 placement cases failed; with the old wizard and step, all 7 cases
+    `setupStatements.test.tsx` had then; without the currency in the main account's choice, the
+    case that picked the newest account in the statement's currency.
 - **The statement step says why its files were not read, and an empty export takes no
   account.** Review of 19 Nov, `components/onboarding/FirstImport.tsx`:
   - A read that stops before it counts any file (the category list not read, say) showed
