@@ -382,6 +382,17 @@ export const transactions = [
     }
   }),
 
+  scenario('a transaction sent without a currency is in the base currency', async (api, expect) => {
+    // The app's own requests always name one; a hand-written request or a script can leave it out.
+    // The Worker gave it 'USD', the column's DEFAULT, so a euro profile's subscription scan priced
+    // it in dollars. (The MCP server and /api/v1/import go through the import, which took the base.)
+    const body: Record<string, unknown> = entry({ description: 'No currency named', amount: 12 });
+    delete body.currency;
+    const id = await added(api, expect, '/api/transactions', body);
+    const row = (await api.get(`/api/transactions/${id}`)).body;
+    expect(row.currency).toBe('EUR');
+  }),
+
   scenario(
     'a category named like an account links the account on the Worker only',
     async (api, expect) => {

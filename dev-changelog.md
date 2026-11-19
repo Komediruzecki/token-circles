@@ -2908,6 +2908,24 @@ check')` first, as the cushion and debt cases do.
     `statementTargets.test.ts`, replacing the two-currencies cases and the main account in USD.
     Taken out one at a time: the rule's set-aside fails 4, keeping the statement in the import
     fails 2, and `setAside` without it fails 2.
+- **A transaction sent without a currency is in the base currency on the Worker too.** Round 3 of
+  the 19 Nov review: the scan's price fields read USD beside a total in EUR. `SubscriptionScan`
+  prices a row in the currency its transactions share (`commonCurrency`, `features/chargePatterns.ts`)
+  and takes the base currency only when they have none. The capture fixture posted its transactions
+  without a currency, and the Worker's `transactionDefaults` (`worker/src/routes/transactions.ts`)
+  filled in 'USD', the column's DEFAULT, where local-first takes the base currency
+  (`localTransactionDefaults`). The Worker now reads the base currency as a paid bill does
+  (`configuredBaseCurrency(...) ?? 'EUR'`), on create and on edit. The app's own requests always
+  name one (the transaction form, quick entry, the guided orbit), and the MCP server and
+  `/api/v1/import` go through the import, which already took the base currency, so only a
+  hand-written request, a script or a fixture met it: `frontend/tests/e2e-seed.ts` posts its
+  transactions without one, so a freshly seeded fixture's rows are in EUR now. Rows already stored
+  as USD stay as they are. The scan's and Bills' own code names no fixed currency; the other hit is
+  `DEFAULT 'USD'` on `transactions.currency` and `accounts.currency` in `0001_init.sql`, which stays
+  (migrations are append-only).
+  - **Test:** contract scenario "a transaction sent without a currency is in the base currency"
+    (`shared/contract/scenarios/transactions.ts`, both runtimes): before the change it passed on
+    local-first and failed on the Worker (expected 'USD' to be 'EUR'); it passes on both after.
 - **Import's messages have no em dashes.** Each is a full stop, a colon or parentheses: the
   preview's notes, the paste help, the bank tab's "no accounts yet", Recent Imports' line and its
   delete confirm, Connected sources' toast and remove confirm, two errors, and a skipped row's
