@@ -2578,19 +2578,19 @@ check')` first, as the cushion and debt cases do.
   What if stays.
 - **`OverflowMenu` follows the WAI-ARIA menu button pattern.** The menu is portalled, which took it
   out of the tab order. Opening now focuses its first item (ArrowUp on the trigger, the last), the
-  arrows wrap, Home and End jump, Escape and Tab close it with focus back on the trigger (Tab is
-  not prevented, so the browser moves on from there), and an item closes the menu before it runs.
-  A menu with no room below opens above. A scroll closes it only when the trigger has moved since
-  it opened: scroll events come a frame late, and the one for a scroll that came with the opening
-  press closed the menu at once (seen at 390 px when the page scrolled to the trigger as it was
-  pressed). Items are 44 px tall on a coarse pointer, and the trigger and icons fall back to
+  arrows wrap, Home and End jump, Escape and Tab close it with focus back on the trigger (Tab is not
+  prevented, so the browser moves on from there), and an item closes the menu before it runs. A menu
+  with no room below opens above. A scroll closes it only when the trigger has moved since it
+  opened: scroll events come a frame late, and the one for a scroll that came with the opening press
+  closed the menu at once (seen at 390 px when the page scrolled to the trigger as it was pressed).
+  Items are 44 px tall on a coarse pointer, and the trigger and icons fall back to
   `--text-secondary`, as `--text-muted` is not a theme token. The focused item draws a 2 px
-  `--primary` ring (4.6:1 on the light menu, 5.2:1 on the dark); hover keeps the tint, which focus
-  used to share at 1.14:1. The menu is a step lighter than the card on a dark page
-  (`color-mix(in oklab, var(--card-bg) 92%, white)`, which leaves a white card's menu white) with
-  an edge of `--text-secondary` mixed 55% into the card colour: 3.1:1 on the dark card and 2.4:1
-  on the light one, where it was the card's own colour with a 1.32:1 border. It sits at z-index
-  1500, above the floating add button's 1400, which covered its corner on a phone.
+  `--primary` ring (4.6:1 on Dawn's menu, 5.2:1 on Orbit's); hover keeps the tint, which focus used
+  to share at 1.14:1. The menu paints the floating pair, `--surface-floating` and
+  `--border-floating` ("Every floating surface draws its own edge", below): #222b47 with a #5b698c
+  edge in Orbit Dark and white with #a1a9bd in Dawn Light, an edge of 3.07 and 2.35:1 on the card,
+  where it was the card's own colour with a 1.32:1 border. It sits at z-index 1500, above the
+  floating add button, which covered its corner on a phone.
 - **Card figures** (`.figures`): `repeat(3, minmax(max-content, 1fr))` and a 12 px column gap, so
   an amount takes the width it needs. With `minmax(0, 1fr)` and `overflow-wrap: anywhere`,
   €175,923.83 broke after the 8 at 390 px.
