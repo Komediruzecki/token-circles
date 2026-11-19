@@ -696,15 +696,12 @@ All notable changes to Token Circles are documented here. The format is based on
     import, or no statement ready) its card offers Open in Import for that file
     (`handOver(file)`); after an import with such a file the step stays, so the card is seen,
     and Continue goes on.
-  - **Goes into, per file** (`defaultTarget`). What the code did: an account named for the bank
+  - **Goes into, per file.** What the code did: an account named for the bank
     (`resolveTargetAccount`), else the account setup made on this visit, else the newest account
     in the statement's currency, else a new account named for the bank. maff's Revolut statement
-    read "Goes into: Erste" through the second rule. Now, after the bank's own answer: the first
-    bank among the files keeps that fallback, except an account named for another bank
-    (`accountNamesBank` over every adapter but YNAB); every other bank gets a new account named
-    for it ("New account: N26 EUR"), since the main account holds one bank's statements and a
-    second bank's in it would add two banks' money up in one balance. One select per card,
-    "Goes into" beside it on one row (`.target`).
+    read "Goes into: Erste" through the second rule. The rule now is the one under "Each statement
+    goes into its own bank's account" below. One select per card, "Goes into" beside it on one
+    row (`.target`).
   - A YNAB Register file keeps sending each row to the account it names, beside other files.
   - Tests: `onboardingFirstImport.test.tsx` "several statements at once" (8) and "the account
     each file goes into" (3); with the one-file step put back, all 11 fail. Without the first-bank
@@ -716,10 +713,10 @@ All notable changes to Token Circles are documented here. The format is based on
 - **Setup waits on the Import page for a file it hands over, and Back to setup picks up again.**
   maff, 19 Nov: Open in Import finished setup, so after matching the columns and importing there
   was no way back to the subscription step or Done. Frontend only: no migration, no API change.
-  - **The wait** (`core/onboardingStore.ts`): `pauseOnboarding(imported)` closes the wizard with
-    nothing decided and keeps `{ owner, rerun, imported, here }` in memory; the record (or
-    local-first's pending marker) stays at the step reached, moved to `subscriptions` when anything
-    came in.
+  - **The wait** (`core/onboardingStore.ts`): `pauseOnboarding()` closes the wizard with
+    nothing decided and keeps `{ id, owner, rerun, decidedBefore, here }` in memory; what setup
+    imported is in its record (`setupSoFar()`, below). The account's record (or local-first's
+    pending marker) stays at the step reached, moved to `subscriptions` when anything came in.
     `noteImportWhileSetupWaits(n)`, called by `Import.tsx`'s `onImported`, adds an import made on
     the page and records `subscriptions`. `resumeOnboarding()` opens setup at `subscriptions` with
     anything imported, else at `import`. Before it opens a first run, it reads the account's record
@@ -773,6 +770,42 @@ All notable changes to Token Circles are documented here. The format is based on
     demo left, the way back and the next start open setup. `onboardingOnTheAccount.test.ts`: an
     import landing while the account is read again opens setup at the subscriptions. All five
     fail on the old store.
+- **Each statement goes into its own bank's account, and setup counts every import made for it.**
+  Review of 19 Nov (P1, P2, P5, P6, and the wizard not knowing what the Import page did). Frontend
+  only: no migration, no API change.
+  - **The rule** (`components/onboarding/statementTargets.ts`, pure). For a statement of bank B in
+    currency C (none in the file: the base currency): an account named for B in C
+    (`accountNamesBank`); else the main account, when it is in C, named for no other bank, and B is
+    the bank it takes; else a new account "B C". The main account is the one setup's account step
+    made; with none (setup reopened at the statement, or its account step skipped), the newest
+    account in C named for no bank. The bank it takes is the first it received earlier in this
+    setup, else the first picked into it by hand, else the first statement in the list that fits
+    it. maff's decision reads "the first bank of this setup"; taken as the first whose statement
+    fits the main account, so a USD statement picked first leaves a EUR main account to the EUR
+    bank after it.
+  - **Placed again** (`FirstImport.tsx`, `placeStatements`) whenever a file is added or removed,
+    every file but those picked by hand (`byHand`, kept until the file goes or the step clears).
+    The old code placed a file once, as it came: picked one after another, a second bank went into
+    the main account, and Remove left the other file on a new account with the main one empty.
+  - **Not the Import page's guess.** Setup no longer keeps `resolveTargetAccount`'s answer for a
+    file: a choice remembered for its signature, else an account named for the bank in any
+    currency. `processBankFiles` remembers every file's account, setup's defaults included, so the
+    map is no sign of a person's choice. The Import page still reads it.
+  - **One record of the setup** (`core/onboardingStore.ts`). `setupSoFar()` holds the main account,
+    the transactions imported, the accounts created, each statement and where it went, and the
+    accounts imported into, for the owner, until setup is decided, started again or the owner
+    changes. The statement step, the step after it, the leave question and Done all read it, and
+    `noteImportWhileSetupWaits` adds an Import page import to it (`ImportSummary` now carries
+    `statements` for bank imports). After Back to setup the step says "Imported N transactions."
+    where it offered the handed-over file's Open in Import, Back then Skip goes on to the
+    subscriptions, and Done counts both imports.
+  - **Tests:** `statementTargets.test.ts` (12) and `setupStatements.test.tsx` (7: one after
+    another, Remove, two currencies of one bank, a hand pick that stays, and three on what setup
+    counts). `onboardingFirstImport.test.tsx` "says when nothing in it is new" starts a fresh run
+    before its second import, as within one run the first import counts and Continue goes to the
+    subscriptions. With the old `defaultTarget` back, 4 placement cases fail; with the old wizard
+    and step, all 7 of `setupStatements.test.tsx`; without the currency in the main account's
+    choice, "reopened with several accounts, picks the newest in the statement's currency".
 
 ### State that follows the account
 

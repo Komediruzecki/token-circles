@@ -157,6 +157,12 @@ export interface ImportSummary {
    * transactions", or "No new transactions. ..." when every row was here before.
    */
   text: string
+  /**
+   * The bank statements in it (Bank Imports, and setup's statement step): each one's bank, its
+   * currency (the base currency when it names none) and the account it went into. Setup places
+   * its next statements by them (components/onboarding/statementTargets.ts).
+   */
+  statements: Array<{ bankId: BankId; currency: string; account: string }>
 }
 
 /**
@@ -1742,6 +1748,16 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
         createdCategories: data.created_categories ?? [],
         source,
         text,
+        statements:
+          activeImportTab() === 'bank-imports'
+            ? bankFiles()
+                .filter((row) => row.bankId !== null && !namesItsAccounts(row) && row.targetAccount)
+                .map((row) => ({
+                  bankId: row.bankId as BankId,
+                  currency: (row.meta.currency || getLocalCurrency()).toUpperCase(),
+                  account: row.targetAccount,
+                }))
+            : [],
       })
 
       // Reset after delay

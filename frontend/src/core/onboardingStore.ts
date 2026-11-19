@@ -63,6 +63,7 @@ import {
 } from './onboardingFlag'
 import { forgetTypedBalances } from './setupTypedBalances'
 import type { OnboardingDecision, OnboardingStep } from '../../../shared/accountStateKeys'
+import type { BankId } from './bankImport'
 
 // The step names are stored on the account and counted by the first-week measurement, so they
 // live with the record's other names in shared/.
@@ -128,6 +129,7 @@ export function setOnboardingOwner(next: string | null): void {
     furthestSent = null
     // Setup waits for the owner that left it: another sign-in finds nothing waiting.
     waiting[1](null)
+    soFar[1](null)
   }
   owner = next
   setAccountStateOwner(next)
@@ -274,6 +276,83 @@ const store = createRoot(() => {
   return { onboardingOpen, setOnboardingOpen, onboardingStep, setOnboardingStep }
 })
 
+/** A statement setup imported: its bank, its currency, and the account it went into. */
+export interface SetupStatement {
+  bankId: BankId
+  currency: string
+  account: string
+}
+
+/** An import that counts as setup's: the wizard's own, or the Import page's while setup waits. */
+export interface SetupImport {
+  imported: number
+  createdAccounts: readonly string[]
+  /** The bank statements in it, for where the next ones go (statementTargets.ts). */
+  statements: readonly SetupStatement[]
+  /** The accounts its transactions went into, when known. */
+  into?: readonly string[]
+}
+
+/**
+ * What this run of setup has done so far, kept here because the wizard closes, and opens anew,
+ * while setup waits on the Import page (review of 19 Nov, finding 12): its own copy began at
+ * nothing again, so the statement step, the step after it and Done's count left out what came in.
+ *
+ * - `main`: the account its account step made.
+ * - `imported`, `createdAccounts`: what its imports brought in and made, the wizard's and the
+ *   Import page's while setup waited.
+ * - `statements`: each bank statement imported, in order.
+ * - `into`: the accounts the transactions went into; null once an import's are not known.
+ */
+export interface SetupSoFar {
+  main: string | null
+  imported: number
+  createdAccounts: readonly string[]
+  statements: readonly SetupStatement[]
+  into: readonly string[] | null
+}
+
+const NOTHING_YET: SetupSoFar = {
+  main: null,
+  imported: 0,
+  createdAccounts: [],
+  statements: [],
+  into: [],
+}
+
+const soFar = createRoot(() => createSignal<(SetupSoFar & { owner: string }) | null>(null))
+
+/** What the current owner's setup has done so far; nothing for no setup under way. */
+export function setupSoFar(): SetupSoFar {
+  const kept = soFar[0]()
+  return kept !== null && kept.owner === owner ? kept : NOTHING_YET
+}
+
+function keepSoFar(change: (now: SetupSoFar) => SetupSoFar): void {
+  if (owner === null) return
+  soFar[1]({ ...change(setupSoFar()), owner })
+}
+
+/** The account setup's account step made, where the statements of the first bank go. */
+export function noteSetupAccount(name: string): void {
+  keepSoFar((now) => ({ ...now, main: name }))
+}
+
+/** Count an import as setup's. */
+export function noteSetupImport(done: SetupImport): void {
+  if (done.imported <= 0 && done.statements.length === 0) return
+  keepSoFar((now) => ({
+    ...now,
+    imported: now.imported + Math.max(0, done.imported),
+    createdAccounts: [...new Set([...now.createdAccounts, ...done.createdAccounts])],
+    statements: [...now.statements, ...done.statements],
+    into:
+      now.into === null || done.into === undefined
+        ? null
+        : [...new Set([...now.into, ...done.into])],
+  }))
+}
+
 /**
  * Setup waiting on the Import page (pauseOnboarding), or null.
  *
@@ -284,10 +363,8 @@ const store = createRoot(() => {
  * - `owner`: whose setup it is.
  * - `rerun`: setup had been finished or left before this run of it (Settings, the tour menu). Such
  *   a record never changes again, so the way back has nothing to ask the account.
- * - `imported`: transactions brought in on the way, by setup before it handed the file over or by
- *   the Import page since.
- * - `here`: those the Import page brought in, which its strip counts: setup's own were in before
- *   the file it handed over.
+ * - `here`: what the Import page brought in, which its strip counts: setup's own were in before
+ *   the file it handed over. All of it is setup's (setupSoFar).
  */
 interface SetupWait {
   id: number
@@ -295,7 +372,6 @@ interface SetupWait {
   rerun: boolean
   /** The decision this browser held as setup began to wait: local-first tells a new one by it. */
   decidedBefore: OnboardingStatus
-  imported: number
   here: number
 }
 
@@ -357,6 +433,7 @@ function decide(outcome: OnboardingDecision): void {
   const of = owner
   store.setOnboardingOpen(false)
   waiting[1](null)
+  soFar[1](null)
   // Left or finished: a local-only switch's setup never opens again by itself.
   clearLocalSetupPending()
   // Its "Balance today" figures say nothing about an import after it (review M2).
@@ -407,11 +484,11 @@ export function completeOnboarding() {
 
 /**
  * Leave setup waiting on the Import page, for a file it cannot read (OnboardingWizard, Open in
- * Import): closed, with nothing decided, at the step it reached. `imported` is what setup brought
- * in before it handed the file over: with any, the step reached is the subscriptions. The balances
+ * Import): closed, with nothing decided, at the step it reached. With anything setup brought in
+ * before it handed the file over (setupSoFar), the step reached is the subscriptions. The balances
  * typed in setup stay too, for the statements still to come (setupTypedBalances.ts).
  */
-export function pauseOnboarding(imported = 0): void {
+export function pauseOnboarding(): void {
   const of = owner
   store.setOnboardingOpen(false)
   if (of === null) return
@@ -419,27 +496,24 @@ export function pauseOnboarding(imported = 0): void {
     ? !firstSetupOfTheAccount()
     : getOnboardingStatus(of) !== null && !localSetupPending()
   const decidedBefore = getOnboardingStatus(of)
-  waiting[1]({
-    id: ++waits,
-    owner: of,
-    rerun,
-    decidedBefore,
-    imported: Math.max(0, imported),
-    here: 0,
-  })
+  waiting[1]({ id: ++waits, owner: of, rerun, decidedBefore, here: 0 })
   // The next start reads it beside the marker: decided since, it opens nothing.
   if (of === LOCAL_ONBOARDING_OWNER && localSetupPending()) noteLocalSetupWaiting(decidedBefore)
-  if (imported > 0) recordStep('subscriptions')
+  if (setupSoFar().imported > 0) recordStep('subscriptions')
 }
 
 /**
- * The Import page imported `imported` transactions while setup waited: the way back opens setup at
- * the subscriptions in them, and so does the next start if the person never takes it.
+ * The Import page imported `done` while setup waited: it counts as setup's own (setupSoFar), the
+ * way back opens setup at the subscriptions in it, and so does the next start if the person never
+ * takes it. A bare count is an import whose accounts are not known.
  */
-export function noteImportWhileSetupWaits(imported: number): void {
+export function noteImportWhileSetupWaits(done: SetupImport | number): void {
   const wait = waiting[0]()
-  if (wait === null || wait.owner !== owner || imported <= 0) return
-  waiting[1]({ ...wait, imported: wait.imported + imported, here: wait.here + imported })
+  const counted: SetupImport =
+    typeof done === 'number' ? { imported: done, createdAccounts: [], statements: [] } : done
+  if (wait === null || wait.owner !== owner || counted.imported <= 0) return
+  waiting[1]({ ...wait, here: wait.here + counted.imported })
+  noteSetupImport(counted)
   recordStep('subscriptions')
 }
 
@@ -485,8 +559,7 @@ export async function resumeOnboarding(): Promise<'opened' | 'finished' | 'unkno
     }
   }
   // As it is now: an import may have landed while the account was read.
-  const now = waiting[0]() ?? wait
-  startOnboarding(now.imported > 0 ? 'subscriptions' : 'import')
+  startOnboarding(setupSoFar().imported > 0 ? 'subscriptions' : 'import')
   return 'opened'
 }
 

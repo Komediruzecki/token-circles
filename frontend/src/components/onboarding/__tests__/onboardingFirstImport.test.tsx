@@ -314,6 +314,10 @@ describe('a statement from a bank the app reads', () => {
       expect(onboardingStep()).toBe('subscriptions')
     }, waitLong)
 
+    // A setup that has brought nothing in yet: after a reload, its import is the profile's, not
+    // this run's (within one run it counts, and Continue goes on to its subscriptions).
+    setOnboardingOwner(null)
+    setOnboardingOwner('local')
     await reopenAt('import')
     choose('revolut.csv', revolut())
     await readUntil('nothing-new')

@@ -29,12 +29,15 @@ import {
   Show,
   Switch,
 } from 'solid-js'
-import { accountNamesBank, listAdapters } from '../../core/bankImport'
+import { getLocalCurrency } from '../../core/api'
+import { listAdapters } from '../../core/bankImport'
 import { IMPORT_ACCOUNT_TYPES } from '../../features/import/accountTypeChoices'
 import { createImportFlow, namesItsAccounts } from '../../features/import/importFlow'
 import { dayText } from '../../utils/dayText'
 import styles from './Onboarding.module.css'
+import { currencyOrBase, newAccountName, statementTargets } from './statementTargets'
 import type { BankId } from '../../core/bankImport'
+import type { SetupSoFar } from '../../core/onboardingStore'
 import type { BankFileRow, ImportSummary } from '../../features/import/importFlow'
 import type { HandedImportFile } from '../../features/import/importHandoff'
 
@@ -77,8 +80,13 @@ export interface FileCounts {
 }
 
 export interface FirstImportOptions {
-  /** The account setup just created, where a statement goes unless its bank names another. */
+  /** The account setup's account step made: the main account (statementTargets.ts). */
   preferredAccount: () => string | null
+  /**
+   * What setup has done so far, the wizard's earlier visits and the Import page's imports while
+   * setup waited included: where the next statements go, and the result the step shows.
+   */
+  soFar?: () => SetupSoFar
   /** Each import that went through, with what it brought in. */
   onImported: (summary: ImportSummary) => void
 }
@@ -134,6 +142,15 @@ export function createFirstImport(options: FirstImportOptions) {
    * reads as here already.
    */
   const [importedInto, setImportedInto] = createSignal<string[] | null>(null)
+  /**
+   * The result of setup's earlier imports stands in for this step's own until the person brings in
+   * another statement: a step opened again (Back to setup, Back from the subscriptions) shows
+   * what came in, as the step that imported it did.
+   */
+  const [earlierShown, setEarlierShown] = createSignal(true)
+  const earlier = (): SetupSoFar | null => options.soFar?.() ?? null
+  // Files whose account the person picked: theirs stays when the set of files changes.
+  const byHand = new Set<File>()
   // Clear abandons what is under way: a read that finishes after it changes nothing.
   let generation = 0
   // One change at a time, each reading the whole batch: a second pick waits for the first.
@@ -230,7 +247,9 @@ export function createFirstImport(options: FirstImportOptions) {
 
   const state = (): FirstImportState => {
     if (imported()) return 'imported'
-    if (chosen().length === 0) return 'empty'
+    if (chosen().length === 0) {
+      return earlierShown() && (earlier()?.imported ?? 0) > 0 ? 'imported' : 'empty'
+    }
     if (reading()) return 'reading'
     const states = chosen().map(stateOf)
     if (states.includes('ready')) return 'ready'
@@ -302,46 +321,37 @@ export function createFirstImport(options: FirstImportOptions) {
 
   /** The account a new statement goes into, when nothing names one: "Revolut EUR". */
   const suggestedName = (row: BankFileRow) =>
-    [bankLabel(row.bankId), row.meta.currency].filter(Boolean).join(' ') || 'Imported account'
-
-  /** An account named for a bank other than `bankId`: Erste is not where Revolut goes. */
-  const namedForAnotherBank = (
-    account: { name: string; bank_name?: string | null },
-    bankId: BankId | null
-  ) =>
-    listAdapters().some(
-      (adapter) =>
-        adapter.id !== bankId && adapter.id !== 'ynab' && accountNamesBank(account, adapter.id)
-    )
+    row.bankId
+      ? newAccountName(row.bankId, currencyOrBase(row.meta.currency, getLocalCurrency()))
+      : 'Imported account'
 
   /**
-   * Where a statement goes when the bank's own answer named no account (resolveTargetAccount: a
-   * choice remembered for it, its IBAN, or an account named for its bank).
-   *
-   * The first bank among the files keeps setup's fallback: the account setup made on this visit;
-   * else one the profile has (setup reopened at this step, or run again), the newest in the
-   * statement's currency, else the newest whose currency is not known. A new account beside one
-   * the person just added would split their money in two, and a statement in one currency does
-   * not belong in an account kept in another. Never an account named for another bank: a Revolut
-   * statement went into an account called Erste (maff, 19 Nov).
-   *
-   * Every other bank gets a new account named for it. The main account holds one bank's
-   * statements, and a second bank's in it would add two banks' money up in one balance.
+   * Every statement's account by setup's rule (statementTargets.ts), but the ones the person
+   * picked: run whenever the set of files changes, added or removed. Each file's own answer
+   * (resolveTargetAccount, on the Import page's terms) is not kept: it took an account named for
+   * the bank in any currency, and the first file only was ever placed again.
    */
-  const defaultTarget = (row: BankFileRow): string => {
-    const first = flow.bankFiles().find((other) => !namesItsAccounts(other))
-    if (first && first.bankId !== row.bankId) return suggestedName(row)
-    const usable = flow.bankAccounts().filter((a) => !namedForAnotherBank(a, row.bankId))
-    const preferred = options.preferredAccount()
-    if (preferred && usable.some((a) => a.name === preferred)) return preferred
-    const currency = row.meta.currency?.toUpperCase()
-    const fits = usable.filter(
-      (a) => !currency || !a.currency || a.currency.toUpperCase() === currency
-    )
-    if (fits.length === 0) return suggestedName(row)
-    const same = fits.filter((a) => currency && a.currency?.toUpperCase() === currency)
-    const pool = same.length > 0 ? same : fits
-    return pool.reduce((newest, a) => (a.id > newest.id ? a : newest), pool[0]).name
+  const placeStatements = () => {
+    const rows = flow.bankFiles()
+    const placed = rows.filter((row) => row.bankId !== null && !namesItsAccounts(row))
+    if (placed.length === 0) return
+    const accounts = flow.bankAccounts()
+    const targets = statementTargets({
+      statements: placed.map((row) => ({
+        bankId: row.bankId as BankId,
+        currency: row.meta.currency ?? null,
+        byHand: byHand.has(row.file) ? row.targetAccount : null,
+      })),
+      earlier: earlier()?.statements ?? [],
+      accounts,
+      made: options.preferredAccount(),
+      base: getLocalCurrency(),
+    })
+    placed.forEach((row, at) => {
+      const index = rows.indexOf(row)
+      if (targets[at] !== row.targetAccount)
+        flow.updateBankFile(index, { targetAccount: targets[at] })
+    })
   }
 
   const targetChoices = (row: BankFileRow): TargetChoice[] => {
@@ -406,11 +416,7 @@ export function createFirstImport(options: FirstImportOptions) {
       for (let index = rows.length - 1; index >= 0; index--) {
         if (!rows[index].bankId) flow.removeBankFile(index)
       }
-      for (const file of still) {
-        const index = flow.bankFiles().findIndex((row) => row.file === file)
-        if (index < 0 || flow.bankFiles()[index].targetAccount) continue
-        flow.updateBankFile(index, { targetAccount: defaultTarget(flow.bankFiles()[index]) })
-      }
+      placeStatements()
       await prepare(mine)
       if (mine !== generation) return
       // What the import makes them as: Credit Card, until the person chooses another.
@@ -420,9 +426,10 @@ export function createFirstImport(options: FirstImportOptions) {
     })
   }
 
-  /** Leave a file out: the others are read again without it. */
+  /** Leave a file out: the others are read again without it, and placed again. */
   const remove = (file: File): Promise<void> => {
     if (importing()) return Promise.resolve()
+    byHand.delete(file)
     const left = chosen().filter((entry) => entry.file !== file)
     if (left.length === 0) {
       clear()
@@ -434,6 +441,7 @@ export function createFirstImport(options: FirstImportOptions) {
       // Set aside, it was never in the import: nothing to read again.
       if (index < 0) return
       flow.removeBankFile(index)
+      placeStatements()
       await prepare(mine)
     })
   }
@@ -441,6 +449,7 @@ export function createFirstImport(options: FirstImportOptions) {
   /** Send a statement to another account: its rows name the account, so it is read again. */
   const setTarget = (file: File, name: string): Promise<void> => {
     if (importing()) return Promise.resolve()
+    byHand.add(file)
     return run(async (mine) => {
       const index = flow.bankFiles().findIndex((row) => row.file === file)
       if (index < 0) return
@@ -459,9 +468,16 @@ export function createFirstImport(options: FirstImportOptions) {
   function clear() {
     generation++
     flow.resetForm()
+    byHand.clear()
     setChosen([])
     setImported(null)
     setImportedInto(null)
+  }
+
+  /** Bring in another statement: the picker, past the result shown. */
+  const another = () => {
+    setEarlierShown(false)
+    clear()
   }
 
   /**
@@ -471,6 +487,8 @@ export function createFirstImport(options: FirstImportOptions) {
   const handOver = (file?: File): Omit<HandedImportFile, 'typed'> | null => {
     const entry = file ? chosen().find((one) => one.file === file) : setAside()[0]
     if (!entry) return null
+    // It is the Import page's now: the step offers it no more.
+    setChosen((list) => list.filter((one) => one !== entry))
     return { file: entry.file, tab: entry.bankId ? 'bank-imports' : 'file-upload' }
   }
 
@@ -520,6 +538,8 @@ export function createFirstImport(options: FirstImportOptions) {
     setTarget,
     importNow,
     clear,
+    another,
+    earlier,
     handOver,
     /** Open the system's file picker: the footer's "Choose a file", and Add another file. */
     openPicker: () => picker?.click(),
@@ -619,20 +639,28 @@ export function FirstImportPanel(props: {
     return names.length === 0 ? '' : `New categories: ${someOf(names)}.`
   }
 
-  /** Where the imported transactions went: the accounts a register named, else the ones chosen. */
+  /**
+   * What setup brought in, as setup counts it (setupSoFar: this step's imports, its earlier ones
+   * and the Import page's while setup waited), and where it went: the accounts a register named,
+   * else the ones chosen. Without what setup counts, this step's own import.
+   */
   const doneLine = () => {
     const summary = importer.imported()
-    if (!summary || summary.imported === 0) {
+    if (summary && summary.imported === 0) {
       return 'Nothing new was imported: every transaction in it was here already.'
     }
-    const into = importer.importedInto() ?? []
+    const earlier = importer.earlier()
+    const total = earlier?.imported || summary?.imported || 0
+    if (total === 0) return 'Nothing new was imported: every transaction in it was here already.'
+    const into = earlier ? earlier.into : (importer.importedInto() ?? [])
+    if (into === null) return `Imported ${counted(total, 'transaction')}.`
     const where =
       into.length === 0
         ? 'your account'
         : into.length <= 3
           ? listed(into)
           : counted(into.length, 'account')
-    return `Imported ${counted(summary.imported, 'transaction')} into ${where}.`
+    return `Imported ${counted(total, 'transaction')} into ${where}.`
   }
 
   /** A file set aside can go to Import from its card when nothing else is waiting to import. */
@@ -893,7 +921,7 @@ export function FirstImportPanel(props: {
               class={styles.linkBtn}
               data-test-id="onboarding-import-another"
               onClick={() => {
-                importer.clear()
+                importer.another()
               }}
             >
               Bring in another statement

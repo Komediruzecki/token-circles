@@ -50,10 +50,13 @@ import {
   goToOnboardingStep,
   markLocalSetupPending,
   nextOnboardingStep,
+  noteSetupAccount,
+  noteSetupImport,
   onboardingOpen,
   onboardingStep,
   pauseOnboarding,
   prevOnboardingStep,
+  setupSoFar,
   skipOnboarding,
 } from '../../core/onboardingStore'
 import { rememberTypedBalance, typedBalances } from '../../core/setupTypedBalances'
@@ -90,7 +93,6 @@ import { workBackTypedBalances } from './setupBalances'
 import type { AnswerChanges, Answers } from '../../../../shared/guidance/answers'
 import type { OrientationStep } from '../../../../shared/orientation'
 import type { AchievementsSnapshot } from '../../core/achievementsStore'
-import type { ImportSummary } from '../../features/import/importFlow'
 import type { AccountType } from '../../types/models'
 import type { ProfileHolds } from './doneLine'
 import type { LocalWorkspace, ProfileCounts } from './localOnly'
@@ -249,10 +251,11 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
   const state = useAppState()
 
   // ---- what this visit did, for Done's summary ----
+  // What setup imported is the store's (setupSoFar): the wizard closes while setup waits on the
+  // Import page and opens anew, and the page's imports meanwhile count as setup's own.
   const [createdAccounts, setCreatedAccounts] = createSignal<
     (CreatedAccount & { type: AccountType })[]
   >([])
-  const [importSummary, setImportSummary] = createSignal<ImportSummary | null>(null)
   const [subsAdded, setSubsAdded] = createSignal(0)
 
   // ---- step: your space ----
@@ -410,6 +413,7 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
   const accountForm = createFirstAccountForm({
     onCreated: async (account) => {
       setCreatedAccounts((prev) => [...prev, { ...account, type: account.type as AccountType }])
+      noteSetupAccount(account.name)
       // What the bank shows now, kept for the statements to come (review M2).
       if (account.typed && account.id !== null) {
         rememberTypedBalance({ id: account.id, figure: account.balance, asOf: localToday() })
@@ -436,19 +440,17 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
 
   // ---- step: a statement ----
   const firstImport = createFirstImport({
-    preferredAccount: () => createdAccounts().at(-1)?.name ?? null,
+    preferredAccount: () => setupSoFar().main ?? createdAccounts().at(-1)?.name ?? null,
+    soFar: setupSoFar,
     onImported: (summary) => {
-      // Totals add up across statements: "Bring in another statement" keeps the earlier ones.
-      setImportSummary((prev) =>
-        prev
-          ? {
-              ...summary,
-              imported: prev.imported + summary.imported,
-              duplicatesSkipped: prev.duplicatesSkipped + summary.duplicatesSkipped,
-              createdAccounts: [...new Set([...prev.createdAccounts, ...summary.createdAccounts])],
-            }
-          : summary
-      )
+      // Totals add up across statements and visits: "Bring in another statement" keeps the
+      // earlier ones, and so does a wizard opened again after waiting on the Import page.
+      noteSetupImport({
+        imported: summary.imported,
+        createdAccounts: summary.createdAccounts,
+        statements: summary.statements,
+        into: firstImport.importedInto() ?? undefined,
+      })
       // "Balance today" is what the bank shows now (review M2): the accounts this visit made with
       // one typed read it again, with the statement worked back from it.
       if (summary.imported > 0) {
@@ -469,7 +471,7 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
 
   /** Past the statement: its subscriptions when an import brought transactions in, else Done. */
   const afterStatement = () => {
-    goToOnboardingStep((importSummary()?.imported ?? 0) > 0 ? 'subscriptions' : 'done')
+    goToOnboardingStep(setupSoFar().imported > 0 ? 'subscriptions' : 'done')
   }
 
   /** Skip, with a statement ready: it asks, since the files would be dropped. */
@@ -501,7 +503,7 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
     // The balances typed here go with the file, for its import on the Import page to work back
     // from, as setup's own import would have (M2).
     handFileToImport(handed.file, handed.tab, typedBalances())
-    pauseOnboarding(importSummary()?.imported ?? 0)
+    pauseOnboarding()
     window.location.hash = 'import'
   }
 
@@ -538,7 +540,7 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
   const accountsHeld = () =>
     Math.max(
       profileAccounts().length,
-      createdAccounts().length + (importSummary()?.createdAccounts.length ?? 0)
+      createdAccounts().length + setupSoFar().createdAccounts.length
     )
 
   /** "Personal Profile has 1 account, 69 transactions and 1 regular payment tracked on Bills." */
@@ -549,7 +551,7 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
       from === 'visit'
         ? {
             accounts: accountsHeld(),
-            transactions: importSummary()?.imported ?? 0,
+            transactions: setupSoFar().imported,
             bills: subsAdded(),
           }
         : holdsOf(from, accountsHeld())
@@ -620,7 +622,7 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
     if (leavePromptOpen) return
     leavePromptOpen = true
     try {
-      const imported = (importSummary()?.imported ?? 0) > 0
+      const imported = setupSoFar().imported > 0
       const sure = await showConfirm(
         leaveSetupQuestion(onboardingStep(), spaceScreen(), imported),
         {

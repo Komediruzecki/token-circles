@@ -10,6 +10,7 @@ import {
   importedWhileSetupWaits,
   nextOnboardingStep,
   noteImportWhileSetupWaits,
+  noteSetupImport,
   ONBOARDING_STEPS,
   onboardingMirrorSettled,
   onboardingOpen,
@@ -287,7 +288,9 @@ describe('onboardingStore', () => {
     function waitAtTheStatement(imported = 0): void {
       startOnboarding()
       goToOnboardingStep('import')
-      pauseOnboarding(imported)
+      // What setup brought in itself before it handed a file over.
+      noteSetupImport({ imported, createdAccounts: [], statements: [] })
+      pauseOnboarding()
     }
 
     it('closes with nothing decided, keeps the step reached, and opens again there', async () => {

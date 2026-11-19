@@ -102,7 +102,14 @@ export default function Import() {
       // While setup waits for this statement, its next step is the subscription scan: the page
       // leaves the offer to it, and the way back opens setup there.
       const waiting = setupWaiting()
-      if (waiting) noteImportWhileSetupWaits(summary.imported)
+      // Setup's own, as the wizard's are: what it counts and where its next statements go.
+      if (waiting) {
+        noteImportWhileSetupWaits({
+          imported: summary.imported,
+          createdAccounts: summary.createdAccounts,
+          statements: summary.statements,
+        })
+      }
       setAfter({
         text: summary.text,
         imported: summary.imported,
