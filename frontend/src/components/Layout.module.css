@@ -498,12 +498,16 @@
 }
 
 /* Floating quick-add button — the universal entry point (opens the Guided
-   Orbit). Positioned bottom-right, above page content, on every screen size. */
+   Orbit). Positioned bottom-right, above page content, on every screen size.
+   Under everything that opens over the page: at 90 it is over the page's own floating pieces (the
+   section rail and the passkey offer at 60, the period bar at 20) and under the lowest backdrop,
+   the phone drawer's and the filter dropdowns' at 99, so a press there reaches the dialog, the
+   drawer or the popover that is open. At 1400 it sat over every dialog's backdrop (1000). */
 .fab {
   position: fixed;
   right: var(--fab-offset);
   bottom: var(--fab-offset);
-  z-index: 1400;
+  z-index: 90;
   width: var(--fab-size);
   height: var(--fab-size);
   border-radius: 50%;

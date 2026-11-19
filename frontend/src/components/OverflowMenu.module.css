@@ -30,7 +30,7 @@
 /* A floating surface draws its own edge, in every theme: the menu opens over a card of its own old
    colour, and a shadow does not show on a dark page. Its surface and edge are the theme's floating
    pair, which this menu's values set (src/__tests__/floatingEdges.test.ts). Above the floating add
-   button (Layout.module.css .fab, 1400), so an open menu is never under it. */
+   button (Layout.module.css .fab, 90), so an open menu is never under it. */
 .menu {
   position: fixed;
   z-index: 1500;

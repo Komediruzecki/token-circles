@@ -146,3 +146,66 @@ test.describe('room for the floating add button, on a phone', () => {
     ])
   })
 })
+
+/**
+ * What a press at the button's centre reaches: `button` for the button itself, or the test id of
+ * the nearest element around what it reaches instead.
+ */
+async function pressAtButton(page: Page): Promise<{ reaches: string; x: number; y: number }> {
+  return page.evaluate(() => {
+    const button = document.querySelector<HTMLElement>('button[aria-label="Quick add entry"]')!
+    const box = button.getBoundingClientRect()
+    const x = box.left + box.width / 2
+    const y = box.top + box.height / 2
+    const el = document.elementFromPoint(x, y)
+    const reaches =
+      el && button.contains(el)
+        ? 'button'
+        : (el?.closest('[data-test-id]')?.getAttribute('data-test-id') ?? el?.tagName ?? 'nothing')
+    return { reaches, x, y }
+  })
+}
+
+/**
+ * The button floats over the page, and under whatever opens over the page: a dialog's backdrop,
+ * the phone's drawer. It sat at z-index 1400, over every dialog's backdrop at 1000 and the
+ * drawer's at 99, so a press there opened the Guided Orbit over the dialog (19 Nov 2026).
+ */
+test.describe('the floating add button, under what opens over the page', () => {
+  test.use({ viewport: { width: 1440, height: 900 } })
+
+  test('a dialog covers it, and a press there reaches the dialog @smoke', async ({ page }) => {
+    await leaveOnboarding(page)
+    await gotoServerless(page, 'loans', 'add-loan-btn')
+    expect((await pressAtButton(page)).reaches, 'over the page').toBe('button')
+
+    await page.getByTestId('add-loan-btn').click()
+    const dialog = page.getByTestId('loans-modal')
+    await expect(dialog).toBeVisible()
+    const { reaches, x, y } = await pressAtButton(page)
+    expect(reaches, 'under the dialog').toBe('loans-modal')
+
+    // The press lands on the dialog's backdrop, which shuts it; the Guided Orbit stays shut. Shut,
+    // the orbit stays on the page to fade, so it is told by its aria-modal, set only while open.
+    await page.mouse.click(x, y)
+    await expect(dialog).toBeHidden()
+    await expect(page.locator('[role="dialog"][aria-label="Add transaction"]')).toHaveCount(1)
+    await expect(
+      page.locator('[role="dialog"][aria-label="Add transaction"][aria-modal="true"]')
+    ).toHaveCount(0)
+  })
+})
+
+test.describe('the floating add button, under the drawer on a phone', () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })
+
+  test('the open drawer covers it @smoke', async ({ page }) => {
+    await leaveOnboarding(page)
+    await gotoServerless(page, 'loans', 'add-loan-btn')
+    expect((await pressAtButton(page)).reaches, 'over the page').toBe('button')
+
+    await page.getByRole('button', { name: 'Toggle sidebar' }).click()
+    await expect(page.locator('nav').first()).toBeInViewport()
+    expect((await pressAtButton(page)).reaches, 'under the drawer').not.toBe('button')
+  })
+})

@@ -2839,6 +2839,22 @@ check')` first, as the cushion and debt cases do.
   elsewhere before the form shuts stays there. `frontend/tests/loan-form-focus.spec.ts` (@smoke)
   does the same in the browser with the add button and the card menu's Edit; both failed before the
   change, with focus left on the button.
+- **The floating add button sits under whatever opens over the page.** At z-index 1400 it was
+  over every dialog's backdrop (1000) and the phone drawer's (99): with the loan form open, a press
+  on it opened the Guided Orbit over the form. Measured with `document.elementFromPoint` at the
+  button's centre on 19 Nov, a press reached the button through 14 of the 24 things opened by script
+  (Add a loan and Edit, Add bill and the bill calendar's day, New Goal, Budgets, Transactions,
+  Housing, Portfolio and Retirement, Create profile, the keyboard shortcuts, the phone drawer, and
+  Add a loan on a phone). At 90 (`components/Layout.module.css`) it is over the page's own floating
+  pieces, the section rail and the passkey offer at 60 and the period bar at 20, and under the
+  lowest backdrop, the drawer's and the filter dropdowns' at 99: each of those 14 now reaches the
+  dialog, the drawer or the popover's backdrop. The card menu and the profile menu draw no backdrop
+  and do not reach the button's corner, so a press there still reaches it; a toast does not reach
+  it either.
+- **Tests:** `frontend/tests/floating-button-room.spec.ts` (@smoke) opens Add a loan and fails
+  unless a press at the button's centre reaches the dialog's backdrop, shuts the form and leaves the
+  Guided Orbit shut, and on a 390 x 844 phone opens the drawer and fails while the button is what
+  a press there reaches. With the button back at 1400 both fail, and the press alone fails too.
 - **No extra-payment label stands on the loan's line.** A label above its mark and to the left of it
   was placed at the mark's height, where the line has not yet come down to the mark, so the line ran
   through it. The review's sweep (`LoanPayoffChart` in jsdom: the boat with one extra payment at
