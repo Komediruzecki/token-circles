@@ -932,7 +932,7 @@ export async function executeImport(
       })();
       skippedItems.push({
         index: ri,
-        reason: detail ? `${invariantError} — ${detail}` : invariantError,
+        reason: detail ? `${invariantError}: ${detail}` : invariantError,
         label: importRowLabel(dateRaw, description),
       });
       continue;

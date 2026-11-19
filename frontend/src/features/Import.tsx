@@ -413,9 +413,10 @@ export default function Import() {
                     <summary style={{ cursor: 'pointer', 'font-size': '14px' }}>
                       <strong>{log.source || 'Import'}</strong>
                       <span style={{ color: 'var(--text-secondary)', 'margin-left': '8px' }}>
-                        {new Date(log.created_at).toLocaleString()} — {log.imported} imported
+                        {new Date(log.created_at).toLocaleString()} ({log.imported} imported
                         {log.duplicates_skipped > 0 &&
                           `, ${log.duplicates_skipped} duplicates skipped`}
+                        )
                       </span>
                     </summary>
                     <div
@@ -466,7 +467,7 @@ export default function Import() {
                         }}
                         onClick={async () => {
                           const ok = await showConfirm(
-                            `Delete this import — "${log.source || 'Import'}" (${log.imported} transaction${log.imported === 1 ? '' : 's'})? This removes the transactions it created and recomputes balances.`,
+                            `Delete this import: "${log.source || 'Import'}" (${log.imported} transaction${log.imported === 1 ? '' : 's'})? This removes the transactions it created and recomputes balances.`,
                             { danger: true, confirmText: 'Delete import' }
                           )
                           if (!ok) return

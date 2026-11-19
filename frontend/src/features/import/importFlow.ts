@@ -1052,7 +1052,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
         .filter((name): name is string => name !== null)
       if (failed.length > 0) {
         setError(
-          `Could not read ${failed.join(', ')} — try dropping the file${failed.length === 1 ? '' : 's'} again`
+          `Could not read ${failed.join(', ')}. Try dropping the file${failed.length === 1 ? '' : 's'} again.`
         )
       }
       if (analyzed.length > 0) {
@@ -1349,7 +1349,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
       const { result, filename } = outcome
       setBankWarnings(result.warnings)
       if (result.rows.length === 0) {
-        setError('No transactions after recalculation — check your rules')
+        setError('No transactions after recalculation. Check your rules.')
         return
       }
       setUploadResult(bankUploadResult(result, filename))

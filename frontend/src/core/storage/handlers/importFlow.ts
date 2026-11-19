@@ -1098,7 +1098,7 @@ export async function importExecute(body: unknown): Promise<Response> {
         })()
         skipped.push({
           index: i,
-          reason: detail ? `${invariantError} — ${detail}` : invariantError,
+          reason: detail ? `${invariantError}: ${detail}` : invariantError,
           label: importRowLabel(row.date, row.description),
         })
         continue

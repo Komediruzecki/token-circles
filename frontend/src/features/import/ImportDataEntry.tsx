@@ -389,7 +389,7 @@ export function ImportDataEntry(props: {
       {flow.activeImportTab() === 'paste-csv' && (
         <>
           <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 12px;">
-            Paste tabular data straight from Excel, Google Sheets, or any spreadsheet app — it's
+            Paste tabular data straight from Excel, Google Sheets, or any spreadsheet app. It's
             parsed right in your browser.
           </p>
           <form {...pasteForm.attrs} data-test-id="import-paste-form">
@@ -533,7 +533,7 @@ export function ImportDataEntry(props: {
                 color: 'var(--text-secondary)',
               }}
             >
-              You have no accounts yet — pick "New account…" in a statement's account dropdown to
+              You have no accounts yet. Pick "New account…" in a statement's account dropdown to
               create one right here.
             </p>
           )}

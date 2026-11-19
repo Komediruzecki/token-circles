@@ -67,7 +67,7 @@ export function ConnectedSources(props: {
         summary.imported > 0
           ? `${summary.imported} imported${summary.duplicatesSkipped ? ` · ${summary.duplicatesSkipped} skipped` : ''}`
           : summary.duplicatesSkipped
-            ? `Nothing new — ${summary.duplicatesSkipped} already imported`
+            ? `Nothing new: ${summary.duplicatesSkipped} already imported`
             : 'Nothing new to import'
       addToast(text, summary.imported > 0 ? 'success' : 'info')
     },
@@ -154,7 +154,7 @@ export function ConnectedSources(props: {
 
   async function removeSource(src: ImportSource) {
     const ok = await showConfirm(
-      `Remove "${src.label}"? This deletes only the saved link — your imported transactions stay.`,
+      `Remove "${src.label}"? This deletes only the saved link. Your imported transactions stay.`,
       { danger: true, confirmText: 'Remove' }
     )
     if (!ok) return
