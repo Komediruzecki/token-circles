@@ -63,15 +63,69 @@ const chart = (page: Page): Locator => page.getByTestId('loans-item-chart')
 const menu = (page: Page): Locator => page.getByTestId('loans-menu')
 
 /** Saved through the app's own client, so the page reads its list again as after any write. */
-async function addLoans(page: Page): Promise<void> {
+async function addLoans(page: Page, loans: typeof LOANS = LOANS): Promise<void> {
   await page.evaluate(async (loans) => {
     const spec = '/src/core/api.ts'
     const mod = (await import(/* @vite-ignore */ spec)) as {
       apiPost: (url: string, body: unknown) => Promise<unknown>
     }
     for (const loan of loans) await mod.apiPost('/api/loans', loan)
-  }, LOANS)
-  for (const loan of LOANS) await expect(card(page, loan.name)).toHaveCount(1, { timeout: 15_000 })
+  }, loans)
+  for (const loan of loans) await expect(card(page, loan.name)).toHaveCount(1, { timeout: 15_000 })
+}
+
+// Seven figures owed, made up: the widest amounts the chart's figures have to fit beside each other.
+const BIG = {
+  name: 'zz-chart-big',
+  principal: 1_250_000,
+  interest_rate: 3.5,
+  term_months: 300,
+  start_date: monthsAgo(23),
+}
+
+/**
+ * How the open chart sits in its box: how far anything in it reaches past the box's border, how
+ * far the page scrolls sideways, how far the drawing's width is from its wrap's, how many of the
+ * four figures broke onto a second line, and, when the sentence on top wraps, whether its last
+ * line is at least half its longest (a word or two alone on the last line is a short one).
+ */
+function chartFit(page: Page) {
+  return chart(page).evaluate((panel) => {
+    const box = panel.firstElementChild as HTMLElement
+    const style = window.getComputedStyle(box)
+    const edge = box.getBoundingClientRect()
+    const left = edge.left + parseFloat(style.borderLeftWidth)
+    const right = edge.right - parseFloat(style.borderRightWidth)
+    let past = 0
+    for (const el of box.querySelectorAll('*')) {
+      const r = el.getBoundingClientRect()
+      if (r.width === 0 && r.height === 0) continue
+      past = Math.max(past, r.right - right, left - r.left)
+    }
+    const wrapped = [...box.querySelectorAll('[data-test-id="loans-chart-readout"] dd')].filter(
+      (dd) =>
+        dd.getBoundingClientRect().height > 1.5 * parseFloat(window.getComputedStyle(dd).lineHeight)
+    ).length
+    const svg = box.querySelector('[data-test-id="loans-payoff-chart"]')!
+    const sentence = box.querySelector('[data-test-id="loans-chart-sentence"]')!
+    const range = document.createRange()
+    range.selectNodeContents(sentence)
+    const lines = new Map<number, number>()
+    for (const r of range.getClientRects()) {
+      const top = Math.round(r.top)
+      lines.set(top, (lines.get(top) ?? 0) + r.width)
+    }
+    const widths = [...lines.values()]
+    return {
+      past: Math.max(0, Math.round(past)),
+      sideways: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      drawing: Math.abs(
+        Math.round(svg.getBoundingClientRect().width - svg.parentElement!.clientWidth)
+      ),
+      wrapped,
+      lastLine: widths.length > 1 ? widths[widths.length - 1] / Math.max(...widths) >= 0.5 : true,
+    }
+  })
 }
 
 interface Box {
@@ -264,5 +318,29 @@ test.describe('the chart under a loan card', () => {
       await page.getByTestId('loans-item-schedule').tap()
       await expect(page).toHaveURL(/#loans\/\d+\/schedule(\?|$)/)
     })
+  })
+})
+
+test.describe('the chart at any width', () => {
+  test.beforeEach(async ({ page }) => {
+    test.setTimeout(120_000)
+    await leaveOnboarding(page)
+    await gotoServerless(page, 'loans', 'loans-header')
+    await addLoans(page, [BIG])
+  })
+
+  // From a wide screen through a tablet with the sidebar shown (820 px leaves the box 426 px) to a
+  // phone: the four figures, Close and the drawing stay inside the box, and the sentence on top
+  // leaves no word or two alone on its last line.
+  test('keeps its figures, its Close and its drawing inside its box @smoke', async ({ page }) => {
+    for (const width of [1440, 1024, 900, 820, 768, 700, 600, 561, 480, 390]) {
+      await page.setViewportSize({ width, height: 900 })
+      const opener = toggle(page, BIG.name)
+      if ((await opener.getAttribute('aria-expanded')) !== 'true') await opener.click()
+      await expect(page.getByTestId('loans-payoff-chart')).toBeVisible()
+      await expect
+        .poll(() => chartFit(page), { message: `the chart at ${width} px` })
+        .toEqual({ past: 0, sideways: 0, drawing: 0, wrapped: 0, lastLine: true })
+    }
   })
 })

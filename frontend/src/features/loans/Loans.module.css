@@ -1217,8 +1217,12 @@
   min-width: 0;
 }
 
+/* The box answers for its own width: the figures and the drawing in it are laid out to that width
+   (the container queries under .readout), and nothing in it can widen it. */
 .chart-box {
+  container-type: inline-size;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
   padding: 16px 20px 12px;
   background: var(--card-bg);
@@ -1234,15 +1238,19 @@
   gap: 12px;
 }
 
+/* One line across a wide box. Balanced when it wraps, so its last line is never a word or two on
+   their own. */
 .chart-sentence {
+  min-width: 0;
   margin: 6px 0 0;
-  max-width: 70ch;
   font-size: 14px;
   line-height: 1.45;
   color: var(--text);
+  text-wrap: balance;
 }
 
 .chart-head .button-quiet {
+  flex: none;
   margin: -4px -8px 0 0;
 }
 
@@ -1250,12 +1258,30 @@
   height: 260px;
 }
 
-/* Four figures sit together on the left, so the eye reads them as one line before the chart. */
+/* Four figures sit together on the left, so the eye reads them as one line before the chart. The
+   box's width decides how many go in a row, not the window's: with the sidebar shown, a tablet's
+   box is narrower than a phone's. Four need about 565 px with seven-figure amounts, two about
+   330 px. A column can still give way below what its figure needs, so an amount longer than any of
+   those wraps inside the box rather than running out of it. */
 .readout {
   display: grid;
-  grid-template-columns: repeat(4, max-content);
+  grid-template-columns: repeat(4, minmax(0, max-content));
   gap: 12px 40px;
+  min-width: 0;
   margin: 0;
+}
+
+@container (width < 600px) {
+  .readout {
+    grid-template-columns: repeat(2, minmax(0, max-content));
+  }
+}
+
+@container (width < 340px) {
+  .readout {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 16px;
+  }
 }
 
 .readout dt {
@@ -1307,11 +1333,6 @@
 }
 
 @media (max-width: 560px) {
-  .readout {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    column-gap: 16px;
-  }
-
   .chart-box {
     padding: 14px 14px 10px;
   }
