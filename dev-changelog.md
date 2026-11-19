@@ -2495,6 +2495,20 @@ check')` first, as the cushion and debt cases do.
 
 ### Fixed
 
+- **Every page leaves room for the floating add button.** The button (`.fab`, fixed bottom right)
+  sat over the end of a page's last row: `main`'s content ran 54 px below the button's top on every
+  page. With the example data something was painted under it at the end of 11 of 19 pages at 390 px
+  wide (the View all link on Accounts, What if on the last loan, the storage line in Settings) and 2
+  of 19 at 1440 (Analytics, Import), asked of the page with `elementFromPoint` at nine points inside
+  the button. The button's size and its gap from the screen edge are now two custom properties on
+  the shell, `--fab-size` and `--fab-offset` (56 and 22 px; 52 and 16 px up to 620 px wide), which
+  `.fab` reads, and `.main` ends with
+  `padding-bottom: calc(var(--fab-size) + 2 * var(--fab-offset))`, set after every `.main` padding
+  shorthand in `components/Layout.module.css` because a later shorthand would reset it. Content now
+  ends 22 px above the button, 16 px on a phone, on all 19 pages. The 404 page's `min-height` takes
+  the same room off, so it still does not scroll. `tests/floating-button-room.spec.ts` (`@smoke`,
+  1440 x 900 and 390 x 844) scrolls Analytics, Import, Accounts and Settings to their end; on the
+  old stylesheet it fails with Analytics ending at 875.5 px against a button top of 822.
 - **The two quick entries are inert while shut, and closing one hands focus back.** `CommandBar` and
   `GuidedOrbit` stay mounted so they can fade, and kept `role="dialog"` with `aria-modal="true"`
   while shut (opacity 0, `pointer-events: none`). Chromium's accessibility tree listed both dialogs
