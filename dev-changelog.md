@@ -2807,6 +2807,21 @@ check')` first, as the cushion and debt cases do.
   the action's hover tint is made stronger, and when a new rule in the card menu's stylesheet is set
   in `--warning`. `src/__tests__/successTextContrast.test.ts` reads the success toast's button
   through `--toast-ink` now, and still fails unless the icon and the edge keep `--success`.
+- **The passkey offer is painted like every other floating surface.** The card that offers a
+  passkey after a sign-in (`components/PasskeyNudge.tsx`, fixed in the bottom-right corner) was
+  styled inline, where `floatingEdges.test.ts` could not read it: it painted `--surface` with a
+  `--border` edge, 1.21:1 against the page in Dawn Light and 1.51:1 in Orbit Dark. It now lives in
+  `components/PasskeyNudge.module.css` on the floating pair, an edge of 2.24:1 on the page in Dawn
+  and 3.52:1 in Orbit. Its place, size, text and buttons did not change.
+- **Tests:** `src/__tests__/floatingEdges.test.ts` finds a floating surface by its shadow or its
+  edge as well as its z-index, so the section rail's labels, which have neither a z-index nor a
+  shadow, are found rather than only listed. Nine rules it now finds are named as not floating (the
+  dots of the timeline, the orbit and the not-found page, the toggle's knob, the period orbit's
+  buttons and centre, a benchmark's marker and a loan card's pull). It also reads every style
+  written in script, JSX style objects, style strings and cssText, and fails on one that positions
+  and paints a box unless `INLINE` names it: the heatmap's tooltip and a plan card's badge. With
+  discovery as it was, the rail's labels taken off the list, a shadowed popover with no z-index and
+  the passkey offer styled inline again all passed; each fails now.
 - **No extra-payment label stands on the loan's line.** A label above its mark and to the left of it
   was placed at the mark's height, where the line has not yet come down to the mark, so the line ran
   through it. The review's sweep (`LoanPayoffChart` in jsdom: the boat with one extra payment at

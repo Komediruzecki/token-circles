@@ -39,6 +39,7 @@ const FLOATING: ReadonlyArray<readonly [file: string, selector: string, what: st
   ['components/Toast.module.css', '.toast', 'toasts, in every kind'],
   ['components/SectionRail.module.css', '.rail', 'the section rail down the right edge'],
   ['components/SectionRail.module.css', '.tip', "the section rail's labels"],
+  ['components/PasskeyNudge.module.css', '.nudge', 'the passkey offer after a sign-in'],
 ]
 
 /**
@@ -53,6 +54,75 @@ const NOT_FLOATING: Record<string, string> = {
   'features/AnalyticsPage.module.css .dialog':
     "the heatmap's day detail, a dialog: dialogEdges.test.ts checks its edge",
   'styles/index.css body::before': 'the strip under the phone status bar, painted in --bg',
+  'components/BadgeTimeline.module.css .dot::after': "a badge's dot on the timeline",
+  'components/OrbitalToggle.module.css .knob': "the toggle's knob",
+  'components/PeriodOrbit.module.css .monthBtn': "a month's button on the period orbit",
+  'components/PeriodOrbit.module.css .core': "the period orbit's centre disc",
+  'components/TokenOrbitLink.module.css .token': 'the dot that orbits a link',
+  'components/guidance/BenchmarkCards.module.css .mark': "the marker on a benchmark's scale",
+  'components/onboarding/Onboarding.module.css .doneSatellite::after': "a finished step's dot",
+  'features/NotFound.module.css .dot': "the dot on the not-found page's orbit",
+  'features/loans/Loans.module.css .card-handle': "the pull on a loan card's bottom edge",
+}
+
+/**
+ * Styles written in script that position and paint a box, by file: a JSX style object, a style
+ * string or a cssText. A floating surface belongs in a stylesheet, where the checks below read it;
+ * these are the ones that stay, and why.
+ */
+const INLINE: Record<string, string> = {
+  'components/D3HeatmapChart.tsx':
+    "the heatmap's tooltip, built by D3 outside Solid: the last test of the next block checks its pair",
+  'components/BillingPlans.tsx': "the badge on a plan card's top edge, not a surface over content",
+}
+
+/** Every script in src/ but the tests. */
+function scriptFiles(dir: string, found: string[] = []): string[] {
+  for (const entry of readdirSync(dir)) {
+    const full = join(dir, entry)
+    if (statSync(full).isDirectory()) {
+      if (entry !== '__tests__') scriptFiles(full, found)
+    } else if (/\.tsx?$/.test(entry) && !/\.(?:test|d)\.tsx?$/.test(entry)) found.push(full)
+  }
+  return found
+}
+
+/** The text between the braces around `at`, nested braces and all. */
+function enclosingBraces(source: string, at: number): string {
+  let start = at
+  for (let depth = 0; start > 0; start--) {
+    const c = source.charAt(start - 1)
+    if (c === '}') depth++
+    else if (c === '{' && depth-- === 0) break
+  }
+  let end = at
+  for (let depth = 0; end < source.length; end++) {
+    const c = source.charAt(end)
+    if (c === '{') depth++
+    else if (c === '}' && depth-- === 0) break
+  }
+  return source.slice(start, end)
+}
+
+/**
+ * Each style a script writes inline that positions its box: a CSS string (`style="..."` or a
+ * cssText), or an object around a `position: 'fixed'` or `'absolute'` (a JSX style, a style
+ * signal, a constant). An object's values are read up to the first comma, which is enough to tell
+ * a background from none.
+ */
+function inlineStyles(file: string): Array<Map<string, string>> {
+  const source = readFileSync(file, 'utf8')
+  const strings = [...source.matchAll(/(?:cssText\s*=\s*'|style=")([^'"]*)['"]/g)].map(([, css]) =>
+    [...css.matchAll(/([\w-]+)\s*:\s*([^;]+)/g)].map(([, k, v]) => [k, v.trim()] as const)
+  )
+  const objects = [...source.matchAll(/position:\s*['"](?:fixed|absolute)['"]/g)].map((match) =>
+    [...enclosingBraces(source, match.index).matchAll(/['"]?([\w-]+)['"]?\s*:\s*([^,\n]+)/g)].map(
+      ([, k, v]) => [k, v.trim().replace(/^['"`]|['"`]$/g, '')] as const
+    )
+  )
+  return [...strings, ...objects]
+    .map((entries) => new Map(entries))
+    .filter((d) => /^(?:fixed|absolute)$/.test(d.get('position') ?? ''))
 }
 
 /** The grounds a floating surface opens over at rest. The hover grounds are under the pointer. */
@@ -84,6 +154,7 @@ const TEXT_ON_FLOATING: ReadonlyArray<readonly [file: string, inside: RegExp]> =
   ['components/Profile.module.css', /^\.profileDropdown(?:Menu|Item|Header)\b/],
   ['components/Toast.module.css', /^\.(?!toastContainer\b)/],
   ['components/SectionRail.module.css', /\.tip\b/],
+  ['components/PasskeyNudge.module.css', /^\./],
 ]
 
 /** Text needs 4.5:1 on whatever it is painted on (WCAG 1.4.3). */
@@ -175,7 +246,11 @@ describe('every floating surface draws its own edge', () => {
     const listed = new Set(FLOATING.map(([file, selector]) => `${file} ${selector}`))
     const unlisted = all
       .filter((r) => /^(?:absolute|fixed)$/.test(r.decls.get('position') ?? ''))
-      .filter((r) => r.decls.has('z-index'))
+      // Set apart from what is under it: stacked over it, shadowed, or edged.
+      .filter(
+        (r) =>
+          r.decls.has('z-index') || r.decls.has('box-shadow') || isVisible(r.decls.get('border'))
+      )
       .filter((r) => {
         const bg = background(r)
         return bg !== undefined && !/^(?:none|transparent)$/.test(bg)
@@ -187,6 +262,22 @@ describe('every floating surface draws its own edge', () => {
     // list are, and add it to FLOATING; if it is not a surface over content, say why in
     // NOT_FLOATING.
     expect(unlisted).toEqual([])
+  })
+
+  it('finds no style written in script that positions and paints a box it does not know', () => {
+    const found = scriptFiles(SRC)
+      .filter((file) =>
+        inlineStyles(file).some((d) => {
+          const bg = d.get('background') ?? d.get('background-color')
+          return bg !== undefined && !/^(?:none|transparent)$/.test(bg) && !coversScreen(d)
+        })
+      )
+      .map((file) => relative(SRC, file))
+      .sort()
+    // A menu, card or tooltip styled inline lands here, out of reach of every check in this file.
+    // Move it to a stylesheet and paint it from the pair; if it is not a surface over content,
+    // say what it is in INLINE.
+    expect(found).toEqual(Object.keys(INLINE).sort())
   })
 
   it.each(FLOATING)(

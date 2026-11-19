@@ -1,0 +1,32 @@
+/* The passkey offer after a sign-in: a card fixed in the bottom-right corner, over the page. It is a
+   floating surface (UI-28), so it paints the floating pair like every menu and toast. Styled inline
+   before, it drew its edge in --border, about 1.2:1 against the page in Dawn. */
+.nudge {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 60;
+  max-width: 340px;
+  padding: 14px 16px;
+  border: 1px solid var(--border-floating);
+  border-radius: 12px;
+  color: var(--text);
+  background: var(--surface-floating);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+  font-size: 13.5px;
+}
+
+.title {
+  margin: 0 0 4px;
+  font-weight: 600;
+}
+
+.text {
+  margin: 0 0 10px;
+  color: var(--text-secondary);
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+}
