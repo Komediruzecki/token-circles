@@ -2732,9 +2732,10 @@ check')` first, as the cushion and debt cases do.
   `core/theme.ts`, today `instrument-deck`), so a tip in the Analytics or Portfolio deck still paints
   the deck's surface, #202329, and mixes its edge from the deck's #5e656d. Its z-index goes from 1000 to 10001: outside every dialog's
   stacking context now, it has to clear the highest dialog overlay (10000) to show over a dialog it
-  was opened in. Hover, focus, click-to-pin, the `aria-describedby` link, Escape and outside-click
-  are unchanged; outside-click already tested the panel by reference, not by where it sits in the
-  page. After the change a script opened every tip on Dashboard (4), Budgets (1) and Analytics (17)
+  was opened in. Hover, focus, the `aria-describedby` link, Escape and outside-click are unchanged;
+  outside-click already tested the panel by reference, not by where it sits in the page. Pinning
+  did change: a pinned panel outlived its page, which "A pinned (i) explanation closes with its
+  page", below, fixes. After the change a script opened every tip on Dashboard (4), Budgets (1) and Analytics (17)
   at both sizes: all 22 inside the window and beside their icon, as Budgets' and Analytics' already
   were.
 - **Tests:** `frontend/tests/info-tip-placement.spec.ts` (@smoke) opens Net Worth's tip from the
@@ -2754,6 +2755,20 @@ check')` first, as the cushion and debt cases do.
 - **Tests:** `src/components/__tests__/InfoTip.test.tsx` gives the heading and the page the title's
   serif, bold and italic, and fails unless the panel's computed type is `var(--font-inter)`, 400
   and normal.
+- **A pinned (i) explanation closes with its page.** Since the panel moved to the end of the page, a
+  tip pinned open with a click or a tap stayed open when its page was left without a press: Back on
+  a phone, Alt+Left, a link or a hash change. Every visited page stays mounted and is hidden with
+  `display: none`, so the tip was never disposed, and its hidden icon measures nothing: on 19 Nov
+  Net Worth's tip, pinned on Dashboard, sat at top 6, left 8 over Loans, above the toasts, until the
+  next press anywhere. `components/InfoTip.tsx` now watches its icon with a `ResizeObserver` while
+  the panel is open and closes the moment the icon is no longer drawn (`checkVisibility()`, or a
+  walk for `display: none` where that is missing); `place()` closes it too rather than place it from
+  a hidden icon, and never places it from an empty box.
+- **Tests:** `src/components/__tests__/InfoTip.test.tsx` pins a tip, hides the element around it and
+  fails unless the panel is gone, once when the browser reports the icon's box and once when the
+  page scrolls. `frontend/tests/info-tip-placement.spec.ts` (@smoke) pins Net Worth's tip with a
+  click at 1440x900 and goes to Loans by hash, and taps it on a 390x844 phone and goes Back; each
+  fails while a panel is left, as each did before the change.
 - **The heatmap's day detail keeps its edge where the dialog check can see it.** A click on a day
   in Analytics' heatmap opens a dialog whose box was styled inline in `features/Analytics.tsx`, so
   `dialogEdges.test.ts`, which reads the CSS modules, never saw it. Its backdrop and box now live in

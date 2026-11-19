@@ -60,3 +60,58 @@ for (const size of SIZES) {
     })
   })
 }
+
+/**
+ * A pinned explanation closes with its page.
+ *
+ * Every visited page stays mounted and is hidden with display: none, and the panel renders at the
+ * end of the page, outside it. On 19 Nov a tip pinned on Dashboard stayed open after a hash change
+ * and after Back on a phone, drawn at the top left of the window from its hidden icon's empty box,
+ * over whatever page came next, until the next press.
+ */
+const netWorthTip = (page: import('@playwright/test').Page) =>
+  page
+    .getByTestId('dashboard-metric-networth')
+    .getByRole('button', { name: /all account balances/ })
+
+test.describe('a pinned explanation closes with its page', () => {
+  test.describe('on a window', () => {
+    test.use({ viewport: { width: 1440, height: 900 } })
+
+    test('pinned with a click, then Loans by hash @smoke', async ({ page }) => {
+      await login(page)
+      await navigateToRoute(page, 'dashboard')
+      const trigger = netWorthTip(page)
+      await expect(trigger).toBeVisible({ timeout: 15000 })
+      await trigger.click()
+      const panel = page.getByRole('tooltip')
+      await expect(panel).toBeVisible()
+
+      await page.evaluate(() => {
+        window.location.hash = '#loans'
+      })
+      await expect(page.getByTestId('loans-header')).toBeVisible({ timeout: 15000 })
+      await expect(panel).toHaveCount(0)
+    })
+  })
+
+  test.describe('on a phone', () => {
+    test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+
+    test('pinned with a tap, then Back @smoke', async ({ page }) => {
+      await login(page)
+      await navigateToRoute(page, 'loans')
+      await navigateToRoute(page, 'dashboard')
+      const trigger = netWorthTip(page)
+      await expect(trigger).toBeVisible({ timeout: 15000 })
+      await trigger.scrollIntoViewIfNeeded()
+      await trigger.tap()
+      const panel = page.getByRole('tooltip')
+      await expect(panel).toBeVisible()
+
+      await page.goBack()
+      await expect(page.getByTestId('loans-header')).toBeVisible({ timeout: 15000 })
+      await expect(panel).toHaveCount(0)
+    })
+  })
+})

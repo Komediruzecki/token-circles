@@ -8,7 +8,7 @@
  * with its neighbour is what prompted the change.
  */
 import { render } from 'solid-js/web'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import InfoTip from '../InfoTip'
 
 let host: HTMLDivElement
@@ -248,6 +248,48 @@ describe('InfoTip, rendered where nothing can move it', () => {
     // The scope only carries tokens: it draws no box of its own, so the deck's background and
     // radius never paint around the panel.
     expect((scope as HTMLElement).style.display).toBe('contents')
+  })
+
+  // Every visited page stays mounted and is hidden with display: none (#317), and the panel lives
+  // at the end of the page, outside it. A tip pinned on Dashboard stayed open over the next page,
+  // after a hash change or Back, drawn at the top left of the window from its hidden icon's empty
+  // box, until the next press anywhere.
+  it('closes when the page around it is hidden, which is how a page is left without a press', () => {
+    const reports: Array<() => void> = []
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        report: () => void
+        constructor(report: () => void) {
+          this.report = report
+        }
+        observe() {
+          reports.push(this.report)
+        }
+        unobserve() {}
+        disconnect() {}
+      }
+    )
+    try {
+      const trigger = mount()
+      trigger.click()
+      expect(panel()).not.toBeNull()
+
+      host.style.display = 'none'
+      // What the browser does when the page is hidden: the icon's box goes to nothing.
+      for (const report of reports) report()
+      expect(panel()).toBeNull()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('is never placed from a hidden icon: a scroll after its page is hidden closes it', () => {
+    const trigger = mount()
+    trigger.click()
+    host.style.display = 'none'
+    window.dispatchEvent(new Event('scroll'))
+    expect(panel()).toBeNull()
   })
 
   it('takes no scope when its icon sits in none', () => {
