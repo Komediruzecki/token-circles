@@ -41,6 +41,8 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Shortcuts work again after you close quick entry.** Escape left the keyboard inside the hidden box, so the arrow keys stopped stepping the period and ? stopped opening the shortcuts guide until you clicked the page.
+- **Screen readers no longer find two closed dialogs on every page.** Quick entry and Add transaction stayed announced as open dialogs while shut.
 - **A category called Groceries shows a shopping cart, and one named for a meal shows a knife and fork** (Eating out, Restaurant, Dining, Breakfast, Lunch, Dinner, Meals), and an import that creates one gives it the same icon. Before, they showed a coffee mug, and Eating out a plain tick. An icon you picked stays, and so does the mug an earlier import gave a category while you were signed in. Coffee and Cafe keep the mug.
 - **The subscription scan keeps up with a long history.** With a few thousand entries, Scan transactions on Bills and the setup wizard's subscriptions step held the page for over a second. They now find the same subscriptions in a small part of that time.
 - **The plan name on a subscription the scan finds is easier to read.** In the light theme, "Standard" beside Netflix was blue on a pale blue tint at 4.0:1. It's a darker blue now, on Bills and in setup.

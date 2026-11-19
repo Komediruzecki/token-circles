@@ -2495,6 +2495,21 @@ check')` first, as the cushion and debt cases do.
 
 ### Fixed
 
+- **The two quick entries are inert while shut, and closing one hands focus back.** `CommandBar` and
+  `GuidedOrbit` stay mounted so they can fade, and kept `role="dialog"` with `aria-modal="true"`
+  while shut (opacity 0, `pointer-events: none`). Chromium's accessibility tree listed both dialogs
+  on every page (read over CDP, `Accessibility.getFullAXTree`), and a screen reader that honours
+  `aria-modal` can keep its cursor inside a dialog nobody sees. Shut, each overlay is now `inert`
+  and its dialog has no `aria-modal`; the tree lists neither, and each one only while it is open.
+  Neither gave focus back on close: after Ctrl+K and Escape, focus stayed in the bar's hidden input,
+  `isEditableTarget` read that as typing, and the right arrow no longer stepped the period nor did
+  `?` open the shortcuts guide (in the browser the period stayed 2026-11 and the guide stayed shut;
+  with the fix it steps to 2026-12 and the guide opens). `utils/returnFocus.ts` gives focus back to
+  the element that had it before opening, when focus is still inside the shut dialog or on the page,
+  and takes it out of the dialog when there is nothing to go back to. The command bar's delayed
+  input focus (60 ms) no longer fires once the bar has shut.
+  `components/__tests__/quickEntryShutIsInert.test.tsx` has 13 cases over both; each guard was taken
+  out and seen failing.
 - **The unused tag components are deleted.** `TagFilter`, `TagInput` and `TagChips` under
   `frontend/src/components/Tags/`, with their stylesheets, had no importer anywhere in the
   repository (`shared/tagSchema.ts` has an unrelated `TagInput` type). They held the last rules on a
