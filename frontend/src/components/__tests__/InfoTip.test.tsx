@@ -255,6 +255,33 @@ describe('InfoTip, rendered where nothing can move it', () => {
     expect(panel()!.closest('.instrument-deck')).toBeNull()
   })
 
+  // Analytics' and Budgets' titles each hold a tip, and a title sets the display serif. The
+  // panel names its own face, weight and style, so its words read as body text wherever it
+  // renders: under the heading it explains, or at the end of the page, given the title's type
+  // here too.
+  it('sets its own type, so a tip in a heading reads in the body face', () => {
+    const heading = document.createElement('h1')
+    heading.dataset.scope = ''
+    const pageStyle = document.body.getAttribute('style')
+    try {
+      for (const el of [heading, document.body]) {
+        el.style.fontFamily = 'var(--font-display)'
+        el.style.fontWeight = '700'
+        el.style.fontStyle = 'italic'
+      }
+      mountIn(heading).click()
+      const type = window.getComputedStyle(panel()!)
+      expect({ family: type.fontFamily, weight: type.fontWeight, style: type.fontStyle }).toEqual({
+        family: 'var(--font-inter)',
+        weight: '400',
+        style: 'normal',
+      })
+    } finally {
+      if (pageStyle === null) document.body.removeAttribute('style')
+      else document.body.setAttribute('style', pageStyle)
+    }
+  })
+
   it('stays above every dialog overlay, now that it no longer opens inside one', async () => {
     mount().click()
     const overlays = Object.values(

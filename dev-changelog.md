@@ -2745,6 +2745,15 @@ check')` first, as the cushion and debt cases do.
   the deck and none outside one, and stands above every overlay rule in the CSS modules.
   `src/__tests__/floatingEdges.test.ts` fails on a block in `styles/themes/` that re-grounds a theme
   under a class `THEME_SCOPES` does not list.
+- **An (i) explanation sets its own type.** `InfoTip`'s `.panel` now declares
+  `font-family: var(--font-inter)` and `font-style: normal` beside the `font-weight: 400` it had, so
+  its words read as body text wherever it renders. Analytics' and Budgets' titles each hold a tip:
+  measured on 19 Nov in Dawn and Orbit, the panel sat inside the title before this round and read in
+  the title's Fraunces; it now reads in Inter at 400. The portal above already takes the panel out
+  of the title, and this keeps its type from depending on where it renders.
+- **Tests:** `src/components/__tests__/InfoTip.test.tsx` gives the heading and the page the title's
+  serif, bold and italic, and fails unless the panel's computed type is `var(--font-inter)`, 400
+  and normal.
 - **The unused `components/BulkActions/` tree is deleted.** Its `BulkActionBar`, `BulkCategoryModal`
   and `BulkTypeModal`, with their stylesheets, had no importer anywhere in the repository;
   Transactions uses `components/BulkActionBar.tsx`. The 2026-07-23 integrity audit
