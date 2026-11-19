@@ -656,6 +656,46 @@ All notable changes to Token Circles are documented here. The format is based on
   ORDER BY 1, 2, 3;
   ```
 
+- **The statement step takes several files at once, a card each, imported in one tap.** maff,
+  19 Nov: the picker took one file and nothing could add a second. Frontend only: no migration,
+  no API change.
+  - **Files** (`components/onboarding/FirstImport.tsx`): the picker is `multiple`, a drop of files
+    anywhere on the step adds them (a drag depth counter for the highlight, as `ImportDataEntry`
+    does), and Add another file opens the picker again. Changes run one at a time through a
+    queue, each reading the whole batch, so a second pick waits for the first; Remove and another
+    account read it again. Clear bumps a generation that drops what is under way.
+  - **One batch** (`features/import/importFlow.ts`): the statements are the flow's `bankFiles`,
+    processed together by `processBankFiles`, which now keeps `bankFileRows`, each file's first
+    row and count in `currentRows()`, from `processFiles`' `perFile` (one entry per file, in
+    order). Each card's counts come from its range: new (picked, not matched by the dry run), here
+    already (`existingDuplicateIndices`), and repeats of an earlier file (the batch's
+    `duplicateSet`, which `goToPreview` leaves unpicked, whose canonical row an earlier file
+    holds). A row a statement repeats of its own is not one of those, as before. The dedup key is
+    the target account plus the bank's raw row (`classify.ts`), so two overlapping exports of one
+    account import each transaction once; the Worker's execute dedups only against stored rows,
+    which is why the batch's own pass is the one that counts here.
+  - **Set aside**: a file from a bank the app does not know, or one that does not read, keeps a
+    card with what is wrong and stays out of the batch. With nothing waiting to import (after the
+    import, or no statement ready) its card offers Open in Import for that file
+    (`handOver(file)`); after an import with such a file the step stays, so the card is seen,
+    and Continue goes on.
+  - **Goes into, per file** (`defaultTarget`). What the code did: an account named for the bank
+    (`resolveTargetAccount`), else the account setup made on this visit, else the newest account
+    in the statement's currency, else a new account named for the bank. maff's Revolut statement
+    read "Goes into: Erste" through the second rule. Now, after the bank's own answer: the first
+    bank among the files keeps that fallback, except an account named for another bank
+    (`accountNamesBank` over every adapter but YNAB); every other bank gets a new account named
+    for it ("New account: N26 EUR"), since the main account holds one bank's statements and a
+    second bank's in it would add two banks' money up in one balance. One select per card,
+    "Goes into" beside it on one row (`.target`).
+  - A YNAB Register file keeps sending each row to the account it names, beside other files.
+  - Tests: `onboardingFirstImport.test.tsx` "several statements at once" (8) and "the account
+    each file goes into" (3); with the one-file step put back, all 11 fail. Without the first-bank
+    rule 1 fails, without the other-bank filter 2, and counting a statement's own repeat as an
+    earlier file's fails "counts a row the statement repeats once". `firstImportCount.test.ts`'s
+    flow stub gained the signals the counts read. In e2e, the `@smoke` "takes several statements
+    at once" case of `tests/onboarding.spec.ts` at 390x844: four files, the overlap counted once,
+    no wider than the screen, Import in view, and the set-aside file's way to Import after.
 - **Setup waits on the Import page for a file it hands over, and Back to setup picks up again.**
   maff, 19 Nov: Open in Import finished setup, so after matching the columns and importing there
   was no way back to the subscription step or Done. Frontend only: no migration, no API change.

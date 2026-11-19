@@ -276,6 +276,8 @@ describe('a statement from a bank the app reads', () => {
     await readUntil('ready')
 
     expect(byTestId('onboarding-import-selected')?.textContent).toBe('Import 7')
+    // Its own repeat: no earlier file holds it, so the card does not say one does.
+    expect(byTestId('onboarding-import-repeats')).toBeNull()
     byTestId('onboarding-import-selected')!.click()
     await vi.waitFor(() => {
       expect(onboardingStep()).toBe('subscriptions')
@@ -968,5 +970,282 @@ describe('the balance setup was given (review M2)', () => {
     const [main] = await accounts()
     expect(main.balance).toBeCloseTo(1888.85, 6)
     expect(main.starting_balance ?? 0).toBeCloseTo(0, 6)
+  })
+})
+
+/**
+ * Several statements at once (maff, 19 Nov): the picker took one file, and the step had no way to
+ * add another. An N26 export, hand-typed with made-up payees and amounts: three transactions.
+ */
+const N26 = [
+  '"Booking Date","Value Date","Partner Name","Partner Iban",Type,"Payment Reference","Account Name","Amount (EUR)","Original Amount","Original Currency","Exchange Rate"',
+  '2026-06-03,2026-06-03,Example Bakery,,Presentment,,Main Account,-4.20,,,',
+  '2026-06-09,2026-06-09,Example Gym,,Presentment,,Main Account,-29.00,,,',
+  '2026-06-15,2026-06-15,Example Employer,,Credit Transfer,Salary June,Main Account,1800.00,,,',
+].join('\n')
+
+/** Choose several files at once, as the system's picker hands them over. */
+function chooseMany(files: readonly [string, string][]): File[] {
+  const picked = files.map(([name, text]) => new File([text], name, { type: 'text/csv' }))
+  const input = byTestId('onboarding-import-input') as HTMLInputElement
+  Object.defineProperty(input, 'files', { value: picked, configurable: true })
+  input.dispatchEvent(new Event('change', { bubbles: true }))
+  return picked
+}
+
+/** Each file's card: its name, where it is, and what its meta line says. */
+const cards = () =>
+  [...host.querySelectorAll<HTMLElement>('[data-test-id="onboarding-import-file"]')].map(
+    (card) => ({
+      file: card.getAttribute('data-file'),
+      state: card.getAttribute('data-state'),
+      meta: card.querySelector('[data-test-id="onboarding-import-meta"]')?.textContent ?? null,
+    })
+  )
+
+const cardOf = (name: string): HTMLElement =>
+  host.querySelector<HTMLElement>(`[data-test-id="onboarding-import-file"][data-file="${name}"]`)!
+
+/** The account a card's "Goes into" has chosen, as it reads. */
+const targetOf = (name: string) => {
+  const select = cardOf(name).querySelector<HTMLSelectElement>(
+    '[data-test-id="onboarding-import-target"]'
+  )
+  return select ? select.options[select.selectedIndex]?.textContent : null
+}
+
+async function allRead(): Promise<void> {
+  await vi.waitFor(() => {
+    const states = cards().map((card) => card.state)
+    expect(states.length).toBeGreaterThan(0)
+    expect(states).not.toContain('reading')
+  }, waitLong)
+}
+
+describe('several statements at once', () => {
+  it('takes several files from the picker', async () => {
+    await openAt('import')
+    expect((byTestId('onboarding-import-input') as HTMLInputElement).multiple).toBe(true)
+  })
+
+  it('reads each on a card of its own, and imports them all in one tap', async () => {
+    await openAt('import')
+    chooseMany([
+      ['revolut.csv', revolut()],
+      ['n26.csv', N26],
+    ])
+    await allRead()
+
+    expect(cards()).toEqual([
+      { file: 'revolut.csv', state: 'ready', meta: 'Revolut · 7 new transactions' },
+      { file: 'n26.csv', state: 'ready', meta: 'N26 · 3 new transactions' },
+    ])
+    expect(targetOf('revolut.csv')).toBe('New account: Revolut EUR')
+    expect(targetOf('n26.csv')).toBe('New account: N26 EUR')
+    expect(footer()).toEqual([
+      { id: 'onboarding-import-skip', text: 'Skip' },
+      { id: 'onboarding-import-selected', text: 'Import 10' },
+    ])
+
+    byTestId('onboarding-import-selected')!.click()
+    await vi.waitFor(() => {
+      expect(onboardingStep()).toBe('subscriptions')
+    }, waitLong)
+    const made = await accounts()
+    expect(made.map((a) => a.name).sort()).toEqual(['N26 EUR', 'Revolut EUR'])
+    const stored = await transactions()
+    expect(stored).toHaveLength(10)
+    const idOf = (name: string) => made.find((a) => a.name === name)!.id
+    expect(stored.filter((t) => t.account_id === idOf('Revolut EUR'))).toHaveLength(7)
+    expect(stored.filter((t) => t.account_id === idOf('N26 EUR'))).toHaveLength(3)
+
+    goToOnboardingStep('import')
+    await settle()
+    expect(byTestId('onboarding-import-done')?.textContent).toBe(
+      'Imported 10 transactions into Revolut EUR and N26 EUR.'
+    )
+  })
+
+  it('imports a transaction two overlapping statements of one account both hold once', async () => {
+    await openAt('import')
+    chooseMany([
+      ['revolut-april-june.csv', revolut(REVOLUT_ROWS.slice(0, 5))],
+      ['revolut-june-july.csv', revolut(REVOLUT_ROWS.slice(3))],
+    ])
+    await allRead()
+
+    expect(cards().map((card) => card.meta)).toEqual([
+      'Revolut · 5 new transactions',
+      'Revolut · 2 new transactions',
+    ])
+    expect(targetOf('revolut-june-july.csv')).toBe(targetOf('revolut-april-june.csv'))
+    expect(
+      cardOf('revolut-june-july.csv').querySelector('[data-test-id="onboarding-import-repeats"]')
+        ?.textContent
+    ).toBe('2 transactions in it are in an earlier file too, and go in once.')
+    expect(byTestId('onboarding-import-selected')?.textContent?.trim()).toBe('Import 7')
+
+    byTestId('onboarding-import-selected')!.click()
+    await vi.waitFor(() => {
+      expect(onboardingStep()).toBe('subscriptions')
+    }, waitLong)
+    expect(await transactions()).toHaveLength(7)
+  })
+
+  it('Add another file opens the picker again, and the file it brings joins the others', async () => {
+    await openAt('import')
+    choose('revolut.csv', revolut())
+    await readUntil('ready')
+    const input = byTestId('onboarding-import-input') as HTMLInputElement
+    const opened = vi.spyOn(input, 'click').mockImplementation(() => undefined)
+
+    byTestId('onboarding-import-add')!.click()
+    expect(opened).toHaveBeenCalledOnce()
+    choose('n26.csv', N26)
+    await allRead()
+
+    expect(cards().map((card) => card.file)).toEqual(['revolut.csv', 'n26.csv'])
+    expect(byTestId('onboarding-import-selected')?.textContent?.trim()).toBe('Import 10')
+  })
+
+  it('takes several files dropped on the step', async () => {
+    await openAt('import')
+    const dropped = [
+      new File([revolut()], 'revolut.csv', { type: 'text/csv' }),
+      new File([N26], 'n26.csv', { type: 'text/csv' }),
+    ]
+    const drop = new Event('drop', { bubbles: true, cancelable: true })
+    Object.defineProperty(drop, 'dataTransfer', { value: { types: ['Files'], files: dropped } })
+    byTestId('onboarding-import-pick')!.dispatchEvent(drop)
+    await allRead()
+
+    expect(cards().map((card) => card.state)).toEqual(['ready', 'ready'])
+    expect(drop.defaultPrevented).toBe(true)
+  })
+
+  it('Remove takes one file out, and the rest are counted again without it', async () => {
+    await openAt('import')
+    chooseMany([
+      ['revolut.csv', revolut()],
+      ['n26.csv', N26],
+    ])
+    await allRead()
+
+    cardOf('revolut.csv')
+      .querySelector<HTMLButtonElement>('[data-test-id="onboarding-import-remove"]')!
+      .click()
+    await allRead()
+
+    expect(cards()).toEqual([{ file: 'n26.csv', state: 'ready', meta: 'N26 · 3 new transactions' }])
+    expect(byTestId('onboarding-import-selected')?.textContent?.trim()).toBe('Import 3')
+  })
+
+  it('sets aside a file it cannot read, imports the rest, and then offers Import for it', async () => {
+    await openAt('import')
+    const [, unknown] = chooseMany([
+      ['revolut.csv', revolut()],
+      ['export.csv', UNKNOWN_TABLE],
+    ])
+    await allRead()
+
+    expect(cards().map((card) => card.state)).toEqual(['ready', 'unreadable'])
+    expect(cardOf('export.csv').textContent).toContain("We don't recognise the bank in this file.")
+    // Nothing goes to Import while the statement beside it waits to be imported.
+    expect(byTestId('onboarding-import-open-file')).toBeNull()
+    expect(byTestId('onboarding-import-selected')?.textContent?.trim()).toBe('Import 7')
+
+    byTestId('onboarding-import-selected')!.click()
+    await vi.waitFor(() => {
+      expect(byTestId('onboarding-import-done')).not.toBeNull()
+    }, waitLong)
+    // It stays on the step, for the file set aside.
+    expect(onboardingStep()).toBe('import')
+    expect(await transactions()).toHaveLength(7)
+    const open = byTestId('onboarding-import-open-file')!
+    expect(open.textContent).toBe('Open export.csv in Import')
+
+    open.click()
+    expect(setupWaiting()).toBe(true)
+    expect(handedImportFile()).toEqual({ file: unknown, tab: 'file-upload', typed: [] })
+    await expect(resumeOnboarding()).resolves.toBe('opened')
+    expect(onboardingStep()).toBe('subscriptions')
+  })
+
+  it("keeps a YNAB Register file's rows in the accounts it names, beside a bank statement", async () => {
+    await openAt('import')
+    chooseMany([
+      [REGISTER_NAME, REGISTER],
+      ['revolut.csv', revolut()],
+    ])
+    await allRead()
+
+    expect(cardOf(REGISTER_NAME).textContent).toContain(
+      'Each row goes to its own account: Test Checking and Test Savings.'
+    )
+    expect(targetOf(REGISTER_NAME)).toBeNull()
+    expect(targetOf('revolut.csv')).toBe('New account: Revolut EUR')
+
+    byTestId('onboarding-import-selected')!.click()
+    await vi.waitFor(() => {
+      expect(onboardingStep()).toBe('subscriptions')
+    }, waitLong)
+    const made = await accounts()
+    expect(made.map((a) => a.name).sort()).toEqual(['Revolut EUR', 'Test Checking', 'Test Savings'])
+    expect(await transactions()).toHaveLength(10)
+  })
+})
+
+/**
+ * Where each file goes by default (maff's screenshot: a Revolut statement read "Goes into:
+ * Erste"). An account of that bank when there is one; the main account for the first bank; a new
+ * account named for the bank for every other one, and for any bank the main account is not.
+ */
+describe('the account each file goes into', () => {
+  const account = async (name: string, extra: Row = {}) =>
+    (await (
+      await getDB()
+    ).add('accounts', {
+      name,
+      type: 'giro',
+      currency: 'EUR',
+      balance: 0,
+      profile_id: 1,
+      ...extra,
+    })) as number
+
+  it('is never an account named for another bank', async () => {
+    await account('Erste')
+    await openAt('import')
+    choose('revolut.csv', revolut())
+    await readUntil('ready')
+
+    expect(targetOf('revolut.csv')).toBe('New account: Revolut EUR')
+  })
+
+  it("is the bank's own account when the profile has one", async () => {
+    await account('Main checking')
+    await account('N26 Joint')
+    await openAt('import')
+    chooseMany([
+      ['revolut.csv', revolut()],
+      ['n26.csv', N26],
+    ])
+    await allRead()
+
+    expect(targetOf('revolut.csv')).toBe('Main checking')
+    expect(targetOf('n26.csv')).toBe('N26 Joint')
+  })
+
+  it('is the main account for the first bank, and a new account for the next', async () => {
+    await account('Main checking')
+    await openAt('import')
+    chooseMany([
+      ['revolut.csv', revolut()],
+      ['n26.csv', N26],
+    ])
+    await allRead()
+
+    expect(targetOf('revolut.csv')).toBe('Main checking')
+    expect(targetOf('n26.csv')).toBe('New account: N26 EUR')
   })
 })

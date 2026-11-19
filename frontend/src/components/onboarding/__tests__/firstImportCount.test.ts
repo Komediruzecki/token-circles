@@ -23,6 +23,10 @@ function previewed(picked: number[], matched: number[]) {
     existingDuplicates: () => matched.length,
     existingDuplicateIndices: () => matched,
     bankFiles: () => [],
+    bankFileRows: () => [],
+    duplicateSet: () => new Set<number>(),
+    currentRows: () => [],
+    activeStep: () => 'preview',
     loading: () => false,
   }
   return createRoot(() => createFirstImport({ preferredAccount: () => null, onImported: () => {} }))

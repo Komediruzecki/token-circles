@@ -454,6 +454,19 @@
   outline-offset: 2px;
 }
 
+/* A file dragged over the step: the whole step takes it. */
+.dropping {
+  outline: 2px dashed color-mix(in oklab, var(--primary) 60%, transparent);
+  outline-offset: 6px;
+  border-radius: 16px;
+}
+
+/* A card per file, close together: four of them and Add another file fit a phone's step. */
+.fileList {
+  display: grid;
+  gap: 10px;
+}
+
 .fileCard {
   display: grid;
   gap: 12px;
@@ -486,6 +499,14 @@
   margin-top: 2px;
   font-size: 14px;
   color: var(--text-secondary);
+}
+
+/* "Goes into" and its account on one row: a card per file stays short. */
+.target {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
 }
 
 /* The accounts a YNAB Register file starts below zero, each with what it is made as. */

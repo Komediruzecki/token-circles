@@ -82,6 +82,44 @@ const UNKNOWN_TABLE = {
   buffer: Buffer.from('When,What,How much\n2026-06-01,Groceries,-10.00\n2026-06-02,Bus,-2.50\n'),
 }
 
+/** Statements typed by hand, with made-up payees and amounts. */
+const REVOLUT_HEADER =
+  'Type,Product,Started Date,Completed Date,Description,Amount,Fee,Currency,State,Balance'
+const REVOLUT_STATEMENT = {
+  name: 'revolut-may.csv',
+  mimeType: 'text/csv',
+  buffer: Buffer.from(
+    [
+      REVOLUT_HEADER,
+      'CARD_PAYMENT,Current,2026-05-03 10:00:00,2026-05-03 10:00:00,Example Cafe,-3.40,0,EUR,COMPLETED,496.60',
+      'CARD_PAYMENT,Current,2026-05-12 10:00:00,2026-05-12 10:00:00,Example Books,-18.00,0,EUR,COMPLETED,478.60',
+      'TOPUP,Current,2026-05-20 08:00:00,2026-05-20 08:00:00,Example Top-up,100.00,0,EUR,COMPLETED,578.60',
+    ].join('\n') + '\n'
+  ),
+}
+const LATER_REVOLUT_STATEMENT = {
+  name: 'revolut-june.csv',
+  mimeType: 'text/csv',
+  buffer: Buffer.from(
+    [
+      REVOLUT_HEADER,
+      'TOPUP,Current,2026-05-20 08:00:00,2026-05-20 08:00:00,Example Top-up,100.00,0,EUR,COMPLETED,578.60',
+      'CARD_PAYMENT,Current,2026-06-02 10:00:00,2026-06-02 10:00:00,Example Cafe,-3.40,0,EUR,COMPLETED,575.20',
+    ].join('\n') + '\n'
+  ),
+}
+const N26_STATEMENT = {
+  name: 'n26-may.csv',
+  mimeType: 'text/csv',
+  buffer: Buffer.from(
+    [
+      '"Booking Date","Value Date","Partner Name","Partner Iban",Type,"Payment Reference","Account Name","Amount (EUR)","Original Amount","Original Currency","Exchange Rate"',
+      '2026-05-05,2026-05-05,Example Bakery,,Presentment,,Main Account,-4.20,,,',
+      '2026-05-09,2026-05-09,Example Gym,,Presentment,,Main Account,-29.00,,,',
+    ].join('\n') + '\n'
+  ),
+}
+
 /** The chosen file's card, once it is in `state`. */
 async function fileIn(page: Page, state: string): Promise<Locator> {
   const card = page.getByTestId('onboarding-import-file')
@@ -358,6 +396,65 @@ test.describe('onboarding wizard', () => {
     await expect
       .poll(() => page.evaluate(() => localStorage.getItem('finance_onboarding:local')))
       .toBe('completed')
+  })
+
+  // maff, 19 Nov: the picker took one statement, and the step had no way to add another.
+  test('@smoke takes several statements at once, a card each, and imports them in one tap', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await gotoServerlessZeroState(page, 'dashboard', 'onboarding-wizard')
+    await toStatement(page)
+    await page
+      .getByTestId('onboarding-import-input')
+      .setInputFiles([REVOLUT_STATEMENT, N26_STATEMENT, LATER_REVOLUT_STATEMENT, UNKNOWN_TABLE])
+
+    const cards = page.getByTestId('onboarding-import-file')
+    await expect(cards).toHaveCount(4)
+    await expect
+      .poll(() => cards.evaluateAll((all) => all.map((card) => card.getAttribute('data-state'))))
+      .toEqual(['ready', 'ready', 'ready', 'unreadable'])
+    await expect(cards.nth(0).getByTestId('onboarding-import-meta')).toHaveText(
+      'Revolut · 3 new transactions'
+    )
+    await expect(cards.nth(1).getByTestId('onboarding-import-meta')).toHaveText(
+      'N26 · 2 new transactions'
+    )
+    // The later Revolut export repeats one of the first's transactions: it goes in once.
+    await expect(cards.nth(2).getByTestId('onboarding-import-meta')).toHaveText(
+      'Revolut · 1 new transaction'
+    )
+    await expect(cards.nth(2).getByTestId('onboarding-import-repeats')).toHaveText(
+      '1 transaction in it is in an earlier file too, and goes in once.'
+    )
+    await expect(cards.nth(3).getByTestId('onboarding-import-problem')).toContainText(
+      "We don't recognise the bank in this file."
+    )
+
+    // On a phone: nothing wider than the screen, and the footer's Import in view.
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390)
+    for (const box of await cards.evaluateAll((all) =>
+      all.map((card) => card.getBoundingClientRect().right)
+    )) {
+      expect(box).toBeLessThanOrEqual(390)
+    }
+    const importAll = page.getByTestId('onboarding-import-selected')
+    await expect(importAll).toHaveText('Import 6')
+    await expect(importAll).toBeInViewport()
+    await page.getByTestId('onboarding-import-add').scrollIntoViewIfNeeded()
+    await expect(page.getByTestId('onboarding-import-add')).toBeInViewport()
+
+    await importAll.click()
+    // The file it set aside keeps the step, with its way to Import.
+    await expect(page.getByTestId('onboarding-import-done')).toHaveText(
+      'Imported 6 transactions into Revolut EUR and N26 EUR.',
+      { timeout: 20000 }
+    )
+    await expect(page.getByTestId('onboarding-import-open-file')).toHaveText(
+      'Open export.csv in Import'
+    )
+    await page.getByTestId('onboarding-next').click()
+    await expect(page.getByTestId('onboarding-step-subscriptions')).toBeVisible({ timeout: 15000 })
   })
 
   test('a file it cannot import can be left behind: Skip goes on to Done without asking', async ({

@@ -132,6 +132,13 @@ export interface BankFileRow {
   targetAccount: string
 }
 
+/** The rows one statement gave a processed batch: from `start`, `count` of them. */
+export interface BankFileRange {
+  file: File
+  start: number
+  count: number
+}
+
 export interface ImportSummary {
   imported: number
   /** Rows rejected as invalid (bad date/amount). */
@@ -336,6 +343,12 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     { id: number; name: string; bank_name?: string | null; currency?: string | null }[]
   >([])
   const [bankWarnings, setBankWarnings] = createSignal<string[]>([])
+  /**
+   * The rows each statement gave the batch last processed, in its order: the statement's file,
+   * its first row in `currentRows()` and how many. Setup's statement step counts and dates each
+   * file of several from it (FirstImport.tsx).
+   */
+  const [bankFileRows, setBankFileRows] = createSignal<BankFileRange[]>([])
 
   // Editable categorization + transfer rules (persisted per profile). Keywords are
   // edited as comma-separated strings for a friendlier input, split on save.
@@ -802,6 +815,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     // Clear Bank Imports state so a fresh import doesn't inherit stale files/warnings
     // and the preview's rules editor is gated correctly by bankFiles().length.
     setBankFiles([])
+    setBankFileRows([])
     setBankWarnings([])
     setShowBankRules(false)
   }
@@ -1134,11 +1148,22 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     setLoading(true)
     setError(null)
     setBankWarnings([])
+    setBankFileRows([])
     try {
       const outcome = await runBankTransform()
       if (!outcome) return
       const { result, recognized, filename } = outcome
       setBankWarnings(result.warnings)
+      // processFiles answers one entry per file it was given, in their order, rows and all.
+      let start = 0
+      setBankFileRows(
+        recognized.map((row, index) => {
+          const count = result.perFile[index]?.count ?? 0
+          const range = { file: row.file, start, count }
+          start += count
+          return range
+        })
+      )
       // Remember each account choice so the next matching statement auto-routes.
       recognized.forEach((r) => {
         rememberBankImportChoice(r.bankId!, r.meta, r.file.name, r.targetAccount)
@@ -1752,6 +1777,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     pasteDelimiter,
     setPasteDelimiter,
     bankFiles,
+    bankFileRows,
     bankFilesMissingAccount,
     bankAccounts,
     bankWarnings,
