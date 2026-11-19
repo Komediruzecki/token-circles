@@ -85,6 +85,9 @@
      --danger itself is under 4.5:1 on --surface. */
   --danger-text: #b93842;
   --warning: #d97f2e;
+  /* Small text in the warning hue, such as a warning toast's title: 5.3:1 on --surface and
+     --surface-floating, 5.0:1 on --bg. --warning itself is 3.0:1 on them. */
+  --warning-text: #a3590c;
   --info: #3b6fe0;
 
   /* Semantic money */

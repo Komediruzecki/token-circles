@@ -84,7 +84,8 @@
 }
 
 .danger {
-  color: var(--danger, #e5484d);
+  /* Text on the floating surface: --danger is 4.35:1 on it in Dawn and 3.71:1 in Orbit. */
+  color: var(--danger-text);
 }
 .danger .icon {
   color: inherit;

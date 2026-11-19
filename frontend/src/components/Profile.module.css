@@ -60,7 +60,8 @@
 
 .profileDropdownItem.active {
   background: rgba(59, 130, 246, 0.1);
-  color: var(--primary);
+  /* The azure the app sets text in: --primary is 4.1:1 on this tint in Dawn. */
+  color: var(--primary-hover);
   font-weight: 500;
 }
 

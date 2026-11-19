@@ -68,6 +68,33 @@ const GROUNDS = [
 /** The edge each colour scheme needs against every ground: UI-28's numbers. */
 const MIN_EDGE = { light: 2, dark: 3 } as const
 
+/**
+ * Where the text on each floating surface is styled: the surface's stylesheet, and the rules in
+ * it that paint inside the surface. A stylesheet that holds only its surface takes every rule but
+ * the ones on the page (the trigger that opens a menu), so a rule added to it is checked; one
+ * that also styles the page names the surface's rules. Dots, colour bars and dividers carry no
+ * text and are left out.
+ */
+const TEXT_ON_FLOATING: ReadonlyArray<readonly [file: string, inside: RegExp]> = [
+  ['components/OverflowMenu.module.css', /^\.(?!trigger\b)/],
+  ['components/FilterBar.module.css', /^\.(?:dropdownContent|optionList|checkboxLabel)\b/],
+  ['features/BillCalendar.module.css', /^\.(?:popover(?!Backdrop|BillColor)|amountOverdue)/],
+  ['components/InfoTip.module.css', /^\.(?!trigger\b)/],
+  ['components/Spotlight.module.css', /^\.(?!overlay\b|backdropSvg\b)/],
+  ['components/Profile.module.css', /^\.profileDropdown(?:Menu|Item|Header)\b/],
+  ['components/Toast.module.css', /^\.(?!toastContainer\b)/],
+  ['components/SectionRail.module.css', /\.tip\b/],
+]
+
+/** Text needs 4.5:1 on whatever it is painted on (WCAG 1.4.3). */
+const MIN_TEXT = 4.5
+
+/**
+ * Rules whose colour paints a mark, not text. A status mark keeps the status colour and the words
+ * beside it take the text token, as a met circle check's do (successTextContrast.test.ts).
+ */
+const MARKS = new Set(['components/Toast.module.css .icon'])
+
 function cssFiles(dir: string, found: string[] = []): string[] {
   for (const entry of readdirSync(dir)) {
     const full = join(dir, entry)
@@ -183,31 +210,85 @@ describe('every floating surface draws its own edge', () => {
   })
 })
 
-/** WCAG contrast between two opaque colours written as #rrggbb. */
-function contrast(a: string, b: string): number {
-  const luminance = (hex: string) => {
-    const [r, g, bl] = [1, 3, 5]
-      .map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
-      .map((v) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4))
-    return 0.2126 * r + 0.7152 * g + 0.0722 * bl
+/** A colour as sRGB channels from 0 to 255 and an alpha from 0 to 1. */
+type Rgba = readonly [r: number, g: number, b: number, a: number]
+
+/**
+ * The colour a CSS value paints, its custom properties read from `props`: a hex or rgb() colour,
+ * `transparent`, a var() with its fallback, or a color-mix() of one colour with transparent.
+ * Anything else, such as a gradient, is not one flat colour and gives undefined.
+ */
+function paint(value: string, props: ReadonlyMap<string, string>, depth = 0): Rgba | undefined {
+  const v = value.trim()
+  if (depth > 8) return undefined
+  if (v === 'transparent') return [0, 0, 0, 0]
+  const inside = (fn: string) =>
+    v.startsWith(`${fn}(`) && v.endsWith(')') ? v.slice(fn.length + 1, -1) : undefined
+  const ref = inside('var')
+  if (ref !== undefined) {
+    const comma = ref.indexOf(',')
+    const name = (comma < 0 ? ref : ref.slice(0, comma)).trim()
+    const next = props.get(name) ?? (comma < 0 ? undefined : ref.slice(comma + 1))
+    return next === undefined ? undefined : paint(next, props, depth + 1)
   }
-  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x)
+  const mix =
+    /^color-mix\(\s*in\s+[\w-]+\s*,\s*([\s\S]+?)\s+([\d.]+)%\s*,\s*transparent\s*\)$/.exec(v)
+  if (mix) {
+    const colour = paint(mix[1], props, depth + 1)
+    return colour && [colour[0], colour[1], colour[2], (colour[3] * Number(mix[2])) / 100]
+  }
+  const hex = /^#([0-9a-f]{6})$/i.exec(v)?.[1]
+  if (hex) {
+    const channel = (i: number) => parseInt(hex.slice(i, i + 2), 16)
+    return [channel(0), channel(2), channel(4), 1]
+  }
+  const rgb = (inside('rgb') ?? inside('rgba'))?.split(',').map(Number)
+  if (rgb && (rgb.length === 3 || rgb.length === 4) && rgb.every(Number.isFinite)) {
+    return [rgb[0], rgb[1], rgb[2], rgb[3] ?? 1]
+  }
+  return undefined
+}
+
+/** `top` laid over an opaque `under`, as the browser composites them. */
+function over(top: Rgba, under: Rgba): Rgba {
+  const channel = (i: 0 | 1 | 2) => top[i] * top[3] + under[i] * (1 - top[3])
+  return [channel(0), channel(1), channel(2), 1]
+}
+
+/** WCAG contrast of `ink` laid over the opaque `ground`. */
+function ratio(ink: Rgba, ground: Rgba): number {
+  const luminance = (c: Rgba) => {
+    const [r, g, b] = [c[0], c[1], c[2]]
+      .map((v) => v / 255)
+      .map((v) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4))
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+  }
+  const [hi, lo] = [luminance(over(ink, ground)), luminance(ground)].sort((x, y) => y - x)
   return (hi + 0.05) / (lo + 0.05)
 }
 
+/** WCAG contrast between two opaque colours written as #rrggbb. */
+function contrast(a: string, b: string): number {
+  return ratio(paint(a, new Map())!, paint(b, new Map())!)
+}
+
+const themeRules = cssFiles(join(SRC, 'styles/themes')).flatMap(rules)
+const block = (selector: string) => themeRules.find((r) => r.selector === selector)?.decls
+
+// A block that sets --card-bg re-grounds the page: a theme, or a variant such as
+// .instrument-deck. Each must set its own pair, or it inherits one painted for other grounds.
+// `:root` repeats the light theme's block as the no-JS fallback; it is checked as that block.
+const grounded = themeRules.filter((r) => r.decls.has('--card-bg') && r.selector !== ':root')
+const cases = grounded.map((r) => {
+  const id = /\[data-theme='([\w-]+)'\]/.exec(r.selector)?.[1]
+  return [r.selector, id] as const
+})
+
+/** A block's tokens: a variant only overrides some, and the rest are its theme's. */
+const tokensOf = (selector: string, id: string | undefined) =>
+  new Map([...(block(`[data-theme='${id}']`) ?? []), ...(block(selector) ?? [])])
+
 describe("each theme's floating pair meets UI-28's numbers on its own grounds", () => {
-  const themeRules = cssFiles(join(SRC, 'styles/themes')).flatMap(rules)
-  const block = (selector: string) => themeRules.find((r) => r.selector === selector)?.decls
-
-  // A block that sets --card-bg re-grounds the page: a theme, or a variant such as
-  // .instrument-deck. Each must set its own pair, or it inherits one painted for other grounds.
-  // `:root` repeats the light theme's block as the no-JS fallback; it is checked as that block.
-  const grounded = themeRules.filter((r) => r.decls.has('--card-bg') && r.selector !== ':root')
-  const cases = grounded.map((r) => {
-    const id = /\[data-theme='([\w-]+)'\]/.exec(r.selector)?.[1]
-    return [r.selector, id] as const
-  })
-
   it('names every variant that re-grounds a theme in THEME_SCOPES, which portals carry along', () => {
     // An InfoTip's panel renders at the end of the page and wears these classes to keep the
     // tokens of the part of the page its icon sits in; a variant missing here loses them.
@@ -227,8 +308,7 @@ describe("each theme's floating pair meets UI-28's numbers on its own grounds", 
   it.each(cases)('%s sets an opaque pair with an edge it can see', (selector, id) => {
     const theme = THEMES.find((t) => t.id === id)
     expect(theme, `${selector} names no theme in THEMES`).toBeDefined()
-    // A variant only overrides some grounds; the rest are its theme's.
-    const decls = new Map([...(block(`[data-theme='${id}']`) ?? []), ...(block(selector) ?? [])])
+    const decls = tokensOf(selector, id)
     const surface = block(selector)?.get('--surface-floating')
     const edge = block(selector)?.get('--border-floating')
     expect(surface).toMatch(/^#[0-9a-f]{6}$/i)
@@ -238,6 +318,126 @@ describe("each theme's floating pair meets UI-28's numbers on its own grounds", 
       .filter(([, value]) => value !== undefined && /^#[0-9a-f]{6}$/i.test(value))
       .map(([ground, value]) => [ground, Math.round(contrast(edge!, value!) * 100) / 100] as const)
       .filter(([, ratio]) => ratio < min)
+    expect(weak).toEqual([])
+  })
+})
+
+/** A hover or focus state: it repaints a rule that is already there. */
+const STATE = /:(?:hover|focus-visible|focus|active)\b/
+const painted = (value: string | undefined): value is string =>
+  value !== undefined && !/^(?:none|transparent)$/.test(value)
+
+interface TextPair {
+  where: string
+  ink: string
+  /** What the text sits on, laid over the floating surface; the surface itself when undefined. */
+  ground?: string
+}
+
+/**
+ * Each colour of text in a scope with what it is painted on. A rule that paints its own
+ * background is measured on it. Text that does not is measured on the surface and on every block
+ * in the scope that paints one under text, such as a popover's header band. A hover that only
+ * changes the background is measured with the text of the rule it repaints. A class that only
+ * recolours another rule's element, such as the card menu's `.danger`, is measured on the surface
+ * but not on that rule's hover tint: a stylesheet does not say which elements wear both.
+ */
+function textPairs(scope: readonly Rule[]): TextPair[] {
+  const bands = scope.filter(
+    (r) =>
+      painted(background(r)) &&
+      !r.decls.has('color') &&
+      !STATE.test(r.selector) &&
+      !r.selector.includes('::')
+  )
+  const pairs: TextPair[] = []
+  for (const rule of scope) {
+    const ink = rule.decls.get('color')
+    const own = background(rule)
+    if (ink === undefined) {
+      if (!painted(own) || !STATE.test(rule.selector)) continue
+      const base = rule.selector.split(STATE).join('')
+      const text = scope.find((r) => r.selector === base)?.decls.get('color')
+      if (text !== undefined) pairs.push({ where: rule.selector, ink: text, ground: own })
+    } else if (/^(?:inherit|currentColor)$/i.test(ink)) {
+      continue
+    } else if (painted(own)) {
+      pairs.push({ where: rule.selector, ink, ground: own })
+    } else {
+      pairs.push({ where: rule.selector, ink })
+      for (const band of bands) {
+        pairs.push({ where: `${rule.selector} on ${band.selector}`, ink, ground: background(band) })
+      }
+    }
+  }
+  return pairs
+}
+
+/**
+ * The custom properties a scope sets for itself, one set per rule that sets them, each over the
+ * first: a toast's kinds each give its accent and ink.
+ */
+function kindsOf(
+  scope: readonly Rule[]
+): Array<readonly [kind: string, props: Map<string, string>]> {
+  const own = (r: Rule) => [...r.decls].filter(([name]) => name.startsWith('--'))
+  const setters = scope.filter((r) => own(r).length > 0)
+  if (setters.length === 0) return [['', new Map()]]
+  return setters.map((r) => [r.selector, new Map([...own(setters[0]), ...own(r)])] as const)
+}
+
+describe('text on a floating surface reads 4.5:1 on it, in every theme', () => {
+  it('scopes the text of every floating surface, and each scope finds text', () => {
+    const files = [...new Set(FLOATING.map(([file]) => file))].sort()
+    expect(TEXT_ON_FLOATING.map(([file]) => file).sort()).toEqual(files)
+    for (const [file, inside] of TEXT_ON_FLOATING) {
+      const scope = all.filter((r) => r.file === file && inside.test(r.selector))
+      expect(
+        scope.some((r) => r.decls.has('color')),
+        `${file}: its scope paints no text`
+      ).toBe(true)
+    }
+  })
+
+  it.each(cases)('%s: every text colour on a floating surface', (selector, id) => {
+    const theme = tokensOf(selector, id)
+    const grounds = GROUNDS.map((g) => paint(`var(${g})`, theme)).filter(
+      (c): c is Rgba => c !== undefined
+    )
+    const weak: string[] = []
+    const measure = (where: string, pair: TextPair, props: ReadonlyMap<string, string>): void => {
+      const surface = paint('var(--surface-floating)', props)!
+      const ink = paint(pair.ink, props)
+      const ground = pair.ground === undefined ? undefined : paint(pair.ground, props)
+      if (ink === undefined || (pair.ground !== undefined && ground === undefined)) {
+        weak.push(`${where}: cannot read ${pair.ink} on ${pair.ground}`)
+        return
+      }
+      // The rail's labels are the floating surface itself, see-through over the page.
+      const under = pair.ground?.includes('--surface-floating') ? grounds : [surface]
+      const worst = Math.min(...under.map((u) => ratio(ink, ground ? over(ground, u) : u)))
+      if (worst < MIN_TEXT) weak.push(`${where}: ${pair.ink} at ${worst.toFixed(2)}:1`)
+    }
+    for (const [file, inside] of TEXT_ON_FLOATING) {
+      const scope = all.filter((r) => r.file === file && inside.test(r.selector))
+      for (const [kind, local] of kindsOf(scope)) {
+        const props = new Map([...theme, ...local])
+        for (const pair of textPairs(scope).filter((p) => !MARKS.has(`${file} ${p.where}`))) {
+          measure(`${file} ${pair.where}${kind ? ` (${kind})` : ''}`, pair, props)
+        }
+      }
+    }
+    // Two surfaces are painted from script, not a stylesheet.
+    const heatmap = /tooltipEl\.style\.cssText\s*=\s*'[^']*;color:([^;']+);/.exec(
+      readFileSync(join(SRC, 'components/D3HeatmapChart.tsx'), 'utf8')
+    )?.[1]
+    const chart = /const ink = \([^)]*\) => token\(context, '(--[\w-]+)'/.exec(
+      readFileSync(join(SRC, 'components/chartFloatingTooltip.ts'), 'utf8')
+    )?.[1]
+    expect(heatmap).toBeDefined()
+    expect(chart).toBeDefined()
+    measure("the heatmap's tooltip", { where: '', ink: heatmap! }, theme)
+    measure("a chart's tooltip", { where: '', ink: `var(${chart!})` }, theme)
     expect(weak).toEqual([])
   })
 })

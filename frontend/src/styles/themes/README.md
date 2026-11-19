@@ -28,7 +28,10 @@ Brand: `--accent-warm` (the one warm touch per view), `--font-display`
 (headings), `--glow-primary` (button/focus glow). Floating: `--surface-floating
 --border-floating`, painted by every menu, dropdown, popover, tooltip and toast; a
 theme sets them where it sets its grounds, with an edge of 2:1 against them in a
-light theme and 3:1 in a dark one (`src/__tests__/floatingEdges.test.ts`).
+light theme and 3:1 in a dark one (`src/__tests__/floatingEdges.test.ts`). Text on a
+floating surface reads 4.5:1 on it in every theme, so status text there takes the text
+tokens, `--success-text --danger-text --warning-text`, which each theme sets beside its
+status colours; the status colours themselves are for marks and edges.
 Dialog: `--border-dialog`, the edge of every dialog, and `--border-dialog-sidebar`,
 the edge of the two painted in the sidebar's navy (sign-in and Create Profile); a
 theme sets them where it sets its grounds and the deck sets its own

@@ -92,8 +92,12 @@ describe("a met circle check's word", () => {
 
 describe("a success toast's button", () => {
   it('is set in --success-text, and the icon and border keep --success', () => {
+    // Each kind sets an ink for the title and the button, and an accent for the icon and the edge.
     const rule = (selector: string) => ruleIn(TOAST_CSS, selector)
-    expect(rule('.toast.success .actionBtn')).toMatch(/color:\s*var\(--success-text\)/)
+    expect(rule('.toast.success')).toMatch(/--toast-ink:\s*var\(--success-text\)/)
+    expect(rule('.actionBtn')).toMatch(/(?:^|;)\s*color:\s*var\(--toast-ink\)/)
     expect(rule('.toast.success')).toMatch(/--toast-accent:\s*var\(--success\)/)
+    expect(rule('.icon')).toMatch(/color:\s*var\(--toast-accent\)/)
+    expect(rule('.toast')).toMatch(/border:[^;]*var\(--toast-accent\)/)
   })
 })

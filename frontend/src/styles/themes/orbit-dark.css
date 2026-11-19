@@ -81,6 +81,9 @@
      --danger itself is under 4.5:1 on --surface. */
   --danger-text: #ff9d9d;
   --warning: #f0a860;
+  /* Small text in the warning hue: 7.0:1 on --surface-floating and 8.4:1 on --surface, so the
+     dark theme uses --warning itself. */
+  --warning-text: #f0a860;
   --info: #6e9bff;
 
   /* Semantic money — reserved for numbers, never decoration */

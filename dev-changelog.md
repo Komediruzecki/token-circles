@@ -2781,6 +2781,32 @@ check')` first, as the cushion and debt cases do.
   `.instrument-deck` and fails unless the tooltip renders outside the chart, inside a scope of the
   deck's class that draws no box; outside a deck it takes none, and nothing is left behind when the
   chart goes.
+- **Text on a floating surface reads 4.5:1 in every theme.** Measured in the browser on 19 Nov,
+  the card menu's Delete was 4.35:1 on the floating surface in Dawn Light, 3.71:1 in Orbit Dark and
+  4.18:1 in the deck, and the bill calendar popover's overdue amount 3.48:1 on its overdue row in
+  Orbit. A toast's title and action took its kind's colour: 2.99:1 for a warning in Dawn, 3.70:1
+  for a success title, 4.35:1 for an error, and 3.71:1 for an error in Orbit, with the action's
+  hover tint taking each lower (2.60:1 for a warning in Dawn). The active profile in the profile
+  switcher was 4.11:1 on its tint in Dawn, and the popover's paid check 3.61:1. Each now takes the
+  hue's text token: `--danger-text` for Delete and the overdue amount, `--success-text` for the paid
+  check, `--primary-hover`, the azure the app already sets text in, for the active profile, and a
+  toast's new `--toast-ink` (`--primary-hover`, `--success-text`, `--warning-text` or
+  `--danger-text`) for its title and action. `--toast-accent` keeps the icon, the edge, the
+  outline and the hover tint: the icon is a mark, and keeps the status colour as a met circle
+  check's mark does. `--warning-text` is new: #a3590c in Dawn (5.26:1 on the surface, 5.0:1 on
+  `--bg`) and Orbit's own `--warning` in Orbit. Of 75 text pairs measured in the three, 24 were
+  under 4.5:1 before and none are after; the lowest is 4.56:1, a success toast's action under the
+  pointer in Dawn. The surfaces and their edges did not change.
+- **Tests:** `src/__tests__/floatingEdges.test.ts` reads the text colour of every rule inside each
+  floating surface (`TEXT_ON_FLOATING`, a scope per surface's stylesheet) with what it is painted
+  on: its own background, a band such as the popover's header, or a hover's tint under the text of
+  the rule it repaints. It resolves each block that re-grounds a theme, and a toast's kinds, and
+  fails on a pair under 4.5:1, on a floating stylesheet with no scope and on a scope that finds no
+  text. A toast's icon is listed as a mark, not text. It failed in Dawn, Orbit and the deck before
+  the change, and fails again when any one part of it is taken back, when the overdue row's tint or
+  the action's hover tint is made stronger, and when a new rule in the card menu's stylesheet is set
+  in `--warning`. `src/__tests__/successTextContrast.test.ts` reads the success toast's button
+  through `--toast-ink` now, and still fails unless the icon and the edge keep `--success`.
 - **No extra-payment label stands on the loan's line.** A label above its mark and to the left of it
   was placed at the mark's height, where the line has not yet come down to the mark, so the line ran
   through it. The review's sweep (`LoanPayoffChart` in jsdom: the boat with one extra payment at
