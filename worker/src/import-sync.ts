@@ -46,7 +46,7 @@ export async function runScheduledSheetSyncs(cron: string, env: Env): Promise<vo
     try {
       const config = parseJson(src.config) || {};
       if (!config.url) continue;
-      const fetched = await fetchGoogleSheetRows(config.url, config.sheetName);
+      const fetched = await fetchGoogleSheetRows(config.url);
       if (fetched.status !== 200) continue;
       const headers = (fetched.body.headers as string[]) || [];
       const rows = (fetched.body.rows as string[][]) || [];

@@ -274,7 +274,8 @@ describe('Connected Sources: Add a sheet', () => {
       expect.objectContaining({
         kind: 'google_sheet',
         label: 'Bank ledger',
-        config: { url: LEDGER, sheetName: 'Sheet1' },
+        // No tab name: the link's gid is the tab, and neither runtime makes one up (finding 11).
+        config: { url: LEDGER },
         mapping: expect.objectContaining({
           date: 'Date',
           amount: 'Amount',
@@ -290,14 +291,15 @@ describe('Connected Sources: Add a sheet', () => {
     })
   })
 
-  it('names a sheet saved without a name after its tab, and opens empty the next time', async () => {
+  it('names a sheet saved without a name a Google Sheet, and opens empty the next time', async () => {
     await openAdd()
     type(urlInput(), LEDGER)
     submit(save())
     await vi.waitFor(() => {
       expect(byTestId('source-add-form')).toBeNull()
     })
-    expect(await storedSources()).toEqual([expect.objectContaining({ label: 'Sheet1' })])
+    // Its tab's name is not known, so it is named for what it is (it was "Sheet1", made up).
+    expect(await storedSources()).toEqual([expect.objectContaining({ label: 'Google Sheet' })])
     Array.from(host.querySelectorAll('button'))
       .find((b) => b.textContent?.includes('Add a sheet'))!
       .click()

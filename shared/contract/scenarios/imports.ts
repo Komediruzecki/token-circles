@@ -393,10 +393,19 @@ export const imports = [
         ['2026-03-01', 'Salary', '2500', 'Salary'],
         ['2026-03-02', 'Groceries', '-45.50', 'Food'],
       ],
-      sheetNames: ['Sheet1'],
-      selectedSheet: 'Sheet1',
+      // The tab is the link's gid, or the first: its name is not known, and none is made up.
+      sheetNames: [],
+      selectedSheet: '',
     });
     expect(SHEETS['contract-sheet']).toContain('Groceries');
+
+    // A tab name sent back is not taken as the tab read: the link says which tab that is.
+    const named = await api.post('/api/import/googlesheet', {
+      url: 'https://docs.google.com/spreadsheets/d/contract-sheet/edit#gid=0',
+      sheetName: 'Sheet1',
+    });
+    expectOk(expect, named, 'POST /api/import/googlesheet');
+    expect(named.body).toMatchObject({ sheetNames: [], selectedSheet: '' });
 
     // A link that is not a Google Sheet's is refused at the link, in the words the page shows.
     const refused = await api.post('/api/import/googlesheet', {

@@ -24,7 +24,11 @@ export interface SheetToKeep {
   categoryTypes: Record<string, 'income' | 'expense' | 'account'>
 }
 
-/** The tab a link opens on: its gid, or the first tab's, 0, when the link names none. */
+/**
+ * The tab a link opens on: its gid, or 0 when the link names none. Google opens such a link on
+ * its first tab, and both runtimes read the first tab for it, which is gid 0 unless that tab was
+ * deleted or moved: taken as equal, as no runtime can read a tab's gid from the sheet.
+ */
 const tabOf = (gid: string | null): string => gid ?? '0'
 
 /** The saved source that reads this sheet's tab, if there is one. */
@@ -40,12 +44,15 @@ export function sourceForSheet(sources: readonly ImportSource[], url: string): I
   )
 }
 
-/** The source to save: named as typed, else for its tab, as Add a sheet names one. */
+/**
+ * The source to save: named as typed, else for its tab, as Add a sheet names one. A tab with no
+ * known name keeps none: the source is a Google Sheet, read at its link's tab.
+ */
 export function keepSheetBody(sheet: SheetToKeep, label: string, now: string) {
   return {
     kind: 'google_sheet' as const,
     label: label.trim() || sheet.sheetName || 'Google Sheet',
-    config: { url: sheet.url, sheetName: sheet.sheetName },
+    config: sheet.sheetName ? { url: sheet.url, sheetName: sheet.sheetName } : { url: sheet.url },
     mapping: sheet.mapping,
     category_types: sheet.categoryTypes,
     schedule: 'manual' as const,

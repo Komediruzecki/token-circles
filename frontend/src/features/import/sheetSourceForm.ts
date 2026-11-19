@@ -69,7 +69,9 @@ export function createSheetSourceForm(options: {
           sourceBody(
             { url: values.url.trim(), label: values.label.trim() || sheetName || 'Google Sheet' },
             {
-              config: { url: values.url.trim(), sheetName },
+              config: sheetName
+                ? { url: values.url.trim(), sheetName }
+                : { url: values.url.trim() },
               mapping: mappingToHeaderNames(autoDetectMapping(headers), headers),
             }
           )

@@ -296,7 +296,11 @@ export async function importGoogleSheet(body: unknown): Promise<Response> {
   // The Worker's rule and words for the link (shared/importSourceSchema.ts).
   const checked = checkSheetFetch(body)
   if (!checked.ok) return refuse(checked.fields)
-  const { id: sheetId, gid, sheetName } = checked.value
+  // The tab read is the link's gid, or the first tab, in every way below, as the Worker reads it.
+  // A tab name the page sends is not used: none is known here (the CSV does not carry it), so the
+  // answer names none, where it said "Sheet1" and the page sent that back as the tab for the
+  // Visualization API to read (review of 19 Nov).
+  const { id: sheetId, gid } = checked.value
 
   // CSV parse helper (handles quoted fields, commas in values)
   const parseCSV = (text: string): { headers: string[]; rows: string[][] } => parseImportCsv(text)
@@ -371,8 +375,8 @@ export async function importGoogleSheet(body: unknown): Promise<Response> {
       return json({
         headers: cleaned.headers,
         rows: cleaned.rows,
-        sheetNames: [sheetName || 'Sheet1'],
-        selectedSheet: sheetName || 'Sheet1',
+        sheetNames: [],
+        selectedSheet: '',
       })
     })
 
@@ -386,13 +390,13 @@ export async function importGoogleSheet(body: unknown): Promise<Response> {
     return json({
       headers: cleaned.headers,
       rows: cleaned.rows,
-      sheetNames: [sheetName || 'Sheet1'],
-      selectedSheet: sheetName || 'Sheet1',
+      sheetNames: [],
+      selectedSheet: '',
     })
   })
 
   // Strategy 2: Google Visualization API
-  const gvizUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json${gid ? `&gid=${gid}` : ''}${sheetName ? `&sheet=${encodeURIComponent(sheetName)}` : ''}`
+  const gvizUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json${gid ? `&gid=${gid}` : ''}`
   const strategy2 = tryStrategy(gvizUrl, (text) => {
     const jsonStr = text
       .replace(/^\)\]\}'/, '')
@@ -425,8 +429,8 @@ export async function importGoogleSheet(body: unknown): Promise<Response> {
     return json({
       headers: gvizCleaned.headers,
       rows: gvizCleaned.rows,
-      sheetNames: [sheetName || 'Sheet1'],
-      selectedSheet: sheetName || 'Sheet1',
+      sheetNames: [],
+      selectedSheet: '',
     })
   })
 
@@ -440,8 +444,8 @@ export async function importGoogleSheet(body: unknown): Promise<Response> {
     return json({
       headers: cleaned.headers,
       rows: cleaned.rows,
-      sheetNames: [sheetName || 'Sheet1'],
-      selectedSheet: sheetName || 'Sheet1',
+      sheetNames: [],
+      selectedSheet: '',
     })
   })
 

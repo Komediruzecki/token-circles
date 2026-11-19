@@ -2733,6 +2733,35 @@ check')` first, as the cushion and debt cases do.
     the fresh guess) and `features/__tests__/syncSavedSheet.test.tsx` (the page: import a sheet
     with unsigned amounts, Save sheet, add a Pharmacy row, Sync: an expense). Both fail on the
     old restore.
+- **A sheet's tab is the link's, and no runtime makes up its name.** Review of 19 Nov:
+  - **No "Sheet1".** Both runtimes answered `POST /api/import/googlesheet` with
+    `selectedSheet`/`sheetNames` of the tab name sent, else "Sheet1", though the tab they read is
+    the link's gid (or the first tab) and the CSV does not carry its name. A sheet saved from the
+    card or with Add a sheet then kept "Sheet1" as its tab and as its name, Recent Imports logged
+    "Google Sheet (Sheet1)", and local-first sent the name back to Google as `&sheet=` on its
+    Visualization API try, which reads that name instead of the gid. Now both answer
+    `sheetNames: []` and `selectedSheet: ''` (`fetchGoogleSheetRows` in
+    `worker/src/routes/imports.ts`, which no longer takes a tab name, and `importGoogleSheet` in
+    `core/storage/handlers/importFlow.ts`, whose `gviz` URL carries the gid alone). The page goes
+    on to Map columns on the headers alone (`fetchGoogleSheet` waited on a tab name, the made-up
+    one). A source saved with no tab name stores none and is named "Google Sheet"
+    (`keepSheetBody`, `sheetSourceForm.ts`). Sources saved earlier keep their `sheetName`; the
+    Worker never read it for the fetch, and local-first no longer sends it.
+  - **A published link is its own sheet.** `parseSheetUrl` (`core/importSources.ts`) read a
+    published link (`/d/e/2PACX…`) as id `e`, so `sourceForSheet` took any two published sheets
+    for one. It reads the id after the `e` now. Fetching a published link is unchanged: both
+    runtimes read it as id `e` and fail to fetch it, as before.
+  - **A link with no gid is tab 0.** `sourceForSheet` takes a link with no gid and one with
+    `gid=0` as the same tab: Google opens a link without a gid on the first tab, and both runtimes
+    read the first tab for it, which is gid 0 unless that tab was deleted or moved. No runtime
+    can read a tab's gid from the sheet, so the two stay equal.
+  - **Tests:** `keepSheetEdges.test.ts` (two published sheets told apart; no gid is gid 0 and not
+    gid 7; no tab name kept or made up), `core/storage/__tests__/googleSheetTab.test.ts` (local-first
+    sends no `sheet=` to Google, even for "Sheet1", and answers no tab name), and the contract
+    scenario "a shared Google Sheet is read for the mapping step" on both runtimes (no tab name,
+    with or without one sent). Before the change all of them failed but "no gid is gid 0".
+    `sheetForms.test.tsx` expected the made-up name ("Sheet1" stored as tab and label) and now
+    expects none and "Google Sheet".
 
 ### Fixed
 

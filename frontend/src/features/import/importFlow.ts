@@ -1436,8 +1436,9 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
       setRows(data.rows || [])
 
       if (navigate) {
-        // If returning with specific sheet and we have headers, go to mapping
-        if (selectedSheet() && hasHeaders) {
+        // On to Map columns with the tab's headers. Neither runtime names the tab (the link's gid
+        // picks it), and this waited on the "Sheet1" they used to make up.
+        if (hasHeaders) {
           goToMapping()
         } else {
           setActiveStep('upload')

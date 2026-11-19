@@ -82,10 +82,13 @@ export async function deleteImportSource(id: number): Promise<boolean> {
 
 /**
  * Extract the spreadsheet id + gid from a Google Sheets URL — used to label a saved source and
- * to detect when the user re-adds a sheet they've already saved. Returns nulls when absent.
+ * to detect when the user re-adds a sheet they've already saved. Returns nulls when absent. A
+ * published link (`/d/e/2PACX…`) has its own id after the `e`: read as `e`, every published
+ * sheet was the same one.
  */
 export function parseSheetUrl(url: string): { id: string | null; gid: string | null } {
-  const id = url.match(/\/d\/([a-zA-Z0-9-_]+)/)?.[1] ?? null
+  const id =
+    url.match(/\/d\/e\/([a-zA-Z0-9-_]+)/)?.[1] ?? url.match(/\/d\/([a-zA-Z0-9-_]+)/)?.[1] ?? null
   const gid = url.match(/[?&#]gid=(\d+)/)?.[1] ?? null
   return { id, gid }
 }

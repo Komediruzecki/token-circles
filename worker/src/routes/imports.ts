@@ -278,9 +278,13 @@ class SheetUnreadable extends Error {}
 // Extracted from the HTTP handler so the route, the daily cron sync and email-in can all call
 // it. Returns a { status, body } pair. Pure-JS CSV path only; the XLSX fallback (multi-tab
 // enumeration) needs a spreadsheet parser and still surfaces as a 501-style error.
+//
+// The tab read is the link's gid, or the first tab: a tab name sent with it is not what is read,
+// and the CSV export does not say the tab's name. So the answer names no tab (`sheetNames` empty,
+// `selectedSheet` ''); it said "Sheet1", which a saved source then kept as its tab and its name,
+// and local-first sent back to Google as the tab to read (review of 19 Nov).
 export async function fetchGoogleSheetRows(
-  url: unknown,
-  sheetName?: string
+  url: unknown
 ): Promise<{ status: number; body: Record<string, unknown> }> {
   // The link's words are shared with local-first and the Import page (shared/importSourceSchema.ts).
   const link = readSheetUrl(url);
@@ -303,8 +307,8 @@ export async function fetchGoogleSheetRows(
         body: {
           headers,
           rows,
-          selectedSheet: sheetName || 'Sheet1',
-          sheetNames: [sheetName || 'Sheet1'],
+          selectedSheet: '',
+          sheetNames: [],
         },
       };
     }
@@ -346,7 +350,7 @@ importRoutes.post('/api/import/googlesheet', requireAuth, async (c) => {
   const rl = await enforce(c, `import:${c.get('userId')}`, 30, 300);
   if (rl) return rl;
   const b = (await c.req.json()) as Record<string, any>;
-  const { status, body } = await fetchGoogleSheetRows(b.url, b.sheetName);
+  const { status, body } = await fetchGoogleSheetRows(b.url);
   return c.json(body, status as 200);
 });
 
