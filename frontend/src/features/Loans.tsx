@@ -17,7 +17,16 @@
  * WHEN they add, edit or delete a loan, or an extra payment
  * THEN every figure follows: the write bumps the `loans` data version and the page reloads from it
  */
-import { createEffect, createMemo, createSignal, on, onCleanup, onMount, Show } from 'solid-js'
+import {
+  batch,
+  createEffect,
+  createMemo,
+  createSignal,
+  on,
+  onCleanup,
+  onMount,
+  Show,
+} from 'solid-js'
 import { apiDelete, apiHouseholdGet, errorStatus, getLocalCurrency, showToast } from '../core/api'
 import { plainMessage } from '../core/apiError'
 import { activeProfileId } from '../core/apiProfileScope'
@@ -55,6 +64,8 @@ export default function Loans() {
    * card's menu can open the loan's own page and Back finds the chart still open.
    */
   const [openId, setOpenId] = createSignal<number | null>(null)
+  /** The day the list was last read: what its figures, and an open chart's, are worked out for. */
+  const [listToday, setListToday] = createSignal(localToday())
 
   // Another profile, another set of loans: the chart closes, so switching back does not find it
   // open again.
@@ -95,7 +106,10 @@ export default function Loans() {
       if (mine !== listToken) return
       const today = localToday()
       const next = data.map((loan) => toLoanRow(loan, today, writeProfileId()))
-      setRows(next)
+      batch(() => {
+        setListToday(today)
+        setRows(next)
+      })
       setStatus('ready')
       // An open chart goes with its loan, deleted here or elsewhere: were the loan to come back
       // into the list, its chart would come back open with it.
@@ -202,6 +216,7 @@ export default function Loans() {
             canWrite={canWrite}
             ownerName={ownerName}
             openId={openId()}
+            today={listToday()}
             onToggle={(row) => setOpenId(openId() === row.id ? null : row.id)}
             onClose={() => setOpenId(null)}
             onAdd={() => setForm({ loan: null })}

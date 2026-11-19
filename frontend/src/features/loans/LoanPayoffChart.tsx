@@ -39,6 +39,8 @@ const PILL_H = 22
 const CHAR = 7.2
 /** Each extra payment gets a label while they are this few. */
 const MAX_EXTRA_LABELS = 6
+/** The glow around today's dot. */
+const HALO = 11
 
 const f1 = (n: number) => n.toFixed(1)
 
@@ -111,8 +113,15 @@ export default function LoanPayoffChart(props: Props) {
   const area = (pts: string[], from: number, to: number) =>
     `M${f1(sx(from))},${f1(base())}L${pts.join('L')}L${f1(sx(to))},${f1(base())}Z`
 
-  /** Today: where the payments made end. Not on a loan with no dates, nor one paid off. */
-  const showToday = () => t().dated && !t().paidOff
+  /**
+   * Today: where the payments made end. Not on a loan with no dates, nor one paid off, nor one
+   * whose first payment falls in a later year: the axis starts in that year, and a Today at its
+   * start would stand in next year.
+   */
+  const showToday = () =>
+    t().dated &&
+    !t().paidOff &&
+    (t().made > 0 || t().rows[0].date.slice(0, 4) <= props.today.slice(0, 4))
   const todayX = () => sx(made())
   const todayY = () => sy(t().owed)
   const pillW = 52
@@ -175,23 +184,43 @@ export default function LoanPayoffChart(props: Props) {
   })
   const bands = () => (12 / n()) * plotW() >= 24
 
-  /** Extra payments: a mark on the line each, and a label for the first few that fit. */
+  /**
+   * Extra payments: a mark on the line each, and a label for the first few that fit: right of its
+   * mark, or left of it where the right runs off the chart or into another label. Neither may
+   * cover the Today pill, nor today's dot and the glow around it; a mark inside that glow has its
+   * label set out past it.
+   */
   const extras = createMemo(() => {
     const placed: Box[] = []
-    const pill = showToday() ? { x0: pillX() - pillW / 2, x1: pillX() + pillW / 2 } : null
+    const today = showToday()
+    const pill = today ? { x0: pillX() - pillW / 2, x1: pillX() + pillW / 2 } : null
+    const glow = today ? { x: todayX(), y: todayY(), r: HALO } : null
     const labelled = t().extras.length <= MAX_EXTRA_LABELS
     return t().extras.map((e) => {
       const x = sx(e.month)
       const y = sy(balanceAt(e.month))
       const text = `+${props.formats.wholeMoney(e.amount)}`
-      const box = { x0: x + 7, x1: x + 7 + text.length * CHAR }
-      const fits =
-        labelled &&
+      const width = text.length * CHAR
+      // The label's line: 12 px text standing on y - 7, from 19 px above the mark to 4 px above.
+      const top = y - 19
+      const bottom = y - 4
+      const level = glow !== null && top < glow.y + glow.r && bottom > glow.y - glow.r
+      const inGlow = glow !== null && level && Math.abs(x - glow.x) <= glow.r
+      const rightFrom = glow !== null && inGlow ? glow.x + glow.r + 3 : x + 7
+      const leftTo = glow !== null && inGlow ? glow.x - glow.r - 3 : x - 7
+      const sides = [
+        { x0: rightFrom, x1: rightFrom + width, at: rightFrom, anchor: 'start' as const },
+        { x0: leftTo - width, x1: leftTo, at: leftTo, anchor: 'end' as const },
+      ]
+      const fits = (box: Box) =>
+        box.x0 >= padLeft() &&
         box.x1 <= padLeft() + plotW() &&
         !placed.some((b) => overlaps(b, box)) &&
-        !(pill && y - 10 < PAD_TOP + 4 && overlaps(pill, box))
-      if (fits) placed.push(box)
-      return { ...e, x, y, text, labelled: fits }
+        !(pill && top < PAD_TOP - 6 && overlaps(pill, box)) &&
+        !(glow !== null && level && box.x0 < glow.x + glow.r && box.x1 > glow.x - glow.r)
+      const side = labelled ? sides.find(fits) : undefined
+      if (side) placed.push(side)
+      return { ...e, x, y, text, label: side ?? null }
     })
   })
 
@@ -206,7 +235,8 @@ export default function LoanPayoffChart(props: Props) {
         height={height()}
         viewBox={`0 0 ${w()} ${height()}`}
         role="img"
-        aria-labelledby={`${props.id}-title ${props.id}-desc`}
+        aria-labelledby={`${props.id}-title`}
+        aria-describedby={`${props.id}-desc`}
         data-test-id="loans-payoff-chart"
       >
         <title id={`${props.id}-title`}>What is owed, from the first payment to the last</title>
@@ -325,14 +355,17 @@ export default function LoanPayoffChart(props: Props) {
               <g data-test-id="loans-payoff-extra" data-made={e.made ? 'true' : 'false'}>
                 <title>{extraTitle(e)}</title>
                 <circle class={styles.payoffExtra} cx={f1(e.x)} cy={f1(e.y)} r="4.5" />
-                <Show when={e.labelled}>
-                  <text
-                    class={`${styles.payoffExtraLabel} ${styles.chartLabelHalo}`}
-                    x={f1(e.x + 7)}
-                    y={f1(e.y - 7)}
-                  >
-                    {e.text}
-                  </text>
+                <Show when={e.label}>
+                  {(label) => (
+                    <text
+                      class={`${styles.payoffExtraLabel} ${styles.chartLabelHalo}`}
+                      x={f1(label().at)}
+                      y={f1(e.y - 7)}
+                      text-anchor={label().anchor}
+                    >
+                      {e.text}
+                    </text>
+                  )}
                 </Show>
               </g>
             )}
@@ -395,7 +428,7 @@ export default function LoanPayoffChart(props: Props) {
             >
               Today
             </text>
-            <circle class={styles.payoffTodayHalo} cx={f1(todayX())} cy={f1(todayY())} r="11" />
+            <circle class={styles.payoffTodayHalo} cx={f1(todayX())} cy={f1(todayY())} r={HALO} />
             <circle class={styles.payoffTodayDot} cx={f1(todayX())} cy={f1(todayY())} r="5.5" />
           </g>
         </Show>

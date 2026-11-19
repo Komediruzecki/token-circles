@@ -32,6 +32,8 @@ interface Props {
   ownerName: (loan: LoanRow) => string
   /** The loan whose chart is open under its card. */
   openId: number | null
+  /** YYYY-MM-DD: the day the list was read. */
+  today: string
   onToggle: (loan: LoanRow) => void
   onClose: () => void
   onAdd: () => void
@@ -168,10 +170,14 @@ export default function LoansOverview(props: Props) {
     if (after !== before) window.scrollBy({ top: after - before, behavior: 'auto' })
   }
 
-  const menu = (loan: LoanRow): OverflowMenuItem[] => {
+  /**
+   * A card's menu. Built again only when what it offers changes: every list read hands the card a
+   * new row, and new items would build the open menu's buttons again and drop focus off them. Each
+   * item reads the card's latest row when picked.
+   */
+  const menu = (loan: () => LoanRow, writable: boolean, paid: boolean): OverflowMenuItem[] => {
     const items: OverflowMenuItem[] = []
-    const writable = props.canWrite(loan)
-    if (writable && !loan.paid) {
+    if (writable && !paid) {
       items.push({
         label: 'Add an extra payment',
         testId: 'loans-item-add-extra',
@@ -182,7 +188,7 @@ export default function LoansOverview(props: Props) {
           </>
         ),
         onSelect: () => {
-          props.onAddExtra(loan)
+          props.onAddExtra(loan())
         },
       })
     }
@@ -191,7 +197,7 @@ export default function LoansOverview(props: Props) {
       testId: 'loans-item-schedule',
       icon: icon(<path d="M4 6h16M4 12h16M4 18h10" />),
       onSelect: () => {
-        props.onSchedule(loan)
+        props.onSchedule(loan())
       },
     })
     if (writable) {
@@ -206,7 +212,7 @@ export default function LoansOverview(props: Props) {
             </>
           ),
           onSelect: () => {
-            props.onEdit(loan)
+            props.onEdit(loan())
           },
         },
         {
@@ -217,11 +223,12 @@ export default function LoansOverview(props: Props) {
             <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
           ),
           onSelect: () => {
+            const row = loan()
             void showConfirm(
-              `Delete ${loan.name}? Its extra payments and rate periods go with it. This cannot be undone.`,
+              `Delete ${row.name}? Its extra payments and rate periods go with it. This cannot be undone.`,
               { confirmText: 'Delete', danger: true }
             ).then((ok) => {
-              if (ok) props.onDelete(loan)
+              if (ok) props.onDelete(row)
             })
           },
         }
@@ -363,6 +370,9 @@ export default function LoansOverview(props: Props) {
                   let last = props.loans.find((l) => l.id === id)!
                   const loan = () => (last = props.loans.find((l) => l.id === id) ?? last)
                   const isOpen = () => props.openId === id
+                  const writable = createMemo(() => props.canWrite(loan()))
+                  const paid = createMemo(() => loan().paid)
+                  const items = createMemo(() => menu(loan, writable(), paid()))
                   return (
                     <>
                       <article
@@ -420,7 +430,7 @@ export default function LoansOverview(props: Props) {
                             testId="loans-item-menu"
                             menuTestId="loans-menu"
                             class={styles.cardMenu}
-                            items={menu(loan())}
+                            items={items()}
                           />
                         </div>
 
@@ -476,6 +486,7 @@ export default function LoansOverview(props: Props) {
                         <LoanChartPanel
                           id={chartId(id)}
                           row={loan()}
+                          today={props.today}
                           formats={props.formats}
                           axisMoney={props.axisMoney}
                           onClose={() => {

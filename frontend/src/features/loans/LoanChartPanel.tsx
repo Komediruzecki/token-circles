@@ -8,9 +8,8 @@
  * list rows carry the rate periods and extra payments it needs; on the Worker the loan's own read
  * supplies them, so the chart waits for it behind a placeholder of the same height.
  */
-import { createEffect, createMemo, Match, onCleanup, Show, Switch } from 'solid-js'
+import { createEffect, createMemo, createSignal, Match, onCleanup, Show, Switch } from 'solid-js'
 import { formatCurrency } from '../../core/api'
-import { localToday } from '../../utils/period'
 import { monthShort, timelineDescription, timelineSentence } from './loanCopy'
 import { engineInput } from './loanData'
 import LoanPayoffChart from './LoanPayoffChart'
@@ -24,6 +23,8 @@ interface Props {
   /** The panel's id, which the card's button controls. */
   id: string
   row: LoanRow
+  /** YYYY-MM-DD: the day the list was read, which the card's figures are worked out for. */
+  today: string
   formats: Formats
   axisMoney: (amount: number) => string
   onClose: () => void
@@ -43,13 +44,28 @@ const BELOW = 88
 
 export default function LoanChartPanel(props: Props) {
   const { record, status, load } = createLoanRecord(() => props.row)
-  const today = localToday()
+  // Today as the list read it, not as the panel opened: past midnight on a payment day, a list read
+  // moves the card's Owed on, and the chart with it.
   const timeline = createMemo(() => {
     const r = record()
-    return r && r.id === props.row.id ? loanTimeline(engineInput(r), today) : null
+    return r && r.id === props.row.id ? loanTimeline(engineInput(r), props.today) : null
   })
   let section!: HTMLElement
   let box!: HTMLDivElement
+  /**
+   * The opening has played: the drop-in, the line drawn and today lit. A page that is not shown
+   * is display: none, which starts a CSS animation over when it shows again, so from here on the
+   * chart is just there on coming back to Loans.
+   */
+  const [played, setPlayed] = createSignal(false)
+  const settle = () => {
+    const opening =
+      typeof section.getAnimations === 'function' ? section.getAnimations({ subtree: true }) : []
+    // Leaving the page part way cancels the rest, which settles it as well.
+    void Promise.allSettled(opening.map((animation) => animation.finished)).then(() => {
+      setPlayed(true)
+    })
+  }
 
   // Opened low on the screen, the panel opens out of sight: bring all of it into view, without
   // taking its card off the top. Once its loan has loaded (a loan from the server arrives a moment
@@ -70,7 +86,12 @@ export default function LoanChartPanel(props: Props) {
   }
   let frame = 0
   createEffect(() => {
-    if (frame === 0 && status() !== 'loading') frame = requestAnimationFrame(reveal)
+    if (frame === 0 && status() !== 'loading') {
+      frame = requestAnimationFrame(() => {
+        reveal()
+        settle()
+      })
+    }
   })
   onCleanup(() => {
     cancelAnimationFrame(frame)
@@ -90,6 +111,7 @@ export default function LoanChartPanel(props: Props) {
       class={styles.chartPanel}
       aria-label={`${props.row.name}: payments over time`}
       data-test-id="loans-item-chart"
+      data-played={played() ? '' : undefined}
     >
       <div ref={box} class={styles.chartBox}>
         <div class={styles.chartHead}>
@@ -137,6 +159,9 @@ export default function LoanChartPanel(props: Props) {
               <span class={styles.visuallyHidden}>Loading the loan's payments</span>
             </div>
           </Match>
+          {/* A loan with no schedule (no amount, or no term) has its sentence and nothing else:
+              no months to count down and no last payment. */}
+          <Match when={timeline()?.rows.length === 0}>{null}</Match>
           <Match when={timeline()}>
             {(t) => (
               <>
@@ -176,16 +201,14 @@ export default function LoanChartPanel(props: Props) {
                     <dd data-test-id="loans-chart-payoff">{payoff(t())}</dd>
                   </div>
                 </dl>
-                <Show when={t().rows.length > 0}>
-                  <LoanPayoffChart
-                    id={`${props.id}-svg`}
-                    timeline={t()}
-                    axisMoney={props.axisMoney}
-                    formats={props.formats}
-                    today={today}
-                    description={timelineDescription(t(), props.formats)}
-                  />
-                </Show>
+                <LoanPayoffChart
+                  id={`${props.id}-svg`}
+                  timeline={t()}
+                  axisMoney={props.axisMoney}
+                  formats={props.formats}
+                  today={props.today}
+                  description={timelineDescription(t(), props.formats)}
+                />
               </>
             )}
           </Match>

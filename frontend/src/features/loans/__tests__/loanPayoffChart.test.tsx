@@ -61,7 +61,9 @@ describe('the payoff chart', () => {
   it('is one image, named and described, for a screen reader', () => {
     const svg = one(draw(BOAT), 'loans-payoff-chart')!
     expect(svg.getAttribute('role')).toBe('img')
-    expect(svg.getAttribute('aria-labelledby')).toBe('test-chart-title test-chart-desc')
+    // The title names it; the description, read after, says what it shows.
+    expect(svg.getAttribute('aria-labelledby')).toBe('test-chart-title')
+    expect(svg.getAttribute('aria-describedby')).toBe('test-chart-desc')
     expect(svg.querySelector('#test-chart-desc')?.textContent).toBe('The balance falls.')
   })
 
@@ -151,5 +153,45 @@ describe('the payoff chart', () => {
     expect(one(root, 'loans-payoff-today')).toBeNull()
     expect(all(root, 'loans-payoff-year')).toHaveLength(0)
     expect(one(root, 'loans-payoff-end')).not.toBeNull()
+  })
+
+  // Its first payment next year: nothing on the axis is this year, so a Today there would stand at
+  // the start of next year. The whole line is still to come.
+  it('has no today on a loan whose first payment is in a later year', () => {
+    const root = draw({ ...BOAT, start_date: '2026-02-10' })
+    expect(one(root, 'loans-payoff-today')).toBeNull()
+    expect(one(root, 'loans-payoff-this-year')).toBeNull()
+    expect(all(root, 'loans-payoff-year').filter((y) => y.hasAttribute('data-current'))).toEqual([])
+    expect(one(root, 'loans-payoff-past')).toBeNull()
+    expect(points(one(root, 'loans-payoff-future'))).toHaveLength(49)
+  })
+
+  it('keeps today at the start of a loan whose first payment is later this year', () => {
+    const root = draw({ ...BOAT, start_date: '2025-12-20' })
+    expect(one(root, 'loans-payoff-today')).not.toBeNull()
+    expect(one(root, 'loans-payoff-this-year')).not.toBeNull()
+  })
+
+  it('puts a label that would run off the right edge on the left of its mark', () => {
+    const root = draw({ ...BOAT, prepayments: [{ month: 46, amount: 1000 }] })
+    const extra = one(root, 'loans-payoff-extra')!
+    const label = extra.querySelector('text')!
+    const mark = extra.querySelector('circle')!
+    expect(label.textContent).toBe('+€1,000')
+    expect(label.getAttribute('text-anchor')).toBe('end')
+    expect(Number(label.getAttribute('x'))).toBeLessThan(Number(mark.getAttribute('cx')))
+  })
+
+  it('keeps a label clear of today and the glow around it', () => {
+    // An extra payment with the payment made today: its mark is where today is.
+    const root = draw({ ...BOAT, prepayments: [{ month: 22, amount: 1000 }] })
+    const dot = one(root, 'loans-payoff-today')!.querySelectorAll('circle')
+    const halo = Number(dot[0].getAttribute('r'))
+    const todayX = Number(dot[0].getAttribute('cx'))
+    const label = one(root, 'loans-payoff-extra')!.querySelector('text')!
+    expect(label.textContent).toBe('+€1,000')
+    const x = Number(label.getAttribute('x'))
+    if (label.getAttribute('text-anchor') === 'end') expect(x).toBeLessThanOrEqual(todayX - halo)
+    else expect(x).toBeGreaterThanOrEqual(todayX + halo)
   })
 })

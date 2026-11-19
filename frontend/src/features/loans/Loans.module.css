@@ -1487,6 +1487,13 @@
   }
 }
 
+/* Once per opening: back on Loans from another page, the chart is just there (LoanChartPanel). */
+.chart-panel[data-played] .chart-box,
+.chart-panel[data-played] .payoff-data,
+.chart-panel[data-played] .payoff-today {
+  animation: none;
+}
+
 @keyframes chart-open {
   from {
     opacity: 0;

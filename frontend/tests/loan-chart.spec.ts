@@ -294,6 +294,31 @@ test.describe('the chart under a loan card', () => {
     await expect(toggle(page, 'zz-chart-a')).toHaveAttribute('aria-expanded', 'false')
   })
 
+  // Pages stay in the document while another is shown, as display: none, which starts a CSS
+  // animation over when the page shows again: the opening plays once, when the chart opens.
+  test('plays its opening once, not again on coming back to Loans @smoke', async ({ page }) => {
+    const running = () =>
+      chart(page).evaluate(
+        (el) =>
+          el
+            .getAnimations({ subtree: true })
+            .filter((animation) => animation.playState === 'running').length
+      )
+    await toggle(page, 'zz-chart-a').click()
+    await expect(page.getByTestId('loans-payoff-today')).toBeVisible()
+    await expect.poll(running).toBe(0)
+
+    await page.evaluate(() => {
+      window.location.hash = '#dashboard'
+    })
+    await expect(chart(page)).toBeHidden()
+    await page.evaluate(() => {
+      window.location.hash = '#loans'
+    })
+    await expect(chart(page)).toBeVisible()
+    expect(await running()).toBe(0)
+  })
+
   test('the card menu adds an extra payment straight away, from the keyboard @smoke', async ({
     page,
   }) => {

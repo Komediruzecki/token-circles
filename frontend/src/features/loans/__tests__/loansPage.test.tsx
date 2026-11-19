@@ -1016,6 +1016,31 @@ describe('the chart under a card', () => {
     expect(charts(root)).toHaveLength(0)
   })
 
+  // The card's Owed is worked out on the day the list was read; so is the chart, and the two
+  // agree after a list read on the day a payment falls due.
+  it('reads today as the card does when the list is read again on a later day', async () => {
+    const root = await mount('#loans')
+    await openChart(root, 'Test boat')
+    const owed = () => el(cardOf(root, 'Test boat'), 'loans-item-remaining')?.textContent
+    expect(text(root, 'loans-chart-owed')).toBe(owed())
+
+    vi.setSystemTime(new Date('2026-01-10T12:00:00Z'))
+    invalidateForRequest('/api/loans/1', 'PUT', true)
+    await settle()
+    expect(owed()).not.toBe('€13,710.01')
+    expect(text(root, 'loans-chart-owed')).toBe(owed())
+    expect(text(root, 'loans-chart-left')).toBe('25')
+  })
+
+  it('says plainly when a loan has no payments to show, with no figures', async () => {
+    listed = [{ ...structuredClone(BOAT), term_months: 0 }]
+    const root = await mount('#loans')
+    await openChart(root, 'Test boat')
+    expect(text(root, 'loans-chart-sentence')).toBe('This loan has no payments to show.')
+    expect(el(root, 'loans-chart-readout')).toBeNull()
+    expect(el(root, 'loans-payoff-chart')).toBeNull()
+  })
+
   it('marks extra payments made and planned, and counts the ones made', async () => {
     listed = [
       {
@@ -1157,6 +1182,20 @@ describe('the card menu', () => {
     await click(root, 'loans-tab-extras')
     expect(el(root, 'loans-extra-amount')).not.toBeNull()
     expect(document.activeElement).not.toBe(el(root, 'loans-extra-amount'))
+  })
+
+  // Any write reads the list again and hands every card a new row: an open menu keeps its items,
+  // and focus stays on the one it was on.
+  it('keeps the open menu and its focus when the list is read again', async () => {
+    const root = await mount('#loans')
+    await openMenu(root, 'Test boat')
+    const item = document.querySelector<HTMLElement>('[data-test-id="loans-item-schedule"]')!
+    item.focus()
+    invalidateForRequest('/api/loans/2', 'PUT', true)
+    await settle()
+    expect(document.querySelector('[data-test-id="loans-menu"]')).not.toBeNull()
+    expect(item.isConnected).toBe(true)
+    expect(document.activeElement).toBe(item)
   })
 
   it('opens every payment on the schedule', async () => {
