@@ -11,6 +11,21 @@ import { setCurrentProfile, setPage, setProfiles } from '../../core/appStore'
 import { __resetDataVersionsForTest } from '../../core/dataVersions'
 import { getDB } from '../../core/storage/idb'
 import { removeToast, toasts } from '../../core/toastStore'
+import type * as ApiFetchModule from '../../core/apiFetch'
+
+/** Set to answer an import with a server error, as a failed one is answered. */
+const executeFails = vi.hoisted(() => ({ on: false }))
+
+vi.mock('../../core/apiFetch', async (importOriginal) => {
+  const real = await importOriginal<typeof ApiFetchModule>()
+  return {
+    ...real,
+    apiFetch: (url: string, init?: RequestInit) =>
+      executeFails.on && url === '/api/import/execute'
+        ? Promise.resolve(new Response('{"error":"Example import failure"}', { status: 500 }))
+        : real.apiFetch(url, init),
+  }
+})
 
 const LINK = 'https://docs.google.com/spreadsheets/d/example-ledger/edit#gid=0'
 const ACCOUNTS = ['Example Checking', 'Example Savings', 'Example Card']
@@ -20,11 +35,21 @@ const CSV =
   '2026-08-02,Example lunch,-12.40,Example Savings\n' +
   '2026-08-03,Example books,-20.00,Example Card\n'
 
-/** Google, as local-first's sheet reader meets it: the published CSV of the ledger. */
+/** A second sheet, kept in Connected sources. */
+const OTHER_LINK = 'https://docs.google.com/spreadsheets/d/example-other/edit#gid=0'
+const OTHER_CSV =
+  'Date,Description,Amount,Means of Payment\n' +
+  '2026-08-04,Example tea,-3.10,Example Checking\n' +
+  '2026-08-05,Example cinema,-9.00,Example Checking\n'
+
+/** Google, as local-first's sheet reader meets it: the published CSV of each sheet. */
 async function google(input: RequestInfo | URL): Promise<Response> {
   const url = String(input instanceof Request ? input.url : input)
   if (url.includes('/d/example-ledger/') && !url.includes('/gviz/')) {
     return new Response(CSV, { status: 200 })
+  }
+  if (url.includes('/d/example-other/') && !url.includes('/gviz/')) {
+    return new Response(OTHER_CSV, { status: 200 })
   }
   return new Response('<!DOCTYPE html><title>Sign in</title>', { status: 401 })
 }
@@ -37,6 +62,7 @@ beforeAll(async () => {
 }, 120_000)
 
 beforeEach(async () => {
+  executeFails.on = false
   localStorage.clear()
   localStorage.setItem('finance_storage_mode', 'serverless')
   localStorage.setItem('currentProfileId', '1')
@@ -291,6 +317,87 @@ describe('the card an import leaves', () => {
 
     byTestId('import-after-dismiss')!.click()
     expect(byTestId('import-after')).toBeNull()
+  }, 30_000)
+
+  it('stays as it was when a Sync fails, an unsaved Save sheet offer included, and a Sync that lands takes it', async () => {
+    const db = await getDB()
+    await db.add('import_sources', {
+      profile_id: 1,
+      kind: 'google_sheet',
+      label: 'Other ledger',
+      config: { url: OTHER_LINK, sheetName: '' },
+      mapping: {
+        date: 'Date',
+        description: 'Description',
+        amount: 'Amount',
+        means_of_payment: 'Means of Payment',
+      },
+      category_types: null,
+      default_account_id: null,
+      schedule: 'manual',
+      last_synced_at: null,
+      last_cursor: null,
+      created_at: '2026-11-01T00:00:00.000Z',
+      updated_at: '2026-11-01T00:00:00.000Z',
+    })
+    await mountImport()
+    await importTheSheet()
+    const name = await vi.waitFor(() => {
+      const found = byTestId('import-after-sheet-name')
+      expect(found).not.toBeNull()
+      return found as HTMLInputElement
+    })
+    type(name, 'Example ledger')
+    const card = byTestId('import-after')!
+    const said = card.textContent
+    await afterTheReset()
+    // The other sheet's Sync, once it can be pressed: its row is drawn again after each one.
+    const sync = async () => {
+      const button = await vi.waitFor(() => {
+        const found = host.querySelector<HTMLButtonElement>('[aria-label="Auto sync Other ledger"]')
+        expect(found?.disabled).toBe(false)
+        return found!
+      })
+      button.click()
+    }
+
+    // The other sheet's Sync fails: the card is the one it was, the name typed in it included.
+    executeFails.on = true
+    await sync()
+    await vi.waitFor(
+      () => {
+        expect(byTestId('source-error')?.textContent).toContain('Example import failure')
+      },
+      { timeout: 8_000 }
+    )
+    expect(byTestId('import-after')).toBe(card)
+    expect(card.textContent).toBe(said)
+    expect(byTestId('import-after-save-sheet')).not.toBeNull()
+    expect((byTestId('import-after-sheet-name') as HTMLInputElement).value).toBe('Example ledger')
+
+    // One that lands takes the card, with its own result and its own balances.
+    executeFails.on = false
+    await sync()
+    await vi.waitFor(
+      () => {
+        expect(byTestId('import-result')?.textContent).toBe('Imported 2 transactions')
+      },
+      { timeout: 8_000 }
+    )
+    expect(byTestId('import-after-save-sheet')).toBeNull()
+    await vi.waitFor(() => {
+      expect(byTestId('import-after-balances')?.textContent).toContain('1 account changed.')
+    })
+
+    // And one that brings nothing new: no balances from the import before it.
+    await sync()
+    await vi.waitFor(
+      () => {
+        expect(byTestId('import-result')?.textContent).toContain('No new transactions')
+      },
+      { timeout: 8_000 }
+    )
+    expect(byTestId('import-after-balances')).toBeNull()
   }, 30_000)
 
   it('says plainly when nothing was new, with nothing to do next', async () => {

@@ -2676,8 +2676,9 @@ check')` first, as the cushion and debt cases do.
     `BALANCES_OPEN_UP_TO` (2) accounts, the case of a bank statement, and otherwise behind Show
     balances (`import-after-balances-toggle`, `aria-expanded`, `aria-controls`). The scan row's
     copy has no dash: "Find the subscriptions and other regular payments in what you've
-    imported." `Import.tsx` keeps the last import in `after` (set in `onImported`, cleared by
-    `beforeImport`, Dismiss and a profile change); the scan row is left out while setup waits.
+    imported." `Import.tsx` keeps the last import in `after` (set in `onImported`, replaced by the
+    next import that lands, cleared by Dismiss, a delete of its import and a profile change); the
+    scan row is left out while setup waits.
   - **The result line comes with the import.** `ImportSummary` carries `text`, and `handleImport`
     no longer puts it in `resultMessage`: in that banner it sat on the next step's form for the
     rest of its six seconds. "No new transactions" is now "No new transactions. All 3 rows were
@@ -2795,10 +2796,18 @@ check')` first, as the cushion and debt cases do.
   - **A Sync's result takes it.** Connected sources drives its own flow, so after a Sync or a
     Fetch & preview import the card still said "Imported 2 transactions" while the toast said
     "1 imported · 2 skipped". `ConnectedSources` now takes `beforeImport` and `onImported` from
-    the page, which runs both flows' imports through one `landed()` in `Import.tsx`: the card
-    goes as an import starts and takes its result, with the balances it changed. A Sync's card
-    has no sheet row (the sheet is saved). The toast stays, as the Sync button can be a screen
-    below the card.
+    the page, which runs both flows' imports through one `landed()` in `Import.tsx`: an import
+    that lands takes the card, with the balances it changed. A Sync's card has no sheet row (the
+    sheet is saved). The toast stays, as the Sync button can be a screen below the card.
+  - **A failed import leaves it as it was** (round 4). `beforeImport` took the card down as any
+    import started, so a failed one, a Sync of another sheet say, left no card, and an unsaved
+    Save sheet offer went with it. `beforeAnImport` now only reads the balances; `landed()`
+    replaces the card and clears the balances list it showed. Test: `importPageTop.test.tsx`
+    "stays as it was when a Sync fails": the same card element, its text and the name typed into
+    the offer after the failed Sync; then a Sync that lands takes it, and one with nothing new
+    shows no balances from the import before. With the card taken down at the start again, it
+    fails at the failed Sync; without the balances cleared in `landed()`, at the nothing-new
+    Sync.
   - **Deleting its import in Recent Imports clears it.** `ImportSummary` and the card carry the
     import's `importId`, which the history entry holds as `import_id` (`ImportLogEntry` now names
     it); a delete of that entry drops the card.

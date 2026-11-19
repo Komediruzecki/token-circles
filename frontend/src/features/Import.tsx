@@ -70,8 +70,8 @@ import type { SheetToKeep } from './import/keepSheet'
 
 export default function Import() {
   // The last import, for the card at the top of the page (ImportAfter.tsx): its result, the
-  // balances it changed and the subscription scan. Gone when another import starts, on dismiss,
-  // and on a profile change.
+  // balances it changed and the subscription scan. Replaced when another import lands, gone on
+  // dismiss, with its import deleted, and on a profile change.
   const [after, setAfter] = createSignal<AfterImport | null>(null)
   const [showScan, setShowScan] = createSignal(false)
 
@@ -91,10 +91,12 @@ export default function Import() {
   const [preparing, setPreparing] = createSignal(false)
   const [summaryImported, setSummaryImported] = createSignal(false)
 
-  /** Before any import on the page, this one's or a Sync's: the card goes, the balances are read. */
+  /**
+   * Before any import on the page, this one's or a Sync's: the balances are read. The card stays
+   * until an import lands (round 4): taken down here, a failed import, a Sync of another sheet
+   * say, left no card at all, and an unsaved Save sheet offer went with it.
+   */
   const beforeAnImport = async () => {
-    setAfter(null)
-    setTouched([])
     heldBefore = null
     heldBefore = await balancesById()
   }
@@ -120,6 +122,7 @@ export default function Import() {
         statements: summary.statements,
       })
     }
+    setTouched([])
     setAfter({
       text: summary.text,
       imported: summary.imported,
