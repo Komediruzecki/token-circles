@@ -151,3 +151,58 @@ describe('a scroll while the menu is open', () => {
     expect(menu()).not.toBeNull()
   })
 })
+
+describe('where the menu opens', () => {
+  /** The trigger's top on a 768 px window (jsdom's), and the menu's height once it is drawn. */
+  let top = 100
+  beforeEach(() => {
+    top = 100
+    vi.spyOn(trigger(), 'getBoundingClientRect').mockImplementation(
+      () =>
+        ({
+          top,
+          bottom: top + 36,
+          left: 300,
+          right: 336,
+          width: 36,
+          height: 36,
+          x: 300,
+          y: top,
+        }) as DOMRect
+    )
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (
+      this: HTMLElement
+    ) {
+      return this.getAttribute('role') === 'menu' ? 160 : 0
+    })
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('opens under the trigger, its right edge on the trigger’s', () => {
+    trigger().click()
+    expect(menu()!.style.top).toBe('142px')
+    expect(menu()!.style.bottom).toBe('')
+    expect(menu()!.style.right).toBe(`${window.innerWidth - 336}px`)
+  })
+
+  it('opens above the trigger when the window has no room for it below', () => {
+    // 600 + 36 + 6 + 160 runs past the window's 768 less its 8 px edge.
+    top = 600
+    trigger().click()
+    expect(menu()!.style.top).toBe('')
+    expect(menu()!.style.bottom).toBe(`${768 - 600 + 6}px`)
+  })
+
+  it('stays under the trigger when there is no room above it either', () => {
+    // A window too short for the menu either way: under the trigger, where it starts.
+    vi.stubGlobal('innerHeight', 300)
+    top = 120
+    trigger().click()
+    expect(menu()!.style.top).toBe('162px')
+    expect(menu()!.style.bottom).toBe('')
+    vi.unstubAllGlobals()
+  })
+})

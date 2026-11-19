@@ -800,6 +800,41 @@ describe('the chart under a card', () => {
     expect(toggleOf(root, 'Test boat').getAttribute('aria-expanded')).toBe('false')
   })
 
+  // A chart open higher up closes as the next one opens, and every card under it moves up by the
+  // chart's height: the page scrolls by as much, so the card clicked stays under the pointer.
+  it('keeps the card clicked where it was when a chart above it closes', async () => {
+    const scrollBy = vi.fn()
+    vi.stubGlobal('scrollBy', scrollBy)
+    // A card sits 300 px lower for each chart above it on the page.
+    const rects = vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: Element
+    ) {
+      const above =
+        this.tagName === 'ARTICLE'
+          ? [...document.querySelectorAll('[data-test-id="loans-item-chart"]')].filter(
+              (chart) => chart.compareDocumentPosition(this) & Node.DOCUMENT_POSITION_FOLLOWING
+            ).length
+          : 0
+      const top = this.tagName === 'ARTICLE' ? 100 + 300 * above : 0
+      return { top, bottom: top + 200, left: 0, right: 320, width: 320, height: 200 } as DOMRect
+    })
+    try {
+      const root = await mount('#loans')
+      await openChart(root, 'Mortgage')
+      scrollBy.mockClear()
+      await openChart(root, 'Test boat')
+      expect(charts(root)).toHaveLength(1)
+      expect(scrollBy).toHaveBeenCalledWith({ top: -300, behavior: 'auto' })
+
+      // Nothing above it changes when its own chart closes: no scroll.
+      scrollBy.mockClear()
+      await openChart(root, 'Test boat')
+      expect(scrollBy).not.toHaveBeenCalled()
+    } finally {
+      rects.mockRestore()
+    }
+  })
+
   it('closes on Escape and on its own Close, with focus back on the card', async () => {
     const root = await mount('#loans')
     await openChart(root, 'Test boat')
