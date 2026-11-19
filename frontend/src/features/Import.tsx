@@ -413,7 +413,10 @@ export default function Import() {
                     <summary style={{ cursor: 'pointer', 'font-size': '14px' }}>
                       <strong>{log.source || 'Import'}</strong>
                       <span style={{ color: 'var(--text-secondary)', 'margin-left': '8px' }}>
-                        {new Date(log.created_at).toLocaleString()} ({log.imported} imported
+                        <span style={{ 'white-space': 'nowrap' }}>
+                          {new Date(log.created_at).toLocaleString()}
+                        </span>{' '}
+                        ({log.imported} imported
                         {log.duplicates_skipped > 0 &&
                           `, ${log.duplicates_skipped} duplicates skipped`}
                         )

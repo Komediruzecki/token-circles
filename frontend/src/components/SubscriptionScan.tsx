@@ -96,6 +96,8 @@ export interface SubscriptionScanPanelProps {
     submitting: () => boolean
     /** Adds the selection; resolves with how many were actually created. */
     addSelected: () => Promise<number>
+    /** How many the scan found, once it has run: null before then and while it runs. */
+    found: () => number | null
   }) => void
   /** Hide the panel's own Add button (the host renders the action itself). */
   hideAddButton?: boolean
@@ -297,7 +299,12 @@ export function SubscriptionScanPanel(props: SubscriptionScanPanelProps) {
     return lastAdded
   }
 
-  props.expose?.({ chosenCount: () => chosen().length, submitting: form.submitting, addSelected })
+  props.expose?.({
+    chosenCount: () => chosen().length,
+    submitting: form.submitting,
+    addSelected,
+    found: () => (scanned() && !scanning() ? detected().length : null),
+  })
 
   const confidenceLabel: Record<DetectedSubscription['confidence'], string> = {
     high: 'High confidence',

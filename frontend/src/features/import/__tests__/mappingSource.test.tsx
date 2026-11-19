@@ -63,6 +63,37 @@ function sourceLine(): string | null {
 }
 
 describe('Map columns', () => {
+  it('says what Category types needs instead of an empty table, until a column gives it values', async () => {
+    await flow.readFile(
+      new File(['Date,Description,Amount\n2026-06-01,Example bakery,-4.20\n'], 'plain.csv', {
+        type: 'text/csv',
+      })
+    )
+    await settled()
+    sourceLine()
+    // Review of the setup captures: a header row (Category, Type, Account setup) over no rows.
+    expect(host!.querySelector('[data-test-id="import-category-types-empty"]')).not.toBeNull()
+    expect(host!.querySelector('[data-test-id="import-category-types"]')).toBeNull()
+    unmount?.()
+    host?.remove()
+
+    await flow.readFile(
+      new File(
+        ['Date,Description,Amount,Category\n2026-06-01,Example bakery,-4.20,Food\n'],
+        'typed.csv',
+        {
+          type: 'text/csv',
+        }
+      )
+    )
+    await settled()
+    sourceLine()
+    expect(host!.querySelector('[data-test-id="import-category-types-empty"]')).toBeNull()
+    expect(host!.querySelector('[data-test-id="import-category-types"]')?.textContent).toContain(
+      'Food'
+    )
+  })
+
   it('names a file handed over as setup hands it, read with readFile', async () => {
     await flow.readFile(
       new File(['When,What,How much\n2026-06-01,Groceries,-10.00\n'], 'october-statement.csv', {

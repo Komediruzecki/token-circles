@@ -347,6 +347,8 @@
   gap: 8px;
   min-height: 44px;
   padding: 0 2px;
+  /* Its text on the paragraph's edge: the padding is for the focus ring, not an indent. */
+  margin-left: -2px;
   border: 0;
   background: transparent;
   /* Primary drawn toward the text colour: --primary itself is 4.1:1 on the light sky's middle and
@@ -486,6 +488,12 @@
   flex: 1;
   min-width: 0;
   padding-top: 2px;
+}
+
+/* Remove keeps its 44 px target but not its height in the row: a file with only a name (a bank
+   we don't recognise) left a 24 px band under it before the card's next line. */
+.fileTop .iconBtn {
+  margin: -10px -6px -12px 0;
 }
 
 .fileName {

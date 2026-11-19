@@ -168,7 +168,26 @@
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  margin-bottom: 16px;
+  margin-bottom: 8px;
+}
+
+/* Fetch as tall as the link's field beside it: it was 39 px to the field's 43. */
+.sheetsFetch {
+  height: 42px;
+  justify-content: center;
+}
+
+/* The help under the link's field, in its form. */
+.sheetsInfo.sheetsHelp {
+  margin: 0;
+}
+
+/* Expected columns: its cells wrap, so the three columns fit a phone without a sideways scroll. */
+.previewTable.expectedColumns td,
+.previewTable.expectedColumns th {
+  white-space: normal;
+  max-width: none;
+  overflow: visible;
 }
 
 /* The link sits in a form-kit field, which carries its message under it. */
@@ -233,8 +252,10 @@
   border: 0;
 }
 
+/* In the field's column, so not flex: 1, which sized its height there and overrode this one. */
 .sheetsUrlInput {
-  flex: 1;
+  flex: none;
+  height: 42px;
   padding: 10px 14px;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -828,6 +849,39 @@
 
   .previewTable {
     min-width: 540px;
+  }
+
+  .previewTable.expectedColumns {
+    min-width: 0;
+  }
+}
+
+/* A phone: the four ways in keep a line each, and the link's field takes the row, Fetch under
+   it, so a message under the field has the screen's width (it wrapped "with" onto a line alone). */
+@media (max-width: 480px) {
+  .tabBar {
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .tab {
+    flex: 1 0 auto;
+    min-height: 44px;
+    padding: 10px 6px;
+    font-size: 13px;
+    white-space: nowrap;
+  }
+
+  .sheetsUrlRow {
+    flex-wrap: wrap;
+  }
+
+  .sheetsUrlField {
+    flex-basis: 100%;
+  }
+
+  .sheetsFetch {
+    flex: 1;
   }
 }
 

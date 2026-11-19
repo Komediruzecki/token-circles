@@ -367,8 +367,18 @@
   .row {
     flex-wrap: wrap;
   }
+  /* The capsule takes a line of its own; Remove stays on the first, beside the name, where it
+     dropped alone under the capsule before. */
   .capsule {
+    order: 1;
     width: 100%;
+  }
+  .rowError {
+    order: 2;
+  }
+  .rowDelete {
+    width: 40px;
+    height: 40px;
   }
   .capsule .btn {
     flex: 1;

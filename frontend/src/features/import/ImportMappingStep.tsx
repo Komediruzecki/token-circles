@@ -35,6 +35,8 @@ export function mappingSource(
 export function ImportMappingStep(props: { flow: ImportFlow; embedded?: boolean }) {
   const flow = props.flow
   const headers = () => flow.currentHeaders()
+  /** Values Category types can type: a Category or Means of Payment column's. */
+  const hasValues = () => flow.mappingValues().length > 0
   // A workbook's sheets, to choose from here: the upload goes straight on to this step, and the
   // choice that sat on the upload step was never on screen once a file read.
   const sheets = () => {
@@ -134,153 +136,172 @@ export function ImportMappingStep(props: { flow: ImportFlow; embedded?: boolean 
           <h3 class={styles.categoryReviewTitle} style={{ margin: 0 }}>
             Category types
           </h3>
-          <label
-            style={{
-              display: 'flex',
-              'align-items': 'center',
-              gap: '6px',
-              'font-size': '13px',
-              color: 'var(--text-secondary)',
-            }}
-          >
-            Tracking start date:
-            <input
-              type="date"
-              value={flow.universalStartDate()}
-              onchange={(e) => {
-                flow.applyUniversalStartDate(e.currentTarget.value)
-              }}
+          <Show when={hasValues()}>
+            <label
               style={{
-                padding: '4px 8px',
-                border: '1px solid var(--border)',
-                'border-radius': '4px',
+                display: 'flex',
+                'align-items': 'center',
+                gap: '6px',
                 'font-size': '13px',
-                background: 'var(--bg)',
-                color: 'var(--text)',
+                color: 'var(--text-secondary)',
               }}
-            />
-          </label>
+            >
+              Tracking start date:
+              <input
+                type="date"
+                value={flow.universalStartDate()}
+                onchange={(e) => {
+                  flow.applyUniversalStartDate(e.currentTarget.value)
+                }}
+                style={{
+                  padding: '4px 8px',
+                  border: '1px solid var(--border)',
+                  'border-radius': '4px',
+                  'font-size': '13px',
+                  background: 'var(--bg)',
+                  color: 'var(--text)',
+                }}
+              />
+            </label>
+          </Show>
         </div>
-        <div style="max-height: 400px; overflow-y: auto;">
-          <table class={styles.categoryTable}>
-            <thead>
-              <tr>
-                <th>Category</th>
-                <th class={styles.categoryTableType}>Type</th>
-                <th class={styles.categoryTableConfig}>Account setup</th>
-              </tr>
-            </thead>
-            <tbody>
-              {/* mappingValues, not detectCategories: the Means-of-Payment / transfer-destination
+        {/* With no Category or Means of Payment column, the table was a header over no rows. */}
+        <Show
+          when={hasValues()}
+          fallback={
+            <p
+              class={styles.dropzoneHint}
+              style={{ margin: 0 }}
+              data-test-id="import-category-types-empty"
+            >
+              Map a Category or Means of Payment column to choose, for each of its values, whether
+              it's an expense, income or an account.
+            </p>
+          }
+        >
+          <div style="max-height: 400px; overflow-y: auto;">
+            <table class={styles.categoryTable} data-test-id="import-category-types">
+              <thead>
+                <tr>
+                  <th>Category</th>
+                  <th class={styles.categoryTableType}>Type</th>
+                  <th class={styles.categoryTableConfig}>Account setup</th>
+                </tr>
+              </thead>
+              <tbody>
+                {/* mappingValues, not detectCategories: the Means-of-Payment / transfer-destination
                   values become accounts on import, and an account this run will create has to be
                   visible here — with its balance setup — not created silently. */}
-              <For each={flow.mappingValues()}>
-                {(category) => {
-                  const currentType = () => flow.categoryTypes()[category] || 'expense'
-                  const isAccount = () => currentType() === 'account'
-                  return (
-                    <tr>
-                      <td class={styles.categoryTableName}>{category}</td>
-                      <td class={styles.categoryTableType}>
-                        <div class={styles.pillGroup}>
-                          <button
-                            class={`${styles.pill} ${currentType() === 'expense' ? styles.expenseActive : ''}`}
-                            onClick={() => {
-                              flow.handleCategoryTypeToggle(category, 'expense')
-                            }}
-                          >
-                            Expense
-                          </button>
-                          <button
-                            class={`${styles.pill} ${currentType() === 'income' ? styles.incomeActive : ''}`}
-                            onClick={() => {
-                              flow.handleCategoryTypeToggle(category, 'income')
-                            }}
-                          >
-                            Income
-                          </button>
-                          <button
-                            class={`${styles.pill} ${isAccount() ? styles.accountActive : ''}`}
-                            onClick={() => {
-                              flow.handleCategoryTypeToggle(category, 'account')
-                            }}
-                          >
-                            Account
-                          </button>
-                        </div>
-                      </td>
-                      <td class={styles.categoryTableConfig}>
-                        {isAccount() ? (
-                          <div class={styles.accountConfig}>
-                            <select
-                              class={styles.accountTypeSelect}
-                              value={flow.accountTypes()[category] || 'giro'}
-                              onchange={(e) => {
-                                const v = { ...flow.accountTypes() }
-                                v[category] = e.currentTarget.value
-                                flow.setAccountTypes(v)
+                <For each={flow.mappingValues()}>
+                  {(category) => {
+                    const currentType = () => flow.categoryTypes()[category] || 'expense'
+                    const isAccount = () => currentType() === 'account'
+                    return (
+                      <tr>
+                        <td class={styles.categoryTableName}>{category}</td>
+                        <td class={styles.categoryTableType}>
+                          <div class={styles.pillGroup}>
+                            <button
+                              class={`${styles.pill} ${currentType() === 'expense' ? styles.expenseActive : ''}`}
+                              onClick={() => {
+                                flow.handleCategoryTypeToggle(category, 'expense')
                               }}
                             >
-                              <For each={IMPORT_ACCOUNT_TYPES}>
-                                {(choice) => (
-                                  <option
-                                    value={choice.value}
-                                    selected={
-                                      choice.value === (flow.accountTypes()[category] || 'giro')
-                                    }
-                                  >
-                                    {choice.label}
-                                  </option>
-                                )}
-                              </For>
-                            </select>
-                            <input
-                              type="text"
-                              inputmode="decimal"
-                              class={styles.accountBalanceInput}
-                              placeholder={`Starting balance (${getLocalCurrency()})`}
-                              title={`Account starting balance in ${getLocalCurrency()}`}
-                              value={flow.accountBalances()[category] || ''}
-                              oninput={(e) => {
-                                const v = { ...flow.accountBalances() }
-                                v[category] = e.currentTarget.value
-                                flow.setAccountBalances(v)
+                              Expense
+                            </button>
+                            <button
+                              class={`${styles.pill} ${currentType() === 'income' ? styles.incomeActive : ''}`}
+                              onClick={() => {
+                                flow.handleCategoryTypeToggle(category, 'income')
                               }}
-                            />
-                            <input
-                              type="date"
-                              class={styles.accountDateInput}
-                              placeholder="Start date"
-                              title="Date the account was opened or when tracking began"
-                              value={flow.accountBalanceDates()[category] || ''}
-                              onchange={(e) => {
-                                const v = { ...flow.accountBalanceDates() }
-                                v[category] = e.currentTarget.value
-                                flow.setAccountBalanceDates(v)
+                            >
+                              Income
+                            </button>
+                            <button
+                              class={`${styles.pill} ${isAccount() ? styles.accountActive : ''}`}
+                              onClick={() => {
+                                flow.handleCategoryTypeToggle(category, 'account')
                               }}
-                            />
+                            >
+                              Account
+                            </button>
                           </div>
-                        ) : (
-                          <span style="color:var(--text-secondary);font-size:12px;">&mdash;</span>
-                        )}
-                      </td>
-                    </tr>
-                  )
-                }}
-              </For>
-            </tbody>
-          </table>
-        </div>
+                        </td>
+                        <td class={styles.categoryTableConfig}>
+                          {isAccount() ? (
+                            <div class={styles.accountConfig}>
+                              <select
+                                class={styles.accountTypeSelect}
+                                value={flow.accountTypes()[category] || 'giro'}
+                                onchange={(e) => {
+                                  const v = { ...flow.accountTypes() }
+                                  v[category] = e.currentTarget.value
+                                  flow.setAccountTypes(v)
+                                }}
+                              >
+                                <For each={IMPORT_ACCOUNT_TYPES}>
+                                  {(choice) => (
+                                    <option
+                                      value={choice.value}
+                                      selected={
+                                        choice.value === (flow.accountTypes()[category] || 'giro')
+                                      }
+                                    >
+                                      {choice.label}
+                                    </option>
+                                  )}
+                                </For>
+                              </select>
+                              <input
+                                type="text"
+                                inputmode="decimal"
+                                class={styles.accountBalanceInput}
+                                placeholder={`Starting balance (${getLocalCurrency()})`}
+                                title={`Account starting balance in ${getLocalCurrency()}`}
+                                value={flow.accountBalances()[category] || ''}
+                                oninput={(e) => {
+                                  const v = { ...flow.accountBalances() }
+                                  v[category] = e.currentTarget.value
+                                  flow.setAccountBalances(v)
+                                }}
+                              />
+                              <input
+                                type="date"
+                                class={styles.accountDateInput}
+                                placeholder="Start date"
+                                title="Date the account was opened or when tracking began"
+                                value={flow.accountBalanceDates()[category] || ''}
+                                onchange={(e) => {
+                                  const v = { ...flow.accountBalanceDates() }
+                                  v[category] = e.currentTarget.value
+                                  flow.setAccountBalanceDates(v)
+                                }}
+                              />
+                            </div>
+                          ) : (
+                            <span style="color:var(--text-secondary);font-size:12px;">&mdash;</span>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  }}
+                </For>
+              </tbody>
+            </table>
+          </div>
+        </Show>
       </div>
 
       <div class={styles.previewHeader}>
-        <span>
-          Total rows: {flow.currentRows().length} | Mapped:{' '}
-          {Object.keys(flow.columnMapping()).length}/12
+        <span data-test-id="import-map-totals">
+          {flow.currentRows().length} row{flow.currentRows().length === 1 ? '' : 's'} ·{' '}
+          {Object.keys(flow.columnMapping()).length} of 12 columns mapped
         </span>
         <Show when={!props.embedded}>
           <div class={styles.previewActions}>
-            <button class={`${styles.btn} ${styles.btnOutline}`} onClick={flow.resetForm}>
+            {/* Neutral, so Continue is the one that stands out: outlined in the primary colour,
+                Cancel read as much like the step's action as Continue did. */}
+            <button class={`${styles.btn} ${styles.btnSecondary}`} onClick={flow.resetForm}>
               Cancel
             </button>
             <button

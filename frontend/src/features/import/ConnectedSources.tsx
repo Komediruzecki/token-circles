@@ -13,12 +13,7 @@ import { Field, FormNotice, SubmitButton } from '../../components/form'
 import { useAppState } from '../../core/appStore'
 import { showConfirm } from '../../core/confirmStore'
 import { entityVersion } from '../../core/dataVersions'
-import {
-  deleteImportSource,
-  listImportSources,
-  parseSheetUrl,
-  updateImportSource,
-} from '../../core/importSources'
+import { deleteImportSource, listImportSources, updateImportSource } from '../../core/importSources'
 import { refetchOnActive } from '../../core/pageVisibility'
 import { getStorageMode } from '../../core/storage/storageFactory'
 import { addToast } from '../../core/toastStore'
@@ -193,11 +188,9 @@ export function ConnectedSources(props: {
     return `synced ${Math.round(h / 24)}d ago`
   }
 
-  const sheetMeta = (src: ImportSource): string => {
-    const { id, gid } = parseSheetUrl(src.config?.url ?? '')
-    const idShort = id ? `${id.slice(0, 6)}…` : 'sheet'
-    return `${idShort}${gid ? ` · gid ${gid}` : ''} · ${relTime(src.last_synced_at)}`
-  }
+  // When it last synced. It led with six characters of the sheet's id and its tab's gid, which
+  // say nothing to a person: the label names the sheet.
+  const sheetMeta = (src: ImportSource): string => relTime(src.last_synced_at)
 
   const isSyncing = (id: number) => busy()?.id === id && busy()?.action === 'sync'
 

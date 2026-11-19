@@ -176,7 +176,7 @@ export function ImportDataEntry(props: {
                 )}
               </Field>
               <SubmitButton
-                class={`${styles.btn} ${styles.btnPrimary}`}
+                class={`${styles.btn} ${styles.btnPrimary} ${styles.sheetsFetch}`}
                 busy={sheetForm.submitting()}
                 busyLabel="Fetching…"
                 data-test-id="import-sheet-fetch"
@@ -184,17 +184,18 @@ export function ImportDataEntry(props: {
                 Fetch
               </SubmitButton>
             </div>
+            {/*
+              Both runtimes read one tab, the one the link opens on (its #gid), and answer only its
+              name: a list of tabs to choose from here only ever held that one, and choosing it read
+              the same tab again. So the line says how to pick a tab instead. In the form, under
+              the field it explains: after it, the page's 24 px gap put it 40 px below the field.
+            */}
+            <p class={`${styles.sheetsInfo} ${styles.sheetsHelp}`} data-test-id="import-sheet-help">
+              Share the sheet so anyone with the link can view it, or publish it. It reads the tab
+              your link opens on: for another tab, open that tab and copy its link.
+            </p>
           </form>
           <StepMessage flow={flow} />
-          {/*
-            Both runtimes read one tab, the one the link opens on (its #gid), and answer only its
-            name: a list of tabs to choose from here only ever held that one, and choosing it read
-            the same tab again. So the line says how to pick a tab instead.
-          */}
-          <p class={styles.sheetsInfo} data-test-id="import-sheet-help">
-            Share the sheet so anyone with the link can view it, or publish it. It reads the tab
-            your link opens on: for another tab, open that tab and copy its link.
-          </p>
 
           {flow.sheetResult() && (
             <button
@@ -207,7 +208,7 @@ export function ImportDataEntry(props: {
             </button>
           )}
           <Show when={!props.compact}>
-            <div class={styles.settingsCard} style={{ 'margin-top': '20px' }}>
+            <div class={styles.settingsCard}>
               <h3 class={styles.settingsCardTitle}>Expected columns</h3>
               {/*
                 This table is the import's contract, so it has to tell the truth. Only Amount
@@ -217,7 +218,10 @@ export function ImportDataEntry(props: {
                 shown beside the sample, so "optional" never reads as "mysterious".
               */}
               <div class={styles.tableWrapper} style={{ 'margin-bottom': 0 }}>
-                <table class={styles.previewTable} data-test-id="import-expected-columns">
+                <table
+                  class={`${styles.previewTable} ${styles.expectedColumns}`}
+                  data-test-id="import-expected-columns"
+                >
                   <thead>
                     <tr>
                       <th>Column</th>
@@ -289,10 +293,21 @@ export function ImportDataEntry(props: {
                   </tbody>
                 </table>
               </div>
+              {/* The template's button sat on File Upload only, so "the downloadable template
+                  below" pointed at nothing from this tab. */}
               <p class={styles.sheetsInfo} style={{ 'margin-top': '12px', 'margin-bottom': 0 }}>
-                Column names are auto-detected. Use the downloadable template below for guaranteed
-                matching.
+                Column names are detected for you. The sample template has every column above, named
+                the way the importer expects.
               </p>
+              <button
+                type="button"
+                class={`${styles.btn} ${styles.btnOutline} ${styles.btnSm}`}
+                style={{ 'margin-top': '10px' }}
+                data-test-id="import-sheet-template"
+                onClick={downloadSampleTemplate}
+              >
+                Download sample template
+              </button>
             </div>
           </Show>
         </>

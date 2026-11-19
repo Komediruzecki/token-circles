@@ -478,4 +478,20 @@ describe('adding the subscriptions the scan found', () => {
       )
     })
   })
+
+  it('does not say it spotted payments when the scan found none', async () => {
+    const db = await getDB()
+    // Two charges that do not repeat: the scan has transactions to read and finds no pattern.
+    await db.add('transactions', charge(1, 'Example Hardware Store', 42.1, 40) as never)
+    await db.add('transactions', charge(2, 'Example Bakery', 6.4, 3) as never)
+    await openAt('subscriptions')
+    await vi.waitFor(() => {
+      expect(byTestId('sub-scan-empty')).not.toBeNull()
+    })
+    const step = byTestId('onboarding-step-subscriptions')!
+    // Review of the setup captures: "Regular payments we spotted" and "Tick the ones to track"
+    // sat over "No known subscriptions found".
+    expect(step.querySelector('h2')?.textContent?.trim()).toBe('Regular payments')
+    expect(step.textContent).not.toContain('Tick the ones to track')
+  })
 })

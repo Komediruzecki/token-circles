@@ -512,6 +512,7 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
     chosenCount: () => number
     submitting: () => boolean
     addSelected: () => Promise<number>
+    found: () => number | null
   } | null>(null)
 
   // ---- step: done, with the next steps from what the profile now holds ----
@@ -1073,14 +1074,18 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
     </div>
   )
 
+  /** The scan found some: the step says it spotted them only then (it said so over none). */
+  const spotted = () => (subScan()?.found() ?? 0) > 0
   const subscriptionsStep = () => (
     <div class={styles.step} data-test-id="onboarding-step-subscriptions">
       <h2 class={styles.title} tabindex="-1" data-step-heading>
-        Regular payments we spotted
+        {spotted() ? 'Regular payments we spotted' : 'Regular payments'}
       </h2>
-      <p class={styles.lead}>
-        Tick the ones to track. They go under Bills, where you can change them.
-      </p>
+      <Show when={spotted()}>
+        <p class={styles.lead}>
+          Tick the ones to track. They go under Bills, where you can change them.
+        </p>
+      </Show>
       <div class={`${styles.stack} ${styles.subscriptions}`}>
         <SubscriptionScanPanel
           active={() => onboardingOpen() && onboardingStep() === 'subscriptions'}
