@@ -2528,7 +2528,13 @@ check')` first, as the cushion and debt cases do.
   to fit), extra payments as filled (made) or hollow (planned) dots with a `+€X` label while there
   are at most six and they fit, and the payoff month at the end, or "Never repaid at this rate"
   where the engine stops. A label goes right of its mark, or left where the right runs off the
-  chart or into another label, and never over the Today pill or today's dot and its glow. A loan
+  chart or into another label, and never over the Today pill or today's dot and its glow. Where
+  neither side above has room, it goes under the line: under the mark, then under and to its left,
+  3 px under the line where the line runs lowest over the label, so the line never crosses it, and
+  under today's glow only as a last resort. It is left off only when none of those fits. On the
+  demo's Investment Property Loan, 5,000 paid extra at payment 20 had no label at 820, 600 or
+  390 px: the Today pill above it, the plot's edge to its left. It now sits under its mark at 820
+  and 600 px, and at 390 px, with today's glow 13 px from the mark, under that glow. A loan
   whose first payment falls in a later year has no Today: its axis starts in that year. The
   sentence above it (`timelineSentence`) and a four-figure readout (Repaid so far, Still owed,
   Months left, Last payment) carry the numbers. Each figure's key is its own mark on the line: the
@@ -2592,7 +2598,9 @@ check')` first, as the cushion and debt cases do.
   are unchanged.
 - **Tests:** `loanTimeline.test.ts`, `loanPayoffChart.test.tsx` and new cases in `loanCopy.test.ts`
   (the split at today and the due-today boundary, today on the line, this year, extra labels only
-  while few, on the left at the right edge and clear of today's glow, paid off, never repaid, no
+  while few, on the left at the right edge and clear of today's glow, the demo loan's two extras
+  labelled at a phone's, a 600 px and an 820 px chart width, by their marks and clear of the line,
+  Today and each other, paid off, never repaid, no
   start date, a first payment next year, the title and description, every sentence and the
   description). `loansPage.test.tsx`: open and close, one at a time, Escape and each exception (a
   shut dialog with no box, another page shown), the card brought into view on Escape, the scroll

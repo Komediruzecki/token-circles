@@ -51,6 +51,21 @@ interface Box {
 
 const overlaps = (a: Box, b: Box, gap = 8) => a.x0 < b.x1 + gap && a.x1 > b.x0 - gap
 
+interface Rect extends Box {
+  top: number
+  bottom: number
+}
+
+/** Two boxes meet: across, with a gap between them; up and down, touching. */
+const meets = (a: Rect, b: Rect, gap: number) =>
+  overlaps(a, b, gap) && a.top < b.bottom && a.bottom > b.top
+
+interface Label extends Rect {
+  at: number
+  anchor: 'start' | 'end'
+  baseline: number
+}
+
 export default function LoanPayoffChart(props: Props) {
   const [width, setWidth] = createSignal(0)
   let wrap!: HTMLDivElement
@@ -184,43 +199,105 @@ export default function LoanPayoffChart(props: Props) {
   })
   const bands = () => (12 / n()) * plotW() >= 24
 
+  /** The lowest the line runs between two x, as a y: a label under it starts below this. */
+  const lineLow = (x0: number, x1: number) => {
+    const month = (x: number) => Math.min(n(), Math.max(0, ((x - padLeft()) / plotW()) * n()))
+    const at = (m: number) => {
+      const lo = Math.min(t().rows.length, Math.floor(m))
+      const hi = Math.min(t().rows.length, lo + 1)
+      return sy(balanceAt(lo)) + (sy(balanceAt(hi)) - sy(balanceAt(lo))) * (m - lo)
+    }
+    let low = Math.max(at(month(x0)), at(month(x1)))
+    for (let m = Math.ceil(month(x0)); m <= month(x1); m++) low = Math.max(low, sy(balanceAt(m)))
+    return low
+  }
+
   /**
-   * Extra payments: a mark on the line each, and a label for the first few that fit: right of its
-   * mark, or left of it where the right runs off the chart or into another label. Neither may
-   * cover the Today pill, nor today's dot and the glow around it; a mark inside that glow has its
-   * label set out past it.
+   * Extra payments: a mark on the line each, and a label for the first few that fit. Above the
+   * mark first, right of it or left of it; then under the line, under the mark or under and to its
+   * left, as close under the line as it runs there without crossing it, and lower still, under
+   * today's glow, as a last resort. A label stays inside the plot and covers no other label, nor
+   * the Today pill, nor today's dot and the glow around it; a mark inside that glow has its label
+   * set out past it. A label is left off only when none of those places fits.
    */
   const extras = createMemo(() => {
-    const placed: Box[] = []
+    const placed: Rect[] = []
     const today = showToday()
-    const pill = today ? { x0: pillX() - pillW / 2, x1: pillX() + pillW / 2 } : null
-    const glow = today ? { x: todayX(), y: todayY(), r: HALO } : null
+    const pill: Rect | null = today
+      ? {
+          x0: pillX() - pillW / 2,
+          x1: pillX() + pillW / 2,
+          top: PAD_TOP - 6 - PILL_H,
+          bottom: PAD_TOP - 6,
+        }
+      : null
+    const glow: (Rect & { x: number }) | null = today
+      ? {
+          x: todayX(),
+          x0: todayX() - HALO,
+          x1: todayX() + HALO,
+          top: todayY() - HALO,
+          bottom: todayY() + HALO,
+        }
+      : null
+    const left = padLeft()
+    const right = padLeft() + plotW()
     const labelled = t().extras.length <= MAX_EXTRA_LABELS
     return t().extras.map((e) => {
       const x = sx(e.month)
       const y = sy(balanceAt(e.month))
       const text = `+${props.formats.wholeMoney(e.amount)}`
       const width = text.length * CHAR
-      // The label's line: 12 px text standing on y - 7, from 19 px above the mark to 4 px above.
-      const top = y - 19
-      const bottom = y - 4
-      const level = glow !== null && top < glow.y + glow.r && bottom > glow.y - glow.r
-      const inGlow = glow !== null && level && Math.abs(x - glow.x) <= glow.r
-      const rightFrom = glow !== null && inGlow ? glow.x + glow.r + 3 : x + 7
-      const leftTo = glow !== null && inGlow ? glow.x - glow.r - 3 : x - 7
-      const sides = [
-        { x0: rightFrom, x1: rightFrom + width, at: rightFrom, anchor: 'start' as const },
-        { x0: leftTo - width, x1: leftTo, at: leftTo, anchor: 'end' as const },
+      // Above: 12 px text standing on y - 7, from 19 px above the mark to 4 px above.
+      const above = (x0: number, anchor: Label['anchor']): Label => ({
+        x0,
+        x1: x0 + width,
+        top: y - 19,
+        bottom: y - 4,
+        at: anchor === 'start' ? x0 : x0 + width,
+        anchor,
+        baseline: y - 7,
+      })
+      const inGlow =
+        glow !== null && glow.top < y - 4 && glow.bottom > y - 19 && Math.abs(x - glow.x) <= HALO
+      const rightFrom = glow !== null && inGlow ? glow.x1 + 3 : x + 7
+      const leftTo = glow !== null && inGlow ? glow.x0 - 3 : x - 7
+      // Under: starting at `from`, kept inside the plot, 3 px under the line where it runs lowest
+      // over the label and 4 px under the mark; under today's glow too when `clear` says so.
+      const under = (from: number, clear: boolean): Label => {
+        const x0 = Math.min(Math.max(from, left), right - width)
+        let top = Math.max(y + 4, lineLow(x0, x0 + width) + 3)
+        if (clear && glow !== null && x0 < glow.x1 && x0 + width > glow.x0) {
+          top = Math.max(top, glow.bottom + 2)
+        }
+        return {
+          x0,
+          x1: x0 + width,
+          top,
+          bottom: top + 15,
+          at: x0,
+          anchor: 'start',
+          baseline: top + 12,
+        }
+      }
+      const places = [
+        above(rightFrom, 'start'),
+        above(leftTo - width, 'end'),
+        under(x - width / 2, false),
+        under(x + 4 - width, false),
+        under(x - width / 2, true),
+        under(x + 4 - width, true),
       ]
-      const fits = (box: Box) =>
-        box.x0 >= padLeft() &&
-        box.x1 <= padLeft() + plotW() &&
-        !placed.some((b) => overlaps(b, box)) &&
-        !(pill && top < PAD_TOP - 6 && overlaps(pill, box)) &&
-        !(glow !== null && level && box.x0 < glow.x + glow.r && box.x1 > glow.x - glow.r)
-      const side = labelled ? sides.find(fits) : undefined
-      if (side) placed.push(side)
-      return { ...e, x, y, text, label: side ?? null }
+      const fits = (label: Label) =>
+        label.x0 >= left &&
+        label.x1 <= right &&
+        label.bottom <= base() &&
+        !placed.some((other) => meets(other, label, 8)) &&
+        !(pill !== null && meets(pill, label, 8)) &&
+        !(glow !== null && meets(glow, label, 0))
+      const label = labelled ? places.find(fits) : undefined
+      if (label) placed.push(label)
+      return { ...e, x, y, text, label: label ?? null }
     })
   })
 
@@ -360,7 +437,7 @@ export default function LoanPayoffChart(props: Props) {
                     <text
                       class={`${styles.payoffExtraLabel} ${styles.chartLabelHalo}`}
                       x={f1(label().at)}
-                      y={f1(e.y - 7)}
+                      y={f1(label().baseline)}
                       text-anchor={label().anchor}
                     >
                       {e.text}

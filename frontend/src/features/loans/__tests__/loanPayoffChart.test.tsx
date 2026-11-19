@@ -5,7 +5,7 @@
  * its 22nd payment.
  */
 import { render } from 'solid-js/web'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { formatsFor } from '../loanCopy'
 import LoanPayoffChart from '../LoanPayoffChart'
 import { loanTimeline } from '../loanTimeline'
@@ -208,5 +208,106 @@ describe('the payoff chart', () => {
     expect(label.textContent).toBe('+€1,000')
     expect(label.getAttribute('text-anchor')).toBe('end')
     expect(Number(label.getAttribute('x'))).toBeLessThanOrEqual(todayX - halo)
+  })
+})
+
+describe("an extra payment's label on a narrow chart", () => {
+  // The demo's Investment Property Loan: 200,000 at 4.2 % over 240 months from June 2023, seen on
+  // 19 November 2026 after its 42nd payment, with 5,000 paid extra at payment 20 and 8,000 planned
+  // at payment 150. On a narrow chart the first mark sits under the Today pill, with the plot's
+  // edge on its left: neither side above it has room.
+  const PROPERTY: LoanInput = {
+    principal: 200000,
+    interest_rate: 4.2,
+    start_date: '2023-06-01',
+    term_months: 240,
+    rate_periods: [],
+    prepayments: [
+      { month: 20, amount: 5000 },
+      { month: 150, amount: 8000 },
+    ],
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  const num = (el: Element | null | undefined, name: string) => Number(el?.getAttribute(name))
+  /** A label's box: 12 px text standing on its y, from 12 px above it to 3 below. */
+  const boxOf = (label: Element) => {
+    const x = num(label, 'x')
+    const y = num(label, 'y')
+    const width = (label.textContent ?? '').length * 7.2
+    const x0 = label.getAttribute('text-anchor') === 'end' ? x - width : x
+    return { x0, x1: x0 + width, top: y - 12, bottom: y + 3 }
+  }
+  type Rect = ReturnType<typeof boxOf>
+  const meets = (a: Rect, b: Rect) =>
+    a.x0 < b.x1 && a.x1 > b.x0 && a.top < b.bottom && a.bottom > b.top
+  /** The line's highest and lowest y between two x: where it runs inside them. */
+  const lineBetween = (line: number[][], x0: number, x1: number) => {
+    const at = (x: number) => {
+      const i = line.findIndex(([px]) => px >= x)
+      if (i <= 0) return line[Math.max(0, i)][1]
+      const [ax, ay] = line[i - 1]
+      const [bx, by] = line[i]
+      return ay + ((by - ay) * (x - ax)) / (bx - ax || 1)
+    }
+    const ys = [at(x0), at(x1), ...line.filter(([px]) => px > x0 && px < x1).map(([, py]) => py)]
+    return { high: Math.min(...ys), low: Math.max(...ys) }
+  }
+
+  it.each([
+    ['on a phone', 308],
+    ['in a window 600 px wide', 494],
+    ['in a window 820 px wide, with the sidebar shown', 426],
+  ])('labels both %s, by its mark, clear of the line, Today and each other', (_, width) => {
+    vi.spyOn(Element.prototype, 'clientWidth', 'get').mockReturnValue(width)
+    const root = draw(PROPERTY, '2026-11-19')
+    const line = [
+      ...points(one(root, 'loans-payoff-past')),
+      ...points(one(root, 'loans-payoff-future')),
+    ].sort((a, b) => a[0] - b[0])
+    const left = line[0][0]
+    const right = line[line.length - 1][0]
+    const base = num(one(root, 'loans-payoff-end')!.querySelector('circle'), 'cy')
+    const today = one(root, 'loans-payoff-today')!
+    const glowEl = today.querySelectorAll('circle')[0]
+    const r = num(glowEl, 'r')
+    const glow = {
+      x0: num(glowEl, 'cx') - r,
+      x1: num(glowEl, 'cx') + r,
+      top: num(glowEl, 'cy') - r,
+      bottom: num(glowEl, 'cy') + r,
+    }
+    const pillEl = today.querySelector('rect')
+    const pill = {
+      x0: num(pillEl, 'x'),
+      x1: num(pillEl, 'x') + num(pillEl, 'width'),
+      top: num(pillEl, 'y'),
+      bottom: num(pillEl, 'y') + num(pillEl, 'height'),
+    }
+
+    const extras = all(root, 'loans-payoff-extra')
+    expect(extras).toHaveLength(2)
+    const boxes = extras.map((extra) => {
+      const label = extra.querySelector('text')
+      expect(label?.textContent ?? 'no label').toMatch(/^\+€[58],000$/)
+      const b = boxOf(label!)
+      const mark = num(extra.querySelector('circle'), 'cx')
+      // By its mark: under it, or beside it.
+      expect(Math.max(b.x0 - mark, mark - b.x1, 0)).toBeLessThanOrEqual(7.1)
+      // Inside the plot.
+      expect(b.x0).toBeGreaterThanOrEqual(left - 0.1)
+      expect(b.x1).toBeLessThanOrEqual(right + 0.1)
+      expect(b.bottom).toBeLessThanOrEqual(base + 0.1)
+      // Never across the line: it runs wholly above the label or wholly under it.
+      const run = lineBetween(line, b.x0, b.x1)
+      expect(run.low < b.top || run.high > b.bottom).toBe(true)
+      expect(meets(b, glow)).toBe(false)
+      expect(meets(b, pill)).toBe(false)
+      return b
+    })
+    expect(meets(boxes[0], boxes[1])).toBe(false)
   })
 })
