@@ -416,9 +416,11 @@ export default function Import() {
                         <span style={{ 'white-space': 'nowrap' }}>
                           {new Date(log.created_at).toLocaleString()}
                         </span>{' '}
-                        ({log.imported} imported
+                        {/* A count keeps its word on its line: "(6" and "imported)" broke apart. */}
+                        ({log.imported}
+                        {'\u00a0'}imported
                         {log.duplicates_skipped > 0 &&
-                          `, ${log.duplicates_skipped} duplicates skipped`}
+                          `, ${log.duplicates_skipped}\u00a0duplicates skipped`}
                         )
                       </span>
                     </summary>

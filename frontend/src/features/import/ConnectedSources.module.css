@@ -58,6 +58,7 @@
   border-radius: 14px;
   overflow: hidden;
   background: var(--surface);
+  container-type: inline-size;
 }
 
 .row {
@@ -379,6 +380,21 @@
   .rowDelete {
     width: 40px;
     height: 40px;
+  }
+  .capsule .btn {
+    flex: 1;
+    justify-content: center;
+  }
+}
+/* A list too narrow for the name beside the capsule (Import beside the sidebar on a tablet) lays
+   its rows out as a phone does: at 820 px "Google Sheet" broke onto two lines in a 113 px column. */
+@container (max-width: 600px) {
+  .capsule {
+    order: 1;
+    width: 100%;
+  }
+  .rowError {
+    order: 2;
   }
   .capsule .btn {
     flex: 1;

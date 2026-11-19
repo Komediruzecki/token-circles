@@ -2880,6 +2880,14 @@ check')` first, as the cushion and debt cases do.
   columns is whole on a phone rather than a 60vh box that scrolls (its wrapped rows are 768 px at
   390). The subscription scan's modal is 96% card rather than 84: over the overlay's near-black, the
   light theme's read grey, with Rescan's border all but gone.
+- **A saved sheet's name and an import's count stay whole.** From the second set of captures:
+  beside the sidebar at 820 px, Connected sources gave the name 113 px next to the Auto sync and
+  Preview capsule, so "Google Sheet" broke onto two lines (the made-up "Sheet1" it replaced was
+  short enough to fit). The list is a size container now, and under 600 px its rows lay out as on a
+  phone: the capsule on a line of its own, Remove beside the name. Recent Imports at 390 px broke
+  "(6 imported)" after the 6; a no-break space keeps each count with its word. Measured in
+  headless Chromium from the lines each text's boxes take: the name 2 lines at 820 before and 1
+  after, the count 2 at 390 before and 1 after, both 1 at every other width and theme.
 - **Import's messages have no em dashes.** Each is a full stop, a colon or parentheses: the
   preview's notes, the paste help, the bank tab's "no accounts yet", Recent Imports' line and its
   delete confirm, Connected sources' toast and remove confirm, two errors, and a skipped row's
