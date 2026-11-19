@@ -5,10 +5,10 @@
  * Class names are kebab-case here and camelCase in the components.
  */
 
-/* The bottom keeps room for the floating add button (Layout.module.css .fab: 56 px tall, 22 px
-   up), which otherwise sits over the end of a chart opened under the last row. */
+/* No room of its own at the bottom: the page around it keeps the floating add button's
+   (Layout.module.css .main). */
 .loans {
-  padding: 24px 24px 96px;
+  padding: 24px;
   display: grid;
   gap: 24px;
   min-width: 0;

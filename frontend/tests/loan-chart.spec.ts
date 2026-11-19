@@ -74,6 +74,21 @@ async function addLoans(page: Page, loans: typeof LOANS = LOANS): Promise<void> 
   for (const loan of loans) await expect(card(page, loan.name)).toHaveCount(1, { timeout: 15_000 })
 }
 
+/** Leaves the demo's own loans out: deletes every loan listed, through the app's own client. */
+async function removeEveryLoan(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    const spec = '/src/core/api.ts'
+    const mod = (await import(/* @vite-ignore */ spec)) as {
+      apiHouseholdGet: (url: string) => Promise<{ id: number }[]>
+      apiDelete: (url: string) => Promise<unknown>
+    }
+    for (const loan of await mod.apiHouseholdGet('/api/loans')) {
+      await mod.apiDelete(`/api/loans/${loan.id}`)
+    }
+  })
+  await expect(page.getByTestId('loans-empty')).toBeVisible({ timeout: 15_000 })
+}
+
 // Seven figures owed, made up: the widest amounts the chart's figures have to fit beside each other.
 const BIG = {
   name: 'zz-chart-big',
@@ -342,5 +357,45 @@ test.describe('the chart at any width', () => {
         .poll(() => chartFit(page), { message: `the chart at ${width} px` })
         .toEqual({ past: 0, sideways: 0, drawing: 0, wrapped: 0, lastLine: true })
     }
+  })
+})
+
+test.describe('one loan on a phone', () => {
+  test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+
+  test.beforeEach(async ({ page }) => {
+    test.setTimeout(90_000)
+    await leaveOnboarding(page)
+    await gotoServerless(page, 'loans', 'loans-header')
+    await removeEveryLoan(page)
+    await addLoans(page, [LOANS[0]])
+  })
+
+  // The case the floating add button covered: the only loan, its chart open, the page scrolled to
+  // its end. The page's own bottom room (Layout.module.css .main) is what keeps the last payment's
+  // month and its mark above the button.
+  test('the end of the chart stays above the floating add button @smoke', async ({ page }) => {
+    await expect(page.getByTestId('loans-item')).toHaveCount(1)
+    await toggle(page, LOANS[0].name).tap()
+    await expect(page.getByTestId('loans-payoff-end')).toBeVisible()
+    await page.evaluate(() => {
+      window.scrollTo(0, document.documentElement.scrollHeight)
+    })
+    const fab = (await page.getByRole('button', { name: 'Quick add entry' }).boundingBox())!
+    await expect
+      .poll(() =>
+        page
+          .getByTestId('loans-payoff-end')
+          .evaluate((end) => Math.ceil(end.getBoundingClientRect().bottom))
+      )
+      .toBeLessThanOrEqual(fab.y)
+    // Scrolled to the end, so nothing more of the page could come out from under the button.
+    expect(
+      await page.evaluate(
+        () =>
+          Math.ceil(window.scrollY + window.innerHeight) >=
+          document.documentElement.scrollHeight - 1
+      )
+    ).toBe(true)
   })
 })
