@@ -24,6 +24,15 @@
  * would later open setup over the demo.
  *
  * It can always be relaunched from Settings → About or the tour-selection modal.
+ *
+ * A file setup cannot read goes to the Import page, and setup waits there (pauseOnboarding): closed
+ * with nothing decided, at the step it reached, while the person matches the file's columns. The
+ * Import page offers Back to setup (resumeOnboarding), which opens it again at the subscriptions in
+ * what was imported, or at the statement when nothing was. Nothing else in the tab opens it over the
+ * columns: maybeOfferOnboarding runs at the app's start and at a sign-in only. Finished or left in the
+ * meantime, on this device or another, it stays closed. Never taken, the way back is the one any
+ * setup left part way has: the next start, here or on another device, opens it at the step reached,
+ * which an import on the way made the subscriptions.
  */
 import { createRoot, createSignal } from 'solid-js'
 import { furthestStep, onboardingFinished, UNREADABLE } from '../../../shared/accountState'
@@ -32,6 +41,7 @@ import {
   accountState,
   isServerAccount,
   readAccountState,
+  rereadAccountState,
   setAccountStateOwner,
   writeAccountState,
 } from './accountState'
@@ -111,7 +121,11 @@ export function onboardingOwnerFor(
  * decides there, as on a new device.
  */
 export function setOnboardingOwner(next: string | null): void {
-  if (next !== owner) furthestSent = null
+  if (next !== owner) {
+    furthestSent = null
+    // Setup waits for the owner that left it: another sign-in finds nothing waiting.
+    waiting[1](null)
+  }
   owner = next
   setAccountStateOwner(next)
   if (next !== LOCAL_ONBOARDING_OWNER) return
@@ -257,6 +271,33 @@ const store = createRoot(() => {
   return { onboardingOpen, setOnboardingOpen, onboardingStep, setOnboardingStep }
 })
 
+/**
+ * Setup waiting on the Import page (pauseOnboarding), or null.
+ *
+ * - `owner`: whose setup it is.
+ * - `rerun`: setup had been finished or left before this run of it (Settings, the tour menu). Such
+ *   a record never changes again, so the way back has nothing to ask the account.
+ * - `imported`: transactions brought in on the way, by setup before it handed the file over or by
+ *   the Import page since.
+ */
+interface SetupWait {
+  owner: string
+  rerun: boolean
+  imported: number
+}
+
+const waiting = createRoot(() => createSignal<SetupWait | null>(null))
+
+/** Whether setup is waiting on the Import page for the person to come back. */
+export function setupWaiting(): boolean {
+  return waiting[0]() !== null
+}
+
+/** The transactions brought in while setup waited, or 0. */
+export function importedWhileSetupWaits(): number {
+  return waiting[0]()?.imported ?? 0
+}
+
 export const onboardingOpen = store.onboardingOpen
 export const onboardingStep = store.onboardingStep
 
@@ -268,6 +309,8 @@ function showStep(step: OnboardingStep): void {
 
 export function startOnboarding(step: OnboardingStep = 'space') {
   const at = openingStep(step)
+  // Open again, by Back to setup or from Settings: it waits on the Import page no more.
+  waiting[1](null)
   // The step first: the wizard seeds the step it opens on, not the one it last showed.
   store.setOnboardingStep(at)
   store.setOnboardingOpen(true)
@@ -298,6 +341,7 @@ export function prevOnboardingStep() {
 function decide(outcome: OnboardingDecision): void {
   const of = owner
   store.setOnboardingOpen(false)
+  waiting[1](null)
   // Left or finished: a local-only switch's setup never opens again by itself.
   clearLocalSetupPending()
   // Its "Balance today" figures say nothing about an import after it (review M2).
@@ -339,6 +383,73 @@ export function countProfileMadeAsDecided(of: string | null = owner): void {
 /** Finish the wizard. */
 export function completeOnboarding() {
   decide('completed')
+}
+
+/**
+ * Leave setup waiting on the Import page, for a file it cannot read (OnboardingWizard, Open in
+ * Import): closed, with nothing decided, at the step it reached. `imported` is what setup brought
+ * in before it handed the file over: with any, the step reached is the subscriptions. The balances
+ * typed in setup stay too, for the statements still to come (setupTypedBalances.ts).
+ */
+export function pauseOnboarding(imported = 0): void {
+  const of = owner
+  store.setOnboardingOpen(false)
+  if (of === null) return
+  const rerun = isServerAccount(of)
+    ? !firstSetupOfTheAccount()
+    : getOnboardingStatus(of) !== null && !localSetupPending()
+  waiting[1]({ owner: of, rerun, imported: Math.max(0, imported) })
+  if (imported > 0) recordStep('subscriptions')
+}
+
+/**
+ * The Import page imported `imported` transactions while setup waited: the way back opens setup at
+ * the subscriptions in them, and so does the next start if the person never takes it.
+ */
+export function noteImportWhileSetupWaits(imported: number): void {
+  const wait = waiting[0]()
+  if (wait === null || wait.owner !== owner || imported <= 0) return
+  waiting[1]({ ...wait, imported: wait.imported + imported })
+  recordStep('subscriptions')
+}
+
+/**
+ * Whether setup was finished or left since it began to wait, on this device or another: the
+ * account's record is read again for it. Null when that cannot be told.
+ */
+async function decidedSince(of: string): Promise<boolean | null> {
+  // A decision this browser keeps (another tab), sent to the account or not yet.
+  if (getOnboardingStatus(of) !== null) return true
+  if (!isServerAccount(of)) return false
+  const state = await rereadAccountState()
+  if (state === null || owner !== of) return null
+  return state.onboarding === UNREADABLE || onboardingFinished(state.onboarding)
+}
+
+/**
+ * Back to setup, from the Import page: open setup again at the subscriptions in what was imported
+ * on the way, or at the statement when nothing was. Resolves `opened`; `finished` when setup was
+ * finished or left meanwhile, here or on another device, so it stays closed and waits no more; or
+ * `unknown` when the account could not be read, so it keeps waiting to be tried again.
+ */
+export async function resumeOnboarding(): Promise<'opened' | 'finished' | 'unknown'> {
+  const wait = waiting[0]()
+  if (wait === null || wait.owner !== owner) {
+    waiting[1](null)
+    return onboardingOpen() ? 'opened' : 'finished'
+  }
+  if (!wait.rerun) {
+    const decided = await decidedSince(wait.owner)
+    // Taken already, by another tap while the account was read, or another owner signed in.
+    if (waiting[0]() !== wait) return onboardingOpen() ? 'opened' : 'finished'
+    if (decided === null) return 'unknown'
+    if (decided) {
+      waiting[1](null)
+      return 'finished'
+    }
+  }
+  startOnboarding(wait.imported > 0 ? 'subscriptions' : 'import')
+  return 'opened'
 }
 
 /** Leave the wizard early. */

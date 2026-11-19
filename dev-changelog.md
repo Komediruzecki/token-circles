@@ -521,7 +521,8 @@ All notable changes to Token Circles are documented here. The format is based on
     and in that list too, so subtracting the dry run's count took them off twice
     (`firstImportCount.test.ts`). A statement with nothing new says so. A file the defaults cannot
     import (a bank the adapters do not know, a table of any other kind, a file that does not read)
-    offers Open in Import, which finishes setup and hands the file to the Import page
+    offers Open in Import, which leaves setup waiting (see "Setup waits on the Import page" below)
+    and hands the file to the Import page
     (`features/import/importHandoff.ts`; `Import.tsx` takes it once the page is active, on Bank
     Imports for a bank it knows, else on File Upload, which goes on to the column mapping), or Skip.
   - **A YNAB Register file in the statement step.** Main's #674 made a Register file (Export
@@ -629,8 +630,10 @@ All notable changes to Token Circles are documented here. The format is based on
   | `subscriptions` | past the import step, imported or not | imported transactions on the statement step              |
   | `done`          | past the subscriptions step           | past subscriptions, or past the statement with no import |
 
-  `outcome: completed` came only from Done's Finish. It now also comes from Open in Import, at
-  step `import`, and from Escape on Done: before this build Escape there asked "Leave setup?" and,
+  `outcome: completed` came only from Done's Finish. It now also comes from Escape on Done
+  (Open in Import decides nothing: the record stays unfinished at `import`, or at `subscriptions`
+  once anything came in, until setup is finished or left): before this build Escape there asked
+  "Leave setup?" and,
   confirmed, recorded `skipped` at step `done`; now it finishes as Finish does, records
   `completed` and asks nothing, since the person reached Done. An old `skipped` at `done` is
   therefore a new `completed` at `done`: count them together. So the comparable counts are: old `welcome` and `space` together against new `space`
@@ -652,6 +655,39 @@ All notable changes to Token Circles are documented here. The format is based on
   GROUP BY 1, 2, 3
   ORDER BY 1, 2, 3;
   ```
+
+- **Setup waits on the Import page for a file it hands over, and Back to setup picks up again.**
+  maff, 19 Nov: Open in Import finished setup, so after matching the columns and importing there
+  was no way back to the subscription step or Done. Frontend only: no migration, no API change.
+  - **The wait** (`core/onboardingStore.ts`): `pauseOnboarding(imported)` closes the wizard with
+    nothing decided and keeps `{ owner, rerun, imported }` in memory; the record (or local-first's
+    pending marker) stays at the step reached, moved to `subscriptions` when anything came in.
+    `noteImportWhileSetupWaits(n)`, called by `Import.tsx`'s `onImported`, adds an import made on
+    the page and records `subscriptions`. `resumeOnboarding()` opens setup at `subscriptions` with
+    anything imported, else at `import`. Before it opens a first run, it reads the account's record
+    again (`rereadAccountState()` in `core/accountState.ts`): finished or left on another device or
+    in another tab answers `finished` and setup stays closed; an account it cannot read answers
+    `unknown` and the wait stays, to be tried again. A rerun (Settings, the tour menu) asks
+    nothing, as its record never changes again. A new owner, `startOnboarding` or a decision ends
+    the wait.
+  - **Nothing opens setup over the page while it waits.** `maybeOfferOnboarding` runs only at
+    boot and after sign-in, so the columns are matched without the wizard in the way. Someone who
+    never comes back meets setup at the next start, on any device, at the step reached: the
+    subscriptions once an import landed. The balances typed in setup stay until setup is decided,
+    for the statements still to come.
+  - **The strip** (`features/import/SetupStrip.tsx`, `ImportNotices.module.css`) sits under the
+    page header while setup waits: "Setup is waiting for this statement" with a secondary Back to
+    setup, then "N transactions are in" with a primary one. The page's own subscription offer is
+    not set while setup waits, as setup's next step is that scan.
+  - Tests: `onboardingStore.test.ts` and `onboardingOnTheAccount.test.ts` ("setup waiting on the
+    Import page", 13 cases), `onboardingFirstImport.test.tsx` (Open in Import leaves setup
+    waiting; after an import it comes back at the subscriptions), `importOpensHandedFile.test.tsx`
+    (the strip, both ways back, no scan offer while waiting), and in e2e the `@smoke` Open in
+    Import case of `tests/onboarding.spec.ts` (map, import, Back to setup, Done) and "a file setup
+    cannot read leaves it waiting on Import, and a skip elsewhere keeps it closed" in
+    `tests/onboarding-server.spec.ts`. Guards checked by putting the old code back: resuming
+    without reading the account fails 4 store cases; the page not noting its import fails 1; the
+    wizard finishing on Open in Import fails 3.
 
 ### State that follows the account
 
@@ -3392,7 +3428,8 @@ true, or is too small for one.
   test that reads the figure back now has the stored account change when the figure is set, as it
   does, rather than before Save.
 - **A file setup hands to the Import page keeps the balance typed in setup.** "Open in Import"
-  finishes setup, and finishing forgot setup's "Balance today" figures (`forgetTypedBalances`)
+  finished setup then (it leaves setup waiting now, see Setup wizard), and finishing forgot setup's
+  "Balance today" figures (`forgetTypedBalances`)
   before the handed file was imported, so that import added up on top of the typed balance, the
   double count M2 removed. The figures now go with the file (`HandedImportFile.typed`), and the
   Import page works the file's import back from them, once, before it lists the balances. Setup

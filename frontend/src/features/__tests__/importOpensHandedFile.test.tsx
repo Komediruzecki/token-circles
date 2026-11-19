@@ -8,6 +8,13 @@ import { render } from 'solid-js/web'
 import { afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest'
 import { setCurrentProfile, setPage, setProfiles } from '../../core/appStore'
 import { __resetDataVersionsForTest } from '../../core/dataVersions'
+import {
+  onboardingOpen,
+  onboardingStep,
+  pauseOnboarding,
+  setOnboardingOwner,
+  setupWaiting,
+} from '../../core/onboardingStore'
 import { getDB } from '../../core/storage/idb'
 import { handedImportFile, handFileToImport, takeHandedImportFile } from '../import/importHandoff'
 
@@ -44,6 +51,8 @@ afterEach(() => {
   dispose = undefined
   host.remove()
   takeHandedImportFile()
+  if (onboardingOpen()) pauseOnboarding()
+  setOnboardingOwner(null)
   setCurrentProfile(null)
   setPage('dashboard')
 })
@@ -140,4 +149,87 @@ it("works the handed file's import back from the balance typed in setup", async 
     },
     { timeout: 8_000 }
   )
+}, 20_000)
+
+const MATCHED_TABLE =
+  'Date,Description,Amount,Means of Payment\n' +
+  '2026-06-01,Groceries,-10.00,Example Checking\n' +
+  '2026-06-02,Bus,-2.50,Example Checking\n'
+
+/** A statement whose columns match as read, handed over by setup. */
+function handTheTable(): void {
+  handFileToImport(new File([MATCHED_TABLE], 'export.csv', { type: 'text/csv' }), 'file-upload')
+}
+
+/** Import the statement on File Upload, matched as read, and wait for the page to say so. */
+async function importTheTable(): Promise<void> {
+  await vi.waitFor(() => {
+    expect(byTestId('import-continue-preview')).not.toBeNull()
+  })
+  byTestId('import-continue-preview')!.click()
+  await vi.waitFor(() => {
+    expect(byTestId('import-execute-all')).not.toBeNull()
+  })
+  byTestId('import-execute-all')!.click()
+  await vi.waitFor(
+    () => {
+      expect(byTestId('import-result')?.textContent).toContain('Imported 2 transactions')
+    },
+    { timeout: 8_000 }
+  )
+}
+
+// maff, 19 Nov: a file setup handed to Import had no way back to finish setup.
+it('while setup waits, says so above the file, and Back to setup opens it at the statement', async () => {
+  setOnboardingOwner('local')
+  pauseOnboarding()
+  handFileToImport(new File([UNKNOWN_TABLE], 'export.csv', { type: 'text/csv' }), 'file-upload')
+  setPage('import')
+  await mountImport()
+
+  await vi.waitFor(() => {
+    expect(byTestId('import-setup')).not.toBeNull()
+  })
+  expect(byTestId('import-setup')!.textContent).toContain('Setup')
+  byTestId('import-setup-back')!.click()
+
+  await vi.waitFor(() => {
+    expect(onboardingOpen()).toBe(true)
+  })
+  expect(onboardingStep()).toBe('import')
+  expect(setupWaiting()).toBe(false)
+  expect(byTestId('import-setup')).toBeNull()
+})
+
+it('after the statement is in, Back to setup goes on to the subscriptions, and leaves the scan to setup', async () => {
+  setOnboardingOwner('local')
+  pauseOnboarding()
+  handTheTable()
+  setPage('import')
+  await mountImport()
+  await importTheTable()
+
+  await vi.waitFor(() => {
+    expect(byTestId('import-setup')?.textContent).toContain('2 transactions')
+  })
+  // Setup's next step is the subscription scan, over these and anything else in the account.
+  expect(byTestId('import-scan-offer')).toBeNull()
+  byTestId('import-setup-back')!.click()
+
+  await vi.waitFor(() => {
+    expect(onboardingOpen()).toBe(true)
+  })
+  expect(onboardingStep()).toBe('subscriptions')
+}, 20_000)
+
+it('with no setup waiting, shows no way back and offers the scan after an import', async () => {
+  handTheTable()
+  setPage('import')
+  await mountImport()
+  await importTheTable()
+
+  await vi.waitFor(() => {
+    expect(byTestId('import-scan-offer')).not.toBeNull()
+  })
+  expect(byTestId('import-setup')).toBeNull()
 }, 20_000)

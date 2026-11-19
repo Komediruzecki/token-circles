@@ -52,6 +52,7 @@ import {
   nextOnboardingStep,
   onboardingOpen,
   onboardingStep,
+  pauseOnboarding,
   prevOnboardingStep,
   skipOnboarding,
 } from '../../core/onboardingStore'
@@ -481,14 +482,18 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
     afterStatement()
   }
 
-  /** The way out for a file this step cannot import: setup finishes, and Import opens with it. */
+  /**
+   * The way out for a file this step cannot import: Import opens with it, and setup waits there
+   * (onboardingStore.ts, pauseOnboarding) until Back to setup brings it back, at the subscriptions
+   * in what came in. It used to finish setup, and left no way back to the subscriptions or Done.
+   */
   const openInImport = () => {
     const handed = firstImport.handOver()
     if (!handed) return
-    // The balances typed here go with the file: finishing forgets setup's copy, and the file's
-    // import on the Import page works back from them, as setup's own import would have (M2).
+    // The balances typed here go with the file, for its import on the Import page to work back
+    // from, as setup's own import would have (M2).
     handFileToImport(handed.file, handed.tab, typedBalances())
-    completeOnboarding()
+    pauseOnboarding(importSummary()?.imported ?? 0)
     window.location.hash = 'import'
   }
 

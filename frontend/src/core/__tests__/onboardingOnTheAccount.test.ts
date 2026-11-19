@@ -25,11 +25,15 @@ import {
   goToOnboardingStep,
   maybeOfferOnboarding,
   nextOnboardingStep,
+  noteImportWhileSetupWaits,
   onboardingMirrorSettled,
   onboardingOpen,
   onboardingStep,
+  pauseOnboarding,
   prevOnboardingStep,
+  resumeOnboarding,
   setOnboardingOwner,
+  setupWaiting,
   skipOnboarding,
   startOnboarding,
   whereToOfferOnboarding,
@@ -700,5 +704,84 @@ describe('a record this build cannot read at all', () => {
     expect(worker.sent).toEqual(['GET /api/account/state'])
     expect(getOnboardingStatus('account-5')).toBe('skipped')
     expect(worker.records.get(5)).toEqual(unreadable)
+  })
+})
+
+// Open in Import, for a file setup cannot read: setup waits on the Import page, and Back to setup
+// there opens it again. Finished or left on another device in the meantime, it stays closed there.
+describe('setup waiting on the Import page', () => {
+  /** A new account's setup, at the statement, left for the Import page. */
+  async function waitAtTheStatement(): Promise<void> {
+    signIn(5)
+    await maybeOfferOnboarding()
+    nextOnboardingStep()
+    nextOnboardingStep()
+    expect(onboardingStep()).toBe('import')
+    pauseOnboarding()
+    await settled()
+  }
+
+  const reads = () => worker.sent.filter((r) => r === 'GET /api/account/state').length
+
+  it('closes with nothing decided on the account, and opens again at the statement', async () => {
+    await waitAtTheStatement()
+
+    expect(onboardingOpen()).toBe(false)
+    expect(setupWaiting()).toBe(true)
+    expect(worker.records.get(5)).toMatchObject({ step: 'import', finished_at: null })
+
+    await expect(resumeOnboarding()).resolves.toBe('opened')
+    expect(onboardingOpen()).toBe(true)
+    expect(onboardingStep()).toBe('import')
+  })
+
+  it('reads the account again on the way back, for a decision made on another device', async () => {
+    await waitAtTheStatement()
+    const before = reads()
+
+    await resumeOnboarding()
+
+    expect(reads()).toBe(before + 1)
+  })
+
+  it('stays closed once another device has finished or left it', async () => {
+    await waitAtTheStatement()
+    // The other device skips setup: the Worker keeps the decision on the record.
+    const write = applyUserStateWrite(
+      'onboarding',
+      { outcome: 'skipped' },
+      JSON.stringify(worker.records.get(5)),
+      sqliteDateTime(new Date())
+    )
+    if (!write.ok) throw new Error('the stand-in refused the skip')
+    worker.records.set(5, write.value)
+
+    await expect(resumeOnboarding()).resolves.toBe('finished')
+    expect(onboardingOpen()).toBe(false)
+    expect(setupWaiting()).toBe(false)
+  })
+
+  it('keeps waiting when the account cannot be read, so the way back can be tried again', async () => {
+    await waitAtTheStatement()
+    worker.failRead = true
+
+    await expect(resumeOnboarding()).resolves.toBe('unknown')
+    expect(onboardingOpen()).toBe(false)
+    expect(setupWaiting()).toBe(true)
+
+    worker.failRead = false
+    await expect(resumeOnboarding()).resolves.toBe('opened')
+  })
+
+  it('keeps the subscriptions as the step reached after an import, for any device to open at', async () => {
+    await waitAtTheStatement()
+    noteImportWhileSetupWaits(23)
+    await vi.waitFor(() => {
+      expect(worker.records.get(5)?.step).toBe('subscriptions')
+    })
+
+    // Never back on this device: the next sign-in, anywhere, opens setup there.
+    signIn(5)
+    await expect(whereToOfferOnboarding()).resolves.toBe('subscriptions')
   })
 })

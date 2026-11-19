@@ -17,7 +17,9 @@ import {
   goToOnboardingStep,
   onboardingOpen,
   onboardingStep,
+  resumeOnboarding,
   setOnboardingOwner,
+  setupWaiting,
   skipOnboarding,
   startOnboarding,
 } from '../../../core/onboardingStore'
@@ -374,7 +376,7 @@ describe('a statement from a bank the app reads', () => {
 })
 
 describe('a file the step cannot import', () => {
-  it('says it does not know the bank, and Open in Import finishes setup with the file', async () => {
+  it('says it does not know the bank, and Open in Import leaves setup waiting there with the file', async () => {
     await openAt('import')
     const file = choose('export.csv', UNKNOWN_TABLE)
     await readUntil('unreadable')
@@ -389,12 +391,40 @@ describe('a file the step cannot import', () => {
 
     byTestId('onboarding-import-open')!.click()
 
+    // Closed, with nothing decided: setup waits for the way back (maff, 19 Nov).
     expect(onboardingOpen()).toBe(false)
-    expect(getOnboardingStatus('local')).toBe('completed')
+    expect(getOnboardingStatus('local')).toBeNull()
+    expect(setupWaiting()).toBe(true)
     expect(window.location.hash).toBe('#import')
     // File Upload reads any table, and goes on to matching its columns.
     expect(handedImportFile()).toEqual({ file, tab: 'file-upload', typed: [] })
     expect(await transactions()).toEqual([])
+
+    // Back to setup, with nothing imported on the way: the statement step again.
+    await expect(resumeOnboarding()).resolves.toBe('opened')
+    expect(onboardingStep()).toBe('import')
+  })
+
+  it('after a statement it imported, Open in Import comes back to the subscriptions', async () => {
+    await openAt('import')
+    choose('revolut.csv', revolut())
+    await readUntil('ready')
+    byTestId('onboarding-import-selected')!.click()
+    await vi.waitFor(() => {
+      expect(onboardingStep()).toBe('subscriptions')
+    }, waitLong)
+    // Back to the statement, and a second file setup cannot read.
+    goToOnboardingStep('import')
+    await settle()
+    byTestId('onboarding-import-another')!.click()
+    await settle()
+    choose('export.csv', UNKNOWN_TABLE)
+    await readUntil('unreadable')
+
+    byTestId('onboarding-import-open')!.click()
+    await expect(resumeOnboarding()).resolves.toBe('opened')
+
+    expect(onboardingStep()).toBe('subscriptions')
   })
 
   it('hands a bank statement with no transactions in it to Bank Imports', async () => {
@@ -918,7 +948,9 @@ describe('the balance setup was given (review M2)', () => {
       { id: main.id, figure: 1240.5, asOf: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) },
     ])
     expect(handedImportFile()?.file).toBe(file)
-    // Setup is finished, so its own copy is gone: only the handed file carries them.
+    // Setup waits, and keeps its own copy for the statements still to come; leaving it forgets it.
+    expect(localStorage.getItem('finance_setup_balances')).not.toBeNull()
+    skipOnboarding()
     expect(localStorage.getItem('finance_setup_balances')).toBeNull()
   })
 

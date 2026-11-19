@@ -301,7 +301,7 @@ test.describe('onboarding wizard', () => {
     await expect(page.locator('.page-bills').getByText('Spotify').first()).toBeVisible()
   })
 
-  test('@smoke a file it cannot import opens on the Import page with that file, and setup finishes', async ({
+  test('@smoke a file it cannot import opens on the Import page, and setup waits there to go on', async ({
     page,
   }) => {
     await gotoServerlessZeroState(page, 'dashboard', 'onboarding-wizard')
@@ -318,7 +318,7 @@ test.describe('onboarding wizard', () => {
     ])
     await page.getByTestId('onboarding-import-open').click()
 
-    // Setup is finished, and Import has read the file, on to matching its columns.
+    // Setup closes without a decision, and Import has read the file, on to matching its columns.
     await expect(page.getByTestId('onboarding-wizard')).toHaveCount(0)
     await expect(page.getByTestId('import-header')).toBeVisible({ timeout: 30000 })
     await expect(page.getByTestId('import-map-date')).toBeVisible({ timeout: 20000 })
@@ -329,9 +329,35 @@ test.describe('onboarding wizard', () => {
         page.getByTestId('import-map-date').locator('option', { hasText: column })
       ).toHaveCount(1)
     }
-    expect(await page.evaluate(() => localStorage.getItem('finance_onboarding:local'))).toBe(
-      'completed'
+    expect(await page.evaluate(() => localStorage.getItem('finance_onboarding:local'))).toBeNull()
+    await expect(page.getByTestId('import-setup')).toContainText(
+      'Setup is waiting for this statement'
     )
+
+    // The columns matched and the file imported, the way back goes on to the subscriptions.
+    await page.getByTestId('import-map-date').selectOption({ label: 'When' })
+    await page.getByTestId('import-map-description').selectOption({ label: 'What' })
+    await page.getByTestId('import-map-amount').selectOption({ label: 'How much' })
+    await page.getByTestId('import-continue-preview').click()
+    await page.getByTestId('import-execute-all').click()
+    await expect(page.getByTestId('import-setup')).toContainText('2 transactions are in', {
+      timeout: 20000,
+    })
+    await expect(page.getByTestId('import-scan-offer')).toHaveCount(0)
+    await page.getByTestId('import-setup-back').click()
+
+    await expect(page.getByTestId('onboarding-step-subscriptions')).toBeVisible({ timeout: 15000 })
+    await expect(page.getByTestId('import-setup')).toHaveCount(0)
+    // Groceries and a bus ride: nothing regular in them, so the step goes on.
+    await page
+      .getByTestId('onboarding-wizard')
+      .getByRole('button', { name: 'Continue', exact: true })
+      .click()
+    await expect(page.getByTestId('onboarding-step-done')).toBeVisible()
+    await page.getByTestId('onboarding-finish').click()
+    await expect
+      .poll(() => page.evaluate(() => localStorage.getItem('finance_onboarding:local')))
+      .toBe('completed')
   })
 
   test('a file it cannot import can be left behind: Skip goes on to Done without asking', async ({

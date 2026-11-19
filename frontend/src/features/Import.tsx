@@ -46,6 +46,7 @@ import { useAppState } from '../core/appStore'
 import { storedAccounts } from '../core/balanceToday'
 import { showConfirm } from '../core/confirmStore'
 import { entityVersion } from '../core/dataVersions'
+import { noteImportWhileSetupWaits, setupWaiting } from '../core/onboardingStore'
 import { refetchOnActive, usePageActive } from '../core/pageVisibility'
 import { addToast } from '../core/toastStore'
 import styles from './Import.module.css'
@@ -58,6 +59,7 @@ import { createImportFlow } from './import/importFlow'
 import { handedImportFile, takeHandedImportFile } from './import/importHandoff'
 import { ImportMappingStep } from './import/ImportMappingStep'
 import { ImportPreviewStep } from './import/ImportPreviewStep'
+import { SetupStrip } from './import/SetupStrip'
 import type { StoredAccount } from '../core/balanceToday'
 import type { TypedBalance } from '../core/setupTypedBalances'
 
@@ -90,7 +92,10 @@ export default function Import() {
     },
     onImported: (summary) => {
       setSummaryImported(true)
-      if (summary.imported > 0) setScanOfferCount(summary.imported)
+      // While setup waits for this statement, its next step is the subscription scan: the page
+      // leaves the offer to it, and the way back opens setup there.
+      if (setupWaiting()) noteImportWhileSetupWaits(summary.imported)
+      else if (summary.imported > 0) setScanOfferCount(summary.imported)
       const before = heldBefore
       heldBefore = null
       // A file setup handed over is worked back from the balances typed there (review M2), once,
@@ -229,6 +234,9 @@ export default function Import() {
         </h1>
         <p>Import transactions from CSV, Excel, or Google Sheets</p>
       </div>
+
+      {/* Setup waiting for the statement it handed over, and the way back to it */}
+      <SetupStrip />
 
       {/* Error message */}
       <Show when={flow.error()}>

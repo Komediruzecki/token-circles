@@ -6,18 +6,23 @@ import {
   getOnboardingStatus,
   goToOnboardingStep,
   nextOnboardingStep,
+  noteImportWhileSetupWaits,
   ONBOARDING_STEPS,
   onboardingMirrorSettled,
   onboardingOpen,
   onboardingOwnerFor,
   onboardingStep,
   openingStep,
+  pauseOnboarding,
   prevOnboardingStep,
+  resumeOnboarding,
   setOnboardingOwner,
+  setupWaiting,
   shouldOfferOnboarding,
   SHOWN_ONBOARDING_STEPS,
   skipOnboarding,
   startOnboarding,
+  whereToOfferOnboarding,
 } from '../onboardingStore'
 import { getDB } from '../storage/idb.js'
 import {
@@ -267,6 +272,96 @@ describe('onboardingStore', () => {
       expect(
         Object.keys(localStorage).filter((key) => key.startsWith('finance_onboarding'))
       ).toEqual([])
+    })
+  })
+  // Open in Import, for a file setup cannot read: setup waits on the Import page while its columns
+  // are matched, and Back to setup there opens it again (maff, 19 Nov: "there is no way back to
+  // finalize onboarding").
+  describe('setup waiting on the Import page', () => {
+    const marker = () => localStorage.getItem('finance_local_setup_pending')
+
+    /** Setup at the statement, left for the Import page. */
+    function waitAtTheStatement(imported = 0): void {
+      startOnboarding()
+      goToOnboardingStep('import')
+      pauseOnboarding(imported)
+    }
+
+    it('closes with nothing decided, keeps the step reached, and opens again there', async () => {
+      waitAtTheStatement()
+
+      expect(onboardingOpen()).toBe(false)
+      expect(setupWaiting()).toBe(true)
+      expect(getOnboardingStatus('local')).toBeNull()
+      expect(marker()).toBe('import')
+
+      await expect(resumeOnboarding()).resolves.toBe('opened')
+      expect(onboardingOpen()).toBe(true)
+      expect(onboardingStep()).toBe('import')
+      expect(setupWaiting()).toBe(false)
+    })
+
+    it('goes back to the subscriptions in what came in, and a start that never came back opens there too', async () => {
+      waitAtTheStatement()
+      noteImportWhileSetupWaits(23)
+
+      expect(marker()).toBe('subscriptions')
+      await expect(whereToOfferOnboarding()).resolves.toBe('subscriptions')
+
+      await expect(resumeOnboarding()).resolves.toBe('opened')
+      expect(onboardingStep()).toBe('subscriptions')
+    })
+
+    it('goes back to the subscriptions when setup imported before it handed the file over', async () => {
+      waitAtTheStatement(7)
+      expect(marker()).toBe('subscriptions')
+      await expect(resumeOnboarding()).resolves.toBe('opened')
+      expect(onboardingStep()).toBe('subscriptions')
+    })
+
+    it('an import that brought nothing new keeps it at the statement', async () => {
+      waitAtTheStatement()
+      noteImportWhileSetupWaits(0)
+      expect(marker()).toBe('import')
+      await expect(resumeOnboarding()).resolves.toBe('opened')
+      expect(onboardingStep()).toBe('import')
+    })
+
+    it('stays closed once setup was finished or left in another tab meanwhile', async () => {
+      waitAtTheStatement()
+      localStorage.setItem('finance_onboarding:local', 'skipped')
+
+      await expect(resumeOnboarding()).resolves.toBe('finished')
+      expect(onboardingOpen()).toBe(false)
+      expect(setupWaiting()).toBe(false)
+    })
+
+    it('waits no more once setup opens another way, or is decided', async () => {
+      waitAtTheStatement()
+      startOnboarding()
+      expect(setupWaiting()).toBe(false)
+
+      goToOnboardingStep('import')
+      pauseOnboarding()
+      startOnboarding('import')
+      skipOnboarding()
+      expect(setupWaiting()).toBe(false)
+    })
+
+    it('run again after a decision, goes back without asking anything', async () => {
+      completeOnboarding()
+      await onboardingMirrorSettled()
+      startOnboarding('import')
+      pauseOnboarding()
+
+      await expect(resumeOnboarding()).resolves.toBe('opened')
+      expect(onboardingStep()).toBe('import')
+    })
+
+    it('belongs to the owner that left it: another sign-in finds nothing waiting', () => {
+      waitAtTheStatement()
+      setOnboardingOwner('account-9')
+      expect(setupWaiting()).toBe(false)
     })
   })
 })

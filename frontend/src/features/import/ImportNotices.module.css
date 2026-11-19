@@ -1,0 +1,54 @@
+/* The notices at the top of the Import page: setup waiting for a statement (SetupStrip.tsx). Each
+   is one compact block, so the import methods stay in view under them. */
+.notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  border: 1px solid color-mix(in oklab, var(--primary) 12%, var(--border));
+  border-radius: var(--radius);
+  background: color-mix(in oklab, var(--card-bg) 74%, transparent);
+}
+
+.setup {
+  border-color: color-mix(in oklab, var(--primary) 40%, var(--border));
+  background: color-mix(in oklab, var(--primary) 7%, var(--card-bg));
+}
+
+.text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--text);
+}
+
+.sub {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.action {
+  flex: none;
+  justify-content: center;
+  min-height: 40px;
+}
+
+@media (max-width: 620px) {
+  .action {
+    width: 100%;
+  }
+}
