@@ -2476,6 +2476,79 @@ check')` first, as the cushion and debt cases do.
   made after it and confirmed an hour later counts (1 of 2, 50%); with no row for 0033, nothing
   counts. Fails before the change (5 tests).
 
+### Loans: a chart under the card, and a card menu
+
+- **The chart under a card** (`frontend/src/features/loans/LoanChartPanel.tsx`,
+  `LoanPayoffChart.tsx`, `loanTimeline.ts`). A card's name is a stretched button
+  (`loans-item-name`, `aria-expanded`, `aria-controls`) that opens a full-row panel straight after
+  its `<article>`: `.chart-panel` spans `grid-column: 1 / -1`, and `.cards` has
+  `grid-auto-flow: row dense`, so the cards beside the opened one fill its row back in above the
+  panel instead of wrapping below it. One chart at a time: `openId` lives in `Loans.tsx`, so Back
+  from a loan's page finds it still open. A second click, the panel's Close or Escape closes it.
+  Escape counts from the cards, the chart or with focus nowhere, not from elsewhere on the page,
+  and not while a visible `aria-modal` dialog or a `role="menu"` is open (the quick entry bar and
+  sheet stay in the DOM faded out; `checkVisibility` skips them). Closing gives focus back to the
+  card's button. When a chart higher up closes as another opens, `toggle` scrolls by the distance
+  the clicked card moved, so it stays under the pointer.
+- **What it draws.** `loanTimeline(loan, today)` splits the shared engine's rows (`amortizeLoan`,
+  no fork) where the card does: a payment due on or before today counts as made. It gives made,
+  owed, repaid, months left, the payoff month, extras made or planned, paid off, never repaid and
+  dated. The SVG is drawn at its measured width (ResizeObserver), so its text stays 12 px: the past
+  as a solid line in the ring gradient over a filled area, the future dotted, today a dashed warm
+  line with a Today pill and a dot on the line at what is owed, the years along the axis (this year
+  always named and banded, the rest thinned to fit), extra payments as filled (made) or hollow
+  (planned) dots with a `+€X` label while there are at most six and they fit, and the payoff month
+  at the end, or "Never repaid at this rate" where the engine stops. The sentence above it
+  (`timelineSentence`) and a four-figure readout (Paid so far, Still owed, Months left, Last
+  payment) carry the numbers; the SVG is one `role="img"` with `timelineDescription` as its
+  `<desc>`. Motion: the box fades in and drops 8 px in 280 ms, the line draws left to right
+  (`clip-path`, 900 ms) and today fades in after it; with reduced motion, a 120 ms fade only.
+- **Loading.** `createLoanRecord` (`loanRecord.ts`, taken out of `LoanDetail.tsx`, which uses it
+  too) gives the panel the listed row when it carries its rate periods and extra payments
+  (local-first) and fetches `GET /api/loans/:id` when it does not (the Worker's list leaves them
+  out); the newest answer wins, and a failure shows Try again. Once the loan is there, a frame
+  later, the panel scrolls itself into view (`scrollBy`, smooth unless motion is reduced) without
+  taking its card off the top. `LoansOverview` loops over loan ids rather than row objects, so a
+  list read again after a write keeps the same card and chart nodes: no replayed draw, no lost
+  focus.
+- **The card menu** (`frontend/src/components/OverflowMenu.tsx`, shared with `SubscriptionCard`):
+  Add an extra payment (a loan you can change, with payments left), See every payment, and Edit and
+  Delete (a loan you can change). Delete asks through `showConfirm`, in the words the card's
+  delete button used. Add an extra payment sets `pendingExtra` in `Loans.tsx` and opens
+  `#loans/<id>/extras`; `LoanExtras` focuses `loans-extra-amount` when it mounts with `focusAdd`,
+  and `LoanDetail` drops the hand-off when another tab is picked before the loan loaded. The card's
+  edit and delete icon buttons and the name's link to the schedule are gone; What if stays.
+- **`OverflowMenu` follows the WAI-ARIA menu button pattern.** The menu is portalled, which took it
+  out of the tab order. Opening now focuses its first item (ArrowUp on the trigger, the last), the
+  arrows wrap, Home and End jump, Escape and Tab close it with focus back on the trigger (Tab is
+  not prevented, so the browser moves on from there), and an item closes the menu before it runs.
+  A menu with no room below opens above. A scroll closes it only when the trigger has moved since
+  it opened: scroll events come a frame late, and the one for a scroll that came with the opening
+  press closed the menu at once (seen at 390 px when the page scrolled to the trigger as it was
+  pressed). Items are 44 px tall on a coarse pointer, and the trigger and icons fall back to
+  `--text-secondary`, as `--text-muted` is not a theme token.
+- **Card figures** (`.figures`): `repeat(3, minmax(max-content, 1fr))` and a 12 px column gap, so
+  an amount takes the width it needs. With `minmax(0, 1fr)` and `overflow-wrap: anywhere`,
+  €175,923.83 broke after the 8 at 390 px.
+- The Loans tour's "Your loans" step says what a card opens and what its menu holds. Its anchors
+  are unchanged.
+- **Tests:** `loanTimeline.test.ts`, `loanPayoffChart.test.tsx` and new cases in `loanCopy.test.ts`
+  (the split at today and the due-today boundary, today on the line, this year, extra labels only
+  while few, paid off, never repaid, no start date, every sentence and the description).
+  `loansPage.test.tsx`: open and close, one at a time, Escape and each exception, the same chart
+  node after the list is read again, a deleted loan, a fetched loan and Try again, the menu by
+  state, the extras focus hand-off and its drop, See every payment. `overflowMenu.test.tsx`: the
+  keyboard pattern and a scroll that moves nothing. A new `@smoke` spec,
+  `frontend/tests/loan-chart.spec.ts` (local-first, its own loans): same-row cards keep their
+  place and the panel spans the grid, Escape and focus, today and the sentence, one chart at a
+  time, the menu by keyboard to a saved extra payment and its planned mark, and at 390 px the
+  panel straight under its card and in view, amounts on one line, the menu staying open. Specs
+  that edited, deleted or opened the schedule from a card go through the menu now
+  (`loans.spec.ts`, `amortization-table.spec.ts`, `loan-form-errors.spec.ts`,
+  `release/s02-pages-follow-writes.spec.ts`). Each guard was taken out and its test seen failing:
+  the ids loop, the Escape exceptions, focus into the menu, the menu's scroll check, the extras
+  focus and its drop, due today, dense rows, the scroll into view, amounts on one line.
+
 ### Fixed
 
 - **Saving the badge record no longer makes Dashboard, Progress and About this space read their

@@ -22,6 +22,8 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Progress has a tour**: what the page holds, Your next step and the seven circles, one stop each.
 - **Prints on Progress.** Every twelve tracked months in a row make a print: your year drawn as a seal, one petal a month, with no amounts on it. Tap a petal to see its month, or share a print as an image.
 - **Three short articles answer the why behind a step.** Getting started, Your next step, the circles and Worth a look on Progress link to them on about.tokencircles.com, in a new tab: Getting a year out of your bank under the import step (the day-2 mail links it too), Why one month lies under a month in the red and the months on file, and Your first cushion under the cushion step and its check.
+- **A loan's payments on a chart, right under its card.** Click a loan card and a chart opens beneath it: what you owe from the first payment to the last, with today marked on the line, what you've repaid, the months left and the month of the last payment. Extra payments sit on the line too, filled once made and hollow while planned.
+- **Add an extra payment from a loan's card.** Its three-dot menu opens the loan's Extra payments with the amount box ready to type in.
 
 ### Changed
 
@@ -37,6 +39,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Each advice card on Progress says which circle it counts toward**, and that line opens the circle.
 - **A statement from a bank the app knows opens on what it brings in.** Import shows the bank, how many entries and from when to when, the new categories and how many are already here, with one button to import them. Check the columns is still there for a closer look.
 - **After an import, Import lists each account it changed with its balance today**, and a field to set it to what your bank shows.
+- **A loan's Edit and Delete are in its card's three-dot menu**, with See every payment, which opens the month-by-month table the loan's name used to open. What if stays on the card.
 
 ### Fixed
 
@@ -47,6 +50,8 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Setup after the demo makes a space of your own.** Keeping your data in this browser after running the demo opened Example Low Income's dashboard, and running setup again in the demo renamed that example. Setup now makes your space a new profile and lets you remove the three example profiles or keep them. Where the browser already has a profile of yours beside the examples, the switch opens on yours.
 - **New accounts and profiles start with the default categories.** They started empty, so a quick add like "coffee 4.50" was saved without a category.
 - **Starting balances stay with their file.** Cancel an import or remove a file in setup, and the next file's accounts could open on the starting balances of the one you set aside, like a YNAB register's, instead of their own.
+- **The three-dot menu on a subscription works from the keyboard.** Opening it puts you on its first item, the arrows move through the items, and Escape or Tab closes it with you back on the button. Before, Tab went past the menu to the rest of the card.
+- **A loan card keeps each amount on one line on a phone.** A six-figure balance broke onto a second line, like €175,923.8 with the 3 under it.
 
 ## [5.17.6] — 2026-11-01
 
