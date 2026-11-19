@@ -2495,6 +2495,11 @@ check')` first, as the cushion and debt cases do.
 
 ### Fixed
 
+- **The unused `components/BulkActions/` tree is deleted.** Its `BulkActionBar`, `BulkCategoryModal`
+  and `BulkTypeModal`, with their stylesheets, had no importer anywhere in the repository;
+  Transactions uses `components/BulkActionBar.tsx`. The 2026-07-23 integrity audit
+  (`docs/audits/2026-07-23-code-and-data-integrity-audit.md`) listed the tree as superseded, to
+  remove once nothing referenced it.
 - **Saving the badge record no longer makes Dashboard, Progress and About this space read their
   settings again.** The badge store (`frontend/src/core/achievementsStore.ts`) keeps the unlocks
   and dismissed advice cards in the settings under `achievements` (`achievements:<profile>` in
