@@ -194,4 +194,19 @@ describe('the payoff chart', () => {
     if (label.getAttribute('text-anchor') === 'end') expect(x).toBeLessThanOrEqual(todayX - halo)
     else expect(x).toBeGreaterThanOrEqual(todayX + halo)
   })
+
+  it('puts a label on the left when its right would cross the glow, level with it', () => {
+    // The payment before today's: its mark sits just past the glow and about level with it, so a
+    // label on its right would run across today's dot.
+    const root = draw({ ...BOAT, prepayments: [{ month: 21, amount: 1000 }] })
+    const dot = one(root, 'loans-payoff-today')!.querySelectorAll('circle')
+    const halo = Number(dot[0].getAttribute('r'))
+    const todayX = Number(dot[0].getAttribute('cx'))
+    const extra = one(root, 'loans-payoff-extra')!
+    expect(todayX - Number(extra.querySelector('circle')!.getAttribute('cx'))).toBeGreaterThan(halo)
+    const label = extra.querySelector('text')!
+    expect(label.textContent).toBe('+€1,000')
+    expect(label.getAttribute('text-anchor')).toBe('end')
+    expect(Number(label.getAttribute('x'))).toBeLessThanOrEqual(todayX - halo)
+  })
 })
