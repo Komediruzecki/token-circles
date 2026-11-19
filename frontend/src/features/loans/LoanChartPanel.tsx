@@ -29,7 +29,11 @@ interface Props {
   onClose: () => void
 }
 
-/** Room kept above the card when the panel is brought into view. */
+/**
+ * Room kept above the card when the panel is brought into view, under whatever the page keeps
+ * clear at its top: on a phone the menu button floats there (Layout.module.css sets the page's
+ * scroll-padding-top to its height), and a card scrolled to 16 px went under it.
+ */
 const MARGIN = 16
 /**
  * Room kept under the panel: the floating add button takes the bottom 78 px of the window
@@ -55,7 +59,10 @@ export default function LoanChartPanel(props: Props) {
     const top = section.getBoundingClientRect().top
     const below = top + box.offsetHeight + BELOW - window.innerHeight
     if (below <= 0) return
-    const cardTop = card ? card.getBoundingClientRect().top - MARGIN : top
+    const clear = parseFloat(window.getComputedStyle(document.documentElement).scrollPaddingTop)
+    const cardTop = card
+      ? card.getBoundingClientRect().top - MARGIN - (Number.isFinite(clear) ? clear : 0)
+      : top
     const by = Math.min(below, Math.max(0, cardTop))
     if (by <= 0) return
     const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches

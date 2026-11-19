@@ -361,6 +361,32 @@ test.describe('the chart under a loan card', () => {
   test.describe('on a phone', () => {
     test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
 
+    test.describe('a short one', () => {
+      test.use({ viewport: { width: 390, height: 600 }, reducedMotion: 'reduce' })
+
+      // A chart taller than the room under its card scrolls the page only as far as the card's
+      // top, and the page's menu button floats over the top of the screen: the card stops under it.
+      test('brings the chart into view with its card clear of the menu button @smoke', async ({
+        page,
+      }) => {
+        const opener = toggle(page, 'zz-chart-c')
+        await opener.scrollIntoViewIfNeeded()
+        await page.evaluate(() => {
+          window.scrollBy(0, 200)
+        })
+        await scrollSettled(page)
+        await opener.tap()
+        await expect(chart(page)).toBeVisible()
+        await scrollSettled(page)
+        const button = (await page.getByRole('button', { name: 'Toggle sidebar' }).boundingBox())!
+        expect(
+          await card(page, 'zz-chart-c').evaluate((el) =>
+            Math.round(el.getBoundingClientRect().top)
+          )
+        ).toBeGreaterThanOrEqual(Math.round(button.y + button.height))
+      })
+    })
+
     test('an open menu is never under the floating add button @smoke', async ({ page }) => {
       // The trigger 600 px down: the menu opens under it and reaches into the button's corner.
       const trigger = card(page, 'zz-chart-a').getByTestId('loans-item-menu')
@@ -440,6 +466,27 @@ test.describe('the chart under a loan card', () => {
     })
   })
 })
+
+/** Waits for the page to stop scrolling: ten frames in a row at the same place. */
+function scrollSettled(page: Page): Promise<number> {
+  return page.evaluate(
+    () =>
+      new Promise<number>((done) => {
+        let last = window.scrollY
+        let still = 0
+        const tick = () => {
+          if (window.scrollY === last) still++
+          else {
+            still = 0
+            last = window.scrollY
+          }
+          if (still >= 10) done(last)
+          else requestAnimationFrame(tick)
+        }
+        requestAnimationFrame(tick)
+      })
+  )
+}
 
 test.describe('the chart at any width', () => {
   test.beforeEach(async ({ page }) => {
