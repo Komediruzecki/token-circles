@@ -784,6 +784,9 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     setSheetResult(null)
     setSelectedSheet('')
     setSheetUrl('')
+    // The tabs of the sheet just read go with its link: kept, they offered "Sheet1" under an empty
+    // link after an import, and choosing it said the link was missing (maff, 19 Nov).
+    setSheetNames([])
     setColumnMapping({})
     setCategoryTypes({})
     setNewCategories([])
@@ -1435,12 +1438,6 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     }
   }
 
-  const handleSheetTabClick = (sheetName: string) => {
-    setSelectedSheet(sheetName)
-    // Fetch the sheet data
-    void fetchGoogleSheet()
-  }
-
   // Column mapping changes
   const handleColumnMappingChange = (field: string, index: number) => {
     const mapping = { ...columnMapping() }
@@ -1872,7 +1869,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     resetBankRules,
     recalculateBankPreview,
     fetchGoogleSheet,
-    handleSheetTabClick,
+
     handleColumnMappingChange,
     handleCategoryTypeToggle,
     toggleRow,

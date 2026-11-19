@@ -40,6 +40,8 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Choose a workbook's other sheets on Map columns.** A file with several sheets opened on its first one, and the choice of sheet sat on the step the page had already left.
+- **After a Google Sheets import, the Sheets tab no longer offers "Sheet1" under the emptied link**, which said the link was missing when chosen. It says how to read another tab instead: open that tab and copy its link.
 - **An ING statement no longer lands in an account just because its name has "ing" in it.** Bank Imports picked the first such account, like Main Checking or Savings. It now looks for the bank's name as a word, after any account you chose for that statement before.
 - **A category called Groceries shows a shopping cart, and one named for a meal shows a knife and fork** (Eating out, Restaurant, Dining, Breakfast, Lunch, Dinner, Meals), and an import that creates one gives it the same icon. Before, they showed a coffee mug, and Eating out a plain tick. An icon you picked stays, and so does the mug an earlier import gave a category while you were signed in. Coffee and Cafe keep the mug.
 - **The subscription scan keeps up with a long history.** With a few thousand entries, Scan transactions on Bills and the setup wizard's subscriptions step held the page for over a second. They now find the same subscriptions in a small part of that time.

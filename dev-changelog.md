@@ -700,8 +700,9 @@ All notable changes to Token Circles are documented here. The format is based on
   maff, 19 Nov: Open in Import finished setup, so after matching the columns and importing there
   was no way back to the subscription step or Done. Frontend only: no migration, no API change.
   - **The wait** (`core/onboardingStore.ts`): `pauseOnboarding(imported)` closes the wizard with
-    nothing decided and keeps `{ owner, rerun, imported, here }` in memory; the record (or local-first's
-    pending marker) stays at the step reached, moved to `subscriptions` when anything came in.
+    nothing decided and keeps `{ owner, rerun, imported, here }` in memory; the record (or
+    local-first's pending marker) stays at the step reached, moved to `subscriptions` when anything
+    came in.
     `noteImportWhileSetupWaits(n)`, called by `Import.tsx`'s `onImported`, adds an import made on
     the page and records `subscriptions`. `resumeOnboarding()` opens setup at `subscriptions` with
     anything imported, else at `import`. Before it opens a first run, it reads the account's record
@@ -2583,6 +2584,23 @@ check')` first, as the cushion and debt cases do.
   detected payments at 2560x1440, 1920x1080 and 390x844: the modal within 720 px, or the screen on
   the phone; the heading and Add in place before and after the list scrolls to its end). Both fail
   on the old stylesheet and markup: the spec measured 1,408 px at 2560x1440.
+- **A workbook's sheets are chosen on Map columns, and the Google Sheets tab lists no tabs.**
+  maff, 19 Nov: what choosing an "Available sheets" chip did was unclear, and the label sat above
+  the chips' line. File Upload drew a workbook's sheets as chips, but an upload that reads goes
+  straight on to Map columns (`handleFileUpload` calls `goToMapping`), so they were never on
+  screen. `ImportMappingStep` now draws them under the source line as a labelled group
+  (`import-map-sheets`: role `group`, label "Sheet", `aria-pressed` on the sheet read,
+  `chooseUploadedSheet` on click) with a line that says choosing another matches its columns
+  instead. The Google Sheets tab listed `sheetNames`, which both runtimes answer as the one tab
+  the link opens on, and `resetForm` kept them: after an import "Sheet1" sat under the emptied
+  link, and choosing it read a link that was no longer there into the page's error banner. The list
+  and `handleSheetTabClick` are gone, `resetForm` clears `sheetNames`, and the line under the link
+  (`import-sheet-help`) says the link picks the tab. `.sheetPicker` puts the label on the pills'
+  middle line (flex, `align-items: center`), and the pills are 32 px tall. Tests:
+  `features/__tests__/importPageTop.test.tsx`, the page in local-first with Google's CSV stubbed:
+  no "Sheet1" button after an import and its reset, and a two-sheet workbook shows the group on
+  Map columns, where choosing April moves `aria-pressed` and the source line. Both fail on the old
+  code (`expected [ …(13) ] to not include 'Sheet1'`; `expected null not to be null`).
 - **Saving the badge record no longer makes Dashboard, Progress and About this space read their
   settings again.** The badge store (`frontend/src/core/achievementsStore.ts`) keeps the unlocks
   and dismissed advice cards in the settings under `achievements` (`achievements:<profile>` in

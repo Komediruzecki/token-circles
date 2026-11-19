@@ -256,32 +256,67 @@
   margin: 0 0 16px 0;
 }
 
+/* A workbook's sheets, under the file: the label on the chips' middle line, not above it. */
+.sheetPicker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 4px 0 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: color-mix(in oklab, var(--card-bg) 74%, transparent);
+}
+
+.sheetPickerLabel {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.sheetPickerHint {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
 .sheetTabs {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
-  margin-bottom: 16px;
 }
 
 .sheetTab {
-  padding: 6px 14px;
+  min-height: 32px;
+  padding: 5px 14px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 999px;
   background: var(--card-bg);
   color: var(--text);
+  font: inherit;
   font-size: 13px;
+  line-height: 1.2;
   cursor: pointer;
-  transition: all 0.15s;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
 }
 
-.sheetTab:hover {
+.sheetTab:hover:not(:disabled) {
   border-color: var(--primary);
 }
 
-.sheetTab.active {
+.sheetTab[aria-pressed='true'] {
   background: var(--primary);
   border-color: var(--primary);
   color: var(--on-primary);
+}
+
+.sheetTab:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }
 
 /* Column mapping */

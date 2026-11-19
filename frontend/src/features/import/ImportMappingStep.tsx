@@ -3,7 +3,7 @@
  * fields (three of them required, and starred) and review detected category types (with per-account setup for values
  * flagged as accounts). Shared by the Import page and the onboarding wizard.
  */
-import { For, Show } from 'solid-js'
+import { createUniqueId, For, Show } from 'solid-js'
 import { getLocalCurrency } from '../../core/api'
 import { FIELD_NAMES } from '../../core/importMapping'
 import styles from '../Import.module.css'
@@ -34,6 +34,15 @@ export function mappingSource(
 export function ImportMappingStep(props: { flow: ImportFlow; embedded?: boolean }) {
   const flow = props.flow
   const headers = () => flow.currentHeaders()
+  // A workbook's sheets, to choose from here: the upload goes straight on to this step, and the
+  // choice that sat on the upload step was never on screen once a file read.
+  const sheets = () => {
+    const upload = flow.uploadResult()
+    return upload && upload.sheetName !== 'Pasted' && upload.sheetNames.length > 1
+      ? upload.sheetNames
+      : null
+  }
+  const sheetPickerId = `map-sheets-${createUniqueId()}`
   return (
     <>
       <div class={styles.mappingSection}>
@@ -43,6 +52,41 @@ export function ImportMappingStep(props: { flow: ImportFlow; embedded?: boolean 
             <p class={styles.mappingSource} data-test-id="import-map-source">
               From <strong>{source()}</strong>
             </p>
+          )}
+        </Show>
+        <Show when={sheets()}>
+          {(names) => (
+            <div
+              class={styles.sheetPicker}
+              role="group"
+              aria-labelledby={sheetPickerId}
+              data-test-id="import-map-sheets"
+            >
+              <span id={sheetPickerId} class={styles.sheetPickerLabel}>
+                Sheet
+              </span>
+              <div class={styles.sheetTabs}>
+                <For each={names()}>
+                  {(name) => (
+                    <button
+                      type="button"
+                      class={styles.sheetTab}
+                      aria-pressed={flow.selectedSheet() === name ? 'true' : 'false'}
+                      disabled={flow.loading()}
+                      onClick={() => {
+                        flow.chooseUploadedSheet(name)
+                      }}
+                    >
+                      {name}
+                    </button>
+                  )}
+                </For>
+              </div>
+              <p class={styles.sheetPickerHint}>
+                This workbook has {names().length} sheets. Choose another to match its columns
+                instead.
+              </p>
+            </div>
           )}
         </Show>
         <p class={styles.mappingSubtitle} data-test-id="import-map-intro">

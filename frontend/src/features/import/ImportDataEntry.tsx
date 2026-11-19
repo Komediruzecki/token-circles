@@ -272,30 +272,15 @@ export function ImportDataEntry(props: {
               </SubmitButton>
             </div>
           </form>
-          <p class={styles.sheetsInfo}>
-            Google Sheets URL format: https://docs.google.com/spreadsheets/d/... (the sheet must be
-            shared or published so it can be read)
+          {/*
+            Both runtimes read one tab, the one the link opens on (its #gid), and answer only its
+            name: a list of tabs to choose from here only ever held that one, and choosing it read
+            the same tab again. So the line says how to pick a tab instead.
+          */}
+          <p class={styles.sheetsInfo} data-test-id="import-sheet-help">
+            Share the sheet so anyone with the link can view it, or publish it. It reads the tab
+            your link opens on: for another tab, open that tab and copy its link.
           </p>
-
-          {flow.sheetNames().length > 0 && !flow.sheetResult() && (
-            <div class={styles.sheetsUrlRow}>
-              <label class={styles.sheetsInfo}>Available sheets:</label>
-              <div class={styles.sheetTabs}>
-                <For each={flow.sheetNames()}>
-                  {(name) => (
-                    <button
-                      class={`${styles.sheetTab} ${flow.selectedSheet() === name ? styles.active : ''}`}
-                      onClick={() => {
-                        flow.handleSheetTabClick(name)
-                      }}
-                    >
-                      {name}
-                    </button>
-                  )}
-                </For>
-              </div>
-            </div>
-          )}
 
           {flow.sheetResult() && (
             <button
@@ -376,26 +361,6 @@ export function ImportDataEntry(props: {
               )}
             </Field>
           </form>
-
-          {flow.uploadResult() && flow.uploadResult()!.sheetNames.length > 1 && (
-            <div class={styles.sheetsUrlRow}>
-              <label class={styles.sheetsInfo}>Available sheets:</label>
-              <div class={styles.sheetTabs}>
-                <For each={flow.uploadResult()!.sheetNames}>
-                  {(name) => (
-                    <button
-                      class={`${styles.sheetTab} ${flow.selectedSheet() === name ? styles.active : ''}`}
-                      onClick={() => {
-                        flow.chooseUploadedSheet(name)
-                      }}
-                    >
-                      {name}
-                    </button>
-                  )}
-                </For>
-              </div>
-            </div>
-          )}
 
           {flow.uploadResult() && (
             <button
