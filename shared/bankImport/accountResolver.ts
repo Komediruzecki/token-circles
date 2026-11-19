@@ -61,9 +61,21 @@ export function resolveTargetAccount(
     }
   }
 
-  const byBank = accounts.find(
-    (a) =>
-      (a.bank_name || '').toLowerCase().includes(bankId) || a.name.toLowerCase().includes(bankId)
-  );
+  const byBank = accounts.find((a) => accountNamesBank(a, bankId));
   return byBank?.name ?? null;
+}
+
+/**
+ * Whether an account's name or bank name names the bank `bankId`. An id of three characters or
+ * fewer ("ing", "dkb", "n26") counts only as a word of its own: inside a word it is English, and
+ * an ING statement went into the first account whose name had "ing" in it (Main Checking,
+ * Savings). A longer one counts inside a word as well, as German bank names hold it
+ * ("Stadtsparkasse").
+ */
+export function accountNamesBank(account: AccountLike, bankId: BankId): boolean {
+  const id = bankId.toLowerCase();
+  const texts = [account.bank_name || '', account.name].map((text) => text.toLowerCase());
+  if (id.length > 3) return texts.some((text) => text.includes(id));
+  const word = new RegExp(`(?:^|[^\\p{L}\\p{N}])${id}(?:$|[^\\p{L}\\p{N}])`, 'u');
+  return texts.some((text) => word.test(text));
 }

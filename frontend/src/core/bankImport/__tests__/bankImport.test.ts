@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import * as XLSX from 'xlsx'
 import {
+  accountNamesBank,
   resolveTargetAccount,
   statementSignature,
 } from '../../../../../shared/bankImport/accountResolver'
@@ -403,6 +404,40 @@ describe('account resolver', () => {
       resolveTargetAccount('erste', { iban: 'HR1234567890123456789' }, 'f.csv', accounts, {}, ids)
     ).toBe('Erste Current')
     expect(resolveTargetAccount('erste', {}, 'f.csv', accounts, {}, {})).toBe('Erste Current') // bank_name match
+  })
+
+  // An ING statement went into the first account whose name had "ing" in it: Main Checking,
+  // Savings, Spending.
+  it('takes a short bank id only as a word of its own', () => {
+    const plain = [{ name: 'Main Checking' }, { name: 'Savings' }, { name: 'Spending money' }]
+    expect(resolveTargetAccount('ing', {}, 'f.csv', plain, {}, {})).toBeNull()
+    expect(
+      resolveTargetAccount('ing', {}, 'f.csv', [...plain, { name: 'ING Current' }], {}, {})
+    ).toBe('ING Current')
+    expect(
+      resolveTargetAccount(
+        'ing',
+        {},
+        'f.csv',
+        [{ name: 'Everyday', bank_name: 'ING-DiBa' }],
+        {},
+        {}
+      )
+    ).toBe('Everyday')
+  })
+
+  it('finds a longer one inside a word, as German bank names hold it', () => {
+    const accounts = [{ name: 'Main Checking' }, { name: 'Stadtsparkasse Giro' }]
+    expect(resolveTargetAccount('sparkasse', {}, 'f.csv', accounts, {}, {})).toBe(
+      'Stadtsparkasse Giro'
+    )
+  })
+
+  it('says whether an account names a bank, by the same rule', () => {
+    expect(accountNamesBank({ name: 'Erste' }, 'erste')).toBe(true)
+    expect(accountNamesBank({ name: 'Main Checking' }, 'ing')).toBe(false)
+    expect(accountNamesBank({ name: 'Joint', bank_name: 'Revolut Ltd' }, 'revolut')).toBe(true)
+    expect(accountNamesBank({ name: 'Joint', bank_name: null }, 'revolut')).toBe(false)
   })
 })
 

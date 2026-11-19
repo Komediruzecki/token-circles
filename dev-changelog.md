@@ -2514,6 +2514,17 @@ check')` first, as the cushion and debt cases do.
 
 ### Fixed
 
+- **A bank's name counts in an account's name only as a word, for a short one.**
+  `resolveTargetAccount` (`shared/bankImport/accountResolver.ts`) took an account whose name or
+  bank name held the bank's id anywhere, so an ING statement went into the first account with
+  "ing" in it (Main Checking, Savings, Spending), on Bank Imports and in setup. The test is now
+  `accountNamesBank(account, bankId)`: an id of three characters or fewer (`ing`, `dkb`, `pbz`,
+  `n26`) must stand as a word of its own (letters and digits on neither side, Unicode-aware); a
+  longer one still counts inside a word, because German names hold it ("Stadtsparkasse"). A
+  remembered choice and stored identifiers come first, as before. Setup's statement step uses the
+  same test to keep a statement out of an account named for another bank. Tests in
+  `core/bankImport/__tests__/bankImport.test.ts` ("account resolver"): the short-id case failed
+  before the change (`expected 'Main Checking' to be null`).
 - **The subscription scan's modal is 720 px tall at most, with its header and actions pinned.**
   On Bills and Import, `SubscriptionScanModal` was `max-height: calc(100dvh - 2rem)`, and the whole
   panel scrolled in `.body`: at 2560x1440 it measured 1,408 px from the top of the screen to the

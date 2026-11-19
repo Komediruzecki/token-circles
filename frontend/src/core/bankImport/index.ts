@@ -6,7 +6,11 @@
  * This barrel re-exports it and adds the browser-only persistence layer, so the Bank
  * Imports tab keeps a single import site.
  */
-export { resolveTargetAccount, statementSignature } from '../../../../shared/bankImport'
+export {
+  accountNamesBank,
+  resolveTargetAccount,
+  statementSignature,
+} from '../../../../shared/bankImport'
 export type { AccountLike } from '../../../../shared/bankImport'
 export { CANONICAL_HEADERS, txnsToTable, txnToRow } from '../../../../shared/bankImport'
 export { detectBank, getAdapter, listAdapters } from '../../../../shared/bankImport'

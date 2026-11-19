@@ -30,7 +30,7 @@ export { listAdapters, getAdapter, detectBank } from './registry';
 export type { DetectResult } from './registry';
 export { processFiles, toDetectInput } from './process';
 export type { BankFileInput, ProcessOptions, ProcessResult, FileResult } from './process';
-export { resolveTargetAccount, statementSignature } from './accountResolver';
+export { accountNamesBank, resolveTargetAccount, statementSignature } from './accountResolver';
 export type { AccountLike } from './accountResolver';
 export {
   DEFAULT_CATEGORY_RULES,
