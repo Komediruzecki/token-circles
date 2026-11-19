@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest'
+import { markLocalSetupPending } from '../onboardingFlag'
 import {
   collectionIsEmpty,
   completeOnboarding,
+  countProfileMadeAsDecided,
   forgetOnboardingStatus,
   getOnboardingStatus,
   goToOnboardingStep,
@@ -367,6 +369,49 @@ describe('onboardingStore', () => {
       waitAtTheStatement()
       setOnboardingOwner('account-9')
       expect(setupWaiting()).toBe(false)
+    })
+
+    // Review of 19 Nov (P3): Create Profile in the profile menu counted as setup's decision while
+    // setup waited, so Back to setup said it was finished and the next start opened it again.
+    it('a profile made from the profile menu meanwhile decides nothing: the way back opens it', async () => {
+      waitAtTheStatement()
+
+      countProfileMadeAsDecided()
+
+      expect(getOnboardingStatus('local')).toBeNull()
+      expect(setupWaiting()).toBe(true)
+      await expect(resumeOnboarding()).resolves.toBe('opened')
+      expect(onboardingStep()).toBe('import')
+    })
+
+    it('a profile made with no setup waiting still counts as the decision, and takes the marker', () => {
+      markLocalSetupPending('account')
+
+      countProfileMadeAsDecided()
+
+      expect(getOnboardingStatus('local')).toBe('skipped')
+      expect(marker()).toBeNull()
+    })
+
+    it('the next start does not open setup decided while it waited, and drops the marker', async () => {
+      waitAtTheStatement()
+      // Decided while it waited, by a path that left the marker behind.
+      localStorage.setItem('finance_onboarding:local', 'skipped')
+
+      await expect(whereToOfferOnboarding()).resolves.toBeNull()
+      expect(marker()).toBeNull()
+    })
+
+    it('over a decision the demo left before it, the way back and the next start still open it', async () => {
+      completeOnboarding()
+      await onboardingMirrorSettled()
+      markLocalSetupPending()
+      startOnboarding('import')
+      pauseOnboarding()
+
+      await expect(whereToOfferOnboarding()).resolves.toBe('import')
+      await expect(resumeOnboarding()).resolves.toBe('opened')
+      expect(onboardingStep()).toBe('import')
     })
   })
 })

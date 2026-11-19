@@ -748,6 +748,31 @@ All notable changes to Token Circles are documented here. The format is based on
     `tests/onboarding-server.spec.ts`. Guards checked by putting the old code back: resuming
     without reading the account fails 4 store cases; the page not noting its import fails 1; the
     wizard finishing on Open in Import fails 3.
+- **While setup waits, nothing but setup decides it, and the way back tells a finished setup
+  truly.** Review of 19 Nov (P3, P4), `core/onboardingStore.ts` and `core/onboardingFlag.ts`:
+  - Each wait has an `id`; `noteImportWhileSetupWaits` replaces the object and keeps it, and
+    `resumeOnboarding` compares ids after reading the account, then opens at the step the wait
+    holds then. By the object, an import that ended during that read answered `finished` and left
+    setup shut.
+  - `countProfileMadeAsDecided` (the profile menu's Create Profile) decides nothing while setup
+    waits for that owner, so Back to setup opens it at the step reached. When it does decide, it
+    clears the local marker as leaving setup does.
+  - Local-first, `decidedSince` compares the flag with the one held as the wait began
+    (`decidedBefore`): a decision the demo left before a local-only switch's setup made the way
+    back answer `finished` for a setup still under way. The pause writes the same thing beside the
+    marker (`finance_local_setup_waiting`, cleared with the marker and when setup opens), and
+    `whereToOfferOnboarding` drops a marker whose setup was decided while it waited instead of
+    opening the wizard over the decision. The marker over an older decision (review M7) still
+    opens it.
+  - "Setup is already finished, here or on another device." comes only from `finished`: a
+    decision made since the wait began, read from the account signed in or the flag local-first,
+    or the wait taken by another tap with setup closed.
+  - **Tests:** `onboardingStore.test.ts`: a profile made while setup waits leaves it undecided and
+    the way back opens it; one made with nothing waiting decides and drops the marker; a decision
+    made while waiting is not reopened at the next start and the marker goes; over a decision the
+    demo left, the way back and the next start open setup. `onboardingOnTheAccount.test.ts`: an
+    import landing while the account is read again opens setup at the subscriptions. All five
+    fail on the old store.
 
 ### State that follows the account
 

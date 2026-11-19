@@ -52,10 +52,13 @@ import {
   accountOnboardingOwner,
   BROWSER_WIDE_ONBOARDING_KEY,
   clearLocalSetupPending,
+  clearLocalSetupWaiting,
   LOCAL_ONBOARDING_OWNER,
   localSetupPending,
   localSetupStep,
+  localSetupWaitingOver,
   markLocalSetupPending,
+  noteLocalSetupWaiting,
   onboardingFlagKey,
 } from './onboardingFlag'
 import { forgetTypedBalances } from './setupTypedBalances'
@@ -274,6 +277,10 @@ const store = createRoot(() => {
 /**
  * Setup waiting on the Import page (pauseOnboarding), or null.
  *
+ * - `id`: which wait it is. A new one each time setup is left for the page; an import on the page
+ *   replaces the object and keeps the id, so the way back tells "still this wait" by the id. By
+ *   the object, an import that ended while the account was read again read as another tap having
+ *   taken the wait, and the way back said setup was finished (review of 19 Nov, P4).
  * - `owner`: whose setup it is.
  * - `rerun`: setup had been finished or left before this run of it (Settings, the tour menu). Such
  *   a record never changes again, so the way back has nothing to ask the account.
@@ -283,13 +290,17 @@ const store = createRoot(() => {
  *   the file it handed over.
  */
 interface SetupWait {
+  id: number
   owner: string
   rerun: boolean
+  /** The decision this browser held as setup began to wait: local-first tells a new one by it. */
+  decidedBefore: OnboardingStatus
   imported: number
   here: number
 }
 
 const waiting = createRoot(() => createSignal<SetupWait | null>(null))
+let waits = 0
 
 /** Whether setup is waiting on the Import page for the person to come back. */
 export function setupWaiting(): boolean {
@@ -314,6 +325,7 @@ export function startOnboarding(step: OnboardingStep = 'space') {
   const at = openingStep(step)
   // Open again, by Back to setup or from Settings: it waits on the Import page no more.
   waiting[1](null)
+  clearLocalSetupWaiting()
   // The step first: the wizard seeds the step it opens on, not the one it last showed.
   store.setOnboardingStep(at)
   store.setOnboardingOpen(true)
@@ -376,7 +388,12 @@ function decide(outcome: OnboardingDecision): void {
  */
 export function countProfileMadeAsDecided(of: string | null = owner): void {
   if (of !== LOCAL_ONBOARDING_OWNER || getOnboardingStatus(of) !== null) return
+  // Setup waiting on the Import page is setup under way: a profile made meanwhile, from the
+  // profile menu, decides nothing, and Back to setup opens it at the step it reached.
+  if (waiting[0]()?.owner === of) return
   setOnboardingStatus('skipped', of)
+  // The decision ends any setup the marker kept the step of, as leaving it would.
+  clearLocalSetupPending()
   // The mirror goes to the settings of the workspace open now, which is this one only when it is
   // local-first's; the switch calls this from the account.
   if (owner === of) persistRemoteStatus('skipped')
@@ -401,7 +418,17 @@ export function pauseOnboarding(imported = 0): void {
   const rerun = isServerAccount(of)
     ? !firstSetupOfTheAccount()
     : getOnboardingStatus(of) !== null && !localSetupPending()
-  waiting[1]({ owner: of, rerun, imported: Math.max(0, imported), here: 0 })
+  const decidedBefore = getOnboardingStatus(of)
+  waiting[1]({
+    id: ++waits,
+    owner: of,
+    rerun,
+    decidedBefore,
+    imported: Math.max(0, imported),
+    here: 0,
+  })
+  // The next start reads it beside the marker: decided since, it opens nothing.
+  if (of === LOCAL_ONBOARDING_OWNER && localSetupPending()) noteLocalSetupWaiting(decidedBefore)
   if (imported > 0) recordStep('subscriptions')
 }
 
@@ -420,10 +447,14 @@ export function noteImportWhileSetupWaits(imported: number): void {
  * Whether setup was finished or left since it began to wait, on this device or another: the
  * account's record is read again for it. Null when that cannot be told.
  */
-async function decidedSince(of: string): Promise<boolean | null> {
+async function decidedSince(wait: SetupWait): Promise<boolean | null> {
+  const of = wait.owner
+  // Local-first, a decision made since it began to wait (another tab). One held before it stands
+  // beside a setup the local-only switch asked for, over a demo decided earlier (review M7): by
+  // presence alone, the way back said that setup was finished.
+  if (!isServerAccount(of)) return getOnboardingStatus(of) !== wait.decidedBefore
   // A decision this browser keeps (another tab), sent to the account or not yet.
   if (getOnboardingStatus(of) !== null) return true
-  if (!isServerAccount(of)) return false
   const state = await rereadAccountState()
   if (state === null || owner !== of) return null
   return state.onboarding === UNREADABLE || onboardingFinished(state.onboarding)
@@ -442,16 +473,20 @@ export async function resumeOnboarding(): Promise<'opened' | 'finished' | 'unkno
     return onboardingOpen() ? 'opened' : 'finished'
   }
   if (!wait.rerun) {
-    const decided = await decidedSince(wait.owner)
-    // Taken already, by another tap while the account was read, or another owner signed in.
-    if (waiting[0]() !== wait) return onboardingOpen() ? 'opened' : 'finished'
+    const decided = await decidedSince(wait)
+    // Taken already, by another tap while the account was read, or another owner signed in. An
+    // import that landed meanwhile keeps the wait's id.
+    if (waiting[0]()?.id !== wait.id) return onboardingOpen() ? 'opened' : 'finished'
     if (decided === null) return 'unknown'
     if (decided) {
       waiting[1](null)
+      clearLocalSetupWaiting()
       return 'finished'
     }
   }
-  startOnboarding(wait.imported > 0 ? 'subscriptions' : 'import')
+  // As it is now: an import may have landed while the account was read.
+  const now = waiting[0]() ?? wait
+  startOnboarding(now.imported > 0 ? 'subscriptions' : 'import')
   return 'opened'
 }
 
@@ -493,6 +528,11 @@ export async function whereToOfferOnboarding(): Promise<OnboardingStep | null> {
     clearLocalSetupPending()
     return whereToOfferOnTheAccount(asking)
   }
+  if (localSetupPending() && localSetupDecidedWhileWaiting()) {
+    // Setup was left waiting on the Import page and decided since: the marker it kept is stale,
+    // and setup stays closed (review of 19 Nov, P3).
+    clearLocalSetupPending()
+  }
   if (localSetupPending()) {
     const own = await holdsOwnProfile()
     if (owner !== asking || own === null) return null
@@ -505,6 +545,13 @@ export async function whereToOfferOnboarding(): Promise<OnboardingStep | null> {
     clearLocalSetupPending()
   }
   return (await shouldOfferLocally(asking)) ? 'space' : null
+}
+
+/** Whether local setup began to wait on the Import page and a decision was made since. */
+function localSetupDecidedWhileWaiting(): boolean {
+  const over = localSetupWaitingOver()
+  if (over === null) return false
+  return (getOnboardingStatus(LOCAL_ONBOARDING_OWNER) ?? 'none') !== over
 }
 
 /**

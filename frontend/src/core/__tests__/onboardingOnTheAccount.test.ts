@@ -773,6 +773,19 @@ describe('setup waiting on the Import page', () => {
     await expect(resumeOnboarding()).resolves.toBe('opened')
   })
 
+  // Review of 19 Nov (P4): an import that ended while the account was read again made the way
+  // back answer that setup was finished, and setup stayed shut.
+  it('opens at the subscriptions when an import lands while the account is read again', async () => {
+    await waitAtTheStatement()
+
+    const going = resumeOnboarding()
+    noteImportWhileSetupWaits(3)
+
+    await expect(going).resolves.toBe('opened')
+    expect(onboardingOpen()).toBe(true)
+    expect(onboardingStep()).toBe('subscriptions')
+  })
+
   it('keeps the subscriptions as the step reached after an import, for any device to open at', async () => {
     await waitAtTheStatement()
     noteImportWhileSetupWaits(23)

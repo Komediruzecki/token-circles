@@ -56,8 +56,44 @@ export function localSetupStep(): string | null {
 export function clearLocalSetupPending(): void {
   try {
     localStorage.removeItem(LOCAL_SETUP_PENDING_KEY)
+    localStorage.removeItem(LOCAL_SETUP_WAITING_KEY)
   } catch {
     // Non-fatal: the next load finds the space saved, or a decision kept, and asks again at most.
+  }
+}
+
+/**
+ * Beside the marker while local setup waits on the Import page: the decision this browser held
+ * when it began to wait ('none' for none). A different one at the next start means setup was
+ * decided while it waited, and the marker is stale. Compared, not merely present: a decision the
+ * demo left before a local-only switch's setup began stands beside a marker that still counts.
+ */
+export const LOCAL_SETUP_WAITING_KEY = 'finance_local_setup_waiting'
+
+/** Note that local setup waits, over `decided`, the decision held as it began to. */
+export function noteLocalSetupWaiting(decided: string | null): void {
+  try {
+    localStorage.setItem(LOCAL_SETUP_WAITING_KEY, decided ?? 'none')
+  } catch {
+    // Non-fatal: the next start treats the marker as it did before.
+  }
+}
+
+/** Local setup waits no more: it opened again, or was decided. */
+export function clearLocalSetupWaiting(): void {
+  try {
+    localStorage.removeItem(LOCAL_SETUP_WAITING_KEY)
+  } catch {
+    // Non-fatal: a stale note only matters beside the marker, which goes with it.
+  }
+}
+
+/** The decision held as local setup began to wait ('none' for none), or null when it does not. */
+export function localSetupWaitingOver(): string | null {
+  try {
+    return localStorage.getItem(LOCAL_SETUP_WAITING_KEY)
+  } catch {
+    return null
   }
 }
 
