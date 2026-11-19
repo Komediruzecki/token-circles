@@ -50,6 +50,12 @@
   --border: #dde4f5;
   --border-color: #dde4f5;
 
+  /* Floating surfaces: menus, dropdowns, popovers, tooltips, toasts. Each opens over a ground
+     painted like itself, so its edge is what says where it ends: UI-28 asks 2:1 in a light theme.
+     This edge is 2.35:1 on --card-bg, 2.24:1 on --bg and 2.10:1 on --bg-secondary. */
+  --surface-floating: #ffffff;
+  --border-floating: #a1a9bd;
+
   /* Action — azure (deep on light ground for contrast) */
   --primary: #3b6fe0;
   --primary-hover: #2f5cc4;

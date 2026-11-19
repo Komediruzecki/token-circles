@@ -28,18 +28,17 @@
 }
 
 /* A floating surface draws its own edge, in every theme: the menu opens over a card of its own old
-   colour, and a shadow does not show on a dark page. A step lighter than the card on a dark page
-   (white mixed into a white card leaves it white), and an edge 3.1:1 on the dark card and 2.4:1 on
-   the white one. Above the floating add button (Layout.module.css .fab, 1400), so an open menu is
-   never under it. */
+   colour, and a shadow does not show on a dark page. Its surface and edge are the theme's floating
+   pair, which this menu's values set (src/__tests__/floatingEdges.test.ts). Above the floating add
+   button (Layout.module.css .fab, 1400), so an open menu is never under it. */
 .menu {
   position: fixed;
   z-index: 1500;
   min-width: 150px;
   padding: 5px;
-  border: 1px solid color-mix(in oklab, var(--text-secondary) 55%, var(--card-bg));
+  border: 1px solid var(--border-floating);
   border-radius: 12px;
-  background: color-mix(in oklab, var(--card-bg) 92%, white);
+  background: var(--surface-floating);
   box-shadow: 0 10px 32px rgba(0, 0, 0, 0.22);
   display: flex;
   flex-direction: column;

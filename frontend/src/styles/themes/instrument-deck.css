@@ -16,6 +16,10 @@
   --table-hover: #161a22;
   --border: #21262d;
   --border-color: #21262d;
+  /* The floating pair in graphite. Orbit's mix (55% --text-secondary into the card) gives an edge
+     of 2.49:1 here, under UI-28's 3:1; 66% gives 3.12:1 on --card-bg and 3.30:1 on --bg. */
+  --surface-floating: #202329;
+  --border-floating: #5e656d;
 
   --text: #e6edf3;
   --text-primary: #e6edf3;

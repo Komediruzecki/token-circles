@@ -2673,6 +2673,42 @@ check')` first, as the cushion and debt cases do.
   where the standard `--border` measures 1.58:1. `src/__tests__/dialogEdges.test.ts` reads every CSS
   module and fails on a `.modal`, `.dialog` or `.sheet` that paints a background without a visible
   border.
+- **Every floating surface draws its own edge (UI-28).** Menus, dropdowns, popovers, tooltips and
+  toasts open over grounds painted like themselves, and most drew their edge in `--border`, the
+  hairline between cards. Measured in the browser on 19 Nov: the filter dropdowns, the bill
+  calendar's day popover and the section rail's labels had an edge of 1.27:1 on the card in Dawn
+  Light and 1.32:1 in Orbit Dark; the heatmap's tooltip 1.27:1 in Dawn and 1.45:1 over the graphite
+  deck; toasts 1.67 to 1.90:1 in Dawn; Chart.js tooltips drew none, and in Orbit their 80% black
+  sat 1.22:1 on the card. Two theme tokens now
+  carry the surface and the edge, set where each theme sets its grounds: `--surface-floating` and
+  `--border-floating`, at the card menu's values (#ffffff and #a1a9bd in Dawn, #222b47 and #5b698c
+  in Orbit, an edge of 2.35:1 and 3.07:1 on the card). `.instrument-deck` re-grounds Orbit in
+  graphite and sets its own pair, #202329 and #5e656d: the card menu's mix gives 2.49:1 there, 66%
+  of its `--text-secondary` gives 3.12:1. The pair paints `OverflowMenu .menu`,
+  `FilterBar .dropdownContent`, `BillCalendar .popover`, `InfoTip .panel`, `Spotlight .tooltip`,
+  `Profile .profileDropdownMenu.visible`, `Toast .toast`, `SectionRail .rail` and `.tip`, the
+  inline style of `D3HeatmapChart`'s tooltip, and the two unused dropdowns in
+  `Dashboard/PeriodNavigator.module.css` and `BudgetsPage.module.css`. InfoTip, the rail and the
+  toasts keep their tint of `--primary` or of the toast's kind, mixed into the new edge, and the
+  rail and its labels keep their translucency. Every edge now measures at least 2:1 in Dawn and 3:1
+  in Orbit and in the deck. Chart tooltips take the pair from `components/chartFloatingTooltip.ts`,
+  which `Chart` and `ChartWrapper` install as Chart.js defaults: scriptable colours read off the
+  chart's canvas each time it draws, so a theme switch needs no rebuild and a chart in the deck gets
+  the deck's pair. Their text takes `--text-primary`, since Chart.js's white would vanish on Dawn's
+  white, and `ChartWrapper` no longer sets a translucent blue tooltip of its own. Nothing else
+  changed: no layout, spacing, radius, shadow or behaviour. The tour step's edge in Dawn went from
+  3.72:1 to 2.02:1 against the page its backdrop dims; its white surface stands 4.74:1 on the same.
+  `styles/themes/README.md` lists the pair in the token contract.
+- **Tests:** `src/__tests__/floatingEdges.test.ts` lists every floating surface and fails when one
+  stops painting `var(--surface-floating)` or drawing a visible border with `var(--border-floating)`.
+  It also fails on any rule positioned absolute or fixed with a z-index and a background that is on
+  neither that list nor its list of exceptions (the sidebar, three buttons, the status-bar strip),
+  and on a theme in `THEMES`, or a block that re-grounds one, that sets no opaque pair or one whose
+  edge is under 2:1 (light) or 3:1 (dark) against `--bg`, `--bg-secondary`, `--surface`,
+  `--card-bg`, `--stat-bg` or `--table-header-bg`. `src/components/__tests__/chartFloatingTooltip.test.tsx`
+  checks that the Chart.js defaults read the tokens off the canvas and fall back to Chart.js's own
+  colours, that `Chart` and `ChartWrapper` install them, and that `ChartWrapper`'s defaults leave
+  the surface and the edge to them.
 - **The unused `components/BulkActions/` tree is deleted.** Its `BulkActionBar`, `BulkCategoryModal`
   and `BulkTypeModal`, with their stylesheets, had no importer anywhere in the repository;
   Transactions uses `components/BulkActionBar.tsx`. The 2026-07-23 integrity audit

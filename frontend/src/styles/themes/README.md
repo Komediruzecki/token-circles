@@ -25,7 +25,10 @@ Ink: `--text --text-primary --text-secondary` … Action: `--primary
 --primary-hover --primary-bg` … Semantic money (never decorative):
 `--income --expense --transfer --text-positive --text-negative` …
 Brand: `--accent-warm` (the one warm touch per view), `--font-display`
-(headings), `--glow-primary` (button/focus glow).
+(headings), `--glow-primary` (button/focus glow). Floating: `--surface-floating
+--border-floating`, painted by every menu, dropdown, popover, tooltip and toast; a
+theme sets them where it sets its grounds, with an edge of 2:1 against them in a
+light theme and 3:1 in a dark one (`src/__tests__/floatingEdges.test.ts`).
 
 The legacy component-specific tokens (`--loan-stat-bg`, `--amort-th-bg`, …)
 remain part of the contract until their call sites are migrated to the

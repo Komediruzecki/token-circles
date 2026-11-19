@@ -50,9 +50,9 @@
   z-index: 1000;
   max-width: 280px;
   padding: 0.6rem 0.7rem;
-  border: 1px solid color-mix(in oklab, var(--primary) 35%, var(--border));
+  border: 1px solid color-mix(in oklab, var(--primary) 35%, var(--border-floating));
   border-radius: 10px;
-  background: var(--card-bg);
+  background: var(--surface-floating);
   box-shadow: var(--shadow-lg);
   color: var(--text);
   font-size: 0.78rem;

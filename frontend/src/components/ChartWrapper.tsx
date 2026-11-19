@@ -4,6 +4,7 @@
  */
 import { createEffect, createMemo, createSignal, ErrorBoundary, onCleanup } from 'solid-js'
 import ChartContainer from './ChartContainer.module.css'
+import { paintTooltipsAsFloating } from './chartFloatingTooltip'
 import ExportChartButton from './ExportChartButton'
 import type * as ChartJS from 'chart.js/auto'
 
@@ -52,6 +53,7 @@ export default function ChartWrapper(props: ChartWrapperProps) {
     import('chart.js/auto')
       .then(({ default: ChartJS }) => {
         if (cancelled) return
+        paintTooltipsAsFloating(ChartJS)
 
         // Destroy existing chart
         const existingChart = chartInstance()
@@ -65,8 +67,6 @@ export default function ChartWrapper(props: ChartWrapperProps) {
 
         const textColor = dark ? '#E5E7EB' : '#374151'
         const gridColor = dark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'
-        const tooltipBg = dark ? 'rgba(59, 130, 246, 0.2)' : 'rgba(59, 130, 246, 0.1)'
-        const tooltipBorder = dark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'
         const isPieOrDoughnut =
           chartType === 'doughnut' || chartType === 'pie' || chartType === 'polarArea'
         const defaultOptions = {
@@ -95,12 +95,10 @@ export default function ChartWrapper(props: ChartWrapperProps) {
                 boxHeight: 12,
               },
             },
+            // Surface and edge come from paintTooltipsAsFloating, as on every chart.
             tooltip: {
-              backgroundColor: tooltipBg,
               titleColor: textColor,
               bodyColor: textColor,
-              borderColor: tooltipBorder,
-              borderWidth: 1,
               padding: 10,
               cornerRadius: 8,
               displayColors: true,

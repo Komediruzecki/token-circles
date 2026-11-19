@@ -214,8 +214,8 @@
   max-width: calc(100vw - 20px);
   /* Solid surface — must fully hide the calendar grid behind it (see the glass
      note further down for why this popover is not translucent). */
-  background: var(--surface);
-  border: 1px solid var(--border);
+  background: var(--surface-floating);
+  border: 1px solid var(--border-floating);
   border-radius: var(--radius);
   box-shadow: var(--shadow-lg);
   overflow: hidden;

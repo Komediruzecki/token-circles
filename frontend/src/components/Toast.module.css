@@ -29,8 +29,8 @@
   min-height: 2.4rem;
   padding: 0.4rem 0.4rem 0.4rem 0.55rem;
   color: var(--text-primary);
-  background: var(--surface);
-  border: 1px solid color-mix(in srgb, var(--toast-accent) 32%, var(--border));
+  background: var(--surface-floating);
+  border: 1px solid color-mix(in srgb, var(--toast-accent) 32%, var(--border-floating));
   border-radius: 0.6rem;
   box-shadow: var(--shadow-lg);
   line-height: 1.35;

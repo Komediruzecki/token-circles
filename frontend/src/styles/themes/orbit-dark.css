@@ -49,6 +49,12 @@
   --border: #26324f;
   --border-color: #26324f;
 
+  /* Floating surfaces: menus, dropdowns, popovers, tooltips, toasts. A step above the card, with an
+     edge UI-28 asks to be 3:1 in a dark theme: 3.07:1 on --card-bg, 3.31:1 on --bg-secondary and
+     3.52:1 on --bg (2.81:1 on a hovered row, --surface-hover). */
+  --surface-floating: #222b47;
+  --border-floating: #5b698c;
+
   /* Action — azure */
   --primary: #6e9bff;
   --primary-hover: #93b4ff;
