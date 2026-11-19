@@ -1261,9 +1261,8 @@
 /* Four figures sit together on the left, so the eye reads them as one line before the chart. The
    box's width decides how many go in a row, not the window's: with the sidebar shown, a tablet's
    box is narrower than a phone's. Measured at 1440 px, four need 525 px with €1,182,363.57 owed
-   and 508 px with €195,000.53; two need 281 and 264 px. A column can still give way below what its
-   figure needs, so an amount longer than any of those wraps inside the box rather than running out
-   of it. */
+   and 508 px with €195,000.53; two need 281 and 264 px. A figure never breaks inside: below the
+   width where two fit side by side, there is one to a row. */
 .readout {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, max-content));
@@ -1285,6 +1284,14 @@
   }
 }
 
+/* Two seven-figure amounts and the 16 px between them need 286 px: measured on 19 Nov,
+   €1,182,363.57 is 135 px at 18 px. At 320 px the box holds 242 and €175,923.83 broke after the 8. */
+@container (width < 286px) {
+  .readout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .readout dt {
   display: flex;
   align-items: center;
@@ -1299,7 +1306,7 @@
   font-weight: 600;
   line-height: 1.2;
   font-variant-numeric: tabular-nums;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
 }
 
 /* Each figure's mark on the chart, as its key. */

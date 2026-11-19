@@ -521,11 +521,13 @@ test.describe('the chart at any width', () => {
     await addLoans(page, [BIG])
   })
 
-  // From a wide screen through a tablet with the sidebar shown (820 px leaves the box 426 px) to a
-  // phone: the four figures, Close and the drawing stay inside the box, and the sentence on top
-  // leaves no word or two alone on its last line.
+  // From a wide screen through a tablet with the sidebar shown (820 px leaves the box 426 px) to the
+  // narrowest phone: the four figures, Close and the drawing stay inside the box, no figure breaks
+  // inside (at 320 px, €175,923.83 broke after the 8), and the sentence on top leaves no word or
+  // two alone on its last line. Where two figures no longer fit side by side, there is one to a
+  // row: at 320 px, and two to a row on a 390 px phone.
   test('keeps its figures, its Close and its drawing inside its box @smoke', async ({ page }) => {
-    for (const width of [1440, 1024, 900, 820, 768, 700, 600, 561, 480, 390]) {
+    for (const width of [1440, 1024, 900, 820, 768, 700, 600, 561, 480, 390, 360, 320]) {
       await page.setViewportSize({ width, height: 900 })
       const opener = toggle(page, BIG.name)
       if ((await opener.getAttribute('aria-expanded')) !== 'true') await opener.click()
@@ -533,6 +535,17 @@ test.describe('the chart at any width', () => {
       await expect
         .poll(() => chartFit(page), { message: `the chart at ${width} px` })
         .toEqual({ past: 0, sideways: 0, drawing: 0, wrapped: 0, lastLine: true })
+      if (width === 390 || width === 320) {
+        const columns = await page
+          .getByTestId('loans-chart-readout')
+          .evaluate(
+            (readout) =>
+              new Set(
+                [...readout.children].map((fig) => Math.round(fig.getBoundingClientRect().left))
+              ).size
+          )
+        expect(columns, `figures to a row at ${width} px`).toBe(width === 320 ? 1 : 2)
+      }
     }
   })
 })

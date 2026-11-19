@@ -2549,8 +2549,9 @@ check')` first, as the cushion and debt cases do.
   `animation: none`, as `display: none` on the hidden page started them over on every return.
 - **Its box answers for its own width** (`.chart-box`: `container-type: inline-size`, one
   `minmax(0, 1fr)` column). The readout goes four to a row from 600 px of box, two below that,
-  and two equal halves below 340 px (`@container`), with `minmax(0, …)` columns so an amount
-  longer than any of those wraps inside the box. Four need 525 px with €1,182,363.57 owed and 508 px
+  two equal halves below 340 px and one to a row below 286 px (`@container`), and a figure never
+  breaks inside ("A figure in the loan chart's readout never breaks inside", below). Four need 525
+  px with €1,182,363.57 owed and 508 px
   with €195,000.53, measured at 1440 px.
   The viewport query it replaces left the box overflowing between 769 and 925 px and between 561
   and 637 px: at 820 px, with the sidebar shown, the box had 426 px and the readout needed 532,
@@ -2797,6 +2798,17 @@ check')` first, as the cushion and debt cases do.
   payment at 46 at 308, 426, 494, 640 and 900 px, and with one at each month at 308, 494 and 900 px,
   and fails on any label the line runs through and on any of those payments left unlabelled. All six
   cases failed before the change.
+- **A figure in the loan chart's readout never breaks inside.** At 320 px the chart's box holds 242
+  px, and the readout's two equal halves gave each figure 113: €175,923.83, 118 px wide, broke after
+  the 8 (measured on 19 Nov on the demo's Investment Property Loan), and the e2e suite's loan of
+  1,250,000 broke at 360 px too. A figure no longer wraps (`white-space: nowrap` in place of
+  `overflow-wrap: anywhere` in `features/loans/Loans.module.css`), and below 286 px of box, what two
+  seven-figure amounts and the 16 px between them need (€1,182,363.57 is 135 px at 18 px), the
+  readout has one figure to a row. Windows of 320, 340 and 360 px now show one to a row, 390 px
+  keeps its two equal halves, and nothing wraps or leaves the box at any of them.
+- **Tests:** `frontend/tests/loan-chart.spec.ts` sweeps the open chart from 1440 down to 360 and 320
+  px, fails on a figure on two lines or anything past the box, and counts one figure to a row at 320
+  px and two at 390 px; it failed at 360 px before the change.
 - **The heatmap's day detail keeps its edge where the dialog check can see it.** A click on a day
   in Analytics' heatmap opens a dialog whose box was styled inline in `features/Analytics.tsx`, so
   `dialogEdges.test.ts`, which reads the CSS modules, never saw it. Its backdrop and box now live in
