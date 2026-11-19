@@ -6,6 +6,7 @@ import { getLocalCurrency } from '../../core/api'
 import { moneyRgb, pdfReportTheme } from '../../core/brandPalette'
 import { txBaseValue } from '../../core/currency'
 import { ensurePdfFonts, PDF_FONT } from '../../core/reportFonts'
+import { annualSpan, spanMonths } from '../../utils/reportSpan'
 import { getDB } from './idb'
 import {
   buildCashFlowLine,
@@ -646,7 +647,9 @@ export async function generateMonthlyPdf(month: string, dark: boolean): Promise<
 // ── Annual PDF ──────────────────────────────────────────────────────────────
 
 export async function generateAnnualPdf(year: number, dark: boolean): Promise<Blob> {
-  const { txns, cats } = await loadReportSource(`${year}-01-01`, `${year}-12-31`)
+  // The current year runs to the end of the current month, not to December (utils/reportSpan).
+  const span = annualSpan(year)
+  const { txns, cats } = await loadReportSource(span.from, span.to)
   const catMap = new Map(cats.map((c: Category) => [c.id, c]))
 
   // Category breakdown
@@ -655,17 +658,19 @@ export async function generateAnnualPdf(year: number, dark: boolean): Promise<Bl
   let totalIncome = 0
   let totalExpense = 0
 
-  for (let m = 1; m <= 12; m++) {
+  for (let m = 1; m <= span.months; m++) {
     monthly.push({ month: MONTHS_SHORT[m - 1], income: 0, expense: 0 })
   }
 
   for (const t of txns as Transaction[]) {
+    // The source keeps to the span. A row outside it has no month here: it is left out whole.
+    if (t.date < span.from || t.date > span.to) continue
+    const moIdx = parseInt(t.date.substring(5, 7)) - 1
     const cat =
       t.category_id !== null && t.category_id !== undefined ? catMap.get(t.category_id)! : undefined
     const name = cat?.name || 'Uncategorized'
     const color = cat?.color || '#94a3b8'
     const amt = Math.abs(txBaseValue(t))
-    const moIdx = parseInt(t.date.substring(5, 7)) - 1
     if (t.type === 'income') {
       totalIncome += amt
       monthly[moIdx].income += amt
@@ -738,7 +743,9 @@ export async function generateAnnualPdf(year: number, dark: boolean): Promise<Bl
     doc,
     ctx,
     `Annual Financial Report — ${year}`,
-    `Token Circles | Generated: ${new Date().toLocaleDateString()}`
+    span.soFar
+      ? `Token Circles | ${spanMonths(span)} ${year}, so far | Generated: ${new Date().toLocaleDateString()}`
+      : `Token Circles | Generated: ${new Date().toLocaleDateString()}`
   )
 
   let posY = addSummaryBox(
