@@ -40,9 +40,12 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **A statement from a bank the app knows opens on what it brings in.** Import shows the bank, how many entries and from when to when, the new categories and how many are already here, with one button to import them. Check the columns is still there for a closer look.
 - **After an import, Import lists each account it changed with its balance today**, and a field to set it to what your bank shows.
 - **A loan's Edit and Delete are in its card's three-dot menu**, with See every payment, which opens the month-by-month table the loan's name used to open. What if stays on the card.
+- **The welcome mail's Find your subscriptions opens the scan.** It opened the list of bills. With nothing imported yet, the scan says so and offers an import.
 
 ### Fixed
 
+- **Shortcuts work again after you close quick entry.** Escape left the keyboard inside the hidden box, so the arrow keys stopped stepping the period and ? stopped opening the shortcuts guide until you clicked the page.
+- **Screen readers no longer find two closed dialogs on every page.** Quick entry and Add transaction stayed announced as open dialogs while shut.
 - **A category called Groceries shows a shopping cart, and one named for a meal shows a knife and fork** (Eating out, Restaurant, Dining, Breakfast, Lunch, Dinner, Meals), and an import that creates one gives it the same icon. Before, they showed a coffee mug, and Eating out a plain tick. An icon you picked stays, and so does the mug an earlier import gave a category while you were signed in. Coffee and Cafe keep the mug.
 - **The subscription scan keeps up with a long history.** With a few thousand entries, Scan transactions on Bills and the setup wizard's subscriptions step held the page for over a second. They now find the same subscriptions in a small part of that time.
 - **The plan name on a subscription the scan finds is easier to read.** In the light theme, "Standard" beside Netflix was blue on a pale blue tint at 4.0:1. It's a darker blue now, on Bills and in setup.

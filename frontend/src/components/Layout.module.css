@@ -483,15 +483,29 @@
   cursor: pointer;
 }
 
+/* The floating button's box: its size, and the gap it keeps from the screen's edges. `.fab` and
+   `.main` both read these, so the button cannot grow or move without every page making room for
+   it. They are set on the shell, which holds both. */
+.shell {
+  --fab-size: 56px;
+  --fab-offset: 22px;
+}
+@media (max-width: 620px) {
+  .shell {
+    --fab-size: 52px;
+    --fab-offset: 16px;
+  }
+}
+
 /* Floating quick-add button — the universal entry point (opens the Guided
    Orbit). Positioned bottom-right, above page content, on every screen size. */
 .fab {
   position: fixed;
-  right: 22px;
-  bottom: 22px;
+  right: var(--fab-offset);
+  bottom: var(--fab-offset);
   z-index: 1400;
-  width: 56px;
-  height: 56px;
+  width: var(--fab-size);
+  height: var(--fab-size);
   border-radius: 50%;
   border: 1px solid color-mix(in oklab, var(--primary) 55%, transparent);
   background: radial-gradient(
@@ -535,18 +549,21 @@
   transform: rotate(-18deg) scaleY(0.5);
   pointer-events: none;
 }
-@media (max-width: 620px) {
-  .fab {
-    right: 16px;
-    bottom: 16px;
-    width: 52px;
-    height: 52px;
-  }
-}
 @media (prefers-reduced-motion: reduce) {
   .fab {
     transition: none;
   }
+}
+
+/* Room at the end of every page for the button: its height, plus its gap from the screen edge
+   once below it and once above. Without it a page's last row ended under the button: the content
+   ran 54 px below the button's top on every page, and with the example data something was painted
+   under it on 11 of 19 pages at 390 px wide and 2 of 19 at 1440 (measured 19 Nov 2026).
+
+   This comes after every `.main` padding shorthand above on purpose: a shorthand later in the file
+   would reset the bottom padding. tests/floating-button-room.spec.ts measures the result. */
+.main {
+  padding-bottom: calc(var(--fab-size) + 2 * var(--fab-offset));
 }
 
 /* The app shell: sidebar, pages, floating button and the overlays that belong to them. It has no

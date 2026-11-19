@@ -20,6 +20,7 @@ import { plainMessage } from '../core/apiError'
 import { handFocusTo, isEditableTarget } from '../core/domFocus'
 import { quickEntrySave } from '../core/quickEntryLists'
 import { localToday } from '../utils/period'
+import { returnFocus } from '../utils/returnFocus'
 import styles from './GuidedOrbit.module.css'
 import type { QuickEntryList } from '../core/quickEntryLists'
 import type { Account, Category } from '../types/models'
@@ -114,8 +115,17 @@ export function GuidedOrbit(props: GuidedOrbitProps) {
     setDate(todayIso())
   }
 
+  // Shut, focus goes back to what had it before: the shut sheet is inert, and focus left inside
+  // it would be lost.
+  let overlayRef: HTMLDivElement | undefined
+  let opener: Element | null = null
   createEffect(() => {
-    if (props.isOpen()) reset()
+    if (props.isOpen()) {
+      opener = document.activeElement
+      reset()
+    } else {
+      returnFocus(opener, overlayRef)
+    }
   })
 
   // keypad
@@ -266,13 +276,22 @@ export function GuidedOrbit(props: GuidedOrbitProps) {
 
   return (
     <div
+      ref={overlayRef}
       class={styles.overlay}
       classList={{ [styles.open]: props.isOpen() }}
+      // Mounted while shut so it can fade, and inert then: out of the accessibility tree and the
+      // tab order, so no screen reader finds a modal dialog nobody can see.
+      inert={!props.isOpen()}
       onClick={(e) => {
         if (e.target === e.currentTarget) props.onClose()
       }}
     >
-      <div class={styles.sheet} role="dialog" aria-modal="true" aria-label="Add transaction">
+      <div
+        class={styles.sheet}
+        role="dialog"
+        aria-modal={props.isOpen() ? 'true' : undefined}
+        aria-label="Add transaction"
+      >
         <h2 class={styles.heading}>Add transaction</h2>
         <button class={styles.close} onClick={props.onClose} aria-label="Close" type="button">
           <svg

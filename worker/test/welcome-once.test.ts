@@ -33,7 +33,7 @@ const WELCOME_CONTENT = [
   'Find your subscriptions',
   'Watch your year fill in',
   '/#import',
-  '/#bills',
+  '/#bills?scan=1',
   '/#progress',
   'hero-engraved-night',
 ];
@@ -281,7 +281,7 @@ describe('the Welcome', () => {
     const account = await signUp(address('links'));
     await signInWithCode(account.email);
     const [welcome] = welcomesTo(account.email);
-    for (const page of ['import', 'bills', 'progress']) {
+    for (const page of ['import', 'bills?scan=1', 'progress']) {
       expect(welcome!.html).toContain(`href="${APP}/#${page}"`);
       expect(welcome!.text).toContain(`${APP}/#${page}`);
     }

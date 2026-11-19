@@ -8,6 +8,7 @@
  * the page where it is done. Rules carry stable ids, so a rule added later goes in its place in
  * RULES without moving the others: a first print goes at the end.
  */
+import { SUBSCRIPTION_SCAN_HASH } from './billsRoute';
 import { addCalendarMonths } from './calendarMonths';
 import { FIRST_CUSHION_MONTHS } from './guidance/circles';
 import { BANK_IMPORT_HASH } from './importRoute';
@@ -158,7 +159,7 @@ const RULES: Rule[] = [
           n === 1
             ? "It's in your statements but not on Bills yet."
             : "They're in your statements but not on Bills yet.",
-        link: { hash: '#bills?scan=1', label: 'Bills' },
+        link: { hash: SUBSCRIPTION_SCAN_HASH, label: 'Bills' },
       };
     },
   },

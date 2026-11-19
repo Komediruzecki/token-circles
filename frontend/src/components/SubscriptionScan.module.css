@@ -426,3 +426,26 @@
     border-color: color-mix(in oklab, var(--text-secondary) 55%, var(--border));
   }
 }
+
+/* "Import a statement" when there is nothing to scan: the one action the empty panel has. */
+.importLink {
+  display: inline-block;
+  margin-top: 12px;
+  padding: 8px 18px;
+  border-radius: 10px;
+  background: var(--primary);
+  color: var(--on-primary);
+  font-size: 13.5px;
+  font-weight: 600;
+  text-decoration: none;
+  box-shadow: var(--glow-primary);
+}
+
+.importLink:hover {
+  background: var(--primary-hover);
+}
+
+.importLink:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
