@@ -2754,6 +2754,20 @@ check')` first, as the cushion and debt cases do.
 - **Tests:** `src/components/__tests__/InfoTip.test.tsx` gives the heading and the page the title's
   serif, bold and italic, and fails unless the panel's computed type is `var(--font-inter)`, 400
   and normal.
+- **The heatmap's day detail keeps its edge where the dialog check can see it.** A click on a day
+  in Analytics' heatmap opens a dialog whose box was styled inline in `features/Analytics.tsx`, so
+  `dialogEdges.test.ts`, which reads the CSS modules, never saw it. Its backdrop and box now live in
+  `features/AnalyticsPage.module.css` as `.day-backdrop` and `.dialog`, with the same values,
+  `border: 1px solid var(--border)` included; the day's rows and its Close button keep their inline
+  styles. Measured on 19 Nov at 1440x900 on the latest day with spending, before and after the move
+  (not one pixel changed): in Dawn Light the white box stands 2.81:1 on the page the 30% backdrop
+  dims beside it, and its edge, #dde4f5, 2.21:1. In Orbit Dark, Analytics sits in the deck, whose
+  `--card-bg` and `--border` are #11141a and #21262d: the box measures 1.04:1 against the dimmed
+  page beside it and its edge 1.25:1.
+- **Tests:** `src/__tests__/dialogEdges.test.ts` covers the day detail: its `.dialog` must paint a
+  background with a visible border, and `Analytics.tsx` must use it.
+  `src/__tests__/floatingEdges.test.ts` lists it in `NOT_FLOATING` as a dialog, which that test
+  leaves to `dialogEdges.test.ts`.
 - **The unused `components/BulkActions/` tree is deleted.** Its `BulkActionBar`, `BulkCategoryModal`
   and `BulkTypeModal`, with their stylesheets, had no importer anywhere in the repository;
   Transactions uses `components/BulkActionBar.tsx`. The 2026-07-23 integrity audit

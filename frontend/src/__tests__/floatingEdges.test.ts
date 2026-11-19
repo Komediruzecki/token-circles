@@ -54,6 +54,8 @@ const NOT_FLOATING: Record<string, string> = {
   'components/Layout.module.css .mobile-toggle': 'a button',
   'components/Layout.module.css .fab': 'a button filled with --primary',
   'features/RetirementPage.module.css .zoom-reset': 'a button over the chart',
+  'features/AnalyticsPage.module.css .dialog':
+    "the heatmap's day detail, a dialog: dialogEdges.test.ts checks its edge",
   'styles/index.css body::before': 'the strip under the phone status bar, painted in --bg',
 }
 

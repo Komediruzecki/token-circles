@@ -103,4 +103,17 @@ describe('every dialog draws its own edge', () => {
     expect(profile?.background).toBe(true)
     expect(isVisible(profile?.border ?? null)).toBe(true)
   })
+
+  // Its box was styled inline in Analytics.tsx, where nothing here could read it. It now takes its
+  // surface and edge from the page's stylesheet, so losing the edge fails the test above.
+  it("covers Analytics' heatmap day detail, which once kept its box inline", () => {
+    const day = all.find(
+      (s) => s.file === 'features/AnalyticsPage.module.css' && s.selector === '.dialog'
+    )
+    expect(day?.background).toBe(true)
+    expect(isVisible(day?.border ?? null)).toBe(true)
+    expect(readFileSync(join(SRC, 'features/Analytics.tsx'), 'utf8')).toContain(
+      'class={styles.dialog}'
+    )
+  })
 })
