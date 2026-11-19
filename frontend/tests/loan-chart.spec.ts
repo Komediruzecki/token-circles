@@ -167,6 +167,56 @@ function cardBoxes(page: Page): Promise<Box[]> {
   )
 }
 
+/**
+ * The open card menu against the card it opens over: the contrast of its edge with the card, and
+ * of the focused item's ring with the menu, with the item's outline as drawn. Colours are read the
+ * way the screen shows them: each laid over what is behind it.
+ */
+function menuLook(page: Page) {
+  return page.evaluate(() => {
+    const canvas = document.createElement('canvas')
+    canvas.width = canvas.height = 1
+    const ctx = canvas.getContext('2d', { willReadFrequently: true })!
+    const paint = (...layers: string[]): number[] => {
+      ctx.clearRect(0, 0, 1, 1)
+      for (const colour of layers) {
+        ctx.fillStyle = colour
+        ctx.fillRect(0, 0, 1, 1)
+      }
+      return [...ctx.getImageData(0, 0, 1, 1).data.slice(0, 3)]
+    }
+    const lum = (rgb: number[]) => {
+      const [r, g, b] = rgb.map((v) => {
+        const c = v / 255
+        return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
+      })
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b
+    }
+    const ratio = (a: number[], b: number[]) => {
+      const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x)
+      return Math.round(((hi + 0.05) / (lo + 0.05)) * 100) / 100
+    }
+    const css = (rgb: number[]) => `rgb(${rgb.join(',')})`
+    const card = document.querySelector('[data-test-id="loans-item"]')!
+    const menu = document.querySelector<HTMLElement>('[role="menu"]')!
+    const item = document.activeElement as HTMLElement
+    const style = window.getComputedStyle(menu)
+    const itemStyle = window.getComputedStyle(item)
+    const cardBg = paint('#fff', window.getComputedStyle(card).backgroundColor)
+    const menuBg = paint(css(cardBg), style.backgroundColor)
+    const edge = paint(css(cardBg), style.borderTopColor)
+    const ring = paint(css(menuBg), itemStyle.outlineColor)
+    return {
+      edgeVsCard: ratio(edge, cardBg),
+      outline:
+        itemStyle.outlineStyle === 'none'
+          ? 'none'
+          : `${itemStyle.outlineStyle} ${itemStyle.outlineWidth}`,
+      ringVsMenu: ratio(ring, menuBg),
+    }
+  })
+}
+
 test.describe('the chart under a loan card', () => {
   test.beforeEach(async ({ page }) => {
     test.setTimeout(90_000)
@@ -252,6 +302,16 @@ test.describe('the chart under a loan card', () => {
     await page.keyboard.press('Enter')
     await expect(menu(page)).toBeVisible()
     await expect(page.getByTestId('loans-item-add-extra')).toBeFocused()
+    // The item with focus shows it as a ring, not as the faint tint a pointer gets.
+    const look = await menuLook(page)
+    expect(look.outline).toMatch(/^solid (2|3)px$/)
+    expect(look.ringVsMenu).toBeGreaterThanOrEqual(3)
+    await page.getByTestId('loans-item-schedule').hover()
+    expect(
+      await page
+        .getByTestId('loans-item-schedule')
+        .evaluate((item) => window.getComputedStyle(item).outlineStyle)
+    ).toBe('none')
     await page.keyboard.press('ArrowDown')
     await expect(page.getByTestId('loans-item-schedule')).toBeFocused()
     await page.keyboard.press('Escape')
@@ -277,8 +337,53 @@ test.describe('the chart under a loan card', () => {
     await expect(page.getByTestId('loans-payoff-extra')).toHaveAttribute('data-made', 'false')
   })
 
+  // A floating surface draws its own edge: the menu opens over a card of the same colour as its
+  // own used to be, and its shadow does not show on a dark page.
+  test('the card menu stands apart from the card under it, in either theme @smoke', async ({
+    page,
+  }) => {
+    for (const theme of ['light', 'dark']) {
+      await page.evaluate((t) => {
+        document.documentElement.setAttribute('data-theme', t)
+      }, theme)
+      const trigger = card(page, 'zz-chart-a').getByTestId('loans-item-menu')
+      await trigger.focus()
+      await page.keyboard.press('Enter')
+      await expect(menu(page)).toBeVisible()
+      const look = await menuLook(page)
+      expect(look.edgeVsCard, `the menu's edge on the card, ${theme}`).toBeGreaterThanOrEqual(2)
+      expect(look.ringVsMenu, `the focus ring on the menu, ${theme}`).toBeGreaterThanOrEqual(3)
+      await page.keyboard.press('Escape')
+      await expect(menu(page)).toHaveCount(0)
+    }
+  })
+
   test.describe('on a phone', () => {
     test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+
+    test('an open menu is never under the floating add button @smoke', async ({ page }) => {
+      // The trigger 600 px down: the menu opens under it and reaches into the button's corner.
+      const trigger = card(page, 'zz-chart-a').getByTestId('loans-item-menu')
+      await trigger.evaluate((el) => {
+        window.scrollBy(0, el.getBoundingClientRect().bottom - 600)
+      })
+      await trigger.tap()
+      await expect(menu(page)).toBeVisible()
+      const fab = (await page.getByRole('button', { name: 'Quick add entry' }).boundingBox())!
+      const box = (await menu(page).boundingBox())!
+      const x0 = Math.max(fab.x, box.x)
+      const x1 = Math.min(fab.x + fab.width, box.x + box.width)
+      const y0 = Math.max(fab.y, box.y)
+      const y1 = Math.min(fab.y + fab.height, box.y + box.height)
+      expect(x1 - x0, 'the menu reaches the button across').toBeGreaterThan(4)
+      expect(y1 - y0, 'the menu reaches the button down').toBeGreaterThan(4)
+      expect(
+        await page.evaluate(
+          ([x, y]) => Boolean(document.elementFromPoint(x, y)?.closest('[role="menu"]')),
+          [(x0 + x1) / 2, (y0 + y1) / 2]
+        )
+      ).toBe(true)
+    })
 
     test('the chart opens straight under its card and in view, and the menu stays open @smoke', async ({
       page,
