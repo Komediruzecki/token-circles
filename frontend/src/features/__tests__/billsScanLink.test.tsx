@@ -99,3 +99,43 @@ describe('arriving from Getting started', () => {
     expect(subscriptionsTabActive()).toBe(true)
   })
 })
+
+describe('with nothing imported yet', () => {
+  it('the scan says there is nothing to scan and offers an import, which closes it', async () => {
+    history.replaceState(null, '', '#bills?scan=1')
+    await mountPage()
+
+    const nothing = await vi.waitFor(() => {
+      const el = host.querySelector('[data-test-id="sub-scan-nothing"]')
+      expect(el).not.toBeNull()
+      return el!
+    })
+    expect(nothing.textContent).toContain('No transactions to scan yet.')
+    expect(host.querySelector('[data-test-id="sub-scan-empty"]')).toBeNull()
+    const link = host.querySelector<HTMLAnchorElement>('[data-test-id="sub-scan-import"]')
+    expect(link?.getAttribute('href')).toBe('#import/bank')
+    link!.click()
+    expect(scanOpen()).toBe(false)
+  })
+
+  it('with transactions and no subscription among them, it says none were found, with no import', async () => {
+    const db = await getDB()
+    await db.add('transactions', {
+      id: 1,
+      profile_id: 1,
+      account_id: 1,
+      type: 'expense',
+      amount: 12,
+      date: '2026-10-01',
+      description: 'Groceries',
+    })
+    history.replaceState(null, '', '#bills?scan=1')
+    await mountPage()
+
+    await vi.waitFor(() => {
+      expect(host.querySelector('[data-test-id="sub-scan-empty"]')).not.toBeNull()
+    })
+    expect(host.querySelector('[data-test-id="sub-scan-nothing"]')).toBeNull()
+    expect(host.querySelector('[data-test-id="sub-scan-import"]')).toBeNull()
+  })
+})

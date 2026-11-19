@@ -594,7 +594,7 @@ describe('the mail itself', () => {
       `1. Bring your history`,
       `2. Find your subscriptions`,
       `3. Watch your year fill in`,
-      `Open Bills: ${APP}/#bills`,
+      `Scan for subscriptions: ${APP}/#bills?scan=1`,
       `Open Progress: ${APP}/#progress`,
     ]) {
       expect(welcome.text).toContain(step);

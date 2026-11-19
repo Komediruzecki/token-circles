@@ -188,7 +188,8 @@ export default function Bills() {
   // Tab state: 'all' | 'subscriptions' | 'calendar'
   const [billTab, setBillTab] = createSignal<'all' | 'subscriptions' | 'calendar'>('all')
 
-  // Getting started's subscription step links here as `#bills?scan=1`: the scan opens, on the
+  // Getting started's subscription step and the Welcome mail link here as `#bills?scan=1`
+  // (shared/billsRoute.ts): the scan opens, on the
   // Subscriptions tab it belongs to. Pages stay mounted once visited, so a later link arrives as a
   // hashchange.
   const openScanFromLink = () => {

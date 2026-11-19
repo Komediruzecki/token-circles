@@ -300,6 +300,23 @@ All notable changes to Token Circles are documented here. The format is based on
   `weekOneAhead`, and saves by itself when flipped. After a general unsubscribe it shows off and
   disabled. `ToggleField` takes `disabled`.
 
+- **The Welcome's Find your subscriptions opens the scan.** Its link was `#bills`, the list of
+  bills, with the scan one tab and one button away. It is `#bills?scan=1` now, the address Getting
+  started's subscription step already used: Bills opens on Subscriptions with the scan running
+  (`openScanFromLink`, `takeHashFlag`). New `shared/billsRoute.ts` holds `SUBSCRIPTION_SCAN_HASH`
+  for both (`WELCOME_STEPS` in `worker/src/emailTemplates.ts`, and `shared/orientation.ts`), as
+  `shared/importRoute.ts` does for `#import/bank`, and the step's link reads Scan for subscriptions
+  instead of Open Bills. `SubscriptionScanPanel` (`frontend/src/components/SubscriptionScan.tsx`)
+  now tells no transactions at all from none that recur: with none it says "No transactions to scan
+  yet." and, given `onImport` (the modal passes its `onClose`), offers Import a statement, a link to
+  `#import/bank` that closes the modal as it goes. The setup wizard passes no `onImport`. Guards:
+  `worker/test/email-templates.test.ts`, `welcome-once.test.ts` and `email-verification.test.ts`
+  (the step links `#bills?scan=1`, in the html and the text), and
+  `frontend/src/features/__tests__/billsScanLink.test.tsx` (an empty space gets the nothing-to-scan
+  state and the link to `#import/bank`, which closes the scan; a space with one transaction and no
+  subscription keeps the old empty state with no import offer, as the control). Each guard fails
+  with its change taken out.
+
 ### The first week, lived locally
 
 - **The week-one run counts from its scheduled time** (`worker/src/index.ts`, scheduled): the
@@ -2674,6 +2691,61 @@ check')` first, as the cushion and debt cases do.
   no "Sheet1" button after an import and its reset, and a two-sheet workbook shows the group on
   Map columns, where choosing April moves `aria-pressed` and the source line. Both fail on the old
   code (`expected [ …(13) ] to not include 'Sheet1'`; `expected null not to be null`).
+- **Every page leaves room for the floating add button.** The button (`.fab`, fixed bottom right)
+  sat over the end of a page's last row: `main`'s content ran 54 px below the button's top on every
+  page. With the example data something was painted under it at the end of 11 of 19 pages at 390 px
+  wide (the View all link on Accounts, What if on the last loan, the storage line in Settings) and 2
+  of 19 at 1440 (Analytics, Import), asked of the page with `elementFromPoint` at nine points inside
+  the button. The button's size and its gap from the screen edge are now two custom properties on
+  the shell, `--fab-size` and `--fab-offset` (56 and 22 px; 52 and 16 px up to 620 px wide), which
+  `.fab` reads, and `.main` ends with
+  `padding-bottom: calc(var(--fab-size) + 2 * var(--fab-offset))`, set after every `.main` padding
+  shorthand in `components/Layout.module.css` because a later shorthand would reset it. Content now
+  ends 22 px above the button, 16 px on a phone, on all 19 pages. The 404 page's `min-height` takes
+  the same room off, so it still does not scroll. `tests/floating-button-room.spec.ts` (`@smoke`,
+  1440 x 900 and 390 x 844) scrolls Analytics, Import, Accounts and Settings to their end; on the
+  old stylesheet it fails with Analytics ending at 875.5 px against a button top of 822.
+- **The two quick entries are inert while shut, and closing one hands focus back.** `CommandBar` and
+  `GuidedOrbit` stay mounted so they can fade, and kept `role="dialog"` with `aria-modal="true"`
+  while shut (opacity 0, `pointer-events: none`). Chromium's accessibility tree listed both dialogs
+  on every page (read over CDP, `Accessibility.getFullAXTree`), and a screen reader that honours
+  `aria-modal` can keep its cursor inside a dialog nobody sees. Shut, each overlay is now `inert`
+  and its dialog has no `aria-modal`; the tree lists neither, and each one only while it is open.
+  Neither gave focus back on close: after Ctrl+K and Escape, focus stayed in the bar's hidden input,
+  `isEditableTarget` read that as typing, and the right arrow no longer stepped the period nor did
+  `?` open the shortcuts guide (in the browser the period stayed 2026-11 and the guide stayed shut;
+  with the fix it steps to 2026-12 and the guide opens). `utils/returnFocus.ts` gives focus back to
+  the element that had it before opening, when focus is still inside the shut dialog or on the page,
+  and takes it out of the dialog when there is nothing to go back to. The command bar's delayed
+  input focus (60 ms) no longer fires once the bar has shut.
+  `components/__tests__/quickEntryShutIsInert.test.tsx` has 13 cases over both; each guard was taken
+  out and seen failing.
+- **The unused tag components are deleted.** `TagFilter`, `TagInput` and `TagChips` under
+  `frontend/src/components/Tags/`, with their stylesheets, had no importer anywhere in the
+  repository (`shared/tagSchema.ts` has an unrelated `TagInput` type). They held the last rules on a
+  `.dark-mode` class, which nothing sets: the themes key on `data-theme` on `<html>`, so those rules
+  never matched. `src/__tests__/darkModeClass.test.ts` fails on any stylesheet that styles
+  `.dark-mode`, with the file and line.
+- **Every dialog has a visible edge.** Create Profile (`components/ProfileModal.module.css`) had no
+  border and left its edge to a black `box-shadow`. In Orbit Dark it is painted in the sidebar's
+  navy (`--sidebar-bg`, #070b16) over a page the 50% black backdrop dims to #05070e, and the two
+  measured 1.02:1 in the browser: its fields floated with nothing around them. Each modal declares
+  its own surface in its own stylesheet, and 14 of the 25 that paint one had no border:
+  `BulkActionBar`, `LoginModal`, `ProfileModal`, `RecurringSection`, `AccountsPage`, `BillsPage`,
+  `BudgetsPage`, `CategoriesPage`, `DashboardPage`, `GoalsPage`, `HousingPage`, `RetirementPage`,
+  `TransactionsPage` and `loans/LoanForm`. The card-coloured ones take
+  `border: 1px solid var(--border)`, like `ConfirmDialog` and the rest. `LoginModal` and
+  `ProfileModal` stay navy in both themes, and `--border` is a near-white #dde4f5 in Dawn Light, so
+  their edge comes from the sidebar's text colour instead:
+  `color-mix(in oklab, var(--sidebar-text) 22%, transparent)`, 1.51:1 against the dark backdrop,
+  where the standard `--border` measures 1.58:1. `src/__tests__/dialogEdges.test.ts` reads every CSS
+  module and fails on a `.modal`, `.dialog` or `.sheet` that paints a background without a visible
+  border.
+- **The unused `components/BulkActions/` tree is deleted.** Its `BulkActionBar`, `BulkCategoryModal`
+  and `BulkTypeModal`, with their stylesheets, had no importer anywhere in the repository;
+  Transactions uses `components/BulkActionBar.tsx`. The 2026-07-23 integrity audit
+  (`docs/audits/2026-07-23-code-and-data-integrity-audit.md`) listed the tree as superseded, to
+  remove once nothing referenced it.
 - **Saving the badge record no longer makes Dashboard, Progress and About this space read their
   settings again.** The badge store (`frontend/src/core/achievementsStore.ts`) keeps the unlocks
   and dismissed advice cards in the settings under `achievements` (`achievements:<profile>` in

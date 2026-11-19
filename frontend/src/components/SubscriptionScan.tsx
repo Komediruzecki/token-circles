@@ -32,6 +32,7 @@ import {
   Show,
 } from 'solid-js'
 import { checkBillCreate } from '../../../shared/billSchema'
+import { BANK_IMPORT_HASH } from '../../../shared/importRoute'
 import { apiGet, apiPost, getLocalCurrency, listRows, showToast } from '../core/api'
 import { ApiError } from '../core/apiError'
 import { parseDecimalInput } from '../core/decimalInput'
@@ -76,6 +77,12 @@ export interface SubscriptionScanPanelProps {
   /** Extra hint under the empty state (e.g. "Import transactions first"). */
   emptyHint?: string
   /**
+   * With no transactions at all there is nothing to scan, and the panel says so. Given this, it
+   * also offers "Import a statement" (the Import page's bank tab), and calls it as the link is
+   * followed so the host can close. The setup wizard leaves it out: its own import came first.
+   */
+  onImport?: () => void
+  /**
    * Hand the host the panel's selection state and its add action.
    *
    * The onboarding wizard has one primary button per step, and this panel used to be the step
@@ -116,6 +123,8 @@ function amountOf(text: string | undefined): number | string | null {
 export function SubscriptionScanPanel(props: SubscriptionScanPanelProps) {
   const [scanning, setScanning] = createSignal(false)
   const [scanned, setScanned] = createSignal(false)
+  /** The last scan read no transactions at all, as opposed to none that recur. */
+  const [nothingToScan, setNothingToScan] = createSignal(false)
   const [detected, setDetected] = createSignal<DetectedSubscription[]>([])
   const [rows, setRows] = createSignal<Record<string, RowState>>({})
   const [categories, setCategories] = createSignal<CategoryRow[]>([])
@@ -135,6 +144,7 @@ export function SubscriptionScanPanel(props: SubscriptionScanPanelProps) {
       const bills = listRows<BillRow>(billsRes)
       const cats = listRows<CategoryRow>(catsRes)
       setCategories(cats)
+      setNothingToScan(txns.length === 0)
       const found = detectSubscriptions(recentForScan(txns, Date.now()), bills, {
         categories: cats,
       })
@@ -154,6 +164,7 @@ export function SubscriptionScanPanel(props: SubscriptionScanPanelProps) {
       setAdded(new Set<string>())
     } catch (err) {
       console.error('Subscription scan failed:', err)
+      setNothingToScan(false)
       setDetected([])
       setRows({})
       form.reset({})
@@ -442,12 +453,34 @@ export function SubscriptionScanPanel(props: SubscriptionScanPanelProps) {
           when={detected().length > 0}
           fallback={
             <Show when={scanned()}>
-              <div class={styles.state} data-test-id="sub-scan-empty">
-                <p>No known subscriptions found in your recent transactions.</p>
-                <Show when={props.emptyHint}>
-                  <p class={styles.hint}>{props.emptyHint}</p>
-                </Show>
-              </div>
+              <Show
+                when={!nothingToScan()}
+                fallback={
+                  <div class={styles.state} data-test-id="sub-scan-nothing">
+                    <p>No transactions to scan yet.</p>
+                    <p class={styles.hint}>
+                      Import a statement and the scan finds the subscriptions in it.
+                    </p>
+                    <Show when={props.onImport}>
+                      <a
+                        class={styles.importLink}
+                        href={BANK_IMPORT_HASH}
+                        onClick={() => props.onImport?.()}
+                        data-test-id="sub-scan-import"
+                      >
+                        Import a statement
+                      </a>
+                    </Show>
+                  </div>
+                }
+              >
+                <div class={styles.state} data-test-id="sub-scan-empty">
+                  <p>No known subscriptions found in your recent transactions.</p>
+                  <Show when={props.emptyHint}>
+                    <p class={styles.hint}>{props.emptyHint}</p>
+                  </Show>
+                </div>
+              </Show>
             </Show>
           }
         >
@@ -550,6 +583,7 @@ export function SubscriptionScanModal(props: SubscriptionScanModalProps) {
             active={props.isOpen}
             onAdded={props.onAdded}
             emptyHint="Import transactions or add them manually, then rescan."
+            onImport={props.onClose}
           />
         </div>
       </div>

@@ -47,9 +47,15 @@ describe('email templates', () => {
     expectBrandedShell(mail);
     expect(mail.html).toContain('email/hero-engraved-night-v1.jpg');
     expect(mail.html).not.toContain('email/orbit.gif');
-    for (const page of ['import', 'bills', 'progress']) {
+    for (const page of ['import', 'progress']) {
       expect(mail.html).toContain(`href="https://tokencircles.com/#${page}"`);
     }
+    // Find your subscriptions opens the scan itself, on Bills, as Getting started's step does: the
+    // bills list it opened before left the scan to be found.
+    expect(mail.html).toMatch(
+      /<a [^>]*href="https:\/\/tokencircles\.com\/#bills\?scan=1"[^>]*>Scan for subscriptions/
+    );
+    expect(mail.html).not.toContain('href="https://tokencircles.com/#bills"');
     expect(mail.text).toContain("Questions, or a bank file that won't import? Reply to this mail.");
   });
 
