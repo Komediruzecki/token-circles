@@ -18,7 +18,9 @@
  * waited. A target picked by hand stays as it is, and claims its account for its bank (round 4).
  * An account holds one bank's statements: a second bank's in it would add two banks' money up in
  * one balance. So no default puts a second bank into an account another bank holds, by an
- * earlier statement or a pick by hand; only two picks by hand can.
+ * earlier statement or a pick by hand; only two picks by hand can. An account is held by its id
+ * where setup knows it (round 4): by its name, the main account renamed while setup waited was
+ * one no bank held, and the next bank's statement went into it.
  *
  * Pure, so the rule can be read and tested on its own; FirstImport runs it whenever the set of
  * files changes and at every pick by hand.
@@ -32,6 +34,12 @@ export interface TargetAccount {
   name: string
   bank_name?: string | null
   currency?: string | null
+}
+
+/** An account as setup keeps it: its id when known, and its name as it was then. */
+export interface AccountRef {
+  id: number | null
+  name: string
 }
 
 export interface StatementToPlace {
@@ -78,17 +86,22 @@ function namedForAnotherBank(account: TargetAccount, bankId: BankId | null): boo
 }
 
 /**
- * The main account: the one setup's account step made, when the profile has it; else the newest
- * account in the base currency named for no bank (setup opened again at the statement, or its
- * account step skipped).
+ * The main account: the one setup's account step made, when the profile has it (by its id, so a
+ * rename keeps it); else the newest account in the base currency named for no bank (setup opened
+ * again at the statement, or its account step skipped).
  */
 export function mainAccountOf(
-  made: string | null,
+  made: AccountRef | null,
   accounts: readonly TargetAccount[],
   base: string
 ): TargetAccount | null {
-  const byName = made ? accounts.find((a) => a.name === made) : undefined
-  if (byName) return byName
+  const found =
+    made === null
+      ? undefined
+      : made.id !== null
+        ? accounts.find((a) => a.id === made.id)
+        : accounts.find((a) => a.name === made.name)
+  if (found) return found
   const currency = currencyOrBase(null, base)
   const fits = accounts.filter(
     (a) => currencyOrBase(a.currency, base) === currency && !namedForAnotherBank(a, null)
@@ -108,30 +121,42 @@ export function statementTargets(input: {
   earlier: readonly SetupStatement[]
   accounts: readonly TargetAccount[]
   /** The account setup's account step made, if any. */
-  made: string | null
+  made: AccountRef | null
   base: string
 }): Array<string | null> {
   const { accounts, made, base } = input
   const currency = currencyOrBase(null, base)
   const currencyOf = (account: TargetAccount) => currencyOrBase(account.currency, base)
+  // Accounts are told apart by id: an account's own, or the one of that name the profile has; a
+  // name only for an account the import is yet to make.
+  const idKey = (id: number) => `#${id}`
+  const nameKey = (name: string) => {
+    const found = accounts.find((a) => a.name === name)
+    return found ? idKey(found.id) : `=${name}`
+  }
   // The bank that holds each account: the first it received earlier in this setup, then the first
   // picked into it by hand, then, for the main account, the first whose statement fits it, below.
   const takes = new Map<string, BankId>()
-  for (const s of input.earlier) if (!takes.has(s.account)) takes.set(s.account, s.bankId)
+  const claim = (key: string, bank: BankId) => {
+    if (!takes.has(key)) takes.set(key, bank)
+  }
+  for (const s of input.earlier) {
+    claim(typeof s.accountId === 'number' ? idKey(s.accountId) : nameKey(s.account), s.bankId)
+  }
   for (const s of input.statements) {
     if (inOtherCurrency(s.currency, base)) continue
-    if (s.byHand !== null && !takes.has(s.byHand)) takes.set(s.byHand, s.bankId)
+    if (s.byHand !== null) claim(nameKey(s.byHand), s.bankId)
   }
-  const heldByAnother = (name: string, bank: BankId) => {
-    const holder = takes.get(name)
+  const heldByAnother = (key: string, bank: BankId) => {
+    const holder = takes.get(key)
     return holder !== undefined && holder !== bank
   }
   /** A new account for `bank`, under a name no other bank holds. */
   const newAccount = (bank: BankId): string => {
     const name = newAccountName(bank, currency)
-    if (!heldByAnother(name, bank)) return name
+    if (!heldByAnother(nameKey(name), bank)) return name
     let n = 2
-    while (heldByAnother(`${name} ${n}`, bank)) n++
+    while (heldByAnother(nameKey(`${name} ${n}`), bank)) n++
     return `${name} ${n}`
   }
   return input.statements.map((statement) => {
@@ -139,18 +164,19 @@ export function statementTargets(input: {
     if (statement.byHand !== null) return statement.byHand
     const bank = statement.bankId
     const own = accounts.find(
-      (a) => currencyOf(a) === currency && accountNamesBank(a, bank) && !heldByAnother(a.name, bank)
+      (a) =>
+        currencyOf(a) === currency && accountNamesBank(a, bank) && !heldByAnother(idKey(a.id), bank)
     )
     if (own) return own.name
     const main = mainAccountOf(made, accounts, base)
-    const taken = main === null ? undefined : takes.get(main.name)
+    const taken = main === null ? undefined : takes.get(idKey(main.id))
     const mainFits =
       main !== null &&
       currencyOf(main) === currency &&
       !namedForAnotherBank(main, bank) &&
       (taken === undefined ? statement.empty !== true : taken === bank)
     if (main !== null && mainFits) {
-      takes.set(main.name, bank)
+      takes.set(idKey(main.id), bank)
       return main.name
     }
     return newAccount(bank)

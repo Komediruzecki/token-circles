@@ -274,6 +274,35 @@ describe('where a statement goes, over the whole setup', () => {
     })
   })
 
+  it('a main account renamed while setup runs keeps its bank: the next bank gets a new account', async () => {
+    await makeMainAccount('Main checking')
+    choose([['revolut.csv', REVOLUT_MAY]])
+    await untilStates(['ready'])
+    await importReady()
+
+    // Renamed meanwhile: on the Accounts page while setup waited on Import, say.
+    const db = await getDB()
+    const main = ((await db.getAll('accounts')) as Array<{ id: number; name: string }>).find(
+      (a) => a.name === 'Main checking'
+    )!
+    await db.put('accounts', { ...main, name: 'Everyday' })
+    goToOnboardingStep('import')
+    await settle()
+    one('onboarding-import-another')!.click()
+    await settle()
+    choose([['n26.csv', N26]])
+    await untilStates(['ready'])
+    expect(targets()).toEqual([['n26.csv', 'New account: N26 EUR']])
+
+    // Revolut's next statement still goes into it, under its new name.
+    choose([['revolut-june.csv', REVOLUT_JUNE]])
+    await untilStates(['ready', 'ready'])
+    expect(targets()).toEqual([
+      ['n26.csv', 'New account: N26 EUR'],
+      ['revolut-june.csv', 'Everyday'],
+    ])
+  })
+
   it('a target picked by hand stays when another file comes, and the rest follow the rule', async () => {
     await makeMainAccount('Main checking')
     choose([
@@ -480,7 +509,7 @@ describe('what setup counts as imported', () => {
     await vi.waitFor(() => {
       expect(onboardingOpen()).toBe(false)
     })
-    expect(setupSoFar()).toMatchObject({ main: 'Main checking', imported: 2 })
+    expect(setupSoFar()).toMatchObject({ main: { name: 'Main checking' }, imported: 2 })
 
     await expect(resumeOnboarding()).resolves.toBe('opened')
     expect(onboardingStep()).toBe('subscriptions')

@@ -170,7 +170,7 @@ export interface ImportSummary {
    * currency (the base currency when it names none) and the account it went into. Setup places
    * its next statements by them (components/onboarding/statementTargets.ts).
    */
-  statements: Array<{ bankId: BankId; currency: string; account: string }>
+  statements: Array<{ bankId: BankId; currency: string; account: string; accountId: number | null }>
   /** The id the import's transactions and its Recent Imports entry carry. */
   importId: string
   /**
@@ -1761,6 +1761,19 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
         }
       }
 
+      // The accounts the statements went into, by id as well (setup holds an account by it): the
+      // ones this import made are read back first.
+      const statementRows =
+        activeImportTab() === 'bank-imports'
+          ? bankFiles().filter(
+              (row) => row.bankId !== null && !namesItsAccounts(row) && row.targetAccount
+            )
+          : []
+      if (statementRows.length > 0 && (data.created_accounts ?? []).length > 0) {
+        await loadBankAccounts()
+      }
+      const idOf = (name: string) => bankAccounts().find((a) => a.name === name)?.id ?? null
+
       opts.onImported?.({
         imported: importedCount,
         skipped: invalidSkipped,
@@ -1771,16 +1784,12 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
         text,
         importId: iid,
         leftOut,
-        statements:
-          activeImportTab() === 'bank-imports'
-            ? bankFiles()
-                .filter((row) => row.bankId !== null && !namesItsAccounts(row) && row.targetAccount)
-                .map((row) => ({
-                  bankId: row.bankId as BankId,
-                  currency: (row.meta.currency || getLocalCurrency()).toUpperCase(),
-                  account: row.targetAccount,
-                }))
-            : [],
+        statements: statementRows.map((row) => ({
+          bankId: row.bankId as BankId,
+          currency: (row.meta.currency || getLocalCurrency()).toUpperCase(),
+          account: row.targetAccount,
+          accountId: idOf(row.targetAccount),
+        })),
       })
 
       // Start over at once: the page's card says what came in. Three seconds later, as it was, left

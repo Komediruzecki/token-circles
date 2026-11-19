@@ -281,6 +281,11 @@ export interface SetupStatement {
   bankId: BankId
   currency: string
   account: string
+  /**
+   * That account's id, when known: setup holds an account by it, so one renamed while setup runs
+   * keeps the bank it took (round 4).
+   */
+  accountId?: number | null
 }
 
 /** An import that counts as setup's: the wizard's own, or the Import page's while setup waits. */
@@ -298,14 +303,14 @@ export interface SetupImport {
  * while setup waits on the Import page (review of 19 Nov, finding 12): its own copy began at
  * nothing again, so the statement step, the step after it and Done's count left out what came in.
  *
- * - `main`: the account its account step made.
+ * - `main`: the account its account step made, by its id, and its name as made.
  * - `imported`, `createdAccounts`: what its imports brought in and made, the wizard's and the
  *   Import page's while setup waited.
  * - `statements`: each bank statement imported, in order.
  * - `into`: the accounts the transactions went into; null once an import's are not known.
  */
 export interface SetupSoFar {
-  main: string | null
+  main: { id: number | null; name: string } | null
   imported: number
   createdAccounts: readonly string[]
   statements: readonly SetupStatement[]
@@ -334,8 +339,8 @@ function keepSoFar(change: (now: SetupSoFar) => SetupSoFar): void {
 }
 
 /** The account setup's account step made, where the statements of the first bank go. */
-export function noteSetupAccount(name: string): void {
-  keepSoFar((now) => ({ ...now, main: name }))
+export function noteSetupAccount(account: { id: number | null; name: string }): void {
+  keepSoFar((now) => ({ ...now, main: { id: account.id, name: account.name } }))
 }
 
 /** Count an import as setup's. */

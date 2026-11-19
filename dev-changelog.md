@@ -798,6 +798,19 @@ All notable changes to Token Circles are documented here. The format is based on
     to do with it moves nothing. Placing reads the account list and setup's record as they are at
     that action, so an account made in another tab while the step is open counts from the next
     one.
+  - **Accounts held by id** (round 4). `takes` and `setupSoFar().main` held an account by name, so
+    a main account renamed while setup waited (on the Accounts page, say) was one no bank held,
+    and the next bank's statement went into it. `SetupSoFar.main` is now `{ id, name }`
+    (`noteSetupAccount` takes the created account), `SetupStatement` and `ImportSummary.statements`
+    carry `accountId` (`handleImport` reads the accounts back when the import made one), and
+    `statementTargets` keys every claim by id: an earlier statement's own, or the id of the
+    account of that name; only an account the import is yet to make goes by name.
+    `mainAccountOf` finds the made account by id. Tests: `setupStatements.test.tsx` "a main
+    account renamed while setup runs keeps its bank" (Revolut into Main checking, renamed to
+    Everyday, then N26 gets a new account and Revolut's next statement goes into Everyday) and
+    `statementTargets.test.ts` "holds an account by its id" (with another account given the old
+    name). With earlier statements keyed by name, both fail; with the made account found by name,
+    the second; with `accountId` left null in the summary, the first.
   - **Not the Import page's guess.** Setup no longer keeps `resolveTargetAccount`'s answer for a
     file: a choice remembered for its signature, else an account named for the bank in any
     currency. `processBankFiles` remembers every file's account, setup's defaults included, so the

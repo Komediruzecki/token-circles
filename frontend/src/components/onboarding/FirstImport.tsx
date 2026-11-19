@@ -40,6 +40,7 @@ import type { BankId } from '../../core/bankImport'
 import type { SetupSoFar } from '../../core/onboardingStore'
 import type { BankFileRow, ImportSummary } from '../../features/import/importFlow'
 import type { HandedImportFile } from '../../features/import/importHandoff'
+import type { AccountRef } from './statementTargets'
 
 /** Where the step's import is, over all the files chosen. */
 export type FirstImportState =
@@ -98,7 +99,7 @@ export interface FileCounts {
 
 export interface FirstImportOptions {
   /** The account setup's account step made: the main account (statementTargets.ts). */
-  preferredAccount: () => string | null
+  preferredAccount: () => AccountRef | null
   /**
    * What setup has done so far, the wizard's earlier visits and the Import page's imports while
    * setup waited included: where the next statements go, and the result the step shows.

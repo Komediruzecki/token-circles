@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest'
 import { inOtherCurrency, mainAccountOf, statementTargets } from '../statementTargets'
 import type { SetupStatement } from '../../../core/onboardingStore'
-import type { StatementToPlace, TargetAccount } from '../statementTargets'
+import type { AccountRef, StatementToPlace, TargetAccount } from '../statementTargets'
 
 const MAIN: TargetAccount = { id: 1, name: 'Main checking', currency: 'EUR' }
 
@@ -13,7 +13,8 @@ function place(
   statements: Array<Partial<StatementToPlace> & Pick<StatementToPlace, 'bankId'>>,
   options: {
     accounts?: TargetAccount[]
-    made?: string | null
+    /** The main account setup made, by name alone when a string. */
+    made?: AccountRef | string | null
     earlier?: SetupStatement[]
     base?: string
   } = {}
@@ -23,7 +24,12 @@ function place(
     statements: statements.map((s) => ({ currency: 'EUR', byHand: null, ...s })),
     earlier: options.earlier ?? [],
     accounts,
-    made: options.made === undefined ? MAIN.name : options.made,
+    made:
+      options.made === undefined
+        ? { id: MAIN.id, name: MAIN.name }
+        : typeof options.made === 'string'
+          ? { id: null, name: options.made }
+          : options.made,
     base: options.base ?? 'EUR',
   })
 }
@@ -127,6 +133,23 @@ describe('where a statement goes', () => {
     ).toEqual(['Main checking', 'Main checking'])
   })
 
+  it('holds an account by its id: renamed, the main account keeps the bank it took', () => {
+    const renamed = { id: 1, name: 'Everyday', currency: 'EUR' }
+    const earlier = [
+      { bankId: 'revolut' as const, currency: 'EUR', account: 'Main checking', accountId: 1 },
+    ]
+    const made = { id: 1, name: 'Main checking' }
+    expect(place([{ bankId: 'n26' }], { accounts: [renamed], made, earlier })).toEqual(['N26 EUR'])
+    expect(place([{ bankId: 'revolut' }], { accounts: [renamed], made, earlier })).toEqual([
+      'Everyday',
+    ])
+    // Another account given the main account's old name is not it.
+    const other = { id: 2, name: 'Main checking', currency: 'EUR' }
+    expect(place([{ bankId: 'n26' }], { accounts: [renamed, other], made, earlier })).toEqual([
+      'N26 EUR',
+    ])
+  })
+
   it('reads no currency as the base currency, on the statement and on the account', () => {
     const main = { id: 1, name: 'Main checking', currency: null }
     expect(
@@ -178,9 +201,12 @@ describe('the main account', () => {
       { id: 3, name: 'Joint', currency: 'EUR' },
       { id: 4, name: 'Dollars', currency: 'USD' },
     ]
-    expect(mainAccountOf('Checking', accounts, 'EUR')?.name).toBe('Checking')
+    expect(mainAccountOf({ id: 1, name: 'Checking' }, accounts, 'EUR')?.name).toBe('Checking')
+    expect(mainAccountOf({ id: null, name: 'Checking' }, accounts, 'EUR')?.name).toBe('Checking')
     expect(mainAccountOf(null, accounts, 'EUR')?.name).toBe('Joint')
-    expect(mainAccountOf('Gone', accounts.slice(0, 2), 'EUR')?.name).toBe('Checking')
+    expect(mainAccountOf({ id: 9, name: 'Gone' }, accounts.slice(0, 2), 'EUR')?.name).toBe(
+      'Checking'
+    )
     expect(mainAccountOf(null, [], 'EUR')).toBeNull()
   })
 

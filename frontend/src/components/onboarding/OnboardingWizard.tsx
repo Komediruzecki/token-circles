@@ -413,7 +413,7 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
   const accountForm = createFirstAccountForm({
     onCreated: async (account) => {
       setCreatedAccounts((prev) => [...prev, { ...account, type: account.type as AccountType }])
-      noteSetupAccount(account.name)
+      noteSetupAccount(account)
       // What the bank shows now, kept for the statements to come (review M2).
       if (account.typed && account.id !== null) {
         rememberTypedBalance({ id: account.id, figure: account.balance, asOf: localToday() })
@@ -440,7 +440,10 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
 
   // ---- step: a statement ----
   const firstImport = createFirstImport({
-    preferredAccount: () => setupSoFar().main ?? createdAccounts().at(-1)?.name ?? null,
+    preferredAccount: () => {
+      const made = createdAccounts().at(-1)
+      return setupSoFar().main ?? (made ? { id: made.id, name: made.name } : null)
+    },
     soFar: setupSoFar,
     onImported: (summary) => {
       // Totals add up across statements and visits: "Bring in another statement" keeps the
