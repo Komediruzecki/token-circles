@@ -76,7 +76,7 @@ import {
 import { theme } from '../core/theme'
 import { setStickyPeriodBar, stickyPeriodBar } from '../core/uiPrefs'
 import { loadChartExportSettings, saveChartExportSettings } from '../utils/chartExportSettings'
-import { localToday, toRange, toYYYYMM } from '../utils/period'
+import { localToday, toYYYYMM } from '../utils/period'
 import { annualSpan, spanMonths } from '../utils/reportSpan'
 import ApiAccess from './ApiAccess'
 import { createBaseCurrencyForm } from './baseCurrencyForm'
@@ -98,12 +98,8 @@ const ACCOUNT_DELETION_ENABLED =
 
 function Reports() {
   // Seed from the global focus period so Reports opens on the period you were just
-  // viewing; the report-type + full-year (month 0) selects stay report-specific. A range seeds
-  // from the month it reaches, not the month it starts in: "All time" starts on 1970-01-01, and
-  // seeding from that start made a 1970 report.
-  const focus = period()
-  const seedFrom = focus.mode === 'range' ? toRange(focus).to.slice(0, 7) : toYYYYMM(focus)
-  const [seedYear, seedMonth] = seedFrom.split('-').map(Number)
+  // viewing; the report-type + full-year (month 0) selects stay report-specific.
+  const [seedYear, seedMonth] = toYYYYMM(period()).split('-').map(Number)
   const [reportYear, setReportYear] = createSignal(seedYear)
   const [reportMonth, setReportMonth] = createSignal(seedMonth)
   const [reportType, setReportType] = createSignal<'monthly' | 'tax' | 'pl' | 'annual'>('monthly')
