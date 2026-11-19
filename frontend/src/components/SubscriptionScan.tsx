@@ -496,41 +496,45 @@ export function SubscriptionScanPanel(props: SubscriptionScanPanelProps) {
                 <For each={tracked()}>{detectedRow}</For>
               </div>
             </Show>
-            <FormNotice form={form} testId="sub-scan-notice" />
           </div>
           <div class={styles.footer} data-test-id="sub-scan-footer">
-            <span class={styles.total}>
-              <Show when={chosen().length > 0} fallback="Nothing selected">
-                {chosen().length} selected · <b>{money(monthlyTotal())}</b>/mo
-              </Show>
-            </span>
-            <span class={styles.footerActions}>
-              <Show when={!props.hideRescan}>
-                <button
-                  class={styles.rescan}
-                  type="button"
-                  disabled={scanning()}
-                  aria-disabled={form.submitting() ? 'true' : undefined}
-                  onClick={() => {
-                    // A rescan resets the rows under an add still on its way.
-                    if (!form.submitting()) void scan()
-                  }}
-                >
-                  Rescan
-                </button>
-              </Show>
-              <Show when={!props.hideAddButton}>
-                <SubmitButton
-                  class={styles.add}
-                  data-test-id="sub-scan-add-btn"
-                  busy={form.submitting()}
-                  busyLabel="Adding…"
-                  unchanged={chosen().length === 0}
-                >
-                  {`Add ${chosen().length || ''}`.trim()}
-                </SubmitButton>
-              </Show>
-            </span>
+            {/* A failed add, directly above the buttons: at the end of the rows it was out of
+                view under a long list, while the Add it answered stays pinned (review of 19 Nov). */}
+            <FormNotice form={form} testId="sub-scan-notice" class={styles.footerNotice} />
+            <div class={styles.footerRow}>
+              <span class={styles.total}>
+                <Show when={chosen().length > 0} fallback="Nothing selected">
+                  {chosen().length} selected · <b>{money(monthlyTotal())}</b>/mo
+                </Show>
+              </span>
+              <span class={styles.footerActions}>
+                <Show when={!props.hideRescan}>
+                  <button
+                    class={styles.rescan}
+                    type="button"
+                    disabled={scanning()}
+                    aria-disabled={form.submitting() ? 'true' : undefined}
+                    onClick={() => {
+                      // A rescan resets the rows under an add still on its way.
+                      if (!form.submitting()) void scan()
+                    }}
+                  >
+                    Rescan
+                  </button>
+                </Show>
+                <Show when={!props.hideAddButton}>
+                  <SubmitButton
+                    class={styles.add}
+                    data-test-id="sub-scan-add-btn"
+                    busy={form.submitting()}
+                    busyLabel="Adding…"
+                    unchanged={chosen().length === 0}
+                  >
+                    {`Add ${chosen().length || ''}`.trim()}
+                  </SubmitButton>
+                </Show>
+              </span>
+            </div>
           </div>
         </Show>
       </Show>

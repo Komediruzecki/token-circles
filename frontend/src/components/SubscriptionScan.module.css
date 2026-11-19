@@ -211,11 +211,22 @@
 
 .footer {
   display: flex;
+  flex-direction: column;
+  padding-top: 4px;
+}
+
+/* The total and the buttons, one line, wrapping on a narrow screen. */
+.footer-row {
+  display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
   flex-wrap: wrap;
-  padding-top: 4px;
+}
+
+/* A failed add, its own line above the buttons. */
+.footer-notice {
+  margin: 0 0 10px;
 }
 
 .total {

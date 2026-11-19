@@ -572,6 +572,36 @@ describe('the scan in its modal', () => {
     expect(list.contains(modal.querySelector('h2'))).toBe(false)
   })
 
+  // Review of 19 Nov: a failed Add said so at the end of the scrolling rows, out of view under a
+  // long list, while the Add it answered sat in the pinned footer.
+  it('says a failed add in the pinned footer, directly above the buttons', async () => {
+    apiMocks.apiPost.mockImplementation(async (_url: string, body: { name: string }) => {
+      if (body.name === 'Spotify') {
+        throw new ApiError(400, BILL_MESSAGES.category, { category_id: BILL_MESSAGES.category })
+      }
+      return { id: 1 }
+    })
+    host = document.createElement('div')
+    document.body.appendChild(host)
+    dispose = render(() => <SubscriptionScanModal isOpen={() => true} onClose={() => {}} />, host)
+    await vi.waitFor(() => {
+      expect(host.querySelectorAll('[data-test-id="sub-scan-row"]')).toHaveLength(2)
+    })
+    const modal = host.querySelector('[data-test-id="sub-scan-modal"]')!
+    const add = modal.querySelector<HTMLButtonElement>('[data-test-id="sub-scan-add-btn"]')!
+
+    add.click()
+    await vi.waitFor(() => {
+      expect(notice()).toBe(`Couldn't add "Spotify". ${BILL_MESSAGES.category}`)
+    })
+
+    const footer = modal.querySelector('[data-test-id="sub-scan-footer"]')!
+    const region = modal.querySelector('[data-test-id="sub-scan-notice"]')!
+    expect(footer.contains(region)).toBe(true)
+    expect(modal.querySelector('[data-test-id="sub-scan-scroll"]')!.contains(region)).toBe(false)
+    expect(region.compareDocumentPosition(add) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
   it('caps its height on a tall screen, and scrolls only the list', () => {
     expect(rule('.modal')).toMatch(/max-height:\s*min\(720px,\s*calc\(100dvh - 2rem\)\)/)
     expect(rule('.modal .scroll')).toMatch(/overflow-y:\s*auto/)

@@ -2839,6 +2839,15 @@ check')` first, as the cushion and debt cases do.
   detected payments at 2560x1440, 1920x1080 and 390x844: the modal within 720 px, or the screen on
   the phone; the heading and Add in place before and after the list scrolls to its end). Both fail
   on the old stylesheet and markup: the spec measured 1,408 px at 2560x1440.
+- **A failed Add in the scan says so above the Add, in the pinned footer.** Review of 19 Nov: the
+  scan's notice (`FormNotice`, `sub-scan-notice`) sat at the end of the rows inside `.scroll`, so
+  under a long list a refused subscription ("Couldn't add ...") was out of view while the Add it
+  answered stayed pinned. It is now the footer's first line (`.footer` a column, the total and the
+  buttons in `.footer-row`, the notice's margin 10 px), directly above the buttons, in the modal
+  and embedded in setup alike. Test: `SubscriptionScan.test.tsx` "says a failed add in the pinned
+  footer, directly above the buttons" (in the footer, not the scroll block, before Add), which
+  fails on the old place. In the browser: `RUN3/evidence/setup-2/scan-notice-*.png`, sixteen
+  rows and a refused add (listed in the hand-back).
 - **A workbook's sheets are chosen on Map columns, and the Google Sheets tab lists no tabs.**
   maff, 19 Nov: what choosing an "Available sheets" chip did was unclear, and the label sat above
   the chips' line. File Upload drew a workbook's sheets as chips, but an upload that reads goes
