@@ -2822,6 +2822,23 @@ check')` first, as the cushion and debt cases do.
   and paints a box unless `INLINE` names it: the heatmap's tooltip and a plan card's badge. With
   discovery as it was, the rail's labels taken off the list, a shadowed popover with no z-index and
   the passkey offer styled inline again all passed; each fails now.
+- **The loan form takes focus when it opens, and gives it back.** Its name field had `autofocus`,
+  which the browser applies only while a page loads, never to a dialog put on the page later: Add a
+  loan and Edit left focus on the button that opened them, behind the dialog. The form now focuses
+  its name itself, or the first rate field when "Edit rates" opens it at its rate periods, and when
+  it shuts, by Escape, Cancel, the close button or a save, focus goes back to the button that
+  opened it (`utils/returnFocus.ts`): the add button, or the card menu's button for Edit. Eight
+  other fields in forms opened later still rely on `autofocus`: Bills.tsx:825 (Add bill) and :1017
+  (its Add Category), Goals.tsx:420 (add money), :657 (New Goal) and :845 (its Add Category),
+  Settings.tsx:1928 (renaming the household), ProfileModal.tsx:80 (Create profile) and
+  TwofaChallenge.tsx:89 (the sign-in code). Opened on 19 Nov, Add bill and New Goal left focus on
+  their buttons; Tags.tsx already focuses its field itself.
+- **Tests:** `src/features/loans/__tests__/loanFormFocus.test.tsx` opens the form for Add and Edit
+  from a button and fails unless the name has focus, and unless that button has it again after
+  Escape or Cancel; opened at its rate periods, the first rate field must have it, and focus moved
+  elsewhere before the form shuts stays there. `frontend/tests/loan-form-focus.spec.ts` (@smoke)
+  does the same in the browser with the add button and the card menu's Edit; both failed before the
+  change, with focus left on the button.
 - **No extra-payment label stands on the loan's line.** A label above its mark and to the left of it
   was placed at the mark's height, where the line has not yet come down to the mark, so the line ran
   through it. The review's sweep (`LoanPayoffChart` in jsdom: the boat with one extra payment at
