@@ -2495,6 +2495,12 @@ check')` first, as the cushion and debt cases do.
 
 ### Fixed
 
+- **The unused tag components are deleted.** `TagFilter`, `TagInput` and `TagChips` under
+  `frontend/src/components/Tags/`, with their stylesheets, had no importer anywhere in the
+  repository (`shared/tagSchema.ts` has an unrelated `TagInput` type). They held the last rules on a
+  `.dark-mode` class, which nothing sets: the themes key on `data-theme` on `<html>`, so those rules
+  never matched. `src/__tests__/darkModeClass.test.ts` fails on any stylesheet that styles
+  `.dark-mode`, with the file and line.
 - **Every dialog has a visible edge.** Create Profile (`components/ProfileModal.module.css`) had no
   border and left its edge to a black `box-shadow`. In Orbit Dark it is painted in the sidebar's
   navy (`--sidebar-bg`, #070b16) over a page the 50% black backdrop dims to #05070e, and the two
