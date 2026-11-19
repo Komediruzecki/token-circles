@@ -20,7 +20,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { THEMES } from '../core/theme'
+import { THEME_SCOPES, THEMES } from '../core/theme'
 
 const SRC = resolve(__dirname, '..')
 
@@ -208,6 +208,17 @@ describe("each theme's floating pair meets UI-28's numbers on its own grounds", 
   const cases = grounded.map((r) => {
     const id = /\[data-theme='([\w-]+)'\]/.exec(r.selector)?.[1]
     return [r.selector, id] as const
+  })
+
+  it('names every variant that re-grounds a theme in THEME_SCOPES, which portals carry along', () => {
+    // An InfoTip's panel renders at the end of the page and wears these classes to keep the
+    // tokens of the part of the page its icon sits in; a variant missing here loses them.
+    const variants = grounded
+      .map((r) => r.selector)
+      .filter((selector) => !/^\[data-theme='[\w-]+'\]$/.test(selector))
+      .flatMap((selector) => [...selector.matchAll(/\.([\w-]+)/g)].map(([, name]) => name))
+    expect(variants.length).toBeGreaterThan(0)
+    for (const name of variants) expect(THEME_SCOPES as readonly string[]).toContain(name)
   })
 
   it('finds a block for every theme the app offers', () => {

@@ -54,6 +54,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **New accounts and profiles start with the default categories.** They started empty, so a quick add like "coffee 4.50" was saved without a category.
 - **Starting balances stay with their file.** Cancel an import or remove a file in setup, and the next file's accounts could open on the starting balances of the one you set aside, like a YNAB register's, instead of their own.
 - **The three-dot menu on a subscription works from the keyboard.** It opens on its first item with a ring around it, the arrows move through the rest, and Escape or Tab takes you back to the button.
+- **The (i) on Dashboard's Net Worth, Income, Expenses and Balance cards opens its explanation right under the icon.** It opened about 430 px lower, where the card cut it off, so on a laptop or a phone you saw nothing.
 
 ## [5.17.6] — 2026-11-01
 

@@ -200,3 +200,75 @@ describe('InfoTip', () => {
     }).not.toThrow()
   })
 })
+
+/**
+ * The panel is `position: fixed`, and an ancestor with a backdrop-filter, a transform or a filter
+ * turns "fixed" into "fixed to that ancestor": Dashboard's metric cards blur what is behind them,
+ * and their explanations opened about 430 px below their icons, off the bottom of the window. So
+ * the panel renders at the end of the page, where no ancestor can capture it, carrying along the
+ * theme scope its icon sits in.
+ */
+describe('InfoTip, rendered where nothing can move it', () => {
+  const mountIn = (scope: HTMLElement) => {
+    host = document.createElement('div')
+    scope.appendChild(host)
+    document.body.appendChild(scope)
+    dispose = render(() => <InfoTip text="Sum of every balance." testId="tip" />, host)
+    return host.querySelector<HTMLButtonElement>('[data-test-id="tip"]')!
+  }
+
+  afterEach(() => {
+    document.querySelectorAll('[data-scope]').forEach((el) => {
+      el.remove()
+    })
+  })
+
+  it('renders its panel outside the card it explains, at the end of the page', () => {
+    const card = document.createElement('div')
+    card.dataset.scope = ''
+    card.style.backdropFilter = 'blur(14px)'
+    const trigger = mountIn(card)
+    trigger.click()
+    expect(panel()).not.toBeNull()
+    expect(card.contains(panel())).toBe(false)
+    expect(document.body.contains(panel())).toBe(true)
+    // Still the trigger's description, wherever the panel lives.
+    expect(trigger.getAttribute('aria-describedby')).toBe(panel()!.id)
+  })
+
+  it("keeps the deck's theme scope, so a tip on Analytics paints the deck's own pair", () => {
+    const deck = document.createElement('div')
+    deck.dataset.scope = ''
+    deck.className = 'instrument-deck'
+    const trigger = mountIn(deck)
+    trigger.click()
+    const scope = panel()!.closest('.instrument-deck')
+    expect(scope).not.toBeNull()
+    expect(scope).not.toBe(deck)
+    // The scope only carries tokens: it draws no box of its own, so the deck's background and
+    // radius never paint around the panel.
+    expect((scope as HTMLElement).style.display).toBe('contents')
+  })
+
+  it('takes no scope when its icon sits in none', () => {
+    mount().click()
+    expect(panel()!.closest('.instrument-deck')).toBeNull()
+  })
+
+  it('stays above every dialog overlay, now that it no longer opens inside one', async () => {
+    mount().click()
+    const overlays = Object.values(
+      import.meta.glob<string>('../../**/*.module.css', {
+        query: '?raw',
+        import: 'default',
+        eager: true,
+      })
+    )
+      // Comments stripped first, so one that mentions an overlay is not read as a rule.
+      .map((css) => css.replace(/\/\*[\s\S]*?\*\//g, ' '))
+      .flatMap((css) => [...css.matchAll(/([^{}]*verlay[^{}]*)\{([^{}]*)\}/g)])
+      .map(([, , body]) => Number(/z-index:\s*(\d+)/.exec(body)?.[1] ?? 0))
+    expect(Math.max(...overlays)).toBeGreaterThan(1000)
+    expect(Number(window.getComputedStyle(panel()!).zIndex)).toBeGreaterThan(Math.max(...overlays))
+  })
+})

@@ -11,10 +11,19 @@
  * absolutely inside the field would have been simpler, but these sit in a narrow form
  * column and would be clipped by the first `overflow` ancestor.
  *
+ * It renders at the end of the page (a portal), not beside its icon. An ancestor with a
+ * backdrop-filter, a transform or a filter makes "fixed" mean fixed to that ancestor: on
+ * Dashboard's metric cards, which blur what is behind them, the panel opened about 430 px
+ * below its icon, off the bottom of the window, and was clipped by the card. At the end of
+ * the page no ancestor can move or clip it. It carries the theme scope its icon sits in
+ * (THEME_SCOPES), so a tip in the Analytics deck still paints the deck's colours.
+ *
  * Nothing here occupies layout: the point of the rewrite is that an explanation no
  * longer pushes the control it explains out of line with its neighbour.
  */
 import { createSignal, createUniqueId, onCleanup, Show } from 'solid-js'
+import { Portal } from 'solid-js/web'
+import { THEME_SCOPES } from '../core/theme'
 import styles from './InfoTip.module.css'
 
 interface InfoTipProps {
@@ -36,6 +45,8 @@ export default function InfoTip(props: InfoTipProps) {
   const panelId = createUniqueId()
   const [open, setOpen] = createSignal(false)
   const [pos, setPos] = createSignal({ top: 0, left: 0 })
+  // The theme scopes the icon sits in, worn by the panel at the end of the page.
+  const [scope, setScope] = createSignal('')
   // A click pins the panel; hovering away then leaves it alone. Without this, reading a
   // tip on a touch-and-mouse laptop means keeping the pointer perfectly still.
   let pinned = false
@@ -64,6 +75,7 @@ export default function InfoTip(props: InfoTipProps) {
   }
 
   const show = () => {
+    setScope(THEME_SCOPES.filter((name) => trigger.closest(`.${name}`)).join(' '))
     setOpen(true)
     // Place once from the fallback size so the panel never paints at the origin, then
     // again next frame once it exists and can be measured for real.
@@ -160,16 +172,21 @@ export default function InfoTip(props: InfoTipProps) {
         </svg>
       </button>
       <Show when={open()}>
-        <div
-          ref={panel}
-          id={panelId}
-          role="tooltip"
-          class={styles.panel}
-          data-test-id={props.testId ? `${props.testId}-panel` : undefined}
-          style={{ top: `${pos().top}px`, left: `${pos().left}px` }}
-        >
-          {props.text}
-        </div>
+        <Portal>
+          {/* Carries the scope's tokens only: `display: contents` draws no box of its own. */}
+          <div class={scope() || undefined} style={{ display: 'contents' }}>
+            <div
+              ref={panel}
+              id={panelId}
+              role="tooltip"
+              class={styles.panel}
+              data-test-id={props.testId ? `${props.testId}-panel` : undefined}
+              style={{ top: `${pos().top}px`, left: `${pos().left}px` }}
+            >
+              {props.text}
+            </div>
+          </div>
+        </Portal>
       </Show>
     </>
   )

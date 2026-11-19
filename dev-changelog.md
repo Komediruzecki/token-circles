@@ -2718,6 +2718,33 @@ check')` first, as the cushion and debt cases do.
   the first paint, and takes each later width a frame after the observer reports it, as
   `LoanPayoffChart` does: 0 of 12. `loans/__tests__/loanBalanceChartResize.test.tsx` fails when a
   width is set inside the callback, or when the chart first paints at its made-up 640 px.
+- **An (i) explanation opens beside its icon, wherever the icon sits.** `components/InfoTip.tsx`
+  places its `position: fixed` panel from the icon's box in window coordinates, and rendered it next
+  to the icon. An ancestor with a `backdrop-filter`, a `transform` or a `filter` becomes the
+  containing block of its fixed descendants, and Dashboard's metric cards blur what is behind them
+  (`.metric-card` in `features/DashboardPage.module.css`, which also hides its overflow), so each
+  card's tip opened as far below its icon as the card sat from the top of the window, and the card
+  clipped it. Measured on 19 Nov in a headless run with the page at the top: all four (Net Worth,
+  Income, Expenses, Balance) opened 431 px below their icon at 1440x900, two of them also past the
+  right edge, and 427 px below at 390x844, off the bottom of the window every time. The panel now
+  renders at the end of `body` through Solid's `Portal`, where no ancestor can move or clip it. A
+  `display: contents` wrapper around it carries the theme scopes its icon sits in (`THEME_SCOPES` in
+  `core/theme.ts`, today `instrument-deck`), so a tip in the Analytics or Portfolio deck still paints
+  the deck's surface, #202329, and mixes its edge from the deck's #5e656d. Its z-index goes from 1000 to 10001: outside every dialog's
+  stacking context now, it has to clear the highest dialog overlay (10000) to show over a dialog it
+  was opened in. Hover, focus, click-to-pin, the `aria-describedby` link, Escape and outside-click
+  are unchanged; outside-click already tested the panel by reference, not by where it sits in the
+  page. After the change a script opened every tip on Dashboard (4), Budgets (1) and Analytics (17)
+  at both sizes: all 22 inside the window and beside their icon, as Budgets' and Analytics' already
+  were.
+- **Tests:** `frontend/tests/info-tip-placement.spec.ts` (@smoke) opens Net Worth's tip from the
+  keyboard at 1440x900 and on a 390x844 phone, and fails when any part of the panel leaves the
+  window, when it is more than 12 px above or below its icon, or when the icon's centre is not over
+  it; with the portal taken out it measured 251 and 372 px. `src/components/__tests__/InfoTip.test.tsx`
+  checks that the panel renders outside the element that holds its icon, wears the deck's scope in
+  the deck and none outside one, and stands above every overlay rule in the CSS modules.
+  `src/__tests__/floatingEdges.test.ts` fails on a block in `styles/themes/` that re-grounds a theme
+  under a class `THEME_SCOPES` does not list.
 - **The unused `components/BulkActions/` tree is deleted.** Its `BulkActionBar`, `BulkCategoryModal`
   and `BulkTypeModal`, with their stylesheets, had no importer anywhere in the repository;
   Transactions uses `components/BulkActionBar.tsx`. The 2026-07-23 integrity audit

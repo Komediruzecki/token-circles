@@ -45,9 +45,11 @@
   outline-offset: 1px;
 }
 
+/* At the end of the page, outside every dialog's stacking, so above the highest dialog overlay
+   (10000): a tip opened inside a dialog must still show over it. */
 .panel {
   position: fixed;
-  z-index: 1000;
+  z-index: 10001;
   max-width: 280px;
   padding: 0.6rem 0.7rem;
   border: 1px solid color-mix(in oklab, var(--primary) 35%, var(--border-floating));
