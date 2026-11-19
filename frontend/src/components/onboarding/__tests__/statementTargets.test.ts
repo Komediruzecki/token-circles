@@ -96,6 +96,37 @@ describe('where a statement goes', () => {
     ])
   })
 
+  it('puts no second bank by default into an account another bank holds, one named for it included', () => {
+    const accounts = [MAIN, { id: 2, name: 'Revolut EUR', currency: 'EUR' }]
+    // N26 picked by hand into the account named for Revolut: Revolut takes the main account.
+    expect(
+      place([{ bankId: 'revolut' }, { bankId: 'n26', byHand: 'Revolut EUR' }], { accounts })
+    ).toEqual(['Main checking', 'Revolut EUR'])
+    // The same, with the main account N26's from an earlier statement: a new account, under a
+    // name of its own.
+    const earlier = [{ bankId: 'n26' as const, currency: 'EUR', account: 'Main checking' }]
+    expect(
+      place([{ bankId: 'revolut' }, { bankId: 'n26', byHand: 'Revolut EUR' }], {
+        accounts,
+        earlier,
+      })
+    ).toEqual(['Revolut EUR 2', 'Revolut EUR'])
+    // Held so by an earlier statement, too.
+    expect(
+      place([{ bankId: 'revolut' }], {
+        accounts,
+        earlier: [{ bankId: 'n26', currency: 'EUR', account: 'Revolut EUR' }],
+      })
+    ).toEqual(['Main checking'])
+    // Two picks by hand can share an account.
+    expect(
+      place([
+        { bankId: 'revolut', byHand: 'Main checking' },
+        { bankId: 'n26', byHand: 'Main checking' },
+      ])
+    ).toEqual(['Main checking', 'Main checking'])
+  })
+
   it('reads no currency as the base currency, on the statement and on the account', () => {
     const main = { id: 1, name: 'Main checking', currency: null }
     expect(

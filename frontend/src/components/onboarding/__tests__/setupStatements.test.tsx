@@ -166,6 +166,34 @@ async function importReady(): Promise<void> {
   }, waitLong)
 }
 
+/** Each account's imported payees, by the account's name. */
+async function bookedByAccount(): Promise<Record<string, string[]>> {
+  const db = await getDB()
+  const names = new Map(
+    ((await db.getAll('accounts')) as Array<{ id: number; name: string }>).map((a) => [
+      a.id,
+      a.name,
+    ])
+  )
+  const booked: Record<string, string[]> = {}
+  for (const t of (await db.getAll('transactions')) as Array<{
+    description: string
+    account_id: number
+  }>) {
+    const name = names.get(t.account_id) ?? String(t.account_id)
+    booked[name] = [...(booked[name] ?? []), t.description]
+  }
+  for (const list of Object.values(booked)) list.sort()
+  return booked
+}
+
+/** Pick the account the `at`th file goes into, as the person does on its card. */
+function pickTarget(at: number, name: string): void {
+  const select = all('onboarding-import-target')[at] as HTMLSelectElement
+  select.value = name
+  select.dispatchEvent(new Event('change', { bubbles: true }))
+}
+
 describe('where a statement goes, over the whole setup', () => {
   it('picked one after another: a second bank gets a new account, not the main one', async () => {
     await makeMainAccount('Main checking')
@@ -200,6 +228,50 @@ describe('where a statement goes, over the whole setup', () => {
     await untilStates(['ready'])
 
     expect(targets()).toEqual([['n26.csv', 'Main checking']])
+  })
+
+  it('a pick by hand into the main account claims it: the other bank moves out at the pick, and nothing moves after', async () => {
+    await makeMainAccount('Main checking')
+    choose([
+      ['revolut-may.csv', REVOLUT_MAY],
+      ['n26.csv', N26],
+    ])
+    await untilStates(['ready', 'ready'])
+    expect(targets()).toEqual([
+      ['revolut-may.csv', 'Main checking'],
+      ['n26.csv', 'New account: N26 EUR'],
+    ])
+
+    // N26 into the main account by hand: Revolut leaves it at once, for an account of its own.
+    pickTarget(1, 'Main checking')
+    await vi.waitFor(() => {
+      expect(targets()[1]).toEqual(['n26.csv', 'Main checking'])
+    }, waitLong)
+    await untilStates(['ready', 'ready'])
+    await settle(300)
+    const picked = [
+      ['revolut-may.csv', 'New account: Revolut EUR'],
+      ['n26.csv', 'Main checking'],
+    ]
+    expect(targets()).toEqual(picked)
+
+    // A file added, then another removed: nothing else moves.
+    choose([['revolut-june.csv', REVOLUT_JUNE]])
+    await untilStates(['ready', 'ready', 'ready'])
+    expect(targets()).toEqual([...picked, ['revolut-june.csv', 'New account: Revolut EUR']])
+    all('onboarding-import-remove')[0].click()
+    await untilStates(['ready', 'ready'])
+    expect(targets()).toEqual([
+      ['n26.csv', 'Main checking'],
+      ['revolut-june.csv', 'New account: Revolut EUR'],
+    ])
+
+    // Imported, each bank is in an account of its own.
+    await importReady()
+    expect(await bookedByAccount()).toEqual({
+      'Main checking': ['Example Grocer', 'Example Gym'],
+      'Revolut EUR': ['Example Bakery'],
+    })
   })
 
   it('a target picked by hand stays when another file comes, and the rest follow the rule', async () => {

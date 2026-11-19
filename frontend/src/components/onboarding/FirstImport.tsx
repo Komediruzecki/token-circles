@@ -361,7 +361,8 @@ export function createFirstImport(options: FirstImportOptions) {
 
   /**
    * Every statement's account by setup's rule (statementTargets.ts), but the ones the person
-   * picked: run whenever the set of files changes, added or removed. Each file's own answer
+   * picked: run whenever the set of files changes, added or removed, and at every pick by hand,
+   * which claims its account for its bank. Each file's own answer
    * (resolveTargetAccount, on the Import page's terms) is not kept: it took an account named for
    * the bank in any currency, and the first file only was ever placed again. A file read with no
    * transaction in it never takes the main account (finding 13). Answers whether a target moved.
@@ -513,7 +514,12 @@ export function createFirstImport(options: FirstImportOptions) {
     })
   }
 
-  /** Send a statement to another account: its rows name the account, so it is read again. */
+  /**
+   * Send a statement to another account: its rows name the account, so it is read again. The pick
+   * claims the account for its bank, and the other statements are placed again at once (round 4):
+   * placed at the next file added or removed instead, one moved at an action that had nothing to
+   * do with it, and imported before that, two banks went into one account.
+   */
   const setTarget = (file: File, name: string): Promise<void> => {
     if (importing()) return Promise.resolve()
     byHand.add(file)
@@ -521,7 +527,7 @@ export function createFirstImport(options: FirstImportOptions) {
       const index = flow.bankFiles().findIndex((row) => row.file === file)
       if (index < 0) return
       flow.updateBankFile(index, { targetAccount: name })
-      await prepare(mine)
+      await placeAndRead(mine)
     })
   }
 

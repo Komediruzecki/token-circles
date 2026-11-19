@@ -775,19 +775,29 @@ All notable changes to Token Circles are documented here. The format is based on
   only: no migration, no API change.
   - **The rule** (`components/onboarding/statementTargets.ts`, pure). For a statement of bank B in
     the base currency (none in the file counts as the base): an account named for B in the base
-    currency (`accountNamesBank`); else the main account, when it is in the base currency, named for
-    no other bank, and B is the bank it takes; else a new account named for B and the base currency
-    ("N26 EUR"). A statement in another currency is set aside (round 3, below). The main account is
+    currency (`accountNamesBank`) that no other bank holds; else the main account, when it is in the
+    base currency, named for no other bank, and B is the bank it takes; else a new account named for
+    B and the base currency ("N26 EUR", or "N26 EUR 2" when another bank holds that name). A
+    statement in another currency is set aside (round 3, below). The main account is
     the one setup's account step made; with none (setup reopened at the statement, or its account
     step skipped), the newest account in the base currency named for no bank. The bank it takes is
     the first it received earlier in this setup, else the first picked into it by hand, else the
     first statement in the list that fits it. maff's decision reads "the first bank of this setup"; taken as the first whose statement
     fits the main account, so a USD statement picked first leaves a EUR main account to the EUR
-    bank after it.
+    bank after it. Round 4: a pick by hand claims its account for its bank, whichever account it
+    is, and no default puts a second bank into an account another bank holds, by an earlier
+    statement or a pick by hand; only two picks by hand can share one.
   - **Placed again** (`FirstImport.tsx`, `placeStatements`) whenever a file is added or removed,
-    every file but those picked by hand (`byHand`, kept until the file goes or the step clears).
-    The old code placed a file once, as it came: picked one after another, a second bank went into
-    the main account, and Remove left the other file on a new account with the main one empty.
+    and at every pick by hand (round 4), every file but those picked by hand (`byHand`, kept until
+    the file goes or the step clears). The old code placed a file once, as it came: picked one
+    after another, a second bank went into the main account, and Remove left the other file on a
+    new account with the main one empty. Until round 4 a pick by hand read the batch again without
+    placing it: N26 picked into the main account left Revolut there too, the next file added or
+    removed moved Revolut out, and an import before that put both banks into the main account. A
+    file's default now changes at the action that changes it; an add or a remove that has nothing
+    to do with it moves nothing. Placing reads the account list and setup's record as they are at
+    that action, so an account made in another tab while the step is open counts from the next
+    one.
   - **Not the Import page's guess.** Setup no longer keeps `resolveTargetAccount`'s answer for a
     file: a choice remembered for its signature, else an account named for the bank in any
     currency. `processBankFiles` remembers every file's account, setup's defaults included, so the
@@ -807,7 +817,12 @@ All notable changes to Token Circles are documented here. The format is based on
     first import counts and Continue goes to the subscriptions. Measured in round 2: with the old
     `defaultTarget` back, 4 placement cases failed; with the old wizard and step, all 7 cases
     `setupStatements.test.tsx` had then; without the currency in the main account's choice, the
-    case that picked the newest account in the statement's currency.
+    case that picked the newest account in the statement's currency. Round 4 added "a pick by hand
+    into the main account claims it" (`setupStatements.test.tsx`: the reviewer's sequence, then a
+    file added and one removed, then the import, one bank per account) and "puts no second bank
+    by default into an account another bank holds" (`statementTargets.test.ts`). With the pick
+    reading again without placing, the first fails; without the hold check on the bank's own
+    account, or without the name of its own, the second does.
 - **The statement step says why its files were not read, and an empty export takes no
   account.** Review of 19 Nov, `components/onboarding/FirstImport.tsx`:
   - A read that stops before it counts any file (the category list not read, say) showed
