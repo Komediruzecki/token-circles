@@ -1,6 +1,6 @@
 /**
  * The chart under a loan's card: a sentence saying how far along the payments are, the four
- * figures today marks (paid so far, still owed, months left, the last payment) and the balance
+ * figures today marks (repaid so far, still owed, months left, the last payment) and the balance
  * over the loan's whole life (LoanPayoffChart). It opens in the overview's grid, across the whole
  * row under the card on a wide screen and straight under the card on a phone.
  *
@@ -133,15 +133,18 @@ export default function LoanChartPanel(props: Props) {
           <Match when={timeline()}>
             {(t) => (
               <>
+                {/* Repaid is the principal, as the card's "% repaid" counts it: the fall of the
+                    solid stretch of the line, from the amount borrowed down to today. Each key
+                    is a figure's own mark on the line; months left has none. */}
                 <dl class={styles.readout} data-test-id="loans-chart-readout">
                   <div>
                     <dt>
                       <svg class={styles.key} viewBox="0 0 18 8" aria-hidden="true">
                         <path class={styles.keyPaid} d="M2 4h14" />
                       </svg>
-                      Paid so far
+                      Repaid so far
                     </dt>
-                    <dd data-test-id="loans-chart-paid">{formatCurrency(t().repaid)}</dd>
+                    <dd data-test-id="loans-chart-repaid">{formatCurrency(t().repaid)}</dd>
                   </div>
                   <div>
                     <dt>
@@ -153,12 +156,7 @@ export default function LoanChartPanel(props: Props) {
                     <dd data-test-id="loans-chart-owed">{formatCurrency(t().owed)}</dd>
                   </div>
                   <div>
-                    <dt>
-                      <svg class={styles.key} viewBox="0 0 18 8" aria-hidden="true">
-                        <circle class={styles.keyToday} cx="9" cy="4" r="3.5" />
-                      </svg>
-                      Months left
-                    </dt>
+                    <dt>Months left</dt>
                     <dd data-test-id="loans-chart-left">{left(t())}</dd>
                   </div>
                   <div>

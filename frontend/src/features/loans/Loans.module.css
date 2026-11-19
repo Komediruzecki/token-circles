@@ -1322,10 +1322,6 @@
   stroke-dasharray: 0.1 5;
 }
 
-.key-today {
-  fill: var(--circle-now);
-}
-
 .key-end {
   fill: var(--card-bg);
   stroke: var(--primary);

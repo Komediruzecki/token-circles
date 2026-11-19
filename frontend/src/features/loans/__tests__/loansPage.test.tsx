@@ -764,7 +764,17 @@ describe('the chart under a card', () => {
     expect(text(root, 'loans-chart-sentence')).toBe(
       '22 of 48 payments made. The last is due in February 2028.'
     )
-    expect(text(root, 'loans-chart-paid')).toBe('€10,289.99')
+    // The principal repaid, the number the card's "% repaid" measures, not the money paid with
+    // interest. Each figure's key is its mark on the line; months left has none.
+    const terms = [...el(root, 'loans-chart-readout')!.querySelectorAll('dt')]
+    expect(terms.map((dt) => dt.textContent?.trim())).toEqual([
+      'Repaid so far',
+      'Still owed',
+      'Months left',
+      'Last payment',
+    ])
+    expect(terms.map((dt) => dt.querySelector('svg') !== null)).toEqual([true, true, false, true])
+    expect(text(root, 'loans-chart-repaid')).toBe('€10,289.99')
     expect(text(root, 'loans-chart-owed')).toBe('€13,710.01')
     expect(text(root, 'loans-chart-left')).toBe('26')
     expect(text(root, 'loans-chart-payoff')).toBe('Feb 2028')
