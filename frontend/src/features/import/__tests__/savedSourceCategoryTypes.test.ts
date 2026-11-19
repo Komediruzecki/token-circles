@@ -82,4 +82,30 @@ describe("a saved source's category types", () => {
       Checking: 'account',
     })
   })
+
+  /*
+   * A row added to the sheet after it was saved can bring a category the saved types never
+   * named. With no entry its type fell to the amount's sign, so an unsigned 12.00 in Pharmacy
+   * came in as income on the next Sync, where a fresh import of the same sheet files it as an
+   * expense.
+   */
+  it('leave a category they do not name to the fresh import guess', async () => {
+    const later = `${CSV  }\n2026-01-12,Pills,12,Pharmacy,Checking`
+    flow.handleFileSelect({
+      target: { files: [new File([later], 'sheet.csv', { type: 'text/csv' })] },
+    } as unknown as Event)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await waitUntil(() => !flow.loading(), 'the upload')
+    const fresh = { ...flow.categoryTypes() }
+    expect(fresh.Pharmacy).toBe('expense')
+
+    flow.applySavedMapping(undefined, { Library: 'account', Salary: 'expense' })
+
+    expect(flow.categoryTypes()).toEqual({
+      Library: 'account',
+      Salary: 'expense',
+      Pharmacy: fresh.Pharmacy,
+      Checking: 'account',
+    })
+  })
 })

@@ -2644,6 +2644,23 @@ check')` first, as the cushion and debt cases do.
     raw gid compare the saved-before case and the matcher fail; reading the label alone fails
     the no-name case. `import-page-top.spec.ts` saves the sheet from the card in the browser and
     finds its Auto sync.
+- **Sync of a saved sheet types a new category as a fresh import does.** Review of the branch,
+  19 Nov: the sheet saved from the card keeps the import's `category_types`, and
+  `applySavedMapping` restored them alone, so a category added to the sheet later had no type and
+  its row fell to the amount's sign (an unsigned 12.00 in Pharmacy came in as income). The saved
+  types now win only for the values they name; everything else gets `classifyAfresh()` in
+  `features/import/importFlow.ts`, the keyword guess with the account-by-construction values as
+  accounts, which Map columns also uses now. A source with no saved types follows the same rule,
+  so a Means of Payment value that is also a category name is an account there too, as on Map
+  columns. The daily cron (`worker/src/import-sync.ts`) passes the saved types to
+  `executeImport`, where a category they do not name still takes the amount's sign: the keyword
+  classifier is frontend-only (`frontend/src/core/categoryClassifier.ts`), so the cron is
+  unchanged. Only a sheet saved from the new card has saved types, so nothing released is
+  affected.
+  - **Tests:** `savedSourceCategoryTypes.test.ts` (a category the saved types do not name gets
+    the fresh guess) and `features/__tests__/syncSavedSheet.test.tsx` (the page: import a sheet
+    with unsigned amounts, Save sheet, add a Pharmacy row, Sync: an expense). Both fail on the
+    old restore.
 
 ### Fixed
 

@@ -612,6 +612,18 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     }
   }
 
+  /**
+   * The types a fresh import gives the rows' values: the keyword guess for every category, then
+   * the account-by-construction values as accounts, last so they win over any guess (a
+   * Means-of-Payment value is the account the money moved from, whatever it is called).
+   */
+  const classifyAfresh = (): Record<string, 'income' | 'expense' | 'account'> => {
+    const types: Record<string, 'income' | 'expense' | 'account'> = {}
+    for (const cat of detectCategories()) types[cat] = classifyCategory(cat)
+    for (const name of detectAccountValues()) types[name] = 'account'
+    return types
+  }
+
   // Step navigation
   const goToMapping = () => {
     const headers = currentHeaders()
@@ -623,18 +635,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     setColumnMapping(mapping)
 
     // Initialize category types when category column is auto-detected
-    if (mapping['category'] !== undefined) {
-      const types: Record<string, 'income' | 'expense' | 'account'> = {}
-      detectCategories().forEach((cat) => {
-        types[cat] = classifyCategory(cat)
-      })
-      // Account-by-construction values last, so they win over any keyword guess: a
-      // Means-of-Payment value is the account the money moved from whatever it is called.
-      detectAccountValues().forEach((name) => {
-        types[name] = 'account'
-      })
-      setCategoryTypes(types)
-    }
+    if (mapping['category'] !== undefined) setCategoryTypes(classifyAfresh())
   }
 
   // Apply a saved source's column mapping (persisted BY HEADER NAME) to the freshly fetched
@@ -653,25 +654,17 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
         : autoDetectMapping(headers)
     setColumnMapping(resolved)
     /*
-     * Both branches have to pick up the account-by-construction values, and a saved source is the
-     * branch that matters most: this is the Google Sheets auto-sync path, and a mapping saved
-     * before those values were classified at all has no entry for any of them. Restoring it
-     * verbatim would keep every transfer unresolvable for exactly the people who had already set
-     * the source up.
-     *
-     * A saved decision still wins where there is one — `??` fills gaps, it does not overwrite.
+     * A saved decision wins for every value it names. Every other value is classified exactly as
+     * a fresh import classifies it: the sheet gains rows after it was saved, and a category they
+     * bring has no saved type. Left without one, a row's type fell to its amount's sign, so an
+     * unsigned 12.00 in a new Pharmacy category came in as income on the next Sync. The same
+     * holds for the account-by-construction values, which a mapping saved before they were
+     * classified at all has no entry for.
      */
-    const withAccountValues = (base: Record<string, 'income' | 'expense' | 'account'>) => {
-      const merged = { ...base }
-      for (const name of detectAccountValues()) merged[name] = merged[name] ?? 'account'
-      return merged
-    }
     if (savedCategoryTypes && Object.keys(savedCategoryTypes).length > 0) {
-      setCategoryTypes(withAccountValues({ ...savedCategoryTypes }))
+      setCategoryTypes({ ...classifyAfresh(), ...savedCategoryTypes })
     } else if (resolved['category'] !== undefined) {
-      const types: Record<string, 'income' | 'expense' | 'account'> = {}
-      for (const cat of detectCategories()) types[cat] = classifyCategory(cat)
-      setCategoryTypes(withAccountValues(types))
+      setCategoryTypes(classifyAfresh())
     }
   }
 
