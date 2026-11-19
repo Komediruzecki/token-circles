@@ -256,8 +256,10 @@ describe('writes made on the page', () => {
 
     // The execute call may create accounts and categories; the log records the session; the
     // source's last-synced time is saved. One reload each, never a second for the same write.
+    // The accounts are read twice more by the card the Sync's result takes (Import.tsx): the
+    // balances before it ran and after, for the accounts it changed, as for the page's own import.
     expect(readsOf('/api/import-logs')).toBe(2)
-    expect(readsOf('/api/accounts')).toBe(2)
+    expect(readsOf('/api/accounts')).toBe(4)
     expect(readsOf('/api/categories')).toBe(2)
     expect(readsOf('/api/import-sources')).toBe(2)
   })

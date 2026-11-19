@@ -30,6 +30,10 @@ export interface AfterImport {
   scan: boolean
   /** The Google Sheet it read, to keep in Connected sources; null for any other import. */
   sheet: SheetToKeep | null
+  /** The id its transactions and its Recent Imports entry carry: deleting that entry clears it. */
+  importId: string
+  /** Rows of the source it left out that a Sync of the sheet brings in (importFlow.ts). */
+  leftOut: number
 }
 
 /** Balances open by themselves up to this many accounts: one or two lines. */
@@ -143,17 +147,28 @@ export function ImportAfter(props: {
       </Show>
 
       <Show when={props.after.sheet} keyed>
-        {(sheet) => <SheetRow sheet={sheet} />}
+        {(sheet) => <SheetRow sheet={sheet} leftOut={props.after.leftOut} />}
       </Show>
     </section>
   )
 }
 
+/** What Sync does: it sends every row, and the import skips the ones in already. */
+const SYNC_BRINGS = "Sync brings in every row of the sheet that isn't in Token Circles yet."
+
+/** The rows this import left out, which the first Sync brings in (review of 19 Nov). */
+const leftOutLine = (count: number): string =>
+  count === 0
+    ? ''
+    : count === 1
+      ? ' That includes the one row this import left out.'
+      : ` That includes the ${count.toLocaleString('en-GB')} rows this import left out.`
+
 /**
  * The sheet's row: in Connected sources already, or Save sheet. Nothing until the saved sources
  * are read, so the row does not change its mind in front of the person.
  */
-function SheetRow(props: { sheet: SheetToKeep }) {
+function SheetRow(props: { sheet: SheetToKeep; leftOut: number }) {
   const [savedNow, setSavedNow] = createSignal<string | null>(null)
   const [stored] = createResource(async () => {
     try {
@@ -180,14 +195,15 @@ function SheetRow(props: { sheet: SheetToKeep }) {
             when={savedAs()}
             fallback={
               <p class={styles.sub}>
-                Keep it in Connected sources, and Sync brings in rows added to it later.
+                Keep it in Connected sources. {SYNC_BRINGS}
+                {leftOutLine(props.leftOut)}
               </p>
             }
           >
             {(label) => (
               <p class={styles.sub} data-test-id="import-after-saved">
-                "{label()}" is in Connected sources below. Sync there brings in rows added to it
-                later.
+                "{label()}" is in Connected sources below. {SYNC_BRINGS}
+                {leftOutLine(props.leftOut)}
               </p>
             )}
           </Show>

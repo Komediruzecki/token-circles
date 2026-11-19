@@ -2762,6 +2762,37 @@ check')` first, as the cushion and debt cases do.
     with or without one sent). Before the change all of them failed but "no gid is gid 0".
     `sheetForms.test.tsx` expected the made-up name ("Sheet1" stored as tab and label) and now
     expects none and "Google Sheet".
+- **The card after an import is about the last import, or it goes.** Review of 19 Nov:
+  - **A Sync's result takes it.** Connected sources drives its own flow, so after a Sync or a
+    Fetch & preview import the card still said "Imported 2 transactions" while the toast said
+    "1 imported · 2 skipped". `ConnectedSources` now takes `beforeImport` and `onImported` from
+    the page, which runs both flows' imports through one `landed()` in `Import.tsx`: the card
+    goes as an import starts and takes its result, with the balances it changed. A Sync's card
+    has no sheet row (the sheet is saved). The toast stays, as the Sync button can be a screen
+    below the card.
+  - **Deleting its import in Recent Imports clears it.** `ImportSummary` and the card carry the
+    import's `importId`, which the history entry holds as `import_id` (`ImportLogEntry` now names
+    it); a delete of that entry drops the card.
+  - **A quick-add keeps it.** The floating add button's save bumps `profileVersion`, which
+    cleared the card and an unsaved Save sheet offer with it. The card now goes only when the
+    current profile changes; on a bump with the same profile its balances are read again, as the
+    entry may have moved one (the balances list remounts on the new array, so it reads them).
+  - **"Imported 1 transaction"**, where the result line said "1 transactions".
+  - **Tests** (`features/__tests__/syncSavedSheet.test.tsx`): a Sync's result in the card, the
+    card gone after its import is deleted, the card and its offer through a quick-add, and the
+    balances read again after one. The first three fail on the old page; with the balances not
+    read again, the last fails. `importFollowsWrites.test.tsx` counts the card's two reads of
+    the accounts after a Sync.
+- **The Save sheet offer says what Sync does.** Review of 19 Nov: Sync sends every row of the
+  sheet and the import skips the ones in already, so rows this import left out come in with the
+  first Sync. The card's sheet row now reads "Sync brings in every row of the sheet that isn't in
+  Token Circles yet.", saved or not, and when this import left rows out, "That includes the N rows
+  this import left out." `ImportSummary.leftOut` counts them in `handleImport`: rows not sent
+  (unticked, outside the date range, or a copy left out by Import only new) that are neither a
+  copy of another row, nor here already by the dry run, nor invalid, as Sync would skip those
+  again. What Sync does is unchanged. Tests: the two offer cases in `syncSavedSheet.test.tsx`
+  (both fail on the old copy); `importPageTop.test.tsx` and `import-page-top.spec.ts` read the
+  new line.
 
 ### Fixed
 

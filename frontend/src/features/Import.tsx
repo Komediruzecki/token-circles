@@ -65,6 +65,7 @@ import { SetupStrip } from './import/SetupStrip'
 import type { StoredAccount } from '../core/balanceToday'
 import type { TypedBalance } from '../core/setupTypedBalances'
 import type { AfterImport } from './import/ImportAfter'
+import type { ImportSummary } from './import/importFlow'
 import type { SheetToKeep } from './import/keepSheet'
 
 export default function Import() {
@@ -90,53 +91,71 @@ export default function Import() {
   const [preparing, setPreparing] = createSignal(false)
   const [summaryImported, setSummaryImported] = createSignal(false)
 
+  /** Before any import on the page, this one's or a Sync's: the card goes, the balances are read. */
+  const beforeAnImport = async () => {
+    setAfter(null)
+    setTouched([])
+    heldBefore = null
+    heldBefore = await balancesById()
+  }
+
+  /**
+   * An import landed, from the page's own steps or from Connected sources (Sync, Fetch & preview):
+   * it takes the card, so the card never describes an older one (review of 19 Nov). `typed` are
+   * the balances setup typed for a statement it handed over, worked back once it is in.
+   */
+  const landed = (
+    summary: ImportSummary,
+    sheet: SheetToKeep | null,
+    typed: readonly TypedBalance[]
+  ) => {
+    // While setup waits for this statement, its next step is the subscription scan: the page
+    // leaves the offer to it, and the way back opens setup there.
+    const waiting = setupWaiting()
+    // Setup's own, as the wizard's are: what it counts and where its next statements go.
+    if (waiting) {
+      noteImportWhileSetupWaits({
+        imported: summary.imported,
+        createdAccounts: summary.createdAccounts,
+        statements: summary.statements,
+      })
+    }
+    setAfter({
+      text: summary.text,
+      imported: summary.imported,
+      scan: !waiting && summary.imported > 0,
+      sheet,
+      importId: summary.importId,
+      leftOut: summary.leftOut,
+    })
+    const before = heldBefore
+    heldBefore = null
+    const workedBack =
+      summary.imported > 0 && typed.length > 0
+        ? workBackTypedBalances(typed).catch((err: unknown) => {
+            console.error('Could not set the balance today after the statement:', err)
+            addToast("Couldn't set your account's balance today. Accounts can set it.", 'warning')
+          })
+        : Promise.resolve()
+    if (summary.imported > 0 && before !== null) {
+      workedBack
+        .then(() => storedAccounts())
+        .then((after) => setTouched(touchedSince(before, after)))
+        .catch((err: unknown) => {
+          console.error('Reading the balances after the import:', err)
+        })
+    }
+  }
+
   const flow = createImportFlow({
-    beforeImport: async () => {
-      setAfter(null)
-      setTouched([])
-      heldBefore = null
-      heldBefore = await balancesById()
-    },
+    beforeImport: beforeAnImport,
     onImported: (summary) => {
       setSummaryImported(true)
-      // While setup waits for this statement, its next step is the subscription scan: the page
-      // leaves the offer to it, and the way back opens setup there.
-      const waiting = setupWaiting()
-      // Setup's own, as the wizard's are: what it counts and where its next statements go.
-      if (waiting) {
-        noteImportWhileSetupWaits({
-          imported: summary.imported,
-          createdAccounts: summary.createdAccounts,
-          statements: summary.statements,
-        })
-      }
-      setAfter({
-        text: summary.text,
-        imported: summary.imported,
-        scan: !waiting && summary.imported > 0,
-        sheet: sheetToKeep(),
-      })
-      const before = heldBefore
-      heldBefore = null
       // A file setup handed over is worked back from the balances typed there (review M2), once,
-      // before the balances below are read.
+      // before the balances are read.
       const typed = handedTyped
       handedTyped = []
-      const workedBack =
-        summary.imported > 0 && typed.length > 0
-          ? workBackTypedBalances(typed).catch((err: unknown) => {
-              console.error('Could not set the balance today after the statement:', err)
-              addToast("Couldn't set your account's balance today. Accounts can set it.", 'warning')
-            })
-          : Promise.resolve()
-      if (summary.imported > 0 && before !== null) {
-        workedBack
-          .then(() => storedAccounts())
-          .then((after) => setTouched(touchedSince(before, after)))
-          .catch((err: unknown) => {
-            console.error('Reading the balances after the import:', err)
-          })
-      }
+      landed(summary, sheetToKeep(), typed)
     },
   })
 
@@ -248,14 +267,30 @@ export default function Import() {
   // every profile notice, reloaded only when the profile really changed: a quick-add bumps
   // profileVersion too (App.tsx), and reloading then would throw away unsaved rule edits.
   // currentProfile is followed as well, because creating a profile makes it the active one
-  // without bumping profileVersion.
+  // without bumping profileVersion. The card goes with the profile it was about, and stays
+  // through a quick-add (review of 19 Nov: it took an unsaved Save sheet offer with it), with its
+  // balances read again, as the entry may have moved one.
+  let cardProfile = state.currentProfile?.id
   createEffect(
     on(
       [() => state.profileVersion, () => state.currentProfile?.id],
-      () => {
+      ([, profileId]) => {
         flow.reloadBankRulesIfProfileChanged()
-        setTouched([])
-        setAfter(null)
+        if (profileId !== cardProfile) {
+          cardProfile = profileId
+          setTouched([])
+          setAfter(null)
+          return
+        }
+        const shown = untrack(touched)
+        if (shown.length === 0) return
+        storedAccounts()
+          .then((all) => {
+            setTouched(shown.map((account) => all.find((one) => one.id === account.id) ?? account))
+          })
+          .catch((err: unknown) => {
+            console.error('Reading the balances again:', err)
+          })
       },
       { defer: true }
     )
@@ -305,7 +340,12 @@ export default function Import() {
         <ImportDataEntry flow={flow} onProcessBank={processBank} />
       </Show>
       <Show when={flow.activeStep() === 'upload'}>
-        <ConnectedSources />
+        <ConnectedSources
+          beforeImport={beforeAnImport}
+          onImported={(summary) => {
+            landed(summary, null, [])
+          }}
+        />
       </Show>
       <Show when={flow.activeStep() === 'mapping' && !preparing()}>
         <ImportMappingStep flow={flow} />
@@ -431,6 +471,12 @@ export default function Import() {
                           )
                           if (!ok) return
                           const deleted = await flow.deleteImportLog(log.id)
+                          // The card about this import goes with it.
+                          const shown = after()
+                          if (deleted !== null && shown && log.import_id === shown.importId) {
+                            setAfter(null)
+                            setTouched([])
+                          }
                           if (deleted === null) addToast('Could not delete import', 'error')
                           else if (deleted === 0)
                             addToast(

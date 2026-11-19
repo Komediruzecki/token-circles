@@ -429,14 +429,14 @@ describe('the sheet an import read', () => {
       return found!
     })
     expect(byTestId('import-after-sheet')?.textContent).toContain(
-      'Keep it in Connected sources, and Sync brings in rows added to it later.'
+      "Keep it in Connected sources. Sync brings in every row of the sheet that isn't in Token Circles yet."
     )
     type(byTestId('import-after-sheet-name') as HTMLInputElement, 'Example ledger')
     save.click()
 
     await vi.waitFor(() => {
       expect(byTestId('import-after-saved')?.textContent).toBe(
-        '"Example ledger" is in Connected sources below. Sync there brings in rows added to it later.'
+        `"Example ledger" is in Connected sources below. Sync brings in every row of the sheet that isn't in Token Circles yet.`
       )
     })
     expect(byTestId('import-after-save-sheet')).toBeNull()
@@ -486,7 +486,7 @@ describe('the sheet an import read', () => {
 
     await vi.waitFor(() => {
       expect(byTestId('import-after-saved')?.textContent).toBe(
-        '"Example saved sheet" is in Connected sources below. Sync there brings in rows added to it later.'
+        `"Example saved sheet" is in Connected sources below. Sync brings in every row of the sheet that isn't in Token Circles yet.`
       )
     })
     expect(byTestId('import-after-save-sheet')).toBeNull()
@@ -509,7 +509,7 @@ describe('the sheet an import read', () => {
 
     await vi.waitFor(() => {
       expect(byTestId('import-after-saved')?.textContent).toBe(
-        '"Google Sheet" is in Connected sources below. Sync there brings in rows added to it later.'
+        `"Google Sheet" is in Connected sources below. Sync brings in every row of the sheet that isn't in Token Circles yet.`
       )
     })
     expect(byTestId('import-after-save-sheet')).toBeNull()

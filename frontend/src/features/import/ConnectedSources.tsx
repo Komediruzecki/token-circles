@@ -28,8 +28,14 @@ import { createImportFlow } from './importFlow'
 import { ImportPreviewModal } from './ImportPreviewModal'
 import { createSheetSourceForm } from './sheetSourceForm'
 import type { ImportSource } from '../../core/importSources'
+import type { ImportSummary } from './importFlow'
 
-export function ConnectedSources() {
+export function ConnectedSources(props: {
+  /** Before a Sync's or a preview's import runs: the page's card goes (Import.tsx). */
+  beforeImport?: () => Promise<void>
+  /** Its import landed: the page's card takes its result. */
+  onImported?: (summary: ImportSummary) => void
+}) {
   const [sources, setSources] = createSignal<ImportSource[]>([])
   const [showAdd, setShowAdd] = createSignal(false)
   const [busy, setBusy] = createSignal<{ id: number; action: 'sync' | 'preview' } | null>(null)
@@ -41,7 +47,9 @@ export function ConnectedSources() {
   // A hidden flow this section drives. autoResetAfterImport off so we control the modal lifecycle.
   const flow = createImportFlow({
     autoResetAfterImport: false,
+    beforeImport: () => props.beforeImport?.() ?? Promise.resolve(),
     onImported: (summary) => {
+      props.onImported?.(summary)
       const src = activeSource()
       if (src) {
         const now = new Date().toISOString()

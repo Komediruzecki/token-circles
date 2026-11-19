@@ -112,6 +112,8 @@ export type ImportTab = 'google-sheets' | 'file-upload' | 'paste-csv' | 'bank-im
 
 export interface ImportLogEntry {
   id: number
+  /** The id the import's transactions carry (Recent Imports' delete undoes them by it). */
+  import_id?: string | null
   source: string
   imported: number
   duplicates_skipped: number
@@ -163,6 +165,14 @@ export interface ImportSummary {
    * its next statements by them (components/onboarding/statementTargets.ts).
    */
   statements: Array<{ bankId: BankId; currency: string; account: string }>
+  /** The id the import's transactions and its Recent Imports entry carry. */
+  importId: string
+  /**
+   * Rows of the source this import did not send (unticked, outside the date range) that are not
+   * in Token Circles already, a copy of another row, or invalid: a Sync of the sheet, which sends
+   * every row, brings them in.
+   */
+  leftOut: number
 }
 
 /**
@@ -1596,10 +1606,11 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
       const mapping = columnMapping()
       const types = categoryTypes()
 
-      // Get rows to import
-      let rowsToImport = currentRows()
+      // Get rows to import, by index into the source's rows
+      const allRows = currentRows()
+      let sent = allRows.map((_, i) => i)
       if (mode === 'selected') {
-        rowsToImport = rowsToImport.filter((_, i) => selectedRows().has(i))
+        sent = sent.filter((i) => selectedRows().has(i))
       }
 
       // "Import only new" skips the within-batch duplicate rows detected on preview.
@@ -1608,19 +1619,33 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
       const dupCount = duplicateIndices().length
       if (mode === 'new' && dupCount > 0) {
         const dupSet = duplicateSet()
-        rowsToImport = rowsToImport.filter((_, i) => !dupSet.has(i))
+        sent = sent.filter((i) => !dupSet.has(i))
       }
 
       // Date-range filter: drop rows whose date falls outside the selected window.
       let dateSkipped = 0
       const dateIdx = mapping.date
       if (dateIdx !== undefined && (importStartDate() || importEndDate())) {
-        rowsToImport = rowsToImport.filter((row) => {
-          const out = isDateOutOfRange(row[dateIdx])
+        sent = sent.filter((i) => {
+          const out = isDateOutOfRange(allRows[i][dateIdx])
           if (out) dateSkipped++
           return !out
         })
       }
+      const rowsToImport = sent.map((i) => allRows[i])
+      // What a Sync, which sends every row, would still bring in of the rows not sent here.
+      const notNew = new Set<number>([
+        ...duplicateSet(),
+        ...existingDuplicateIndices(),
+        ...previewValidationIssues()
+          .map((issue) => issue.index)
+          .filter((index): index is number => typeof index === 'number'),
+      ])
+      const sentSet = new Set(sent)
+      const leftOut = allRows.reduce(
+        (count, _, i) => (sentSet.has(i) || notNew.has(i) ? count : count + 1),
+        0
+      )
 
       // Reuse a stable id across retries so the worker can de-dupe a re-run of the same import.
       let iid = importId()
@@ -1670,7 +1695,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
         if (alreadyExisted > 0) parts.push(`${alreadyExisted} already imported, skipped`)
         if (invalidSkipped > 0) parts.push(`${invalidSkipped} invalid`)
         if (dateSkipped > 0) parts.push(`${dateSkipped} outside date range`)
-        text = `Imported ${importedCount} transactions${parts.length > 0 ? ` (${parts.join(', ')})` : ''}`
+        text = `Imported ${importedCount} transaction${importedCount === 1 ? '' : 's'}${parts.length > 0 ? ` (${parts.join(', ')})` : ''}`
       }
       // The page heads its after-import card with it (onImported, below). Announced in the flow's
       // banner as well, it sat on the next step's form for the rest of its six seconds.
@@ -1749,6 +1774,8 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
         createdCategories: data.created_categories ?? [],
         source,
         text,
+        importId: iid,
+        leftOut,
         statements:
           activeImportTab() === 'bank-imports'
             ? bankFiles()

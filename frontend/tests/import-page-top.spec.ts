@@ -125,7 +125,7 @@ for (const size of [
     await page.getByTestId('import-after-sheet-name').fill('Example ledger')
     await page.getByTestId('import-after-save-sheet').click()
     await expect(page.getByTestId('import-after-saved')).toHaveText(
-      '"Example ledger" is in Connected sources below. Sync there brings in rows added to it later.'
+      `"Example ledger" is in Connected sources below. Sync brings in every row of the sheet that isn't in Token Circles yet.`
     )
     await expect(page.getByRole('button', { name: 'Auto sync Example ledger' })).toBeVisible()
   })
