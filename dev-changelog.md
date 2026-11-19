@@ -2769,6 +2769,16 @@ check')` first, as the cushion and debt cases do.
   page scrolls. `frontend/tests/info-tip-placement.spec.ts` (@smoke) pins Net Worth's tip with a
   click at 1440x900 and goes to Loans by hash, and taps it on a 390x844 phone and goes Back; each
   fails while a panel is left, as each did before the change.
+- **The heatmap's tooltip paints the deck's colours.** `components/D3HeatmapChart.tsx` appends its
+  tooltip at the end of the page, outside the chart, and the tooltip took its `--surface-floating`
+  and `--border-floating` from there: over Analytics' graphite deck in Orbit Dark it painted Orbit's
+  navy pair, #222b47 and #5b698c, instead of the deck's #202329 and #5e656d. It now sits in a
+  `display: contents` wrapper that carries the theme scopes its chart sits in (`THEME_SCOPES`), as
+  InfoTip's panel does, and the wrapper goes with the chart.
+- **Tests:** `src/components/__tests__/heatmapTooltipScope.test.tsx` mounts the chart inside
+  `.instrument-deck` and fails unless the tooltip renders outside the chart, inside a scope of the
+  deck's class that draws no box; outside a deck it takes none, and nothing is left behind when the
+  chart goes.
 - **The heatmap's day detail keeps its edge where the dialog check can see it.** A click on a day
   in Analytics' heatmap opens a dialog whose box was styled inline in `features/Analytics.tsx`, so
   `dialogEdges.test.ts`, which reads the CSS modules, never saw it. Its backdrop and box now live in
