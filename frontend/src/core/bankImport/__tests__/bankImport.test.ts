@@ -426,11 +426,41 @@ describe('account resolver', () => {
     ).toBe('Everyday')
   })
 
-  it('finds a longer one inside a word, as German bank names hold it', () => {
-    const accounts = [{ name: 'Main Checking' }, { name: 'Stadtsparkasse Giro' }]
-    expect(resolveTargetAccount('sparkasse', {}, 'f.csv', accounts, {}, {})).toBe(
-      'Stadtsparkasse Giro'
-    )
+  // Review of 19 Nov: a longer id still matched inside a word ("Erstes Konto" named Erste,
+  // "Otherwise" Wise), and a digit after a short one hid it ("ING2"). maff's rule: a bank's id,
+  // of any length, counts only where no letter touches it; digits, spaces and punctuation are
+  // edges.
+  it('takes a bank id of any length only where no letter touches it', () => {
+    const names = (bankId: Parameters<typeof accountNamesBank>[1], ...list: string[]) =>
+      list.filter((name) => accountNamesBank({ name }, bankId))
+    expect(names('erste', 'Erstes Konto', 'Mein erstes Girokonto', 'Erste Bank')).toEqual([
+      'Erste Bank',
+    ])
+    expect(names('wise', 'Otherwise', 'Clockwise fund', 'Wisely', 'Wise')).toEqual(['Wise'])
+    expect(names('revolut', 'Revolution', 'Revolut EUR')).toEqual(['Revolut EUR'])
+    expect(names('ing', 'ING2', 'ING_savings', 'éing', 'Shopping')).toEqual(['ING2', 'ING_savings'])
+    expect(names('pbz', 'pbz2', '2pbz', 'PBZ/EUR', 'PBZ€')).toEqual([
+      'pbz2',
+      '2pbz',
+      'PBZ/EUR',
+      'PBZ€',
+    ])
+    expect(names('sparkasse', 'Sparkasse Giro', 'Stadtsparkasse Giro', 'Sparkassenbuch')).toEqual([
+      'Sparkasse Giro',
+    ])
+  })
+
+  it('keeps the names that named their bank before', () => {
+    const named: Array<[string, Parameters<typeof accountNamesBank>[1]]> = [
+      ['Štednja ING', 'ing'],
+      ['ing-diba', 'ing'],
+      ['N26 (EUR)', 'n26'],
+      ['Moj PBZ tekući', 'pbz'],
+      ['pbz', 'pbz'],
+    ]
+    for (const [name, bankId] of named) expect(accountNamesBank({ name }, bankId)).toBe(true)
+    expect(accountNamesBank({ name: 'Shopping' }, 'ing')).toBe(false)
+    expect(accountNamesBank({ name: 'Booking' }, 'ing')).toBe(false)
   })
 
   it('says whether an account names a bank, by the same rule', () => {

@@ -2736,17 +2736,22 @@ check')` first, as the cushion and debt cases do.
 
 ### Fixed
 
-- **A bank's name counts in an account's name only as a word, for a short one.**
+- **A bank's name counts in an account's name only where no letter touches it.**
   `resolveTargetAccount` (`shared/bankImport/accountResolver.ts`) took an account whose name or
   bank name held the bank's id anywhere, so an ING statement went into the first account with
   "ing" in it (Main Checking, Savings, Spending), on Bank Imports and in setup. The test is now
-  `accountNamesBank(account, bankId)`: an id of three characters or fewer (`ing`, `dkb`, `pbz`,
-  `n26`) must stand as a word of its own (letters and digits on neither side, Unicode-aware); a
-  longer one still counts inside a word, because German names hold it ("Stadtsparkasse"). A
-  remembered choice and stored identifiers come first, as before. Setup's statement step uses the
-  same test to keep a statement out of an account named for another bank. Tests in
-  `core/bankImport/__tests__/bankImport.test.ts` ("account resolver"): the short-id case failed
-  before the change (`expected 'Main Checking' to be null`).
+  `accountNamesBank(account, bankId)`: the id, of any length, with no letter on either side
+  (Unicode letters and the marks that join them, compared in NFC; digits, spaces and punctuation
+  are edges). The first version of this branch kept a longer id inside a word, for German names
+  ("Stadtsparkasse"); the review of 19 Nov found "Erstes Konto" and "Mein erstes Girokonto"
+  naming Erste, "Otherwise" Wise and "Revolution" Revolut, and a digit hiding a short id ("ING2",
+  "pbz2"), and maff chose one rule for every id. So "Stadtsparkasse Giro" no longer names the
+  Sparkasse adapter; "Sparkasse Giro" does. No lookbehind in the pattern, as Safari before 16.4
+  throws on one. A remembered choice and stored identifiers come first, as before. Setup's
+  statement step uses the same test (`statementTargets.ts`). Tests in
+  `core/bankImport/__tests__/bankImport.test.ts` ("account resolver"): the review's names, and
+  the seven names of the first version (five that name their bank, Shopping and Booking that do
+  not). Before the change the new case failed on "Erstes Konto" and "Mein erstes Girokonto".
 - **The subscription scan's modal is 720 px tall at most, with its header and actions pinned.**
   On Bills and Import, `SubscriptionScanModal` was `max-height: calc(100dvh - 2rem)`, and the whole
   panel scrolled in `.body`: at 2560x1440 it measured 1,408 px from the top of the screen to the

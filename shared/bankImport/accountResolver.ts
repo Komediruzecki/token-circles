@@ -66,16 +66,19 @@ export function resolveTargetAccount(
 }
 
 /**
- * Whether an account's name or bank name names the bank `bankId`. An id of three characters or
- * fewer ("ing", "dkb", "n26") counts only as a word of its own: inside a word it is English, and
- * an ING statement went into the first account whose name had "ing" in it (Main Checking,
- * Savings). A longer one counts inside a word as well, as German bank names hold it
- * ("Stadtsparkasse").
+ * Whether an account's name or bank name names the bank `bankId`: the id, of any length, where no
+ * letter touches it on either side. Digits, spaces and punctuation are edges, so "ING2", "pbz2"
+ * and "ING-DiBa" name their banks; "Main Checking" (ing), "Erstes Konto" (erste), "Otherwise"
+ * (wise) and "Revolution" (revolut) do not. Letters are Unicode letters and the marks that join
+ * them, compared in NFC: "éing" holds no ING. A bank whose name grows inside a longer word
+ * ("Stadtsparkasse") is not named by it either (maff, review of 19 Nov).
  */
 export function accountNamesBank(account: AccountLike, bankId: BankId): boolean {
-  const id = bankId.toLowerCase();
-  const texts = [account.bank_name || '', account.name].map((text) => text.toLowerCase());
-  if (id.length > 3) return texts.some((text) => text.includes(id));
-  const word = new RegExp(`(?:^|[^\\p{L}\\p{N}])${id}(?:$|[^\\p{L}\\p{N}])`, 'u');
-  return texts.some((text) => word.test(text));
+  const id = bankId.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // No lookbehind: Safari before 16.4 throws on one.
+  const alone = new RegExp(`(?:^|[^\\p{L}\\p{M}])${id}(?![\\p{L}\\p{M}])`, 'u');
+  const texts = [account.bank_name || '', account.name].map((text) =>
+    text.normalize('NFC').toLowerCase()
+  );
+  return texts.some((text) => alone.test(text));
 }
