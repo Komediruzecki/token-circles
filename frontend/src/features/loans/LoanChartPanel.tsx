@@ -1,0 +1,191 @@
+/**
+ * The chart under a loan's card: a sentence saying how far along the payments are, the four
+ * figures today marks (paid so far, still owed, months left, the last payment) and the balance
+ * over the loan's whole life (LoanPayoffChart). It opens in the overview's grid, across the whole
+ * row under the card on a wide screen and straight under the card on a phone.
+ *
+ * The schedule is the shared engine's on the loan as stored, as on the loan's own page. Local-first
+ * list rows carry the rate periods and extra payments it needs; on the Worker the loan's own read
+ * supplies them, so the chart waits for it behind a placeholder of the same height.
+ */
+import { createEffect, createMemo, Match, onCleanup, Show, Switch } from 'solid-js'
+import { formatCurrency } from '../../core/api'
+import { localToday } from '../../utils/period'
+import { monthShort, timelineDescription, timelineSentence } from './loanCopy'
+import { engineInput } from './loanData'
+import LoanPayoffChart from './LoanPayoffChart'
+import { createLoanRecord } from './loanRecord'
+import styles from './Loans.module.css'
+import { loanTimeline } from './loanTimeline'
+import type { Formats } from './loanCopy'
+import type { LoanRow } from './loanData'
+
+interface Props {
+  /** The panel's id, which the card's button controls. */
+  id: string
+  row: LoanRow
+  formats: Formats
+  axisMoney: (amount: number) => string
+  onClose: () => void
+}
+
+/** Room kept above the card when the panel is brought into view. */
+const MARGIN = 16
+/**
+ * Room kept under the panel: the floating add button takes the bottom 78 px of the window
+ * (Layout.module.css .fab), right over the end of the line, where the last payment is.
+ */
+const BELOW = 88
+
+export default function LoanChartPanel(props: Props) {
+  const { record, status, load } = createLoanRecord(() => props.row)
+  const today = localToday()
+  const timeline = createMemo(() => {
+    const r = record()
+    return r && r.id === props.row.id ? loanTimeline(engineInput(r), today) : null
+  })
+  let section!: HTMLElement
+  let box!: HTMLDivElement
+
+  // Opened low on the screen, the panel opens out of sight: bring all of it into view, without
+  // taking its card off the top. Once its loan has loaded (a loan from the server arrives a moment
+  // later, in place of a shorter placeholder), a frame on, when the chart has its height.
+  const reveal = () => {
+    const card = section.previousElementSibling
+    const top = section.getBoundingClientRect().top
+    const below = top + box.offsetHeight + BELOW - window.innerHeight
+    if (below <= 0) return
+    const cardTop = card ? card.getBoundingClientRect().top - MARGIN : top
+    const by = Math.min(below, Math.max(0, cardTop))
+    if (by <= 0) return
+    const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    window.scrollBy({ top: by, behavior: still ? 'auto' : 'smooth' })
+  }
+  let frame = 0
+  createEffect(() => {
+    if (frame === 0 && status() !== 'loading') frame = requestAnimationFrame(reveal)
+  })
+  onCleanup(() => {
+    cancelAnimationFrame(frame)
+  })
+
+  const left = (t: NonNullable<ReturnType<typeof timeline>>) =>
+    t.left === null ? '–' : String(t.left)
+  const payoff = (t: NonNullable<ReturnType<typeof timeline>>) =>
+    t.neverPaysOffFrom !== null
+      ? 'Never at this rate'
+      : monthShort(t.payoffDate, t.payoffMonth ?? t.rows.length)
+
+  return (
+    <section
+      ref={section}
+      id={props.id}
+      class={styles.chartPanel}
+      aria-label={`${props.row.name}: payments over time`}
+      data-test-id="loans-item-chart"
+    >
+      <div ref={box} class={styles.chartBox}>
+        <div class={styles.chartHead}>
+          <p class={styles.chartSentence} data-test-id="loans-chart-sentence">
+            <Show when={timeline()} fallback={`${props.row.name}: payments over time`}>
+              {(t) => timelineSentence(t(), props.formats)}
+            </Show>
+          </p>
+          <button
+            type="button"
+            class={styles.buttonQuiet}
+            aria-label="Close"
+            title="Close"
+            data-test-id="loans-chart-close"
+            onClick={() => {
+              props.onClose()
+            }}
+          >
+            <svg
+              width="16"
+              height="16"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <Switch>
+          <Match when={status() === 'error' && !timeline()}>
+            <div class={styles.error} role="alert" data-test-id="loans-chart-error">
+              <p>This loan's payments did not load. Try again in a moment.</p>
+              <button type="button" class={styles.button} onClick={() => void load()}>
+                Try again
+              </button>
+            </div>
+          </Match>
+          <Match when={!timeline()}>
+            <div class={`${styles.skeleton} ${styles.chartSkeleton}`} aria-busy="true">
+              <span class={styles.visuallyHidden}>Loading the loan's payments</span>
+            </div>
+          </Match>
+          <Match when={timeline()}>
+            {(t) => (
+              <>
+                <dl class={styles.readout} data-test-id="loans-chart-readout">
+                  <div>
+                    <dt>
+                      <svg class={styles.key} viewBox="0 0 18 8" aria-hidden="true">
+                        <path class={styles.keyPaid} d="M2 4h14" />
+                      </svg>
+                      Paid so far
+                    </dt>
+                    <dd data-test-id="loans-chart-paid">{formatCurrency(t().repaid)}</dd>
+                  </div>
+                  <div>
+                    <dt>
+                      <svg class={styles.key} viewBox="0 0 18 8" aria-hidden="true">
+                        <path class={styles.keyOwed} d="M2 4h14" />
+                      </svg>
+                      Still owed
+                    </dt>
+                    <dd data-test-id="loans-chart-owed">{formatCurrency(t().owed)}</dd>
+                  </div>
+                  <div>
+                    <dt>
+                      <svg class={styles.key} viewBox="0 0 18 8" aria-hidden="true">
+                        <circle class={styles.keyToday} cx="9" cy="4" r="3.5" />
+                      </svg>
+                      Months left
+                    </dt>
+                    <dd data-test-id="loans-chart-left">{left(t())}</dd>
+                  </div>
+                  <div>
+                    <dt>
+                      <svg class={styles.key} viewBox="0 0 18 8" aria-hidden="true">
+                        <circle class={styles.keyEnd} cx="9" cy="4" r="3" />
+                      </svg>
+                      Last payment
+                    </dt>
+                    <dd data-test-id="loans-chart-payoff">{payoff(t())}</dd>
+                  </div>
+                </dl>
+                <Show when={t().rows.length > 0}>
+                  <LoanPayoffChart
+                    id={`${props.id}-svg`}
+                    timeline={t()}
+                    axisMoney={props.axisMoney}
+                    formats={props.formats}
+                    today={today}
+                    description={timelineDescription(t(), props.formats)}
+                  />
+                </Show>
+              </>
+            )}
+          </Match>
+        </Switch>
+      </div>
+    </section>
+  )
+}

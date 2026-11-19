@@ -121,7 +121,9 @@ async function openEdit(name: string): Promise<void> {
     (c) => c.textContent?.includes(name)
   )
   if (!card) throw new Error(`no loan "${name}"`)
-  card.querySelector<HTMLButtonElement>('[data-test-id="loans-item-edit"]')!.click()
+  // Edit is in the card's menu, which is portalled to <body>.
+  card.querySelector<HTMLButtonElement>('[data-test-id="loans-item-menu"]')!.click()
+  document.querySelector<HTMLButtonElement>('[data-test-id="loans-item-edit"]')!.click()
   await vi.waitFor(() => {
     expect(field('Name').value).toBe(name)
   })

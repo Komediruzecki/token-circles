@@ -588,7 +588,9 @@ const OWN_WRITES: OwnWrite[] = [
     module: '../Loans',
     reads: '/api/loans',
     act: async (root) => {
-      click(root, '[data-test-id="loans-item-edit"]')
+      // Edit is in the card's menu, which is portalled to <body>.
+      click(root, '[data-test-id="loans-item-menu"]')
+      click(document.body, '[data-test-id="loans-item-edit"]')
       await settle()
       submit(root)
     },
@@ -602,7 +604,8 @@ const OWN_WRITES: OwnWrite[] = [
     module: '../Loans',
     reads: '/api/loans',
     act: (root) => {
-      click(root, '[data-test-id="loans-item-delete"]')
+      click(root, '[data-test-id="loans-item-menu"]')
+      click(document.body, '[data-test-id="loans-item-delete"]')
     },
     helper: 'apiDelete',
     method: 'DELETE',

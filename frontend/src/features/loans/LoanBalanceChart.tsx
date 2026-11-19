@@ -36,7 +36,7 @@ const LABEL_ROW = 18
 const AXIS_ROW = 28
 
 /** 1, 2, 2.5 or 5 times a power of ten: the smallest such step at least `raw`. */
-function niceStep(raw: number): number {
+export function niceStep(raw: number): number {
   if (!Number.isFinite(raw) || raw <= 0) return 1
   const power = 10 ** Math.floor(Math.log10(raw))
   for (const s of [1, 2, 2.5, 5, 10]) if (s * power >= raw) return s * power

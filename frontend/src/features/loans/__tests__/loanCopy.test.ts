@@ -17,7 +17,10 @@ import {
   monthLong,
   monthShort,
   span,
+  timelineDescription,
+  timelineSentence,
 } from '../loanCopy'
+import { loanTimeline } from '../loanTimeline'
 import type { WhatIfChoice } from '../../../../../shared/loanScenarios'
 import type { LoanInput } from '../../../../../shared/loanSchedule'
 
@@ -255,5 +258,83 @@ describe('words', () => {
       'Rate 1 point lower',
       'Rate 2 points higher',
     ])
+  })
+})
+
+/**
+ * The sentence above the chart under a card, and the chart's description. The loan is a boat:
+ * 24,000 at 6 % over 48 months, paid on the 10th from March 2024; on 2025-12-15 the 22nd payment
+ * is made and 13,710.01 is owed (closed form). With 2,000 extra in month 6 and 1,500 planned in
+ * month 30 it ends with payment 41, in July 2027.
+ */
+describe('the chart under a card', () => {
+  const BOAT: LoanInput = {
+    principal: 24000,
+    interest_rate: 6,
+    start_date: '2024-03-10',
+    term_months: 48,
+    rate_periods: [],
+    prepayments: [],
+  }
+  const EXTRAS: LoanInput = {
+    ...BOAT,
+    prepayments: [
+      { month: 6, amount: 2000 },
+      { month: 30, amount: 1500 },
+    ],
+  }
+  const at = (loan: LoanInput, today: string) => timelineSentence(loanTimeline(loan, today), f)
+
+  it('says how many payments are made and when the last is due', () => {
+    expect(at(BOAT, '2025-12-15')).toBe('22 of 48 payments made. The last is due in February 2028.')
+    expect(at(EXTRAS, '2025-12-15')).toBe(
+      '22 of 41 payments made, and €2,000 paid extra. The last is due in July 2027.'
+    )
+  })
+
+  it('before the first payment, says when the first and the last are due', () => {
+    expect(at(BOAT, '2024-01-01')).toBe(
+      'The first payment is due in March 2024 and the last in February 2028.'
+    )
+    expect(at({ ...BOAT, term_months: 1 }, '2024-01-01')).toBe(
+      'The one payment is due in March 2024.'
+    )
+  })
+
+  it('once paid off, says so, with the extra paid', () => {
+    expect(at(BOAT, '2030-01-01')).toBe('All 48 payments made. Paid off in February 2028.')
+    expect(at(EXTRAS, '2030-01-01')).toBe(
+      'All 41 payments made, and €3,500 paid extra. Paid off in July 2027.'
+    )
+    expect(at({ ...BOAT, term_months: 1 }, '2030-01-01')).toBe(
+      'The one payment is made. Paid off in March 2024.'
+    )
+  })
+
+  it('says where a loan that is never repaid stops, and counts payments with no start date', () => {
+    const never: LoanInput = {
+      ...BOAT,
+      on_rate_change: 'keep-installment',
+      rate_periods: [{ rate: 40, start_month: 13 }],
+    }
+    expect(at(never, '2025-12-15')).toBe(
+      'From payment 13 the installment no longer covers the interest, so this loan is never repaid. The chart stops there.'
+    )
+    expect(at({ ...BOAT, start_date: '' }, '2025-12-15')).toBe(
+      '48 payments as planned. The start date cannot be read, so the chart counts payments instead of months.'
+    )
+  })
+
+  it('describes the line for a screen reader: the fall, today and each extra payment', () => {
+    expect(timelineDescription(loanTimeline(EXTRAS, '2025-12-15'), f)).toBe(
+      'The balance falls from €24,000.00 to nothing with payment 41, in July 2027. ' +
+        'Today, after payment 22, €11,543.86 is owed. ' +
+        'An extra payment of €2,000.00 with payment 6, in August 2024. ' +
+        'A planned extra payment of €1,500.00 with payment 30, in August 2026.'
+    )
+    expect(timelineDescription(loanTimeline(BOAT, '2024-01-01'), f)).toBe(
+      'The balance falls from €24,000.00 to nothing with payment 48, in February 2028. ' +
+        'Today no payment is made yet, and €24,000.00 is owed.'
+    )
   })
 })

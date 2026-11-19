@@ -4,6 +4,10 @@
  * GIVEN a user on the Loans page
  * THEN they see what is owed in total, the monthly total, the next loan to finish, and a card per
  *   loan with the share repaid, the balance, installment, rate and payoff date
+ * WHEN they click a card
+ * THEN its payments open on a chart under it, today marked on it; one card's at a time
+ * WHEN they pick Add an extra payment in a card's menu
+ * THEN the loan's Extra payments tab opens with the amount box focused
  * WHEN they click What if on a card
  * THEN the loan's Compare tab opens on the first template's first preset: the loan as planned (A)
  *   beside the what-if (B), in figures, a sentence and one chart
@@ -43,7 +47,14 @@ export default function Loans() {
     parseLoansHash(window.location.hash) ?? { view: 'overview' }
   )
   const [pendingWhatIf, setPendingWhatIf] = createSignal<number | null>(null)
+  /** Add an extra payment from a card's menu: the Extra payments tab focuses its amount box. */
+  const [pendingExtra, setPendingExtra] = createSignal<number | null>(null)
   const [form, setForm] = createSignal<FormState | null>(null)
+  /**
+   * The loan whose chart is open under its card. Kept here rather than in the overview, so a
+   * card's menu can open the loan's own page and Back finds the chart still open.
+   */
+  const [openId, setOpenId] = createSignal<number | null>(null)
 
   const writeProfileId = () => state.currentProfile?.id ?? activeProfileId()
   const canWrite = (row: LoanRow) => row.profile_id === writeProfileId()
@@ -175,6 +186,9 @@ export default function Loans() {
             offline={offline()}
             canWrite={canWrite}
             ownerName={ownerName}
+            openId={openId()}
+            onToggle={(row) => setOpenId(openId() === row.id ? null : row.id)}
+            onClose={() => setOpenId(null)}
             onAdd={() => setForm({ loan: null })}
             onEdit={(row) => setForm({ loan: row })}
             onDelete={deleteLoan}
@@ -182,10 +196,19 @@ export default function Loans() {
               setPendingWhatIf(row.id)
               navigate({ view: 'loan', loanId: row.id, tab: 'compare', b: null, a: null })
             }}
+            onAddExtra={(row) => {
+              setPendingExtra(row.id)
+              navigate({ view: 'loan', loanId: row.id, tab: 'extras', b: null, a: null })
+            }}
+            onSchedule={(row) => {
+              navigate({ view: 'loan', loanId: row.id, tab: 'schedule', b: null, a: null })
+            }}
             onRetry={() => {
               setStatus('loading')
               void loadLoans()
             }}
+            formats={formats()}
+            axisMoney={axisMoney}
           />
         }
       >
@@ -200,6 +223,8 @@ export default function Loans() {
               ownerName={row() ? ownerName(row()!) : ''}
               pendingWhatIf={pendingWhatIf() === r().loanId}
               onPendingDone={() => setPendingWhatIf(null)}
+              pendingExtra={pendingExtra() === r().loanId}
+              onPendingExtraDone={() => setPendingExtra(null)}
               navigate={navigate}
               onEdit={(loan, focusRates) => setForm({ loan, focusRates })}
               onDelete={deleteLoan}

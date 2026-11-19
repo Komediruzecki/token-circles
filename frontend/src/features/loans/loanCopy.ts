@@ -9,6 +9,7 @@
  */
 import type { ScenarioFacts, TemplateId, WhatIfChoice } from '../../../../shared/loanScenarios'
 import type { ScenarioMode } from './loanRoute'
+import type { LoanTimeline } from './loanTimeline'
 
 /** How a number or a month reads. The page passes the app's currency; tests pass their own. */
 export interface Formats {
@@ -320,4 +321,70 @@ export function differenceLine(
     parts.push(`${f.wholeMoney(Math.abs(interest))} ${interest > 0 ? 'less' : 'more'} interest`)
   }
   return parts.length > 0 ? parts.join(' · ') : 'No change'
+}
+
+// ── The chart under a card ───────────────────────────────────────────────────
+
+/** The extra payments made so far, added up. */
+function extraMade(t: LoanTimeline): number {
+  return t.extras.reduce((sum, e) => (e.made ? sum + e.amount : sum), 0)
+}
+
+/**
+ * What the chart under a loan's card shows, in a sentence above it: how far along the payments
+ * are and when the last one is due. Extra payments made so far are added in.
+ */
+export function timelineSentence(t: LoanTimeline, f: Formats): string {
+  const count = t.rows.length
+  if (count === 0) return 'This loan has no payments to show.'
+  if (t.neverPaysOffFrom !== null) {
+    return `From payment ${t.neverPaysOffFrom} the installment no longer covers the interest, so this loan is never repaid. The chart stops there.`
+  }
+  if (!t.dated) {
+    return `${count === 1 ? '1 payment' : `${count} payments`} as planned. The start date cannot be read, so the chart counts payments instead of months.`
+  }
+  const last = monthLong(t.payoffDate, t.payoffMonth ?? count)
+  const extra = extraMade(t)
+  const plus = extra > 0 ? `, and ${f.wholeMoney(extra)} paid extra` : ''
+  if (t.paidOff) {
+    return `${count === 1 ? 'The one payment is' : `All ${count} payments`} made${plus}. Paid off in ${last}.`
+  }
+  if (t.made === 0) {
+    return count === 1
+      ? `The one payment is due in ${last}.`
+      : `The first payment is due in ${monthLong(t.rows[0].date, 1)} and the last in ${last}.`
+  }
+  return `${t.made} of ${count} payments made${plus}. The last is due in ${last}.`
+}
+
+/**
+ * The chart's description for a screen reader: where the balance goes, where today is on it and
+ * each extra payment. Money to the cent, as the card shows it.
+ */
+export function timelineDescription(t: LoanTimeline, f: Formats): string {
+  const count = t.rows.length
+  if (count === 0) return 'No payments to show.'
+  const parts: string[] = []
+  if (t.neverPaysOffFrom !== null) {
+    parts.push(
+      `The balance starts at ${f.money(t.principal)} and is never repaid at this rate: the line stops before payment ${t.neverPaysOffFrom}.`
+    )
+  } else {
+    parts.push(
+      `The balance falls from ${f.money(t.principal)} to nothing with payment ${count}, in ${monthLong(t.payoffDate, count)}.`
+    )
+  }
+  if (t.dated && !t.paidOff) {
+    parts.push(
+      t.made === 0
+        ? `Today no payment is made yet, and ${f.money(t.owed)} is owed.`
+        : `Today, after payment ${t.made}, ${f.money(t.owed)} is owed.`
+    )
+  }
+  for (const e of t.extras) {
+    parts.push(
+      `${e.made ? 'An extra payment' : 'A planned extra payment'} of ${f.money(e.amount)} with payment ${e.month}, in ${monthLong(e.date, e.month)}.`
+    )
+  }
+  return parts.join(' ')
 }

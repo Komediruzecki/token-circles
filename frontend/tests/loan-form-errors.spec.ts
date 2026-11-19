@@ -281,7 +281,8 @@ for (const mode of MODES) {
       ])
 
       // Changed: renamed, its rate period moved, and a second one added.
-      await card(page, name).getByTestId('loans-item-edit').click()
+      await card(page, name).getByTestId('loans-item-menu').click()
+      await page.getByTestId('loans-item-edit').click()
       await expect(dialog(page)).toBeVisible()
       await expect(field(page, 'Name')).toHaveValue(name)
       await expect(periodRows(page)).toHaveCount(1)
@@ -300,7 +301,8 @@ for (const mode of MODES) {
       ])
 
       // A rate period removed: the other one stays.
-      await card(page, `${name}-renamed`).getByTestId('loans-item-edit').click()
+      await card(page, `${name}-renamed`).getByTestId('loans-item-menu').click()
+      await page.getByTestId('loans-item-edit').click()
       await expect(periodRows(page)).toHaveCount(2)
       await periodRows(page)
         .first()
@@ -320,10 +322,9 @@ for (const mode of MODES) {
       await expect(periodRows(page)).toHaveCount(0)
       await dialog(page).getByRole('button', { name: 'Cancel' }).click()
 
-      // Deleted, once it is confirmed.
-      await card(page, `${name}-renamed`)
-        .getByRole('button', { name: `Delete ${name}-renamed` })
-        .click()
+      // Deleted from the card's menu, once it is confirmed.
+      await card(page, `${name}-renamed`).getByTestId('loans-item-menu').click()
+      await page.getByTestId('loans-item-delete').click()
       await page.getByTestId('confirm-accept').click()
 
       await expect(toasts(page).getByText('Loan deleted')).toBeVisible()
