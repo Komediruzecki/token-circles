@@ -2825,6 +2825,17 @@ check')` first, as the cushion and debt cases do.
   stylesheet's only importer, never uses. The floating pair the entry above gave both dropdowns goes
   with them, and so do their two rows in `src/__tests__/floatingEdges.test.ts`;
   `cssModuleReferences.test.ts` and `cssModuleNaming.test.ts` pass without them.
+- **The rest of Budgets' unused month and year control is deleted.** Budgets picked its month and
+  year in a control of its own until `PeriodBar` took its place in #316 (`784034d6`), and
+  `BudgetsPage.module.css` kept its rules: `.month-selector`, `.month-display`, `.monthBtn` and
+  `.yearBtn` with their hover and minimum widths, `.selected` and `.overlay`, two `.budget-summary`
+  rules for the same selector and display, and the phone-width `flex-wrap` for the selector, 67
+  lines in all (`.month-display` was not used as a class even before #316). `Budgets.tsx`, the
+  stylesheet's only importer, looks none of them up, and its two computed lookups return only
+  `status-*` and `chartStatus*` names. `month-selector` is still the `data-test-id` that `PeriodBar`
+  puts on Budgets' period bar for the e2e specs, an attribute and not a class, and `.monthBtn` in
+  `PeriodOrbit.module.css` is that component's own. `cssModuleReferences.test.ts`,
+  `cssModuleNaming.test.ts` and `core/__tests__/cssModuleHygiene.test.ts` pass without them.
 - **The unused `components/BulkActions/` tree is deleted.** Its `BulkActionBar`, `BulkCategoryModal`
   and `BulkTypeModal`, with their stylesheets, had no importer anywhere in the repository;
   Transactions uses `components/BulkActionBar.tsx`. The 2026-07-23 integrity audit

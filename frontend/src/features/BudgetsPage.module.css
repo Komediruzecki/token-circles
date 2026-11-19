@@ -20,15 +20,6 @@
   font-size: 24px;
   font-weight: 700;
 }
-.budget-summary .month-selector {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.budget-summary .month-display {
-  font-size: 14px;
-  color: var(--text);
-}
 .budget-summary .page-subtitle {
   color: var(--text-secondary);
   font-size: 14px;
@@ -560,58 +551,6 @@
   font-size: 14px;
 }
 
-.month-selector {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  position: relative;
-}
-
-.month-display {
-  font-size: 14px;
-  color: var(--text);
-}
-
-.monthBtn,
-.yearBtn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  color: var(--text-primary);
-  padding: 6px 12px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 600;
-  transition: border-color 0.2s;
-}
-
-.monthBtn {
-  min-width: 100px;
-}
-
-.yearBtn {
-  min-width: 70px;
-}
-
-.monthBtn:hover,
-.yearBtn:hover {
-  border-color: var(--primary);
-}
-
-.selected {
-  color: var(--primary);
-  font-weight: 600;
-}
-
-.overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 99;
-}
-
 /* category chart section */
 .category-chart-section {
   /* The OrbitalDivider inside the section provides the vertical rhythm. */
@@ -1033,12 +972,6 @@
 }
 
 @media (max-width: 768px) {
-  .budget-summary .month-selector,
-  .budgets-page .month-selector,
-  .month-selector {
-    flex-wrap: wrap;
-  }
-
   .budgets-page .modal,
   .budget-summary .modal {
     max-width: calc(100vw - 2rem);
