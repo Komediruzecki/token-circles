@@ -110,6 +110,19 @@ describe('where a statement goes', () => {
   })
 })
 
+describe('an empty statement', () => {
+  it('never takes the main account, and goes in once its bank has it', () => {
+    expect(place([{ bankId: 'revolut', empty: true }, { bankId: 'n26' }])).toEqual([
+      'Revolut EUR',
+      'Main checking',
+    ])
+    expect(place([{ bankId: 'revolut' }, { bankId: 'revolut', empty: true }])).toEqual([
+      'Main checking',
+      'Main checking',
+    ])
+  })
+})
+
 describe('the main account', () => {
   it('is the one setup made, else the newest in the currency named for no bank', () => {
     const accounts = [

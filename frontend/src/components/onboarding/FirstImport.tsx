@@ -49,6 +49,8 @@ export type FirstImportState =
   | 'reading'
   /** At least one statement has new transactions, ready to import. */
   | 'ready'
+  /** The files could not be read through (the reason is on the step); Try again reads them. */
+  | 'failed'
   /** Nothing new to import: what the statements hold is here already. */
   | 'nothing-new'
   /** No file it can import: banks it does not read, or no transactions came out of them. */
@@ -57,7 +59,7 @@ export type FirstImportState =
   | 'imported'
 
 /** Where one file of the step is, on its card. */
-export type FileState = 'reading' | 'ready' | 'nothing-new' | 'unreadable'
+export type FileState = 'reading' | 'ready' | 'failed' | 'nothing-new' | 'unreadable'
 
 /** A file chosen on the step, in the order chosen. */
 export interface ChosenFile {
@@ -216,9 +218,19 @@ export function createFirstImport(options: FirstImportOptions) {
   const countsOf = (file: File): FileCounts =>
     countsByFile().get(file) ?? { fresh: 0, here: 0, repeats: 0 }
 
+  /**
+   * Why the batch could not be read, when it stopped before counting any file: the category list
+   * not read, say. Every card said "We couldn't read any transactions in this file" for it.
+   */
+  const failure = (): string | null =>
+    !reading() && flow.bankFiles().length > 0 && flow.bankFileRows().length === 0
+      ? flow.error()
+      : null
+
   const stateOf = (entry: ChosenFile): FileState => {
     if (reading() || entry.bankId === undefined) return 'reading'
     if (entry.failed || entry.bankId === null) return 'unreadable'
+    if (failure() !== null) return 'failed'
     const counts = countsOf(entry.file)
     if (counts.fresh > 0) return 'ready'
     // Nothing to add: because it is all here already or in an earlier file, or because no row of
@@ -253,6 +265,7 @@ export function createFirstImport(options: FirstImportOptions) {
     if (reading()) return 'reading'
     const states = chosen().map(stateOf)
     if (states.includes('ready')) return 'ready'
+    if (states.includes('failed')) return 'failed'
     return states.includes('nothing-new') ? 'nothing-new' : 'unreadable'
   }
 
@@ -329,29 +342,45 @@ export function createFirstImport(options: FirstImportOptions) {
    * Every statement's account by setup's rule (statementTargets.ts), but the ones the person
    * picked: run whenever the set of files changes, added or removed. Each file's own answer
    * (resolveTargetAccount, on the Import page's terms) is not kept: it took an account named for
-   * the bank in any currency, and the first file only was ever placed again.
+   * the bank in any currency, and the first file only was ever placed again. A file read with no
+   * transaction in it never takes the main account (finding 13). Answers whether a target moved.
    */
-  const placeStatements = () => {
+  const placeStatements = (): boolean => {
     const rows = flow.bankFiles()
     const placed = rows.filter((row) => row.bankId !== null && !namesItsAccounts(row))
-    if (placed.length === 0) return
+    if (placed.length === 0) return false
     const accounts = flow.bankAccounts()
     const targets = statementTargets({
       statements: placed.map((row) => ({
         bankId: row.bankId as BankId,
         currency: row.meta.currency ?? null,
         byHand: byHand.has(row.file) ? row.targetAccount : null,
+        empty: rangeOf(row.file)?.count === 0,
       })),
       earlier: earlier()?.statements ?? [],
       accounts,
       made: options.preferredAccount(),
       base: getLocalCurrency(),
     })
+    let moved = false
     placed.forEach((row, at) => {
       const index = rows.indexOf(row)
-      if (targets[at] !== row.targetAccount)
-        flow.updateBankFile(index, { targetAccount: targets[at] })
+      if (targets[at] === row.targetAccount) return
+      flow.updateBankFile(index, { targetAccount: targets[at] })
+      moved = true
     })
+    return moved
+  }
+
+  /**
+   * Place the statements and read them. Once read, a file found empty may have taken the main
+   * account it cannot keep: placed again, the batch is read again.
+   */
+  const placeAndRead = async (mine: number) => {
+    placeStatements()
+    await prepare(mine)
+    if (mine !== generation || !placeStatements()) return
+    await prepare(mine)
   }
 
   const targetChoices = (row: BankFileRow): TargetChoice[] => {
@@ -416,8 +445,7 @@ export function createFirstImport(options: FirstImportOptions) {
       for (let index = rows.length - 1; index >= 0; index--) {
         if (!rows[index].bankId) flow.removeBankFile(index)
       }
-      placeStatements()
-      await prepare(mine)
+      await placeAndRead(mine)
       if (mine !== generation) return
       // What the import makes them as: Credit Card, until the person chooses another.
       for (const row of flow.bankFiles()) {
@@ -441,8 +469,17 @@ export function createFirstImport(options: FirstImportOptions) {
       // Set aside, it was never in the import: nothing to read again.
       if (index < 0) return
       flow.removeBankFile(index)
-      placeStatements()
-      await prepare(mine)
+      await placeAndRead(mine)
+    })
+  }
+
+  /** Read the files again after a read that stopped (`failure()`), as they are. */
+  const retry = (): Promise<void> => {
+    if (importing() || state() !== 'failed') return Promise.resolve()
+    return run(async (mine) => {
+      await flow.loadBankAccounts()
+      if (mine !== generation) return
+      await placeAndRead(mine)
     })
   }
 
@@ -537,6 +574,8 @@ export function createFirstImport(options: FirstImportOptions) {
     remove,
     setTarget,
     importNow,
+    retry,
+    failure,
     clear,
     another,
     earlier,
@@ -939,10 +978,18 @@ export function FirstImportPanel(props: {
               {categoriesLine()}
             </p>
           </Show>
-          <Show when={importer.flow.error() && importer.state() === 'ready'}>
-            <p class={styles.cardError} role="alert">
-              {importer.flow.error()}
-            </p>
+          <Show
+            when={
+              importer.state() === 'failed'
+                ? importer.failure()
+                : importer.state() === 'ready' && importer.flow.error()
+            }
+          >
+            {(reason) => (
+              <p class={styles.cardError} role="alert" data-test-id="onboarding-import-error">
+                {reason()}
+              </p>
+            )}
           </Show>
           <button
             type="button"

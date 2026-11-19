@@ -806,6 +806,20 @@ All notable changes to Token Circles are documented here. The format is based on
     subscriptions. With the old `defaultTarget` back, 4 placement cases fail; with the old wizard
     and step, all 7 of `setupStatements.test.tsx`; without the currency in the main account's
     choice, "reopened with several accounts, picks the newest in the statement's currency".
+- **The statement step says why its files were not read, and an empty export takes no
+  account.** Review of 19 Nov, `components/onboarding/FirstImport.tsx`:
+  - A read that stops before it counts any file (the category list not read, say) showed
+    `flow.error()` only once a statement was ready, so every card said "We couldn't read any
+    transactions in this file" and offered Open in Import. Now the cards are `failed` with nothing
+    on them, the reason sits on the step (`onboarding-import-error`, `role="alert"`), and the
+    footer's main button is Try again (`onboarding-import-retry`), which reads them again.
+  - A statement read with no transaction in it never takes the main account for its bank
+    (`empty` in `statementTargets.ts`): an empty Revolut export picked first sent the N26
+    statement after it to a new account. Picked together, nothing is counted before the first
+    read, so the step places the files again once read and reads them again when a target moved.
+  - **Tests:** three in `setupStatements.test.tsx` and one in `statementTargets.test.ts`. Taken
+    out one at a time: the `empty` check fails 3, the placing after the read fails "picked
+    together", and the `failed` state fails "says why the files were not read".
 
 ### State that follows the account
 

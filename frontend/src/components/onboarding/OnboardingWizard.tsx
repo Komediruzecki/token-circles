@@ -1170,6 +1170,14 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
           testId: 'onboarding-import-selected',
           skip: skip(firstImport.importing()),
         }
+      case 'failed':
+        return {
+          label: 'Try again',
+          run: () => void firstImport.retry(),
+          disabled: false,
+          testId: 'onboarding-import-retry',
+          skip: skip(),
+        }
       case 'unreadable':
         return {
           label: 'Open in Import',

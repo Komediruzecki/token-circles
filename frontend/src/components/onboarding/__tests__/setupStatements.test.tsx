@@ -1,7 +1,7 @@
 /**
- * Setup's statement step over a whole setup (review of 19 Nov, findings 2 and 12): where each
- * statement goes by default as files come and go, and what setup counts as imported when the
- * Import page imported while it waited. The wizard is mounted as App mounts it, under
+ * Setup's statement step over a whole setup (review of 19 Nov, findings 2, 12 and 13): where each
+ * statement goes by default as files come and go, what setup counts as imported when the Import
+ * page imported while it waited, and what the step says when the files cannot be read. The wizard is mounted as App mounts it, under
  * `onboardingOpen()`, so waiting on the Import page closes it and the way back opens a new one.
  * Local-first on fake-indexeddb; made-up payees and amounts only.
  */
@@ -26,6 +26,21 @@ import {
 import { getDB } from '../../../core/storage/idb'
 import { removeToast, toasts } from '../../../core/toastStore'
 import { takeHandedImportFile } from '../../../features/import/importHandoff'
+import type * as ApiFetchModule from '../../../core/apiFetch'
+
+/** Set to answer the category list with a server error, as a failed read of it does. */
+const categoriesFail = vi.hoisted(() => ({ on: false }))
+
+vi.mock('../../../core/apiFetch', async (importOriginal) => {
+  const real = await importOriginal<typeof ApiFetchModule>()
+  return {
+    ...real,
+    apiFetch: (url: string, init?: RequestInit) =>
+      categoriesFail.on && url.startsWith('/api/categories')
+        ? Promise.resolve(new Response('{"error":"Test failure"}', { status: 500 }))
+        : real.apiFetch(url, init),
+  }
+})
 
 const REVOLUT_HEADER =
   'Type,Product,Started Date,Completed Date,Description,Amount,Fee,Currency,State,Balance'
@@ -37,6 +52,8 @@ const REVOLUT_MAY = revolut([
 const REVOLUT_JUNE = revolut([
   'CARD_PAYMENT,Current,2026-06-02 10:00:00,2026-06-02 10:00:00,Example Bakery,-2.10,0,EUR,COMPLETED,476.50',
 ])
+/** A Revolut export of a month with nothing in it: the header alone. */
+const REVOLUT_EMPTY = revolut([])
 const REVOLUT_USD = revolut([
   'CARD_PAYMENT,Current,2026-05-04 10:00:00,2026-05-04 10:00:00,Example Diner,-7.00,0,USD,COMPLETED,93.00',
 ])
@@ -76,6 +93,7 @@ beforeEach(async () => {
 })
 
 afterEach(() => {
+  categoriesFail.on = false
   dispose?.()
   dispose = undefined
   host.remove()
@@ -305,5 +323,61 @@ describe('what setup counts as imported', () => {
     await expect(resumeOnboarding()).resolves.toBe('opened')
     expect(onboardingStep()).toBe('subscriptions')
     pauseOnboarding()
+  })
+})
+
+describe('a statement step that cannot read its files', () => {
+  it('an empty statement picked first leaves the main account to the next bank', async () => {
+    await makeMainAccount('Main checking')
+    choose([['empty.csv', REVOLUT_EMPTY]])
+    await untilStates(['unreadable'])
+
+    choose([['n26.csv', N26]])
+    await untilStates(['unreadable', 'ready'])
+
+    expect(targets()).toEqual([
+      ['empty.csv', null],
+      ['n26.csv', 'Main checking'],
+    ])
+  })
+
+  it('picked together, an empty statement does not take the main account', async () => {
+    await makeMainAccount('Main checking')
+    choose([
+      ['empty.csv', REVOLUT_EMPTY],
+      ['n26.csv', N26],
+    ])
+    await untilStates(['unreadable', 'ready'])
+
+    expect(targets()).toEqual([
+      ['empty.csv', null],
+      ['n26.csv', 'Main checking'],
+    ])
+  })
+
+  it('says why the files were not read, at the step, and Try again reads them', async () => {
+    const { BANK_CATEGORIES_UNREAD } = await import('../../../features/import/importFlow')
+    await makeMainAccount('Main checking')
+    categoriesFail.on = true
+    choose([['revolut.csv', REVOLUT_MAY]])
+    await vi.waitFor(() => {
+      expect(one('onboarding-import-file')?.getAttribute('data-state')).not.toBe('reading')
+    }, waitLong)
+    expect(all('onboarding-import-file').map((c) => c.getAttribute('data-state'))).toEqual([
+      'failed',
+    ])
+
+    const alert = host.querySelector('[role="alert"]')
+    expect(alert?.textContent).toContain(BANK_CATEGORIES_UNREAD)
+    expect(host.textContent).not.toContain("We couldn't read any transactions")
+    expect(one('onboarding-import-open')).toBeNull()
+    const retry = one('onboarding-import-retry')
+    expect(retry?.textContent).toContain('Try again')
+
+    categoriesFail.on = false
+    retry!.click()
+    await untilStates(['ready'])
+    expect(host.querySelector('[role="alert"]')).toBeNull()
+    expect(targets()).toEqual([['revolut.csv', 'Main checking']])
   })
 })

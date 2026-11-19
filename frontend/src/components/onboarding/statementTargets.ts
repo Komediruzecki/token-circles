@@ -5,8 +5,9 @@
  * 1. an account the profile has, named for B, whose currency is C;
  * 2. else the main account, when its currency is C, it is named for no other bank, and B is the
  *    bank it takes: the bank it already received in this setup, or else the first bank of this
- *    setup whose statement fits it. The main account is the one setup's account step made; with
- *    none (setup opened again at the statement), the newest account in C named for no bank;
+ *    setup whose statement fits it and has transactions in it (finding 13). The main account is
+ *    the one setup's account step made; with none (setup opened again at the statement), the
+ *    newest account in C named for no bank;
  * 3. else a new account "B C".
  *
  * A statement with no currency, and an account with none, count as the base currency. Every
@@ -35,6 +36,11 @@ export interface StatementToPlace {
   currency: string | null
   /** The target the person picked by hand, which stays; null when none was picked. */
   byHand: string | null
+  /**
+   * Read, and no transaction came out of it. It never takes the main account for its bank: an
+   * empty export picked first would leave the next bank's statement a new account.
+   */
+  empty?: boolean
 }
 
 /** A currency code as compared, the base currency for none. */
@@ -113,7 +119,7 @@ export function statementTargets(input: {
       main !== null &&
       currencyOf(main) === currency &&
       !namedForAnotherBank(main, bank) &&
-      (taken === undefined || taken === bank)
+      (taken === undefined ? statement.empty !== true : taken === bank)
     if (main !== null && mainFits) {
       takes.set(main.name, bank)
       return main.name
