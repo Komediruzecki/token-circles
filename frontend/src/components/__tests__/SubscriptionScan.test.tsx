@@ -602,6 +602,70 @@ describe('the scan in its modal', () => {
     expect(region.compareDocumentPosition(add) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
+  // Review of 19 Nov, round 3: "adjust price or period" sat over "No known subscriptions found".
+  it('asks to adjust a price or period only over rows that have one', async () => {
+    const subtitle = () =>
+      [...host.querySelectorAll('[data-test-id="sub-scan-modal"] p')].find((line) =>
+        line.textContent?.includes('adjust price or period')
+      ) ?? null
+    const open = async (ready: string) => {
+      dispose?.()
+      host?.remove()
+      host = document.createElement('div')
+      document.body.appendChild(host)
+      dispose = render(() => <SubscriptionScanModal isOpen={() => true} onClose={() => {}} />, host)
+      await vi.waitFor(() => {
+        expect(host.querySelector(ready)).not.toBeNull()
+      })
+    }
+
+    await open('[data-test-id="sub-scan-row"]')
+    expect(subtitle()?.textContent).toBe('Recurring charges we recognized · adjust price or period')
+
+    // A rescan: the rows give way to the spinner, and the line goes with them until they are back.
+    const found = await apiMocks.apiGet('/api/transactions')
+    let finish: (rows: unknown) => void = () => {}
+    apiMocks.apiGet.mockImplementation((url: string) =>
+      url === '/api/transactions'
+        ? new Promise((done) => {
+            finish = done
+          })
+        : Promise.resolve([])
+    )
+    ;[...host.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Rescan')!.click()
+    await vi.waitFor(() => {
+      expect(host.querySelector('[data-test-id="sub-scan-row"]')).toBeNull()
+    })
+    expect(subtitle()).toBeNull()
+    finish(found)
+    await vi.waitFor(() => {
+      expect(subtitle()).not.toBeNull()
+    })
+
+    // A charge that does not recur: the empty state, with nothing to adjust.
+    apiMocks.apiGet.mockImplementation(async (url: string) =>
+      url === '/api/transactions' ? [charge('Corner bakery', 4.2, 3)] : []
+    )
+    await open('[data-test-id="sub-scan-empty"]')
+    expect(subtitle()).toBeNull()
+
+    // No transactions at all.
+    apiMocks.apiGet.mockImplementation(async () => [])
+    await open('[data-test-id="sub-scan-nothing"]')
+    expect(subtitle()).toBeNull()
+
+    // Everything it found is tracked already: those rows have no price or period to change.
+    apiMocks.apiGet.mockImplementation(async (url: string) => {
+      if (url === '/api/transactions') {
+        return [95, 65, 35, 5].map((days) => charge('NETFLIX.COM AMSTERDAM', 13.99, days))
+      }
+      return url === '/api/bills' ? [{ name: 'Netflix' }] : []
+    })
+    await open('[data-test-id="sub-scan-row"]')
+    expect(host.querySelector('[data-test-id="sub-scan-price"]')).toBeNull()
+    expect(subtitle()).toBeNull()
+  })
+
   it('caps its height on a tall screen, and scrolls only the list', () => {
     expect(rule('.modal')).toMatch(/max-height:\s*min\(720px,\s*calc\(100dvh - 2rem\)\)/)
     expect(rule('.modal .scroll')).toMatch(/overflow-y:\s*auto/)

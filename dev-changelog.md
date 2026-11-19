@@ -2926,6 +2926,16 @@ check')` first, as the cushion and debt cases do.
   - **Test:** contract scenario "a transaction sent without a currency is in the base currency"
     (`shared/contract/scenarios/transactions.ts`, both runtimes): before the change it passed on
     local-first and failed on the Worker (expected 'USD' to be 'EUR'); it passes on both after.
+- **The scan's modal asks to adjust a price or period only over rows that have one.** Round 3 of
+  the 19 Nov review: "Recurring charges we recognized · adjust price or period" sat over "No known
+  subscriptions found". `SubscriptionScanModal` (Bills and Import) reads `adjustable` from the
+  panel's `expose` (the rows not tracked yet, none while it scans) and shows the line only when it
+  is above zero: not over the empty state, "No transactions to scan yet.", a rescan's spinner or
+  rows that are all tracked already. The setup wizard has no such line.
+  - **Test:** `SubscriptionScan.test.tsx` "asks to adjust a price or period only over rows that
+    have one" (rows, a rescan, a charge that does not recur, no transactions, all tracked). Before
+    the change it failed over the empty state; with the `Show` taken out, or with the panel counting
+    rows while it scans, it fails at the rescan.
 - **Import's messages have no em dashes.** Each is a full stop, a colon or parentheses: the
   preview's notes, the paste help, the bank tab's "no accounts yet", Recent Imports' line and its
   delete confirm, Connected sources' toast and remove confirm, two errors, and a skipped row's

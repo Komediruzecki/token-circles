@@ -98,6 +98,8 @@ export interface SubscriptionScanPanelProps {
     addSelected: () => Promise<number>
     /** How many the scan found, once it has run: null before then and while it runs. */
     found: () => number | null
+    /** How many rows on show have a price and period to change: none while it scans. */
+    adjustable: () => number
   }) => void
   /** Hide the panel's own Add button (the host renders the action itself). */
   hideAddButton?: boolean
@@ -304,6 +306,7 @@ export function SubscriptionScanPanel(props: SubscriptionScanPanelProps) {
     submitting: form.submitting,
     addSelected,
     found: () => (scanned() && !scanning() ? detected().length : null),
+    adjustable: () => (scanning() ? 0 : selectable().length),
   })
 
   const confidenceLabel: Record<DetectedSubscription['confidence'], string> = {
@@ -556,6 +559,9 @@ export interface SubscriptionScanModalProps {
 }
 
 export function SubscriptionScanModal(props: SubscriptionScanModalProps) {
+  // The line under the title asks to adjust a price or period, so it shows over rows that have
+  // them: not over the empty state, the spinner or rows that are all tracked already.
+  const [panel, setPanel] = createSignal<{ adjustable: () => number }>()
   return (
     <div
       class={styles.overlay}
@@ -574,7 +580,9 @@ export function SubscriptionScanModal(props: SubscriptionScanModalProps) {
         <div class={styles.head}>
           <div>
             <h2 class={styles.title}>Detected subscriptions</h2>
-            <p class={styles.sub}>Recurring charges we recognized · adjust price or period</p>
+            <Show when={(panel()?.adjustable() ?? 0) > 0}>
+              <p class={styles.sub}>Recurring charges we recognized · adjust price or period</p>
+            </Show>
           </div>
           <button class={styles.close} onClick={props.onClose} aria-label="Close" type="button">
             <svg
@@ -592,6 +600,7 @@ export function SubscriptionScanModal(props: SubscriptionScanModalProps) {
         <div class={styles.body}>
           <SubscriptionScanPanel
             active={props.isOpen}
+            expose={setPanel}
             onAdded={props.onAdded}
             emptyHint="Import transactions or add them manually, then rescan."
             onImport={props.onClose}
