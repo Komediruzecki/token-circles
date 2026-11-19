@@ -2768,6 +2768,15 @@ check')` first, as the cushion and debt cases do.
   background with a visible border, and `Analytics.tsx` must use it.
   `src/__tests__/floatingEdges.test.ts` lists it in `NOT_FLOATING` as a dialog, which that test
   leaves to `dialogEdges.test.ts`.
+- **The unused `PeriodNavigator` and Budgets' unused dropdown rules are deleted.**
+  `components/Dashboard/PeriodNavigator.tsx`, a month and year picker with arrows either side, and
+  its stylesheet lost their last importer when `PeriodBar` took their place on Dashboard in #316
+  (`784034d6`). Nothing in `frontend/src`, the e2e specs, the tours or the scripts referred to them,
+  and the component set no `data-tour` or `data-test-id`. `BudgetsPage.module.css` kept
+  `.dropdownWrapper`, `.dropdown`, `.dropdownItem` and its hover, which `Budgets.tsx`, the
+  stylesheet's only importer, never uses. The floating pair the entry above gave both dropdowns goes
+  with them, and so do their two rows in `src/__tests__/floatingEdges.test.ts`;
+  `cssModuleReferences.test.ts` and `cssModuleNaming.test.ts` pass without them.
 - **The unused `components/BulkActions/` tree is deleted.** Its `BulkActionBar`, `BulkCategoryModal`
   and `BulkTypeModal`, with their stylesheets, had no importer anywhere in the repository;
   Transactions uses `components/BulkActionBar.tsx`. The 2026-07-23 integrity audit

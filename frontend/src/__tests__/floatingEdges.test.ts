@@ -39,10 +39,6 @@ const FLOATING: ReadonlyArray<readonly [file: string, selector: string, what: st
   ['components/Toast.module.css', '.toast', 'toasts, in every kind'],
   ['components/SectionRail.module.css', '.rail', 'the section rail down the right edge'],
   ['components/SectionRail.module.css', '.tip', "the section rail's labels"],
-  // Neither of these two is rendered today (PeriodNavigator is imported nowhere, and nothing takes
-  // BudgetsPage's .dropdown); they keep the pair so that bringing one back brings its edge too.
-  ['components/Dashboard/PeriodNavigator.module.css', '.dropdown', 'an unused period dropdown'],
-  ['features/BudgetsPage.module.css', '.dropdown', 'an unused dropdown'],
 ]
 
 /**
