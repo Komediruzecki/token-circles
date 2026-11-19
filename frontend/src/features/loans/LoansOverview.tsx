@@ -12,6 +12,7 @@ import { createEffect, createMemo, For, Match, onCleanup, Show, Switch } from 's
 import OverflowMenu from '../../components/OverflowMenu'
 import { formatCurrency } from '../../core/api'
 import { showConfirm } from '../../core/confirmStore'
+import { usePageActive } from '../../core/pageVisibility'
 import LoanChartPanel from './LoanChartPanel'
 import { monthLong } from './loanCopy'
 import LoanRing from './LoanRing'
@@ -99,12 +100,21 @@ export default function LoansOverview(props: Props) {
 
   const toggleOf = (id: number) =>
     list?.querySelector<HTMLButtonElement>(`[data-loan-toggle="${id}"]`) ?? null
+  /** Pages stay in the document, hidden, while another is shown. */
+  const active = usePageActive('loans')
 
-  /** Close the open chart, and give focus back to its card when it was in the chart or nowhere. */
+  /**
+   * Close the open chart, and give focus back to its card when it was in the chart or nowhere, or
+   * on another card (Escape): brought into view, as focus somewhere out of sight is lost.
+   */
   const close = (refocus: boolean) => {
     const id = props.openId
     props.onClose()
-    if (refocus && id !== null) toggleOf(id)?.focus({ preventScroll: true })
+    const button = refocus && id !== null ? toggleOf(id) : null
+    if (!button) return
+    button.focus({ preventScroll: true })
+    const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    button.scrollIntoView({ block: 'nearest', behavior: still ? 'auto' : 'smooth' })
   }
 
   const focusWasHere = () => {
@@ -113,24 +123,22 @@ export default function LoansOverview(props: Props) {
   }
 
   /**
-   * A dialog or a menu open over the page, which takes Escape for itself. Some dialogs stay in the
-   * page while shut, faded out (the quick entry bar and sheet): those do not count.
+   * A dialog or a menu open over the page, which takes Escape for itself. A dialog that stays in
+   * the page while shut (Transactions' entry form, the subscription scan) still says aria-modal,
+   * and so does one on a page that is not shown: neither has a box.
    */
   const overlayOpen = () =>
-    Array.from(document.querySelectorAll<HTMLElement>('[aria-modal="true"], [role="menu"]')).some(
-      (el) =>
-        typeof el.checkVisibility === 'function'
-          ? el.checkVisibility({ opacityProperty: true, visibilityProperty: true })
-          : true
+    Array.from(document.querySelectorAll('[aria-modal="true"], [role="menu"]')).some(
+      (el) => el.getClientRects().length > 0
     )
 
   // Escape closes the chart: from the cards or the chart, or with nothing focused (a click in
-  // Safari focuses no button). Not when a dialog or a menu has it, nor from elsewhere on the page
-  // (the sidebar on a phone closes on Escape too).
+  // Safari focuses no button). Only while this page is shown, and not when a dialog or a menu has
+  // it, nor from elsewhere on the page (the sidebar on a phone closes on Escape too).
   createEffect(() => {
-    if (props.openId === null) return
+    if (props.openId === null || !active()) return
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape' || overlayOpen()) return
+      if (e.key !== 'Escape' || e.defaultPrevented || overlayOpen()) return
       const target = e.target
       const nowhere =
         !(target instanceof Element) ||

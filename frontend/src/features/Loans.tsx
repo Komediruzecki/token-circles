@@ -56,6 +56,16 @@ export default function Loans() {
    */
   const [openId, setOpenId] = createSignal<number | null>(null)
 
+  // Another profile, another set of loans: the chart closes, so switching back does not find it
+  // open again.
+  createEffect(
+    on(
+      () => state.currentProfile?.id,
+      () => setOpenId(null),
+      { defer: true }
+    )
+  )
+
   const writeProfileId = () => state.currentProfile?.id ?? activeProfileId()
   const canWrite = (row: LoanRow) => row.profile_id === writeProfileId()
   const ownerName = (row: LoanRow) =>
@@ -84,8 +94,13 @@ export default function Loans() {
       const data = await apiHouseholdGet<ListedLoan[]>('/api/loans')
       if (mine !== listToken) return
       const today = localToday()
-      setRows(data.map((loan) => toLoanRow(loan, today, writeProfileId())))
+      const next = data.map((loan) => toLoanRow(loan, today, writeProfileId()))
+      setRows(next)
       setStatus('ready')
+      // An open chart goes with its loan, deleted here or elsewhere: were the loan to come back
+      // into the list, its chart would come back open with it.
+      const open = openId()
+      if (open !== null && !next.some((row) => row.id === open)) setOpenId(null)
     } catch (err) {
       if (mine !== listToken) return
       console.error('Failed to load loans:', err)

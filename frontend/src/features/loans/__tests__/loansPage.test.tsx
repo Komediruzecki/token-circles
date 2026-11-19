@@ -11,7 +11,7 @@ import { render } from 'solid-js/web'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../../../core/api'
 import { ApiError } from '../../../core/apiError'
-import { setPage } from '../../../core/appStore'
+import { bumpProfileVersion, setCurrentProfile, setPage } from '../../../core/appStore'
 import { confirmRequests, resolveConfirm } from '../../../core/confirmStore'
 import { __resetDataVersionsForTest, invalidateForRequest } from '../../../core/dataVersions'
 
@@ -118,6 +118,8 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  boxes?.mockRestore()
+  boxes = undefined
   dispose?.()
   dispose = undefined
   host?.remove()
@@ -738,6 +740,14 @@ async function openChart(root: HTMLElement, name: string) {
   await settle()
 }
 
+/** Every element has a box, as one a browser draws: jsdom gives none any. Undone after each test. */
+let boxes: { mockRestore: () => void } | undefined
+const drawn = () => {
+  boxes = vi
+    .spyOn(Element.prototype, 'getClientRects')
+    .mockImplementation(() => [{ width: 10, height: 10 }] as unknown as DOMRectList)
+}
+
 const escape = (target: EventTarget = document.body) =>
   target.dispatchEvent(
     new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
@@ -859,8 +869,80 @@ describe('the chart under a card', () => {
     expect(charts(root)).toHaveLength(1)
   })
 
+  // Pages stay in the document while another is shown: an Escape there is not this page's.
+  it('leaves Escape alone while another page is shown', async () => {
+    const root = await mount('#loans')
+    await openChart(root, 'Test boat')
+    setPage('dashboard')
+    await settle()
+    const key = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+    document.body.dispatchEvent(key)
+    await settle()
+    expect(key.defaultPrevented).toBe(false)
+    setPage('loans')
+    await settle()
+    expect(charts(root)).toHaveLength(1)
+  })
+
+  it('brings the open card into view when Escape takes focus back to it', async () => {
+    const root = await mount('#loans')
+    await openChart(root, 'Mortgage')
+    // Focus on another card, the open one scrolled out of sight above it.
+    toggleOf(root, 'Test boat').focus()
+    scrolled = []
+    escape(document.activeElement!)
+    await settle()
+    expect(charts(root)).toHaveLength(0)
+    expect(document.activeElement).toBe(toggleOf(root, 'Mortgage'))
+    expect(scrolled).toEqual([
+      { chip: 'loans-item-name', options: { block: 'nearest', behavior: 'smooth' } },
+    ])
+  })
+
+  // Switched away and back from another page: Loans reads its list once, on its return, and finds
+  // the loan there again. Its chart comes back shut.
+  it('closes on a profile switch, and stays closed on switching back', async () => {
+    const root = await mount('#loans')
+    await openChart(root, 'Test boat')
+    setPage('dashboard')
+    try {
+      setCurrentProfile({ id: 2, name: 'Them', created_at: '2025-01-01' })
+      bumpProfileVersion()
+      await settle()
+      setCurrentProfile({ id: 1, name: 'Me', created_at: '2025-01-01' })
+      bumpProfileVersion()
+      await settle()
+      setPage('loans')
+      await settle()
+      expect(cardOf(root, 'Test boat')).toBeDefined()
+      expect(charts(root)).toHaveLength(0)
+      expect(toggleOf(root, 'Test boat').getAttribute('aria-expanded')).toBe('false')
+    } finally {
+      setCurrentProfile(null)
+    }
+  })
+
+  // Deleted here or in another tab, the loan takes its open chart with it: should the same loan
+  // come back into the list (another profile's view of the household, say), it comes back shut.
+  it('forgets the open chart once a list read no longer has its loan', async () => {
+    const root = await mount('#loans')
+    await openChart(root, 'Test boat')
+    const boat = listed.find((loan) => loan.name === 'Test boat')!
+    listed = listed.filter((loan) => loan !== boat)
+    invalidateForRequest('/api/loans/2', 'DELETE', true)
+    await settle()
+    expect(cardOf(root, 'Test boat')).toBeUndefined()
+
+    listed = [...listed, boat]
+    invalidateForRequest('/api/loans', 'POST', true)
+    await settle()
+    expect(cardOf(root, 'Test boat')).toBeDefined()
+    expect(charts(root)).toHaveLength(0)
+  })
+
   // With focus nowhere, as a click on a menu's or a dialog's padding leaves it in Safari.
   it('leaves Escape to the card menu when the menu is open', async () => {
+    drawn()
     const root = await mount('#loans')
     await openChart(root, 'Test boat')
     el(cardOf(root, 'Test boat'), 'loans-item-menu')!.click()
@@ -874,18 +956,13 @@ describe('the chart under a card', () => {
     expect(charts(root)).toHaveLength(1)
   })
 
-  it('takes Escape back from a dialog that stays in the page while shut', async () => {
-    // The quick entry bar is always there, faded out: it does not have Escape while it is shut.
+  // Some dialogs stay in the page while shut (Transactions' entry form, the subscription scan),
+  // still saying aria-modal, and so does any dialog on a page that is not shown. Neither has a box:
+  // jsdom gives no element one, so this dialog is as a browser draws a shut one.
+  it('takes Escape back from a dialog that is in the page but not shown', async () => {
     const shut = document.createElement('div')
     shut.setAttribute('role', 'dialog')
     shut.setAttribute('aria-modal', 'true')
-    // jsdom draws nothing, so it has no checkVisibility: this one says what a browser would.
-    Object.defineProperty(HTMLElement.prototype, 'checkVisibility', {
-      configurable: true,
-      value: function (this: HTMLElement) {
-        return this !== shut
-      },
-    })
     try {
       document.body.appendChild(shut)
       const root = await mount('#loans')
@@ -894,12 +971,12 @@ describe('the chart under a card', () => {
       await settle()
       expect(charts(root)).toHaveLength(0)
     } finally {
-      delete (HTMLElement.prototype as Partial<HTMLElement>).checkVisibility
       shut.remove()
     }
   })
 
   it('leaves Escape to a dialog open over the page', async () => {
+    drawn()
     const root = await mount('#loans')
     await openChart(root, 'Test boat')
     el(cardOf(root, 'Test boat'), 'loans-item-menu')!.click()
