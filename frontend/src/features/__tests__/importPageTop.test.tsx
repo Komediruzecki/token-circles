@@ -417,3 +417,155 @@ describe("the flow's errors", () => {
     expect(byTestId('import-map-sheets')!.nextElementSibling).toBe(error)
   }, 30_000)
 })
+
+describe('the sheet an import read', () => {
+  it('is offered to Connected sources, and saved with its columns as matched', async () => {
+    await mountImport()
+    await importTheSheet()
+
+    const save = await vi.waitFor(() => {
+      const found = byTestId('import-after-save-sheet')
+      expect(found).not.toBeNull()
+      return found!
+    })
+    expect(byTestId('import-after-sheet')?.textContent).toContain(
+      'Keep it in Connected sources, and Sync brings in rows added to it later.'
+    )
+    type(byTestId('import-after-sheet-name') as HTMLInputElement, 'Example ledger')
+    save.click()
+
+    await vi.waitFor(() => {
+      expect(byTestId('import-after-saved')?.textContent).toBe(
+        '"Example ledger" is in Connected sources below. Sync there brings in rows added to it later.'
+      )
+    })
+    expect(byTestId('import-after-save-sheet')).toBeNull()
+    const db = await getDB()
+    const sources = (await db.getAll('import_sources')) as Record<string, unknown>[]
+    expect(sources).toHaveLength(1)
+    expect(sources[0]).toMatchObject({
+      kind: 'google_sheet',
+      label: 'Example ledger',
+      config: { url: LINK },
+      schedule: 'manual',
+      profile_id: 1,
+      mapping: {
+        date: 'Date',
+        description: 'Description',
+        amount: 'Amount',
+        means_of_payment: 'Means of Payment',
+      },
+    })
+    expect(typeof sources[0].last_synced_at).toBe('string')
+
+    // Connected sources lists it once the flow starts over, with its Sync.
+    await afterTheReset()
+    await vi.waitFor(() => {
+      expect(host.querySelector('[aria-label="Auto sync Example ledger"]')).not.toBeNull()
+    })
+  }, 30_000)
+
+  it('says where a sheet saved before is, with nothing to save', async () => {
+    const db = await getDB()
+    await db.add('import_sources', {
+      profile_id: 1,
+      kind: 'google_sheet',
+      label: 'Example saved sheet',
+      config: { url: 'https://docs.google.com/spreadsheets/d/example-ledger/edit', sheetName: '' },
+      mapping: null,
+      category_types: null,
+      default_account_id: null,
+      schedule: 'manual',
+      last_synced_at: null,
+      last_cursor: null,
+      created_at: '2026-11-01T00:00:00.000Z',
+      updated_at: '2026-11-01T00:00:00.000Z',
+    })
+    await mountImport()
+    await importTheSheet()
+
+    await vi.waitFor(() => {
+      expect(byTestId('import-after-saved')?.textContent).toBe(
+        '"Example saved sheet" is in Connected sources below. Sync there brings in rows added to it later.'
+      )
+    })
+    expect(byTestId('import-after-save-sheet')).toBeNull()
+    expect(await db.count('import_sources')).toBe(1)
+  }, 30_000)
+
+  it('counts a sheet saved with no name as saved, and offers no second copy', async () => {
+    const db = await getDB()
+    await db.add('import_sources', {
+      profile_id: 1,
+      kind: 'google_sheet',
+      label: '',
+      config: { url: LINK, sheetName: '' },
+      schedule: 'manual',
+      created_at: '2026-11-01T00:00:00.000Z',
+      updated_at: '2026-11-01T00:00:00.000Z',
+    })
+    await mountImport()
+    await importTheSheet()
+
+    await vi.waitFor(() => {
+      expect(byTestId('import-after-saved')?.textContent).toBe(
+        '"Google Sheet" is in Connected sources below. Sync there brings in rows added to it later.'
+      )
+    })
+    expect(byTestId('import-after-save-sheet')).toBeNull()
+  }, 30_000)
+
+  it('has no row after an import from a file', async () => {
+    await mountImport()
+    byTestId('import-tab-file-upload')!.click()
+    const input = await vi.waitFor(() => {
+      const found = byTestId('import-file-input') as HTMLInputElement | null
+      expect(found).not.toBeNull()
+      return found!
+    })
+    pick(input, [new File([CSV], 'example-ledger.csv', { type: 'text/csv' })])
+    await vi.waitFor(
+      () => {
+        expect(byTestId('import-continue-preview')).not.toBeNull()
+      },
+      { timeout: 8_000 }
+    )
+    byTestId('import-continue-preview')!.click()
+    await vi.waitFor(
+      () => {
+        expect(byTestId('import-execute-all')).not.toBeNull()
+      },
+      { timeout: 8_000 }
+    )
+    byTestId('import-execute-all')!.click()
+    await vi.waitFor(
+      () => {
+        expect(byTestId('import-result')?.textContent).toBe('Imported 3 transactions')
+      },
+      { timeout: 8_000 }
+    )
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(byTestId('import-after-sheet')).toBeNull()
+  }, 30_000)
+})
+
+describe('sourceForSheet', () => {
+  const saved = (url: string) =>
+    ({
+      id: 7,
+      profile_id: 1,
+      kind: 'google_sheet',
+      label: 'Example',
+      config: { url },
+      schedule: 'manual',
+    }) as const
+
+  it('matches the same spreadsheet and tab, a link with no gid being the first tab', async () => {
+    const { sourceForSheet } = await import('../import/keepSheet')
+    const at = (url: string) => sourceForSheet([saved(url)], LINK)?.label ?? null
+    expect(at('https://docs.google.com/spreadsheets/d/example-ledger/edit#gid=0')).toBe('Example')
+    expect(at('https://docs.google.com/spreadsheets/d/example-ledger/edit')).toBe('Example')
+    expect(at('https://docs.google.com/spreadsheets/d/example-ledger/edit#gid=123')).toBeNull()
+    expect(at('https://docs.google.com/spreadsheets/d/another-ledger/edit#gid=0')).toBeNull()
+  })
+})

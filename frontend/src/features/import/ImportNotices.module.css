@@ -138,3 +138,56 @@
 .rowBody[hidden] {
   display: none;
 }
+
+/* The sheet's row: a name, if wanted, and Save sheet, on one line at every width. */
+.keep {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 0 1 360px;
+  min-width: 0;
+}
+
+.keepRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.keepField {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.keepInput {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+}
+
+.keepInput:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+.keepSave {
+  flex: none;
+  min-height: 40px;
+}
+
+@media (max-width: 620px) {
+  .keep {
+    flex-basis: 100%;
+  }
+
+  /* 16 px, or a phone's browser zooms the page on focus. */
+  .keepInput {
+    font-size: 16px;
+  }
+}

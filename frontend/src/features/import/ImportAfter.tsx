@@ -6,13 +6,19 @@
  * screen down, and the link field further still.
  *
  * Each row is one line until it is opened. The balances list opens by itself for one or two
- * accounts, the case of a bank statement; for more it waits behind Show balances.
+ * accounts, the case of a bank statement; for more it waits behind Show balances. After a Google
+ * Sheet, a last row says whether the sheet is in Connected sources, where Sync reads it again, and
+ * offers to save it there when it is not (keepSheet.ts).
  */
-import { createSignal, createUniqueId, Show } from 'solid-js'
+import { createResource, createSignal, createUniqueId, Show } from 'solid-js'
+import { Field, FormNotice, SubmitButton } from '../../components/form'
+import { listImportSources } from '../../core/importSources'
 import pageStyles from '../Import.module.css'
 import { ImportBalances } from './ImportBalances'
 import styles from './ImportNotices.module.css'
+import { createKeepSheetForm, sourceForSheet } from './keepSheet'
 import type { StoredAccount } from '../../core/balanceToday'
+import type { SheetToKeep } from './keepSheet'
 
 /** An import as the card shows it, from the flow's onImported. */
 export interface AfterImport {
@@ -22,6 +28,8 @@ export interface AfterImport {
   imported: number
   /** Offer the subscription scan: something came in, and setup is not waiting to run it. */
   scan: boolean
+  /** The Google Sheet it read, to keep in Connected sources; null for any other import. */
+  sheet: SheetToKeep | null
 }
 
 /** Balances open by themselves up to this many accounts: one or two lines. */
@@ -133,6 +141,93 @@ export function ImportAfter(props: {
           </button>
         </div>
       </Show>
+
+      <Show when={props.after.sheet} keyed>
+        {(sheet) => <SheetRow sheet={sheet} />}
+      </Show>
     </section>
+  )
+}
+
+/**
+ * The sheet's row: in Connected sources already, or Save sheet. Nothing until the saved sources
+ * are read, so the row does not change its mind in front of the person.
+ */
+function SheetRow(props: { sheet: SheetToKeep }) {
+  const [savedNow, setSavedNow] = createSignal<string | null>(null)
+  const [stored] = createResource(async () => {
+    try {
+      const source = sourceForSheet(await listImportSources(), props.sheet.url)
+      // A source saved with no name is still saved: Save sheet would make a second one.
+      return source ? source.label || 'Google Sheet' : null
+    } catch {
+      // Not read: Save sheet is offered, and a second copy of a saved sheet is the worst of it.
+      return null
+    }
+  })
+  const savedAs = () => savedNow() ?? stored()
+  const form = createKeepSheetForm({
+    sheet: props.sheet,
+    onSaved: (source) => setSavedNow(source.label),
+  })
+
+  return (
+    <Show when={!stored.loading}>
+      <div class={styles.afterRow} data-test-id="import-after-sheet">
+        <div class={styles.text}>
+          <h3 class={styles.rowLabel}>Google Sheet</h3>
+          <Show
+            when={savedAs()}
+            fallback={
+              <p class={styles.sub}>
+                Keep it in Connected sources, and Sync brings in rows added to it later.
+              </p>
+            }
+          >
+            {(label) => (
+              <p class={styles.sub} data-test-id="import-after-saved">
+                "{label()}" is in Connected sources below. Sync there brings in rows added to it
+                later.
+              </p>
+            )}
+          </Show>
+        </div>
+        <Show when={!savedAs()}>
+          <form class={styles.keep} {...form.attrs} data-test-id="import-after-sheet-form">
+            <FormNotice form={form} />
+            {/* The name and Save sheet share a line, on a phone too: the card stays short. */}
+            <div class={styles.keepRow}>
+              <Field
+                form={form}
+                name="label"
+                label="Name for the sheet"
+                class={styles.keepField}
+                labelClass={pageStyles.visuallyHidden}
+              >
+                {(control) => (
+                  <input
+                    {...control}
+                    class={styles.keepInput}
+                    placeholder="Name (optional)"
+                    autocomplete="off"
+                    data-test-id="import-after-sheet-name"
+                    value={form.values.label}
+                    onInput={(e) => form.set('label', e.currentTarget.value)}
+                  />
+                )}
+              </Field>
+              <SubmitButton
+                class={`${pageStyles.btn} ${pageStyles.btnSecondary} ${styles.keepSave}`}
+                busy={form.submitting()}
+                busyLabel="Saving…"
+                data-test-id="import-after-save-sheet"
+              >
+                Save sheet
+              </SubmitButton>
+            </div>
+          </form>
+        </Show>
+      </div>
+    </Show>
   )
 }

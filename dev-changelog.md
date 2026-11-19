@@ -2601,6 +2601,32 @@ check')` first, as the cushion and debt cases do.
     import the tabs start and the link field ends inside the viewport, and a link that is not a
     sheet's marks the field with no `import-error`. It fails on the old page, and with the list
     open (the link field's bottom at 971 px of 900; the tabs at 1,297 px of 844 on a phone).
+- **After a Google Sheets import, the card offers to keep the sheet in Connected sources.** maff,
+  19 Nov: after importing from a sheet, its Sync should be a click away, or offered when the link
+  was never saved. `Import.tsx` reads the sheet as the import ends (`sheetToKeep`: the link, its
+  tab's name, the columns as matched, by header name with `mappingToHeaderNames`, and the
+  category types), before the flow starts over; any other tab gives `null`. The card's last row
+  (`import-after-sheet`, `SheetRow` in `ImportAfter.tsx`) reads the saved sources first and shows
+  nothing until then: a source for the same spreadsheet and tab (`sourceForSheet` in
+  `features/import/keepSheet.ts`, a link with no gid being tab 0) is named, in Connected sources
+  below (`import-after-saved`); otherwise a form on the kit (`createKeepSheetForm`, the name
+  checked with `checkImportSourceCreate`, refusals under the field or in its notice) saves it with
+  Save sheet (`import-after-save-sheet`). The body is Add a sheet's (`keepSheetBody`: the name, or
+  the tab's, or "Google Sheet"; `schedule: 'manual'`) plus the import's `mapping` and
+  `category_types`, and `last_synced_at` now, since its rows just came in. The write bumps
+  `import-sources`, so Connected sources lists it with Auto sync. No API change: both runtimes
+  took these fields on create already. The name and Save sheet share a line at every width
+  (`.keepRow`; the input is 16 px on a phone). With this row, after the twelve-account import the
+  tabs start at 374 px and the link field at 450 at 1440x900, and at 585 and 682 at 390x844.
+  - **Tests:** `importPageTop.test.tsx`: Save sheet with a name stores one `google_sheet` source
+    with the link, `manual`, the four columns by name and a `last_synced_at`, and Connected
+    sources shows its Auto sync; a sheet saved before is named with no form and no second row,
+    and one saved with no name reads as "Google Sheet" rather than offering a second copy; a
+    file import has no sheet row; `sourceForSheet` matches the same tab, a link with no gid as
+    tab 0, and not another tab or spreadsheet. Without `sheetToKeep` the first two fail; with a
+    raw gid compare the saved-before case and the matcher fail; reading the label alone fails
+    the no-name case. `import-page-top.spec.ts` saves the sheet from the card in the browser and
+    finds its Auto sync.
 
 ### Fixed
 

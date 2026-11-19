@@ -3,7 +3,8 @@
  * line of balance for each and the subscription offer above the import methods, and the link field
  * began over a screen down: 1,467 px at 1440x900, 1,890 px on a phone. The card an import leaves
  * keeps a long list shut, so the methods and the link stay on the first screen, and a link that is
- * not a sheet's is said at the field, not in a banner at the top.
+ * not a sheet's is said at the field, not in a banner at the top. The card offers to keep the sheet
+ * in Connected sources, where Sync reads it again.
  *
  * Local-first, the sheet answered by a route: made-up accounts and amounts.
  */
@@ -119,5 +120,13 @@ for (const size of [
     await page.getByTestId('import-sheet-fetch').click()
     await expect(page.getByTestId('import-sheet-url')).toHaveAttribute('aria-invalid', 'true')
     await expect(page.getByTestId('import-error')).toHaveCount(0)
+
+    // The sheet just read goes into Connected sources from the card, for Sync to read again.
+    await page.getByTestId('import-after-sheet-name').fill('Example ledger')
+    await page.getByTestId('import-after-save-sheet').click()
+    await expect(page.getByTestId('import-after-saved')).toHaveText(
+      '"Example ledger" is in Connected sources below. Sync there brings in rows added to it later.'
+    )
+    await expect(page.getByRole('button', { name: 'Auto sync Example ledger' })).toBeVisible()
   })
 }

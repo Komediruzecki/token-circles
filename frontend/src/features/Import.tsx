@@ -46,6 +46,7 @@ import { useAppState } from '../core/appStore'
 import { storedAccounts } from '../core/balanceToday'
 import { showConfirm } from '../core/confirmStore'
 import { entityVersion } from '../core/dataVersions'
+import { mappingToHeaderNames } from '../core/importMapping'
 import { noteImportWhileSetupWaits, setupWaiting } from '../core/onboardingStore'
 import { refetchOnActive, usePageActive } from '../core/pageVisibility'
 import { addToast } from '../core/toastStore'
@@ -64,6 +65,7 @@ import { SetupStrip } from './import/SetupStrip'
 import type { StoredAccount } from '../core/balanceToday'
 import type { TypedBalance } from '../core/setupTypedBalances'
 import type { AfterImport } from './import/ImportAfter'
+import type { SheetToKeep } from './import/keepSheet'
 
 export default function Import() {
   // The last import, for the card at the top of the page (ImportAfter.tsx): its result, the
@@ -105,6 +107,7 @@ export default function Import() {
         text: summary.text,
         imported: summary.imported,
         scan: !waiting && summary.imported > 0,
+        sheet: sheetToKeep(),
       })
       const before = heldBefore
       heldBefore = null
@@ -135,6 +138,20 @@ export default function Import() {
       if (step !== 'preview') setSummary(false)
     })
   )
+
+  // A Google Sheet the import read, as the card offers to keep it (keepSheet.ts): the link, its
+  // tab, and the columns and category types as this import matched them. Read as the import ends,
+  // before the flow starts over and forgets them.
+  const sheetToKeep = (): SheetToKeep | null => {
+    const url = flow.sheetUrl().trim()
+    if (flow.activeImportTab() !== 'google-sheets' || !url) return null
+    return {
+      url,
+      sheetName: flow.selectedSheet(),
+      mapping: mappingToHeaderNames(flow.columnMapping(), flow.currentHeaders()),
+      categoryTypes: { ...flow.categoryTypes() },
+    }
+  }
   const processBank = async () => {
     setSummary(false)
     setSummaryImported(false)
