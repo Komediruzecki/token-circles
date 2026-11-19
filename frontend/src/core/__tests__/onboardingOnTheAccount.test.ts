@@ -6,12 +6,14 @@
  * own rules (shared/accountState.ts, answerUserStateValue and applyUserStateWrite), because that
  * is the network.
  */
+import { render } from 'solid-js/web'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   answerUserStateValue,
   applyUserStateWrite,
   sqliteDateTime,
 } from '../../../../shared/accountState'
+import { SetupStrip } from '../../features/import/SetupStrip'
 import { __resetAccountStateForTest, accountState, readAccountState } from '../accountState'
 import {
   __resetGettingStartedForTest,
@@ -38,6 +40,7 @@ import {
   startOnboarding,
   whereToOfferOnboarding,
 } from '../onboardingStore'
+import { removeToast, toasts } from '../toastStore'
 import type { GettingStartedRecord, OnboardingRecord } from '../../../../shared/accountStateKeys'
 
 const json = (body: unknown, status = 200) =>
@@ -53,6 +56,8 @@ const worker = {
   failWrite: false,
   /** Runs as the settings are read: another sign-in finishing while they are on their way. */
   whileSettingsRead: null as (() => void) | null,
+  /** Runs as the account state is read: a sign-out while it is on its way, say. */
+  whileStateRead: null as (() => void) | null,
   sent: [] as string[],
 }
 
@@ -68,6 +73,7 @@ function workerStandIn() {
     worker.sent.push(`${method} ${path}${body ? ` ${body}` : ''}`)
     const id = worker.signedIn
     if (path === '/api/account/state' && method === 'GET') {
+      worker.whileStateRead?.()
       if (worker.failRead) return json({ error: 'Something went wrong on our side.' }, 500)
       return json({
         onboarding: answerUserStateValue('onboarding', stored(worker.records.get(id))),
@@ -155,6 +161,7 @@ beforeEach(async () => {
   worker.failRead = false
   worker.failWrite = false
   worker.whileSettingsRead = null
+  worker.whileStateRead = null
   worker.sent.length = 0
 })
 
@@ -784,6 +791,48 @@ describe('setup waiting on the Import page', () => {
     await expect(going).resolves.toBe('opened')
     expect(onboardingOpen()).toBe(true)
     expect(onboardingStep()).toBe('subscriptions')
+  })
+
+  // Round 4: a sign-out while the account was read again took the wait, and the way back answered
+  // that setup was finished, which the Import page's strip then said.
+  it('ends with a sign-out during the re-read, and nothing says setup is finished', async () => {
+    await waitAtTheStatement()
+    for (const toast of toasts()) removeToast(toast.id)
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const dispose = render(() => SetupStrip(), host)
+    try {
+      worker.whileStateRead = () => {
+        worker.whileStateRead = null
+        setOnboardingOwner(null)
+      }
+      const back = host.querySelector<HTMLButtonElement>('[data-test-id="import-setup-back"]')
+      expect(back).not.toBeNull()
+      back!.click()
+
+      await vi.waitFor(() => {
+        expect(host.querySelector('[data-test-id="import-setup"]')).toBeNull()
+      })
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      expect(setupWaiting()).toBe(false)
+      expect(onboardingOpen()).toBe(false)
+      expect(toasts().map((toast) => toast.message)).toEqual([])
+    } finally {
+      dispose()
+      host.remove()
+    }
+  })
+
+  it('answers a sign-out during the re-read as the wait ended, not as setup finished', async () => {
+    await waitAtTheStatement()
+    worker.whileStateRead = () => {
+      worker.whileStateRead = null
+      setOnboardingOwner(null)
+    }
+
+    await expect(resumeOnboarding()).resolves.toBe('ended')
+    expect(setupWaiting()).toBe(false)
+    expect(onboardingOpen()).toBe(false)
   })
 
   it('keeps the subscriptions as the step reached after an import, for any device to open at', async () => {

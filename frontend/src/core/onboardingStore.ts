@@ -59,7 +59,9 @@ import {
   localSetupWaitingOver,
   markLocalSetupPending,
   noteLocalSetupWaiting,
+  onboardingDecisionStamp,
   onboardingFlagKey,
+  stampOnboardingDecision,
 } from './onboardingFlag'
 import { forgetTypedBalances } from './setupTypedBalances'
 import type { OnboardingDecision, OnboardingStep } from '../../../shared/accountStateKeys'
@@ -177,6 +179,17 @@ function setOnboardingStatus(
   } catch {
     // Non-fatal: the wizard may auto-open again next visit.
   }
+  stampOnboardingDecision(of)
+}
+
+/**
+ * The decision `of` holds, with the stamp it was kept under: any decision kept since changes it,
+ * the same one made again included (round 4). By the status alone, another tab's skip over a skip
+ * the demo had left read as no decision, and Back to setup opened setup again. The status stays
+ * in it for a tab still on a build that writes no stamp.
+ */
+function decisionMark(of: string): string {
+  return `${getOnboardingStatus(of) ?? 'none'}@${onboardingDecisionStamp(of) ?? 'none'}`
 }
 
 /**
@@ -375,8 +388,11 @@ interface SetupWait {
   id: number
   owner: string
   rerun: boolean
-  /** The decision this browser held as setup began to wait: local-first tells a new one by it. */
-  decidedBefore: OnboardingStatus
+  /**
+   * The decision this browser held as setup began to wait, with its stamp (`decisionMark`):
+   * local-first tells a new one by it.
+   */
+  decidedBefore: string
   here: number
 }
 
@@ -500,7 +516,7 @@ export function pauseOnboarding(): void {
   const rerun = isServerAccount(of)
     ? !firstSetupOfTheAccount()
     : getOnboardingStatus(of) !== null && !localSetupPending()
-  const decidedBefore = getOnboardingStatus(of)
+  const decidedBefore = decisionMark(of)
   waiting[1]({ id: ++waits, owner: of, rerun, decidedBefore, here: 0 })
   // The next start reads it beside the marker: decided since, it opens nothing.
   if (of === LOCAL_ONBOARDING_OWNER && localSetupPending()) noteLocalSetupWaiting(decidedBefore)
@@ -528,10 +544,10 @@ export function noteImportWhileSetupWaits(done: SetupImport | number): void {
  */
 async function decidedSince(wait: SetupWait): Promise<boolean | null> {
   const of = wait.owner
-  // Local-first, a decision made since it began to wait (another tab). One held before it stands
-  // beside a setup the local-only switch asked for, over a demo decided earlier (review M7): by
-  // presence alone, the way back said that setup was finished.
-  if (!isServerAccount(of)) return getOnboardingStatus(of) !== wait.decidedBefore
+  // Local-first, a decision made since it began to wait (another tab), by its stamp. One held
+  // before it stands beside a setup the local-only switch asked for, over a demo decided earlier
+  // (review M7): by presence alone, the way back said that setup was finished.
+  if (!isServerAccount(of)) return decisionMark(of) !== wait.decidedBefore
   // A decision this browser keeps (another tab), sent to the account or not yet.
   if (getOnboardingStatus(of) !== null) return true
   const state = await rereadAccountState()
@@ -542,10 +558,12 @@ async function decidedSince(wait: SetupWait): Promise<boolean | null> {
 /**
  * Back to setup, from the Import page: open setup again at the subscriptions in what was imported
  * on the way, or at the statement when nothing was. Resolves `opened`; `finished` when setup was
- * finished or left meanwhile, here or on another device, so it stays closed and waits no more; or
- * `unknown` when the account could not be read, so it keeps waiting to be tried again.
+ * finished or left meanwhile, here or on another device, so it stays closed and waits no more;
+ * `unknown` when the account could not be read, so it keeps waiting to be tried again; or `ended`
+ * when the account signed out, or another signed in, while it was read: that ends the wait and
+ * says nothing about setup (round 4).
  */
-export async function resumeOnboarding(): Promise<'opened' | 'finished' | 'unknown'> {
+export async function resumeOnboarding(): Promise<'opened' | 'finished' | 'unknown' | 'ended'> {
   const wait = waiting[0]()
   if (wait === null || wait.owner !== owner) {
     waiting[1](null)
@@ -553,8 +571,11 @@ export async function resumeOnboarding(): Promise<'opened' | 'finished' | 'unkno
   }
   if (!wait.rerun) {
     const decided = await decidedSince(wait)
-    // Taken already, by another tap while the account was read, or another owner signed in. An
-    // import that landed meanwhile keeps the wait's id.
+    // Signed out, or another account signed in, while the account was read: the wait went with
+    // the owner, and setup was not decided for it.
+    if (owner !== wait.owner) return 'ended'
+    // Taken already, by another tap while the account was read. An import that landed meanwhile
+    // keeps the wait's id.
     if (waiting[0]()?.id !== wait.id) return onboardingOpen() ? 'opened' : 'finished'
     if (decided === null) return 'unknown'
     if (decided) {
@@ -629,7 +650,9 @@ export async function whereToOfferOnboarding(): Promise<OnboardingStep | null> {
 function localSetupDecidedWhileWaiting(): boolean {
   const over = localSetupWaitingOver()
   if (over === null) return false
-  return (getOnboardingStatus(LOCAL_ONBOARDING_OWNER) ?? 'none') !== over
+  // A note from before the stamp holds the decision alone.
+  if (!over.includes('@')) return (getOnboardingStatus(LOCAL_ONBOARDING_OWNER) ?? 'none') !== over
+  return decisionMark(LOCAL_ONBOARDING_OWNER) !== over
 }
 
 /**

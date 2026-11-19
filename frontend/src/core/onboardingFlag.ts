@@ -22,6 +22,31 @@ export const accountOnboardingOwner = (accountId: number) => `account-${accountI
 export const onboardingFlagKey = (owner: string) => `${BROWSER_WIDE_ONBOARDING_KEY}:${owner}`
 
 /**
+ * The localStorage key of the stamp beside `owner`'s flag: written with every decision, so a new
+ * one is told from the one held before, the same decision made again included (round 4).
+ */
+export const onboardingStampKey = (owner: string) => `finance_onboarding_stamp:${owner}`
+
+/** Stamp a decision of `owner` just kept: a time, and a few letters for two in one millisecond. */
+export function stampOnboardingDecision(owner: string): void {
+  try {
+    const letters = (globalThis.crypto?.randomUUID?.() ?? '').slice(0, 8)
+    localStorage.setItem(onboardingStampKey(owner), `${Date.now()}-${letters}`)
+  } catch {
+    // Non-fatal: a decision then reads as new by its value alone, as it did before the stamp.
+  }
+}
+
+/** The stamp of `owner`'s last decision, or null for none kept. */
+export function onboardingDecisionStamp(owner: string): string | null {
+  try {
+    return localStorage.getItem(onboardingStampKey(owner))
+  } catch {
+    return null
+  }
+}
+
+/**
  * Set by the wizard's "Keep my data in this browser only" just before it reloads into the local
  * workspace, so that workspace offers setup for a space of the person's own (whereToOfferOnboarding).
  * Local-first's first setup keeps it too, holding the furthest step it reached, until setup is
@@ -64,16 +89,18 @@ export function clearLocalSetupPending(): void {
 
 /**
  * Beside the marker while local setup waits on the Import page: the decision this browser held
- * when it began to wait ('none' for none). A different one at the next start means setup was
- * decided while it waited, and the marker is stale. Compared, not merely present: a decision the
- * demo left before a local-only switch's setup began stands beside a marker that still counts.
+ * when it began to wait, with its stamp (onboardingStore.ts, `decisionMark`). A different one at
+ * the next start means setup was decided while it waited, and the marker is stale. Compared, not
+ * merely present: a decision the demo left before a local-only switch's setup began stands beside
+ * a marker that still counts. A note from before the stamp holds the decision alone ('none' for
+ * none).
  */
 export const LOCAL_SETUP_WAITING_KEY = 'finance_local_setup_waiting'
 
 /** Note that local setup waits, over `decided`, the decision held as it began to. */
-export function noteLocalSetupWaiting(decided: string | null): void {
+export function noteLocalSetupWaiting(decided: string): void {
   try {
-    localStorage.setItem(LOCAL_SETUP_WAITING_KEY, decided ?? 'none')
+    localStorage.setItem(LOCAL_SETUP_WAITING_KEY, decided)
   } catch {
     // Non-fatal: the next start treats the marker as it did before.
   }
@@ -88,7 +115,7 @@ export function clearLocalSetupWaiting(): void {
   }
 }
 
-/** The decision held as local setup began to wait ('none' for none), or null when it does not. */
+/** The decision held as local setup began to wait, or null when it does not wait. */
 export function localSetupWaitingOver(): string | null {
   try {
     return localStorage.getItem(LOCAL_SETUP_WAITING_KEY)

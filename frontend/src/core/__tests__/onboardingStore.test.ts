@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { markLocalSetupPending } from '../onboardingFlag'
+import { markLocalSetupPending, onboardingStampKey } from '../onboardingFlag'
 import {
   collectionIsEmpty,
   completeOnboarding,
@@ -400,6 +400,61 @@ describe('onboardingStore', () => {
       waitAtTheStatement()
       // Decided while it waited, by a path that left the marker behind.
       localStorage.setItem('finance_onboarding:local', 'skipped')
+
+      await expect(whereToOfferOnboarding()).resolves.toBeNull()
+      expect(marker()).toBeNull()
+    })
+
+    /**
+     * What another tab's Skip or Finish leaves in the shared localStorage: decide() there writes
+     * the decision with its stamp, and drops the marker unless the path that decided left it.
+     */
+    function otherTabDecides(outcome: 'skipped' | 'completed', keepMarker = false): void {
+      localStorage.setItem('finance_onboarding:local', outcome)
+      localStorage.setItem(onboardingStampKey('local'), 'stamped-in-another-tab')
+      if (keepMarker) return
+      localStorage.removeItem('finance_local_setup_pending')
+      localStorage.removeItem('finance_local_setup_waiting')
+    }
+
+    // Round 4: compared by status, another tab's decision, the same as the one the demo had left,
+    // read as none, and the way back opened setup again.
+    for (const outcome of ['skipped', 'completed'] as const) {
+      it(`over the demo's ${outcome}, another tab's ${outcome} meanwhile counts: the way back stays closed`, async () => {
+        localStorage.setItem('finance_onboarding:local', outcome)
+        markLocalSetupPending()
+        startOnboarding('import')
+        pauseOnboarding()
+
+        otherTabDecides(outcome)
+
+        await expect(resumeOnboarding()).resolves.toBe('finished')
+        expect(onboardingOpen()).toBe(false)
+        expect(setupWaiting()).toBe(false)
+      })
+    }
+
+    it('stamps every decision kept, anew each time, the same decision again included', () => {
+      const stamp = () => localStorage.getItem(onboardingStampKey('local'))
+      const before = stamp()
+      skipOnboarding()
+      const first = stamp()
+      expect(first).not.toBeNull()
+      expect(first).not.toBe(before)
+      startOnboarding('import')
+      skipOnboarding()
+      expect(stamp()).not.toBeNull()
+      expect(stamp()).not.toBe(first)
+    })
+
+    it("over the demo's skip, the next start does not open setup another tab skipped while it waited", async () => {
+      localStorage.setItem('finance_onboarding:local', 'skipped')
+      markLocalSetupPending()
+      startOnboarding('import')
+      pauseOnboarding()
+
+      // The same decision again, by a path that left the marker behind.
+      otherTabDecides('skipped', true)
 
       await expect(whereToOfferOnboarding()).resolves.toBeNull()
       expect(marker()).toBeNull()

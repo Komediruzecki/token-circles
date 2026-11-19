@@ -761,15 +761,35 @@ All notable changes to Token Circles are documented here. The format is based on
     `whereToOfferOnboarding` drops a marker whose setup was decided while it waited instead of
     opening the wizard over the decision. The marker over an older decision (review M7) still
     opens it.
+  - **Round 4: a decision stamp, not the status.** The flag compared by value could not tell
+    another tab's skip from the skip the demo had left, so the way back opened setup again over a
+    decision made while it waited (the same for completed). `setOnboardingStatus` now writes a
+    stamp beside every decision (`finance_onboarding_stamp:<owner>`, a time and a few letters,
+    `stampOnboardingDecision` in `core/onboardingFlag.ts`), and the wait holds `decisionMark`: the
+    status with that stamp. `decidedSince` (local-first) and `whereToOfferOnboarding`'s note
+    beside the marker compare marks, so any decision kept since counts, the same one included.
+    The status stays in the mark for a tab still on a build that writes no stamp, which the old
+    comparison already caught when its decision differed; a note written by such a build (the
+    status alone) is compared by status.
+  - **Round 4: a sign-out during the account's re-read ends the wait and says nothing.** The owner
+    change took the wait, and `resumeOnboarding` read that as another tap having taken it:
+    `finished`, so the strip said "Setup is already finished, here or on another device." It now
+    answers `ended` when the owner changed during the read, and the strip says nothing for it.
   - "Setup is already finished, here or on another device." comes only from `finished`: a
-    decision made since the wait began, read from the account signed in or the flag local-first,
-    or the wait taken by another tap with setup closed.
+    decision made since the wait began, read from the account signed in or the flag and its stamp
+    local-first, or the wait taken by another tap with setup closed.
   - **Tests:** `onboardingStore.test.ts`: a profile made while setup waits leaves it undecided and
     the way back opens it; one made with nothing waiting decides and drops the marker; a decision
     made while waiting is not reopened at the next start and the marker goes; over a decision the
     demo left, the way back and the next start open setup. `onboardingOnTheAccount.test.ts`: an
     import landing while the account is read again opens setup at the subscriptions. All five
-    fail on the old store.
+    fail on the old store. Round 4 added, in `onboardingStore.test.ts`, the reviewer's two cases
+    (over the demo's skip, another tab's skip; over its finish, another tab's finish: the way back
+    answers `finished`), the next start over the same skip made again with the marker left, and
+    a stamp anew with every decision; in `onboardingOnTheAccount.test.ts`, a sign-out during the
+    re-read answers `ended`, and with the real strip mounted no toast is shown. With the status
+    alone in the mark the first three fail, without `ended` the two sign-out cases, and without
+    the stamp written the stamp case.
 - **Each statement goes into its own bank's account, and setup counts every import made for it.**
   Review of 19 Nov (P1, P2, P5, P6, and the wizard not knowing what the Import page did). Frontend
   only: no migration, no API change.

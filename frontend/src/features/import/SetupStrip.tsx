@@ -19,6 +19,7 @@ export function SetupStrip() {
     if (going()) return
     setGoing(true)
     try {
+      // `ended`: signed out while the account was read, which says nothing about setup.
       const outcome = await resumeOnboarding()
       if (outcome === 'finished') {
         addToast('Setup is already finished, here or on another device.', 'info')
