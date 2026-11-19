@@ -90,7 +90,7 @@ describe("a saved source's category types", () => {
    * expense.
    */
   it('leave a category they do not name to the fresh import guess', async () => {
-    const later = `${CSV  }\n2026-01-12,Pills,12,Pharmacy,Checking`
+    const later = `${CSV}\n2026-01-12,Pills,12,Pharmacy,Checking`
     flow.handleFileSelect({
       target: { files: [new File([later], 'sheet.csv', { type: 'text/csv' })] },
     } as unknown as Event)
