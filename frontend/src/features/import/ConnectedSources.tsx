@@ -30,6 +30,9 @@ import { createSheetSourceForm } from './sheetSourceForm'
 import type { ImportSource } from '../../core/importSources'
 import type { ImportSummary } from './importFlow'
 
+/** A sheet the flow could not read, when it said nothing itself. */
+const SHEET_NOT_READ = "Couldn't read the sheet. Try again."
+
 export function ConnectedSources(props: {
   /** Before a Sync's or a preview's import runs: the page's card goes (Import.tsx). */
   beforeImport?: () => Promise<void>
@@ -41,6 +44,9 @@ export function ConnectedSources(props: {
   const [busy, setBusy] = createSignal<{ id: number; action: 'sync' | 'preview' } | null>(null)
   const [previewOpen, setPreviewOpen] = createSignal(false)
   const [activeSource, setActiveSource] = createSignal<ImportSource | null>(null)
+  // What went wrong with a source's last Sync or Fetch & preview, said at its row until the next
+  // try (review of 19 Nov): a toast was gone in six seconds, from the corner of the screen.
+  const [failed, setFailed] = createSignal<{ id: number; message: string } | null>(null)
   // The daily auto-sync runs on the Worker cron, so only offer it in self-hosted / cloud mode.
   const canSchedule = getStorageMode() !== 'serverless'
 
@@ -92,11 +98,12 @@ export function ConnectedSources(props: {
   async function autoSync(src: ImportSource) {
     if (busy()) return
     setBusy({ id: src.id, action: 'sync' })
+    setFailed(null)
     setActiveSource(src)
     prime(src)
     const ok = await flow.fetchGoogleSheet({ navigate: false })
     if (!ok) {
-      addToast(flow.error() ?? 'Could not fetch that sheet', 'error')
+      setFailed({ id: src.id, message: flow.error() ?? SHEET_NOT_READ })
       setBusy(null)
       return
     }
@@ -105,21 +112,22 @@ export function ConnectedSources(props: {
     // re-sync of a growing ledger only lands genuinely new rows and never duplicates.
     await flow.handleImport('all')
     // handleImport swallows failures into flow.error() and never calls onImported. Auto sync has
-    // no preview or result screen, so without this toast a rejected import ends in silence — the
+    // no preview or result screen, so without this a rejected import ends in silence — the
     // spinner stops and the button just looks like it did nothing.
     const importError = flow.error()
-    if (importError) addToast(importError, 'error')
+    if (importError) setFailed({ id: src.id, message: importError })
     setBusy(null)
   }
 
   async function preview(src: ImportSource) {
     if (busy()) return
     setBusy({ id: src.id, action: 'preview' })
+    setFailed(null)
     setActiveSource(src)
     prime(src)
     const ok = await flow.fetchGoogleSheet({ navigate: false })
     if (!ok) {
-      addToast(flow.error() ?? 'Could not fetch that sheet', 'error')
+      setFailed({ id: src.id, message: flow.error() ?? SHEET_NOT_READ })
       setBusy(null)
       return
     }
@@ -434,6 +442,14 @@ export function ConnectedSources(props: {
                     <path d="M4 7h16M10 11v6M14 11v6M5 7l1 13a2 2 0 002 2h8a2 2 0 002-2l1-13M9 7V4h6v3" />
                   </svg>
                 </button>
+
+                <Show when={failed()?.id === src.id ? failed() : null}>
+                  {(failure) => (
+                    <p class={styles.rowError} role="alert" data-test-id="source-error">
+                      {failure().message}
+                    </p>
+                  )}
+                </Show>
               </div>
             )}
           </For>

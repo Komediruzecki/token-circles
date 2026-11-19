@@ -70,6 +70,14 @@ export function ImportPreviewModal(props: {
           </div>
 
           <div class={styles.footer}>
+            {/* A failed import, above the buttons that ran it: the modal said nothing before. */}
+            <Show when={props.flow.error()}>
+              {(message) => (
+                <p class={styles.error} role="alert" data-test-id="import-preview-error">
+                  {message()}
+                </p>
+              )}
+            </Show>
             <button
               class={`${importStyles.btn} ${importStyles.btnGhost}`}
               type="button"

@@ -2793,6 +2793,17 @@ check')` first, as the cushion and debt cases do.
   again. What Sync does is unchanged. Tests: the two offer cases in `syncSavedSheet.test.tsx`
   (both fail on the old copy); `importPageTop.test.tsx` and `import-page-top.spec.ts` read the
   new line.
+- **A failed Sync or Fetch & preview is said at its source's row, and a failed import in the
+  preview modal in the modal.** Review of 19 Nov, the rest of the ask to say each message where
+  it belongs. `ConnectedSources.tsx` toasted both failures, gone in six seconds from the corner
+  of the screen; now the row says it in a `role="alert"` line under its controls
+  (`source-error`, `.rowError`; the row wraps at every width so the line takes its own), until
+  the next Sync or Fetch & preview of any source. `ImportPreviewModal.tsx` showed nothing when its
+  import failed (its step's message is not drawn embedded); the flow's error now sits in the
+  footer, a line of its own above the buttons (`import-preview-error`). The success toast stays.
+  Tests: `connectedSources.autoSyncError.test.tsx` (the import's error at the row with no toast;
+  an unread sheet at the row, cleared by the next try; the modal's error above Import selected).
+  All three fail on the old code.
 
 ### Fixed
 

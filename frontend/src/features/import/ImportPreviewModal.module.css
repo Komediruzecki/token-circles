@@ -78,3 +78,16 @@
   padding: 14px 20px;
   border-top: 1px solid var(--border);
 }
+/* A failed import: a line of its own above the buttons. */
+.error {
+  flex-basis: 100%;
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  font-size: 13.5px;
+  line-height: 1.45;
+  font-weight: 500;
+  color: var(--danger);
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
