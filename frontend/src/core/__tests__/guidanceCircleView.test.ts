@@ -492,11 +492,20 @@ describe('the questions each circle asks', () => {
     expect(circleQuestions(3, facts({ windowCategories: f.windowCategories }), at)).toEqual([])
   })
 
-  it('asks the card question while a card or an overdraft is below zero, answered or not', () => {
-    expect(circleQuestions(4, facts({ belowZero: 1, debts: [card] }), at)).toEqual(['card'])
-    // After "No", the debts leave the card out; the question stays to change the answer.
-    expect(circleQuestions(4, facts({ belowZero: 1, debts: [] }), at)).toEqual(['card'])
-    expect(circleQuestions(4, facts({ debts: [loan] }), at)).toEqual([])
+  // Guard: the card question was dropped on 16 Nov 2026. A card or an overdraft below zero asks
+  // nothing in Solid ground's view.
+  it('never asks the card question, with a card or an overdraft below zero', () => {
+    const overdraft = { ...card, kind: 'overdraft' as const, id: 8 }
+    // belowZero is the count the question was asked on; facts no longer carry it, but an older
+    // snapshot might, and it must not bring the question back.
+    const below = (over: Partial<GuidanceFacts>) =>
+      facts({ ...over, belowZero: 2 } as Partial<GuidanceFacts>)
+    expect(circleQuestions(4, below({ debts: [card, overdraft] }), at)).toEqual([])
+    expect(circleQuestions(4, below({ debts: [] }), at)).toEqual([])
+    const bills = { count: 1, perYear: 600, perMonth: 50 }
+    expect(circleQuestions(4, below({ debts: [card, loan], yearlyBills: bills }), at)).toEqual([
+      'yearly-bills',
+    ])
   })
 
   it('asks about yearly bills while Bills holds one, and free money only behind the gate', () => {

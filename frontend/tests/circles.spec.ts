@@ -1,7 +1,7 @@
 /**
  * The seven circles on Progress, in both storage modes: Your next step over the ledger, each
- * circle's row with the person's own figure, a circle's own view at `#progress/<n>`, and the card
- * question answered there, kept through a reload and listed in Settings, About this space.
+ * circle's row with the person's own figure, a circle's own view at `#progress/<n>`, and a card
+ * below zero counted as debt with no question asked about it, there or in Settings.
  *
  * The statement is generated here, relative to today: the last twelve full months, each with a
  * salary of 3,000, a rent of 1,000 and two grocery runs of 200. So a year is on file, all of it
@@ -147,11 +147,11 @@ async function openAndCloseSolidGround(page: Page): Promise<void> {
 }
 
 /**
- * A card 300 below zero with no entries of its own: nothing shows whether its balance is carried,
- * so Solid ground's debt check waits on the card question. Answered in the circle's view, the
- * check is met, the answer survives a reload, and Settings, About this space lists it.
+ * A card 300 below zero with no entries of its own. Nothing shows it cleared each month, so it
+ * counts as carried, and with no rate set, as debt at 10% or more. Nothing is asked about it: the
+ * card question was dropped on 16 Nov 2026, from Your next step, the circle's view and Settings.
  */
-async function answerTheCardQuestion(page: Page): Promise<void> {
+async function aCardCountsAsDebt(page: Page): Promise<void> {
   await viaApp(page, 'POST', '/api/accounts', {
     name: 'Travel card',
     type: 'credit',
@@ -160,46 +160,26 @@ async function answerTheCardQuestion(page: Page): Promise<void> {
   await openProgress(page)
   const step = page.locator('[data-tour="progress-next-step"]').getByTestId('next-step-card')
   await expect(step).toHaveAttribute('data-step', 'no-expensive-debt', { timeout: 30_000 })
-  await expect(step.getByTestId('next-step-title')).toHaveText(
-    'Do you carry a balance on a credit card or overdraft?'
-  )
+  await expect(step.getByTestId('next-step-title')).toHaveText('Travel card carries €300')
+  await expect(step.getByTestId('next-step-choice')).toHaveCount(0)
 
   await page.locator('[data-circle-row="4"] a').click()
   const view = page.getByTestId('circle-view')
   const debt = view.locator('[data-check="no-expensive-debt"]')
-  await expect(debt).toHaveAttribute('data-state', 'not-known')
-  await expect(debt.getByTestId('circle-check-waiting')).toHaveText('Waiting on your answer')
-  // Your next step says why it asks, so the check does not say it again.
-  await expect(debt.getByTestId('circle-check-detail')).toHaveCount(0)
-  await expect(view.getByTestId('next-step-why')).toHaveText(
-    'Travel card has too few entries to show whether you clear it each month. Your answer settles the debt check in Solid ground.'
-  )
-  // Your next step asks it on this view, so the check does not ask it twice.
-  await expect(debt.getByTestId('circle-card-choice')).toHaveCount(0)
-  await view.getByTestId('next-step-choice').filter({ hasText: 'No' }).click()
-  await expect(debt).toHaveAttribute('data-state', 'met', { timeout: 30_000 })
-  const no = debt.getByTestId('circle-card-choice').filter({ hasText: 'No' }).locator('input')
-  await expect(no).toBeChecked()
-
-  await page.reload({ waitUntil: 'domcontentloaded' })
-  const again = page.getByTestId('circle-view').locator('[data-check="no-expensive-debt"]')
-  await expect(again).toHaveAttribute('data-state', 'met', { timeout: 30_000 })
-  await expect(
-    again.getByTestId('circle-card-choice').filter({ hasText: 'No' }).locator('input')
-  ).toBeChecked()
+  await expect(debt).toHaveAttribute('data-state', 'not-yet', { timeout: 30_000 })
+  await expect(debt.getByTestId('circle-check-waiting')).toHaveCount(0)
+  await expect(view.getByTestId('circle-card-choice')).toHaveCount(0)
+  await expect(view).not.toContainText('carry a balance')
 
   await page.evaluate(() => {
     window.location.hash = 'settings'
   })
   await expect(page.getByTestId('settings-header')).toBeVisible({ timeout: 30_000 })
   await page.getByTestId('settings-tab-general').click()
-  const answer = page.getByTestId('settings-answer-card')
-  await expect(answer).toContainText('Do you carry a balance on a credit card or overdraft?', {
-    timeout: 30_000,
-  })
-  await expect(
-    answer.getByTestId('settings-answer-card-choice').filter({ hasText: 'No' }).locator('input')
-  ).toBeChecked()
+  const answers = page.getByTestId('settings-circle-answers')
+  await expect(answers).toBeVisible({ timeout: 30_000 })
+  await expect(answers.getByTestId('settings-answer-card')).toHaveCount(0)
+  await expect(answers).not.toContainText('carry a balance')
 }
 
 test.describe('The seven circles @smoke', () => {
@@ -227,7 +207,7 @@ test.describe('The seven circles @smoke', () => {
 
     await aYearInSolidGround(page)
     await openAndCloseSolidGround(page)
-    await answerTheCardQuestion(page)
+    await aCardCountsAsDebt(page)
   })
 
   test("signed in: the ledger reads a year, and a circle's address survives a reload", async ({
@@ -256,7 +236,7 @@ test.describe('The seven circles @smoke', () => {
       await expect(page).toHaveURL(/#progress(\?|$)/)
       await expect(page.locator('[data-circle-row="3"] a')).toBeFocused()
 
-      await answerTheCardQuestion(page)
+      await aCardCountsAsDebt(page)
     } finally {
       await deleteAccount(ctx, email)
     }

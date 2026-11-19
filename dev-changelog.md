@@ -2159,6 +2159,37 @@ check')` first, as the cushion and debt cases do.
 - **Tests:** `guidanceNextStep.test.ts`: the year of income and transfers with no expense gets the
   new step, with no share in its words; a placement with Paying your way's income check not known
   and no words for it gets the circle step, not all-reached. Both fail before the change.
+- **The card question is dropped** (maff's decision, 16 Nov 2026: the circles do not go into
+  whether a balance is carried under some deal with the bank, for now). "Do you carry a balance on
+  a credit card or overdraft?" is no longer asked anywhere: not as Your next step, not under Solid
+  ground's debt check, not listed in Settings, About this space.
+  - `debtsOf` (`shared/guidance/facts.ts`) reads no answer and no longer takes `answers`. An
+    overdraft below zero counts as carried debt. A card below zero counts as carried unless
+    `cardCarried` finds that what went into it over the last three full months covers what it owes
+    (cleared each month: left out). A card too new for its entries to say, which used to be "not
+    known" until the question was answered, now counts as carried; with no rate set it is debt at
+    10% or more, so Solid ground's debt check is never left waiting on an answer.
+  - Removed: `CARD_QUESTION`, `CARD_OPTIONS` and the `card` question id (`questions.ts`,
+    `QuestionId`, `CircleQuestion`), `FactsAnswers.carriesCardBalance`, `GuidanceFacts.belowZero`
+    (only the question read it), the next step's card question and its "too few entries" why
+    (`nextStep.ts`), "The debt check waits on one answer." (`ledger.ts` `debtSentence`), the debt
+    check from `waitsOnAnswer`, and the card chips in `NextStepCard.tsx`, `CircleView.tsx` and
+    `CircleAnswers.tsx`.
+  - Kept: `carriesCardBalance` is still accepted by the answers parser (`answers.ts` `readAnswers`,
+    `checkAnswers`, `ANSWER_FIELDS`, its refusal message) and by `PUT /api/settings`
+    (`shared/contract/scenarios/settings.ts`), so stored rows and older clients still validate. It
+    is unread: `factsAnswersOf` no longer passes it on, and Settings does not list it, so a stored
+    answer stays in the record untouched.
+- **Tests:** guards that fail against the code before this change. `guidanceFacts.test.ts`: with a
+  stored `carriesCardBalance` of false, true or null, `debtsOf` still counts the overdraft and the
+  card (handed in directly, and through `readAnswers` and `factsAnswersOf` into `guidanceFacts`),
+  and a card's debts are the same whatever the stored answer. `guidanceNextStep.test.ts`: a year on
+  file with a card too new to judge and an overdraft gets "Travel card carries €300", whatever the
+  stored record says, and a debt not known to be expensive gets no question. `guidanceCircleView.test.ts`,
+  `progressCircles.test.tsx` and `settingsAboutThisSpace.test.tsx`: no card question in Solid
+  ground's view, in Your next step or in Settings. `circles.spec.ts` (E2E) checks the card counted
+  as debt with nothing asked; `guidanceGate.test.ts` and `s17-benchmarks-gate.spec.ts` anchor on
+  the yearly-bills question instead.
 
 ### Prints
 

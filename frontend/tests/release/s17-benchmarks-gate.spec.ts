@@ -83,7 +83,7 @@ test.describe('circles part 2: the benchmarks gate in the production build', () 
       .map((name) => readFileSync(join(assets, name), 'utf8'))
       .join('\n')
     // The questions every build asks are there, so these are the app's scripts.
-    expect(scripts).toContain('Do you carry a balance on a credit card or overdraft?')
+    expect(scripts).toContain('Do you set aside money for yearly bills each month?')
     expect(HELD_BACK.filter((line) => scripts.includes(line))).toEqual([])
   })
 

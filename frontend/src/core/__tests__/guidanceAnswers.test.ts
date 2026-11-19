@@ -173,10 +173,12 @@ describe('what the circles read of the answers', () => {
     })
   })
 
-  it('reads the support categories and the card answer wherever it is asked', () => {
+  // The card answer is still parsed (answers carries carriesCardBalance: false), but the circles no
+  // longer read it: the card question was dropped on 16 Nov 2026.
+  it('reads the support categories wherever they were asked, and never the card answer', () => {
+    expect(answers.carriesCardBalance).toBe(false)
     expect(factsAnswersOf(answers, { region: 'US', currency: 'USD' })).toEqual({
       supportCategoryIds: [12, 15],
-      carriesCardBalance: false,
       freeMoney: null,
       savedElsewhere: null,
       enoughPerYear: null,
@@ -187,7 +189,6 @@ describe('what the circles read of the answers', () => {
   it('reads no answers as none answered', () => {
     expect(factsAnswersOf({}, { region: 'DE', currency: 'EUR' })).toEqual({
       supportCategoryIds: null,
-      carriesCardBalance: null,
       freeMoney: null,
       savedElsewhere: null,
       enoughPerYear: null,

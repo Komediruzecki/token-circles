@@ -112,16 +112,15 @@ it('lists each answer the circles asked for, with the support by name', async ()
   })
   await openGeneral()
   await vi.waitFor(() => {
-    expect(answer('card')).not.toBeNull()
+    expect(answer('yearly-bills')).not.toBeNull()
   })
-  expect(answer('card')?.textContent).toContain(
-    'Do you carry a balance on a credit card or overdraft?'
-  )
+  // The card question was dropped on 16 Nov 2026: a stored answer to it is not listed.
+  expect(answer('card')).toBeNull()
+  expect(host.textContent).not.toContain('carry a balance')
   const chosen = (name: string) =>
     [...(answer(name)?.querySelectorAll<HTMLInputElement>('input[type="radio"]') ?? [])]
       .filter((radio) => radio.checked)
       .map((radio) => radio.closest('label')?.textContent)
-  expect(chosen('card')).toEqual(['No'])
   expect(chosen('yearly-bills')).toEqual(['Yes'])
   expect(host.querySelector('[data-test-id="settings-answer-support-value"]')?.textContent).toBe(
     'Family help and Allowance.'
@@ -154,29 +153,57 @@ it("lists the answers when the categories can't be read, the support as a count"
       '2 income categories.'
     )
   })
-  expect(answer('card')).not.toBeNull()
+  expect(answer('card')).toBeNull()
+})
+
+// Guard: the card question was dropped on 16 Nov 2026. A card answer stored before then is not an
+// answer the circles asked for, so on its own it leaves the list empty.
+it('lists nothing for a stored card answer alone', async () => {
+  const { CircleAnswers } = await import('../../components/guidance/CircleAnswers')
+  for (const carriesCardBalance of [false, true]) {
+    dispose = render(
+      () => (
+        <CircleAnswers
+          answers={{ carriesCardBalance }}
+          currency="EUR"
+          categoryNames={null}
+          gate
+          region="DE"
+          disabled={false}
+          onSave={async () => true}
+        />
+      ),
+      host
+    )
+    expect(host.querySelector('[data-test-id="settings-circle-answers-empty"]')).not.toBeNull()
+    expect(answer('card')).toBeNull()
+    expect(host.textContent).not.toContain('carry a balance')
+    dispose()
+    dispose = undefined
+  }
 })
 
 it('changes an answer here, and removes one so its circle asks again', async () => {
   vi.stubEnv('MODE', 'production')
+  // A card answer stored before the question was dropped is kept as it is, unread.
   await storeAnswers({ carriesCardBalance: false, setsAsideYearly: true })
   await openGeneral()
   await vi.waitFor(() => {
-    expect(answer('card')).not.toBeNull()
+    expect(answer('yearly-bills')).not.toBeNull()
   })
-  const yes = [...answer('card')!.querySelectorAll('label')].find(
-    (label) => label.textContent === 'Yes'
+  const notYet = [...answer('yearly-bills')!.querySelectorAll('label')].find(
+    (label) => label.textContent === 'Not yet'
   )!
-  yes.querySelector('input')!.click()
+  notYet.querySelector('input')!.click()
   await vi.waitFor(async () => {
-    expect((await storedAnswers()).carriesCardBalance).toBe(true)
+    expect((await storedAnswers()).setsAsideYearly).toBe(false)
   })
 
   host
     .querySelector<HTMLButtonElement>('[data-test-id="settings-answer-yearly-bills-remove"]')!
     .click()
   await vi.waitFor(async () => {
-    expect(await storedAnswers()).toEqual({ carriesCardBalance: true })
+    expect(await storedAnswers()).toEqual({ carriesCardBalance: false })
   })
   await vi.waitFor(() => {
     expect(answer('yearly-bills')).toBeNull()

@@ -70,23 +70,9 @@ describe('the status over the rows', () => {
   })
 
   it('counts the checks that wait on an answer', () => {
-    const card = facts({
-      cushionMonths: 4,
-      liquid: 8000,
-      debts: [
-        {
-          kind: 'card',
-          id: 3,
-          name: 'Visa',
-          owed: 400,
-          rate: null,
-          payment: null,
-          carried: null,
-          expensive: null,
-        },
-      ],
-    })
-    expect(status(card).sub).toBe('One check waits on your answer.')
+    // The own number is the one required check an answer settles: the card question is gone.
+    const enough = facts({ cushionMonths: 7, liquid: 14000, invested: 2000000 })
+    expect(status(enough).sub).toBe('One check waits on your answer.')
   })
 
   it('says when no account holds money to count', () => {
@@ -316,7 +302,7 @@ describe('the rows', () => {
     expect(row(facts({ cushionMonths: 4.25, liquid: 8500 }), 4).key).toBe('4.2 months put by')
   })
 
-  it('names the debt that comes first, the answer it waits on, and the yearly bills', () => {
+  it('names the debt that comes first, and the yearly bills', () => {
     const loan = facts({
       debts: [
         {
@@ -341,12 +327,12 @@ describe('the rows', () => {
           owed: 400,
           rate: null,
           payment: null,
-          carried: null,
-          expensive: null,
+          carried: true,
+          expensive: true,
         },
       ],
     })
-    expect(row(card, 4).detail).toBe('The debt check waits on one answer.')
+    expect(row(card, 4).detail).toBe('A card comes first: no rate is set for it.')
     const bills = facts({ yearlyBills: { count: 2, perYear: 770, perMonth: 770 / 12 } })
     expect(row(bills, 4).detail).toBe('Yearly bills: about €65 a month to set aside.')
   })
