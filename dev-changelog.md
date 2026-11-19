@@ -2555,6 +2555,53 @@ check')` first, as the cushion and debt cases do.
   made after it and confirmed an hour later counts (1 of 2, 50%); with no row for 0033, nothing
   counts. Fails before the change (5 tests).
 
+### The top of the Import page
+
+- **An import leaves one card at the top of the page, and the flow's messages are on their
+  step.** maff, 19 Nov: after a Google Sheets import with twelve accounts, the offers above the
+  import tabs pushed the form out of view, and a sheet's error was in red above them. Frontend
+  only.
+  - **The card** (`features/import/ImportAfter.tsx`, `import-after`, styles in
+    `ImportNotices.module.css` beside the setup strip): the result line as its heading
+    (`import-result`), a Dismiss button, then one row each for Balances today
+    (`import-after-balances`) and the subscription scan (`import-scan-offer`, `import-scan-open`).
+    The balances row says how many accounts changed; its list (`ImportBalances` with the new
+    `plain` prop: no card of its own, the heading for assistive tech only) opens by itself up to
+    `BALANCES_OPEN_UP_TO` (2) accounts, the case of a bank statement, and otherwise behind Show
+    balances (`import-after-balances-toggle`, `aria-expanded`, `aria-controls`). The scan row's
+    copy has no dash: "Find the subscriptions and other regular payments in what you've
+    imported." `Import.tsx` keeps the last import in `after` (set in `onImported`, cleared by
+    `beforeImport`, Dismiss and a profile change); the scan row is left out while setup waits.
+  - **The result line comes with the import.** `ImportSummary` carries `text`, and `handleImport`
+    no longer puts it in `resultMessage`: in that banner it sat on the next step's form for the
+    rest of its six seconds. "No new transactions" is now "No new transactions. All 3 rows were
+    imported before, so they were skipped." (one row: "Its one row was imported before, so it was
+    skipped.").
+  - **Messages on their step** (`features/import/StepMessage.tsx`): `flow.error()`
+    (`import-error`, `role="alert"`), or else the flow's short notice (`import-notice`,
+    `role="status"`; only "Preview recalculated from your rules." is left). One is drawn per
+    step: each upload tab under its own form (the Bank Imports tab under Process & continue), Map
+    columns under the workbook's sheets, the preview under its buttons (not in Connected
+    sources' preview modal) and the bank summary under its actions. The page-wide banners are
+    gone. `flow.chooseImportTab(tab)`, which the tab bar now calls, clears the error when the tab
+    changes, so a bank file's error does not follow onto the Google Sheets form.
+  - **The Google Sheets tab puts its form first.** The Expected columns table (about 690 px)
+    moved under the link, its help line and Continue to mapping.
+  - **Measured** at 1440x900 after a sheet import into twelve accounts: the tabs from 775 px to
+    305 px down the page, the link field from 1,467 to 381; at 390x844, 1,159 to 450 and 1,890
+    to 547.
+  - **Tests:** `features/__tests__/importPageTop.test.tsx` (the page in local-first): the card's
+    rows, the list shut for three accounts and opened by its toggle, the methods straight after
+    the card once the flow starts over, Dismiss; "No new transactions" on a second import with
+    no rows to do; a Bank Imports error under Process & continue, gone on another tab; an empty
+    sheet's error under the sheets on Map columns. All four fail on the old page. Guards: without
+    the clear in `chooseImportTab` the error stays on the Sheets tab; with the threshold at 12
+    the list is open; with the message over the tab bar it is not under the button.
+    `tests/import-page-top.spec.ts` (`@smoke`, 1440x900 and 390x844): after the twelve-account
+    import the tabs start and the link field ends inside the viewport, and a link that is not a
+    sheet's marks the field with no `import-error`. It fails on the old page, and with the list
+    open (the link field's bottom at 971 px of 900; the tabs at 1,297 px of 844 on a phone).
+
 ### Fixed
 
 - **A bank's name counts in an account's name only as a word, for a short one.**

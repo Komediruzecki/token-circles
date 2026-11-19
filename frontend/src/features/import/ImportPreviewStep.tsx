@@ -8,6 +8,7 @@ import InfoTip from '../../components/InfoTip'
 import styles from '../Import.module.css'
 import { BankRulesEditor } from './BankRulesEditor'
 import { sourceRowNumber } from './importFlow'
+import { StepMessage } from './StepMessage'
 import type { ImportFlow } from './importFlow'
 
 /**
@@ -96,6 +97,9 @@ export function ImportPreviewStep(props: { flow: ImportFlow; embedded?: boolean 
             </div>
           </Show>
         </div>
+        <Show when={!props.embedded}>
+          <StepMessage flow={flow} />
+        </Show>
 
         <div class={styles.optionsRow}>
           <label class={styles.optionLabel}>

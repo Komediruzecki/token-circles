@@ -53,7 +53,8 @@ import styles from './Import.module.css'
 import { BankImportSummary } from './import/BankImportSummary'
 import { summarises } from './import/bankSummary'
 import { ConnectedSources } from './import/ConnectedSources'
-import { balancesById, ImportBalances, touchedSince } from './import/ImportBalances'
+import { ImportAfter } from './import/ImportAfter'
+import { balancesById, touchedSince } from './import/ImportBalances'
 import { ImportDataEntry } from './import/ImportDataEntry'
 import { createImportFlow } from './import/importFlow'
 import { handedImportFile, takeHandedImportFile } from './import/importHandoff'
@@ -62,10 +63,13 @@ import { ImportPreviewStep } from './import/ImportPreviewStep'
 import { SetupStrip } from './import/SetupStrip'
 import type { StoredAccount } from '../core/balanceToday'
 import type { TypedBalance } from '../core/setupTypedBalances'
+import type { AfterImport } from './import/ImportAfter'
 
 export default function Import() {
-  // After a successful import, offer a subscription scan over the fresh data.
-  const [scanOfferCount, setScanOfferCount] = createSignal<number | null>(null)
+  // The last import, for the card at the top of the page (ImportAfter.tsx): its result, the
+  // balances it changed and the subscription scan. Gone when another import starts, on dismiss,
+  // and on a profile change.
+  const [after, setAfter] = createSignal<AfterImport | null>(null)
   const [showScan, setShowScan] = createSignal(false)
 
   // The accounts an import touched, each with its balance today (review M2): read what they held
@@ -86,6 +90,7 @@ export default function Import() {
 
   const flow = createImportFlow({
     beforeImport: async () => {
+      setAfter(null)
       setTouched([])
       heldBefore = null
       heldBefore = await balancesById()
@@ -94,8 +99,13 @@ export default function Import() {
       setSummaryImported(true)
       // While setup waits for this statement, its next step is the subscription scan: the page
       // leaves the offer to it, and the way back opens setup there.
-      if (setupWaiting()) noteImportWhileSetupWaits(summary.imported)
-      else if (summary.imported > 0) setScanOfferCount(summary.imported)
+      const waiting = setupWaiting()
+      if (waiting) noteImportWhileSetupWaits(summary.imported)
+      setAfter({
+        text: summary.text,
+        imported: summary.imported,
+        scan: !waiting && summary.imported > 0,
+      })
       const before = heldBefore
       heldBefore = null
       // A file setup handed over is worked back from the balances typed there (review M2), once,
@@ -221,6 +231,7 @@ export default function Import() {
       () => {
         flow.reloadBankRulesIfProfileChanged()
         setTouched([])
+        setAfter(null)
       },
       { defer: true }
     )
@@ -238,58 +249,23 @@ export default function Import() {
       {/* Setup waiting for the statement it handed over, and the way back to it */}
       <SetupStrip />
 
-      {/* Error message */}
-      <Show when={flow.error()}>
-        <div class={`${styles.resultMessage} ${styles.error}`} data-test-id="import-error">
-          {flow.error()}
-        </div>
-      </Show>
-
-      {/* Success message */}
-      <Show when={flow.resultMessage()}>
-        <div class={`${styles.resultMessage} ${styles.success}`} data-test-id="import-result">
-          {flow.resultMessage()!.text}
-        </div>
-      </Show>
-
-      {/* Post-import: each account it touched, with its balance today and the way to set it */}
-      <Show when={touched().length > 0 ? touched() : null} keyed>
-        {(accounts) => <ImportBalances accounts={accounts} />}
-      </Show>
-
-      {/* Post-import: offer to detect subscriptions in the imported data */}
-      <Show when={scanOfferCount() !== null}>
-        <div class={styles.settingsCard} data-test-id="import-scan-offer">
-          <div
-            style={{
-              display: 'flex',
-              'align-items': 'center',
-              'justify-content': 'space-between',
-              gap: '12px',
-              'flex-wrap': 'wrap',
+      {/*
+        The last import: its result, the balances it changed and the subscription scan, one row
+        each. The flow's errors and notices are on the step they are about (StepMessage.tsx), not
+        up here, a screen away from the form on a phone.
+      */}
+      <Show when={after()} keyed>
+        {(last) => (
+          <ImportAfter
+            after={last}
+            touched={touched()}
+            onScan={() => setShowScan(true)}
+            onDismiss={() => {
+              setAfter(null)
+              setTouched([])
             }}
-          >
-            <p style={{ margin: 0, 'font-size': '13.5px', color: 'var(--text-secondary)' }}>
-              {scanOfferCount()} transactions imported — want to check them for known subscriptions
-              like Netflix or Spotify?
-            </p>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button
-                class={`${styles.btn} ${styles.btnPrimary} ${styles.btnSm}`}
-                data-test-id="import-scan-open"
-                onClick={() => setShowScan(true)}
-              >
-                Scan for subscriptions
-              </button>
-              <button
-                class={`${styles.btn} ${styles.btnGhost} ${styles.btnSm}`}
-                onClick={() => setScanOfferCount(null)}
-              >
-                Dismiss
-              </button>
-            </div>
-          </div>
-        </div>
+          />
+        )}
       </Show>
 
       {/* Loading overlay. dropProcessing has its own inline spinner in the

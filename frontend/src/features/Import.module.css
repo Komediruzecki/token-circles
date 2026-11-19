@@ -858,6 +858,14 @@
   color: var(--primary);
 }
 
+/* The flow's message on the step it is about (StepMessage.tsx): under the form or the buttons. */
+.stepMessage {
+  margin: 12px 0;
+  padding: 10px 14px;
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+
 /* Loading */
 .loadingOverlay {
   display: flex;

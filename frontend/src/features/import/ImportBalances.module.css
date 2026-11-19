@@ -6,6 +6,11 @@
   background: color-mix(in oklab, var(--card-bg) 74%, transparent);
 }
 
+/* Inside the after-import card, which is the card. */
+.plain {
+  padding: 0;
+}
+
 .title {
   margin: 0 0 4px;
   font-size: 14px;

@@ -40,7 +40,14 @@ interface Row {
 
 const UNREAD = 'Type the balance as a number, like 1240.50.'
 
-export function ImportBalances(props: { accounts: readonly StoredAccount[] }): JSX.Element {
+/**
+ * `plain`: drawn inside the after-import card (ImportAfter.tsx), which names the list itself, so
+ * no card of its own and the heading for assistive tech only.
+ */
+export function ImportBalances(props: {
+  accounts: readonly StoredAccount[]
+  plain?: boolean
+}): JSX.Element {
   const [rows, setRows] = createSignal<Row[]>([])
   const [editing, setEditing] = createSignal<number | null>(null)
   const [draft, setDraft] = createSignal('')
@@ -93,11 +100,14 @@ export function ImportBalances(props: { accounts: readonly StoredAccount[] }): J
   return (
     <Show when={props.accounts.length > 0}>
       <section
-        class={styles.balances}
+        class={props.plain ? styles.plain : styles.balances}
         aria-labelledby="import-balances-title"
         data-test-id="import-balances"
       >
-        <h2 id="import-balances-title" class={styles.title}>
+        <h2
+          id="import-balances-title"
+          class={props.plain ? pageStyles.visuallyHidden : styles.title}
+        >
           Balances today
         </h2>
         <ul class={styles.list}>

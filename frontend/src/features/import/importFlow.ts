@@ -152,6 +152,11 @@ export interface ImportSummary {
   createdAccounts: string[]
   createdCategories: string[]
   source: string
+  /**
+   * The result in a line, as the Import page heads its after-import card with it: "Imported 12
+   * transactions", or "No new transactions. ..." when every row was here before.
+   */
+  text: string
 }
 
 /**
@@ -455,6 +460,17 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     setResultMessage({ type: 'success', text })
     clearTimeout(resultMessageTimer)
     resultMessageTimer = setTimeout(() => setResultMessage(null), 6000)
+  }
+
+  /**
+   * Another import method, from its tab. An error is drawn under the form of the tab that raised
+   * it (StepMessage.tsx), so it goes with that tab: kept, a bank file's "Choose a target account"
+   * would sit under the Google Sheets link.
+   */
+  const chooseImportTab = (tab: ImportTab) => {
+    if (tab === activeImportTab()) return
+    setError(null)
+    setActiveImportTab(tab)
   }
 
   const currentHeaders = () => {
@@ -905,7 +921,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
   /**
    * Reads `file` as File Upload reads a chosen one, for a file that comes from elsewhere (the setup
    * wizard hands over one it could not import): on to the mapping step when it reads, and in the
-   * page's error banner when it does not.
+   * flow's error, under the drop area (StepMessage.tsx), when it does not.
    */
   const readFile = (file: File) => {
     clearUpload()
@@ -1645,7 +1661,10 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
       const invalidSkipped: number = data.skipped ?? 0
       let text: string
       if (importedCount === 0 && alreadyExisted > 0) {
-        text = `No new transactions — all ${alreadyExisted} row${alreadyExisted === 1 ? ' was' : 's were'} already imported before (duplicates are detected and skipped automatically).`
+        text =
+          alreadyExisted === 1
+            ? 'No new transactions. Its one row was imported before, so it was skipped.'
+            : `No new transactions. All ${alreadyExisted} rows were imported before, so they were skipped.`
       } else {
         const parts: string[] = []
         if (alreadyExisted > 0) parts.push(`${alreadyExisted} already imported, skipped`)
@@ -1653,7 +1672,8 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
         if (dateSkipped > 0) parts.push(`${dateSkipped} outside date range`)
         text = `Imported ${importedCount} transactions${parts.length > 0 ? ` (${parts.join(', ')})` : ''}`
       }
-      announceResult(text)
+      // The page heads its after-import card with it (onImported, below). Announced in the flow's
+      // banner as well, it sat on the next step's form for the rest of its six seconds.
 
       // Record the session in the import log (best-effort; the import itself succeeded)
       const source =
@@ -1728,6 +1748,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
         createdAccounts: data.created_accounts ?? [],
         createdCategories: data.created_categories ?? [],
         source,
+        text,
       })
 
       // Reset after delay
@@ -1757,6 +1778,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     // signals
     activeImportTab,
     setActiveImportTab,
+    chooseImportTab,
     activeStep,
     setActiveStep,
     setBudgetsFromSpending,

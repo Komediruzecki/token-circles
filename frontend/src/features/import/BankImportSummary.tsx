@@ -8,6 +8,7 @@ import { For, Show } from 'solid-js'
 import pageStyles from '../Import.module.css'
 import styles from './BankImportSummary.module.css'
 import { bankSummary } from './bankSummary'
+import { StepMessage } from './StepMessage'
 import type { ImportFlow } from './importFlow'
 
 export function BankImportSummary(props: {
@@ -90,6 +91,7 @@ export function BankImportSummary(props: {
           </button>
         </div>
       </Show>
+      <StepMessage flow={flow} />
     </section>
   )
 }

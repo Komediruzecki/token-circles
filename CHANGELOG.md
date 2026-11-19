@@ -37,6 +37,8 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Each advice card on Progress says which circle it counts toward**, and that line opens the circle.
 - **A statement from a bank the app knows opens on what it brings in.** Import shows the bank, how many entries and from when to when, the new categories and how many are already here, with one button to import them. Check the columns is still there for a closer look.
 - **After an import, Import lists each account it changed with its balance today**, and a field to set it to what your bank shows.
+- **After an import, one card at the top of Import holds what comes next**: the result, the balances it changed and the subscription scan, a line each. With three accounts or more the balances wait behind Show balances, so the import methods and the Google Sheets link stay on the first screen.
+- **Import says what went wrong under the form or the button you used**, not in a banner at the top of the page, which on a phone could be a screen away.
 
 ### Fixed
 

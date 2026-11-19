@@ -8,6 +8,7 @@ import { getLocalCurrency } from '../../core/api'
 import { FIELD_NAMES } from '../../core/importMapping'
 import styles from '../Import.module.css'
 import { IMPORT_ACCOUNT_TYPES } from './accountTypeChoices'
+import { StepMessage } from './StepMessage'
 import type { ImportFlow, UploadResult } from './importFlow'
 
 /**
@@ -89,6 +90,7 @@ export function ImportMappingStep(props: { flow: ImportFlow; embedded?: boolean 
             </div>
           )}
         </Show>
+        <StepMessage flow={flow} />
         <p class={styles.mappingSubtitle} data-test-id="import-map-intro">
           Match your columns. Starred fields are required.
         </p>

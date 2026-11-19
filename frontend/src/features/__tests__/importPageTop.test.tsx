@@ -238,3 +238,182 @@ describe("a workbook's sheets", () => {
     ])
   }, 20_000)
 })
+
+/** Hands `files` to the file input inside the element with test id `scope`, as a pick does. */
+function pick(scopeInput: HTMLInputElement, files: File[]): void {
+  Object.defineProperty(scopeInput, 'files', { value: files, configurable: true })
+  scopeInput.dispatchEvent(new Event('change', { bubbles: true }))
+}
+
+const follows = (a: Node, b: Node): boolean =>
+  (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0
+
+describe('the card an import leaves', () => {
+  it('heads the page with the result, one row a next step, and keeps a long list shut', async () => {
+    await mountImport()
+    await importTheSheet()
+
+    const card = byTestId('import-after')!
+    expect(card.querySelector('[data-test-id="import-result"]')?.textContent).toBe(
+      'Imported 3 transactions'
+    )
+    expect(byTestId('import-balances')).toBeNull()
+
+    // Three accounts changed: one line saying so, the list behind Show balances.
+    const toggle = await vi.waitFor(() => {
+      const found = byTestId('import-after-balances-toggle')
+      expect(found).not.toBeNull()
+      return found!
+    })
+    expect(byTestId('import-after-balances')?.textContent).toContain('3 accounts changed.')
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    expect(toggle.textContent).toBe('Show balances')
+    expect(host.querySelectorAll('[data-test-id="import-balance-row"]')).toHaveLength(0)
+    toggle.click()
+    await vi.waitFor(() => {
+      expect(host.querySelectorAll('[data-test-id="import-balance-row"]')).toHaveLength(3)
+    })
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    expect(document.getElementById(toggle.getAttribute('aria-controls') ?? '')).not.toBeNull()
+
+    // The scan, offered in a line with no dash in it.
+    const scan = byTestId('import-scan-offer')!
+    expect(scan.textContent).toContain(
+      "Find the subscriptions and other regular payments in what you've imported."
+    )
+    expect(scan.textContent).not.toMatch(/[–—]/)
+    expect(card.contains(scan)).toBe(true)
+
+    // Once the flow starts over, the import methods come straight after the card.
+    await afterTheReset()
+    expect(byTestId('import-after')).toBe(card)
+    expect(follows(card, byTestId('import-tab-google-sheets')!)).toBe(true)
+
+    byTestId('import-after-dismiss')!.click()
+    expect(byTestId('import-after')).toBeNull()
+  }, 30_000)
+
+  it('says plainly when nothing was new, with nothing to do next', async () => {
+    await mountImport()
+    await importTheSheet()
+    await afterTheReset()
+    byTestId('import-tab-google-sheets')!.click()
+    type(byTestId('import-sheet-url') as HTMLInputElement, LINK)
+    byTestId('import-sheet-fetch')!.click()
+    await vi.waitFor(
+      () => {
+        expect(byTestId('import-continue-preview')).not.toBeNull()
+      },
+      { timeout: 8_000 }
+    )
+    byTestId('import-continue-preview')!.click()
+    await vi.waitFor(
+      () => {
+        expect(byTestId('import-execute-all')).not.toBeNull()
+      },
+      { timeout: 8_000 }
+    )
+    byTestId('import-execute-all')!.click()
+
+    await vi.waitFor(
+      () => {
+        expect(byTestId('import-result')?.textContent).toBe(
+          'No new transactions. All 3 rows were imported before, so they were skipped.'
+        )
+      },
+      { timeout: 8_000 }
+    )
+    expect(byTestId('import-scan-offer')).toBeNull()
+    expect(byTestId('import-after-balances')).toBeNull()
+  }, 30_000)
+})
+
+describe("the flow's errors", () => {
+  it('are said under the button that raised them, and go with their tab', async () => {
+    await mountImport()
+    byTestId('import-tab-bank-imports')!.click()
+    const input = await vi.waitFor(() => {
+      const found = byTestId('bank-file-input') as HTMLInputElement | null
+      expect(found).not.toBeNull()
+      return found!
+    })
+    pick(input, [
+      new File(['Colour,Shape\nred,round\n'], 'example-notes.csv', { type: 'text/csv' }),
+    ])
+    await vi.waitFor(
+      () => {
+        expect(byTestId('bank-process-btn')).not.toBeNull()
+      },
+      { timeout: 8_000 }
+    )
+    byTestId('bank-process-btn')!.click()
+
+    const error = await vi.waitFor(
+      () => {
+        const found = byTestId('import-error')
+        expect(found).not.toBeNull()
+        return found!
+      },
+      { timeout: 8_000 }
+    )
+    expect(error.textContent).toBe(
+      'None of the files were recognized as a supported bank statement'
+    )
+    expect(error.getAttribute('role')).toBe('alert')
+    // Under Process & continue, not over the import methods at the top of the page.
+    expect(follows(byTestId('import-tab-bank-imports')!, error)).toBe(true)
+    expect(follows(byTestId('bank-process-btn')!, error)).toBe(true)
+    expect(byTestId('bank-process-btn')!.nextElementSibling).toBe(error)
+
+    // Another method's form is not where a bank file's error belongs.
+    byTestId('import-tab-google-sheets')!.click()
+    await vi.waitFor(() => {
+      expect(byTestId('import-sheet-url')).not.toBeNull()
+    })
+    expect(byTestId('import-error')).toBeNull()
+  }, 30_000)
+
+  it("say a sheet with nothing in it on Map columns, under the workbook's sheets", async () => {
+    await mountImport()
+    byTestId('import-tab-file-upload')!.click()
+    const book = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(
+      book,
+      XLSX.utils.aoa_to_sheet([
+        ['Date', 'Description', 'Amount'],
+        ['2026-03-02', 'Example rent', -700],
+      ]),
+      'March'
+    )
+    XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet([]), 'Notes')
+    const bytes = new Uint8Array(
+      XLSX.write(book, { type: 'array', bookType: 'xlsx' }) as ArrayBuffer
+    )
+    const input = await vi.waitFor(() => {
+      const found = byTestId('import-file-input') as HTMLInputElement | null
+      expect(found).not.toBeNull()
+      return found!
+    })
+    pick(input, [new File([bytes], 'example-book.xlsx')])
+    const sheets = await vi.waitFor(
+      () => {
+        const found = byTestId('import-map-sheets')
+        expect(found).not.toBeNull()
+        return found!
+      },
+      { timeout: 8_000 }
+    )
+    sheets.querySelectorAll('button')[1].click()
+
+    const error = await vi.waitFor(
+      () => {
+        const found = byTestId('import-error')
+        expect(found).not.toBeNull()
+        return found!
+      },
+      { timeout: 8_000 }
+    )
+    expect(error.textContent).toBe('That sheet has no rows to import. Choose another sheet.')
+    expect(byTestId('import-map-sheets')!.nextElementSibling).toBe(error)
+  }, 30_000)
+})

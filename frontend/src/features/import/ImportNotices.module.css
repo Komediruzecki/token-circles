@@ -52,3 +52,89 @@
     width: 100%;
   }
 }
+
+/* After an import (ImportAfter.tsx): the result, then a row for each thing to do next. */
+.after {
+  margin-bottom: 16px;
+  border: 1px solid color-mix(in oklab, var(--success) 28%, var(--border));
+  border-radius: var(--radius);
+  background: color-mix(in oklab, var(--card-bg) 74%, transparent);
+}
+
+.afterHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 6px 6px 16px;
+}
+
+.afterIcon {
+  flex: none;
+  color: var(--success);
+}
+
+.afterIcon.nothingNew {
+  color: var(--text-secondary);
+}
+
+.afterTitle {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  padding: 8px 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--text);
+}
+
+.dismiss {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.dismiss:hover {
+  color: var(--text);
+  background: color-mix(in oklab, var(--text) 6%, transparent);
+}
+
+.dismiss:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+
+.afterRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
+}
+
+.rowLabel {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--text);
+}
+
+.rowBody {
+  flex-basis: 100%;
+  min-width: 0;
+}
+
+.rowBody[hidden] {
+  display: none;
+}
