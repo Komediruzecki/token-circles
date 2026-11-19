@@ -700,7 +700,7 @@ All notable changes to Token Circles are documented here. The format is based on
   maff, 19 Nov: Open in Import finished setup, so after matching the columns and importing there
   was no way back to the subscription step or Done. Frontend only: no migration, no API change.
   - **The wait** (`core/onboardingStore.ts`): `pauseOnboarding(imported)` closes the wizard with
-    nothing decided and keeps `{ owner, rerun, imported }` in memory; the record (or local-first's
+    nothing decided and keeps `{ owner, rerun, imported, here }` in memory; the record (or local-first's
     pending marker) stays at the step reached, moved to `subscriptions` when anything came in.
     `noteImportWhileSetupWaits(n)`, called by `Import.tsx`'s `onImported`, adds an import made on
     the page and records `subscriptions`. `resumeOnboarding()` opens setup at `subscriptions` with
@@ -717,7 +717,9 @@ All notable changes to Token Circles are documented here. The format is based on
     for the statements still to come.
   - **The strip** (`features/import/SetupStrip.tsx`, `ImportNotices.module.css`) sits under the
     page header while setup waits: "Setup is waiting for this statement" with a secondary Back to
-    setup, then "N transactions are in" with a primary one. The page's own subscription offer is
+    setup, then "N transactions are in" with a primary one. N is `here`, the page's own imports:
+    setup's, made before it handed a set-aside file over, are not the file's. The page's own
+    subscription offer is
     not set while setup waits, as setup's next step is that scan.
   - Tests: `onboardingStore.test.ts` and `onboardingOnTheAccount.test.ts` ("setup waiting on the
     Import page", 13 cases), `onboardingFirstImport.test.tsx` (Open in Import leaves setup

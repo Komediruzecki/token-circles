@@ -5,6 +5,7 @@ import {
   forgetOnboardingStatus,
   getOnboardingStatus,
   goToOnboardingStep,
+  importedWhileSetupWaits,
   nextOnboardingStep,
   noteImportWhileSetupWaits,
   ONBOARDING_STEPS,
@@ -315,6 +316,10 @@ describe('onboardingStore', () => {
     it('goes back to the subscriptions when setup imported before it handed the file over', async () => {
       waitAtTheStatement(7)
       expect(marker()).toBe('subscriptions')
+      // The Import page counts only its own: the file handed over is not in yet.
+      expect(importedWhileSetupWaits()).toBe(0)
+      noteImportWhileSetupWaits(5)
+      expect(importedWhileSetupWaits()).toBe(5)
       await expect(resumeOnboarding()).resolves.toBe('opened')
       expect(onboardingStep()).toBe('subscriptions')
     })

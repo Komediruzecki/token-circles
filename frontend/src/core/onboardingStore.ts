@@ -279,11 +279,14 @@ const store = createRoot(() => {
  *   a record never changes again, so the way back has nothing to ask the account.
  * - `imported`: transactions brought in on the way, by setup before it handed the file over or by
  *   the Import page since.
+ * - `here`: those the Import page brought in, which its strip counts: setup's own were in before
+ *   the file it handed over.
  */
 interface SetupWait {
   owner: string
   rerun: boolean
   imported: number
+  here: number
 }
 
 const waiting = createRoot(() => createSignal<SetupWait | null>(null))
@@ -293,9 +296,9 @@ export function setupWaiting(): boolean {
   return waiting[0]() !== null
 }
 
-/** The transactions brought in while setup waited, or 0. */
+/** The transactions the Import page brought in while setup waited, or 0. */
 export function importedWhileSetupWaits(): number {
-  return waiting[0]()?.imported ?? 0
+  return waiting[0]()?.here ?? 0
 }
 
 export const onboardingOpen = store.onboardingOpen
@@ -398,7 +401,7 @@ export function pauseOnboarding(imported = 0): void {
   const rerun = isServerAccount(of)
     ? !firstSetupOfTheAccount()
     : getOnboardingStatus(of) !== null && !localSetupPending()
-  waiting[1]({ owner: of, rerun, imported: Math.max(0, imported) })
+  waiting[1]({ owner: of, rerun, imported: Math.max(0, imported), here: 0 })
   if (imported > 0) recordStep('subscriptions')
 }
 
@@ -409,7 +412,7 @@ export function pauseOnboarding(imported = 0): void {
 export function noteImportWhileSetupWaits(imported: number): void {
   const wait = waiting[0]()
   if (wait === null || wait.owner !== owner || imported <= 0) return
-  waiting[1]({ ...wait, imported: wait.imported + imported })
+  waiting[1]({ ...wait, imported: wait.imported + imported, here: wait.here + imported })
   recordStep('subscriptions')
 }
 
