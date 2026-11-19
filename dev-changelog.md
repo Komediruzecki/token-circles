@@ -2495,6 +2495,21 @@ check')` first, as the cushion and debt cases do.
 
 ### Fixed
 
+- **Every dialog has a visible edge.** Create Profile (`components/ProfileModal.module.css`) had no
+  border and left its edge to a black `box-shadow`. In Orbit Dark it is painted in the sidebar's
+  navy (`--sidebar-bg`, #070b16) over a page the 50% black backdrop dims to #05070e, and the two
+  measured 1.02:1 in the browser: its fields floated with nothing around them. Each modal declares
+  its own surface in its own stylesheet, and 14 of the 25 that paint one had no border:
+  `BulkActionBar`, `LoginModal`, `ProfileModal`, `RecurringSection`, `AccountsPage`, `BillsPage`,
+  `BudgetsPage`, `CategoriesPage`, `DashboardPage`, `GoalsPage`, `HousingPage`, `RetirementPage`,
+  `TransactionsPage` and `loans/LoanForm`. The card-coloured ones take
+  `border: 1px solid var(--border)`, like `ConfirmDialog` and the rest. `LoginModal` and
+  `ProfileModal` stay navy in both themes, and `--border` is a near-white #dde4f5 in Dawn Light, so
+  their edge comes from the sidebar's text colour instead:
+  `color-mix(in oklab, var(--sidebar-text) 22%, transparent)`, 1.51:1 against the dark backdrop,
+  where the standard `--border` measures 1.58:1. `src/__tests__/dialogEdges.test.ts` reads every CSS
+  module and fails on a `.modal`, `.dialog` or `.sheet` that paints a background without a visible
+  border.
 - **The unused `components/BulkActions/` tree is deleted.** Its `BulkActionBar`, `BulkCategoryModal`
   and `BulkTypeModal`, with their stylesheets, had no importer anywhere in the repository;
   Transactions uses `components/BulkActionBar.tsx`. The 2026-07-23 integrity audit
