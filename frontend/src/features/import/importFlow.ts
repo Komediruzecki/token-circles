@@ -11,6 +11,13 @@
 
 import { createMemo, createSignal } from 'solid-js'
 import { createStore, reconcile } from 'solid-js/store'
+import { classifyCategory } from '../../../../shared/categoryClassifier'
+import {
+  accountValues,
+  categoryValues,
+  freshImportTypes,
+  syncTypes,
+} from '../../../../shared/importCategoryTypes'
 import { readSheetUrl } from '../../../../shared/importSourceSchema'
 import { IMPORT_UPLOAD_MESSAGES } from '../../../../shared/importUpload'
 import { getLocalCurrency, toast } from '../../core/api'
@@ -31,7 +38,6 @@ import {
 } from '../../core/bankImport'
 import { loadBankImportMemory, rememberBankImportChoice } from '../../core/bankImport/memory'
 import { savedFormerNames } from '../../core/bankImport/rulesCheck'
-import { classifyCategory } from '../../core/categoryClassifier'
 import { autoDetectMapping, resolveHeaderMapping } from '../../core/importMapping'
 import {
   isTransferToVoid as isTransferToVoidPure,
@@ -506,17 +512,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
   const duplicateSet = createMemo(() => new Set(duplicateIndices()))
 
   // Detect unique categories
-  const detectCategories = () => {
-    const categories = new Set<string>()
-    currentRows().forEach((row) => {
-      const catIdx = columnMapping()['category']
-      if (catIdx !== undefined && row[catIdx]) {
-        const catName = row[catIdx].trim()
-        if (catName) categories.add(catName)
-      }
-    })
-    return Array.from(categories)
-  }
+  const detectCategories = () => categoryValues(currentRows(), columnMapping())
 
   /**
    * Every distinct Means-of-Payment value, and the Category value of every row the sheet calls a
@@ -532,20 +528,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
    * reading of "transfer to Groceries" that makes Groceries a category, and a first-time import
    * has no way to have marked it yet.
    */
-  const detectAccountValues = () => {
-    const names = new Set<string>()
-    const mopIdx = columnMapping()['means_of_payment']
-    const catIdx = columnMapping()['category']
-    const typeIdx = columnMapping()['type']
-    currentRows().forEach((row) => {
-      if (mopIdx !== undefined && row[mopIdx]?.trim()) names.add(row[mopIdx].trim())
-      const isTransfer = typeIdx !== undefined && row[typeIdx]?.trim().toLowerCase() === 'transfer'
-      if (isTransfer && catIdx !== undefined && row[catIdx]?.trim()) {
-        names.add(row[catIdx].trim())
-      }
-    })
-    return Array.from(names)
-  }
+  const detectAccountValues = () => accountValues(currentRows(), columnMapping())
 
   /**
    * Every value the mapping step should show a row for: the category column's values, then the
@@ -628,17 +611,9 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     }
   }
 
-  /**
-   * The types a fresh import gives the rows' values: the keyword guess for every category, then
-   * the account-by-construction values as accounts, last so they win over any guess (a
-   * Means-of-Payment value is the account the money moved from, whatever it is called).
-   */
-  const classifyAfresh = (): Record<string, 'income' | 'expense' | 'account'> => {
-    const types: Record<string, 'income' | 'expense' | 'account'> = {}
-    for (const cat of detectCategories()) types[cat] = classifyCategory(cat)
-    for (const name of detectAccountValues()) types[name] = 'account'
-    return types
-  }
+  /** The types a fresh import gives the rows' values (shared/importCategoryTypes.ts). */
+  const classifyAfresh = (): Record<string, 'income' | 'expense' | 'account'> =>
+    freshImportTypes(currentRows(), columnMapping())
 
   // Step navigation
   const goToMapping = () => {
@@ -670,18 +645,12 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
         : autoDetectMapping(headers)
     setColumnMapping(resolved)
     /*
-     * A saved decision wins for every value it names. Every other value is classified exactly as
-     * a fresh import classifies it: the sheet gains rows after it was saved, and a category they
-     * bring has no saved type. Left without one, a row's type fell to its amount's sign, so an
-     * unsigned 12.00 in a new Pharmacy category came in as income on the next Sync. The same
-     * holds for the account-by-construction values, which a mapping saved before they were
-     * classified at all has no entry for.
+     * A saved decision wins for every value it names; every other value is typed exactly as a
+     * fresh import types it. The same rule as the daily cron's (shared/importCategoryTypes.ts),
+     * so a row comes in the same whichever syncs it.
      */
-    if (savedCategoryTypes && Object.keys(savedCategoryTypes).length > 0) {
-      setCategoryTypes({ ...classifyAfresh(), ...savedCategoryTypes })
-    } else if (resolved['category'] !== undefined) {
-      setCategoryTypes(classifyAfresh())
-    }
+    const types = syncTypes(currentRows(), resolved, savedCategoryTypes)
+    if (types) setCategoryTypes(types)
   }
 
   const goToPreview = async () => {

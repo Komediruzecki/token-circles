@@ -1,6 +1,7 @@
 /**
  * Auto-detect category type from its name using keyword matching.
- * Used by the Import page to pre-classify categories during column mapping.
+ * Used by the Import page to pre-classify categories during column mapping, and by a saved
+ * sheet's sync on both runtimes, the daily cron included (shared/importCategoryTypes.ts).
  *
  * Keywords match whole words and whole phrases, never parts of a word: "ib" is Interactive
  * Brokers, not the middle of "Library", and "wise" is the bank, not the end of "Otherwise". A
@@ -39,7 +40,7 @@ const incomeKeywords = [
   'royalties',
   'reimbursement',
   'reimbursements',
-]
+];
 
 /**
  * Account names of more than one word. They are checked before the income keywords, so "Credit
@@ -52,7 +53,7 @@ const accountPhrases = [
   'savings account',
   'investment account',
   'credit card account',
-]
+];
 
 const accountWords = [
   'ib',
@@ -87,30 +88,30 @@ const accountWords = [
   'bunq',
   'monzo',
   'starling',
-]
+];
 
-export type CategoryType = 'income' | 'expense' | 'account'
+export type CategoryType = 'income' | 'expense' | 'account';
 
 /** The name's words, lowercased and joined by single spaces, with a space at each end. */
 function wordsOf(name: string): string {
   const words = name
     .toLowerCase()
     .split(/[^\p{L}\p{N}]+/u)
-    .filter(Boolean)
-  return ` ${words.join(' ')} `
+    .filter(Boolean);
+  return ` ${words.join(' ')} `;
 }
 
 /** "WRev" -> "W Rev", "IBAccount" -> "IB Account". A name without inner capitals is unchanged. */
 function splitCamelCase(name: string): string {
-  return name.replace(/(\p{Ll})(\p{Lu})/gu, '$1 $2').replace(/(\p{Lu})(\p{Lu}\p{Ll})/gu, '$1 $2')
+  return name.replace(/(\p{Ll})(\p{Lu})/gu, '$1 $2').replace(/(\p{Lu})(\p{Lu}\p{Ll})/gu, '$1 $2');
 }
 
 export function classifyCategory(name: string): CategoryType {
-  const readings = [wordsOf(name), wordsOf(splitCamelCase(name))]
+  const readings = [wordsOf(name), wordsOf(splitCamelCase(name))];
   const has = (keywords: string[]) =>
-    keywords.some((kw) => readings.some((words) => words.includes(` ${kw} `)))
-  if (has(accountPhrases)) return 'account'
-  if (has(incomeKeywords)) return 'income'
-  if (has(accountWords)) return 'account'
-  return 'expense'
+    keywords.some((kw) => readings.some((words) => words.includes(` ${kw} `)));
+  if (has(accountPhrases)) return 'account';
+  if (has(incomeKeywords)) return 'income';
+  if (has(accountWords)) return 'account';
+  return 'expense';
 }

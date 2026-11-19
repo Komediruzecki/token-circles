@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { classifyCategory } from '../categoryClassifier.js'
+import { classifyCategory } from '../../../../shared/categoryClassifier'
 
 describe('classifyCategory', () => {
   it('classifies Revolut as account', () => {

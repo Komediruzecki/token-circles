@@ -1,3 +1,4 @@
+import { syncTypes, type ImportValueType } from '../../shared/importCategoryTypes';
 import { resolveHeaderMapping } from '../../shared/importMapping';
 import type { Env } from './index';
 import { notWaitingForConfirmLinkSql } from './auth';
@@ -27,6 +28,23 @@ const parseJson = (v: string | null): any => {
     return null;
   }
 };
+
+/**
+ * The types this sync gives the sheet's values: the rule Connected sources' Sync follows
+ * (shared/importCategoryTypes.ts), so a row comes in the same overnight as by hand. A sheet with
+ * no saved types was saved by an earlier release, as no screen wrote them before the card's Save
+ * sheet and Add a sheet did: its rows keep their Type column or their amount's sign, as this sync
+ * has always typed them. Typing them as Sync does would retype a signed sheet's refunds and pay,
+ * which is the owner's decision (worker/test/sheet-sync-types.test.ts pins both rules).
+ */
+function categoryTypesFor(
+  saved: unknown,
+  rows: string[][],
+  mapping: Record<string, number>
+): Record<string, ImportValueType> | undefined {
+  if (!saved || typeof saved !== 'object' || Array.isArray(saved)) return undefined;
+  return syncTypes(rows, mapping, saved as Record<string, ImportValueType>) ?? undefined;
+}
 
 // Best-effort per source: one failing sheet must not stop the rest. Runs only on the daily trigger
 // so the Monday/1st-15th reminder crons don't re-sync. The sources of an account waiting for its
@@ -61,7 +79,7 @@ export async function runScheduledSheetSyncs(cron: string, env: Env): Promise<vo
       const outcome = await executeImport(env.DB, src.profile_id, {
         rows,
         mapping,
-        categoryTypes: parseJson(src.category_types) || undefined,
+        categoryTypes: categoryTypesFor(parseJson(src.category_types), rows, mapping),
         importId,
       });
 

@@ -2718,23 +2718,35 @@ check')` first, as the cushion and debt cases do.
     raw gid compare the saved-before case and the matcher fail; reading the label alone fails
     the no-name case. `import-page-top.spec.ts` saves the sheet from the card in the browser and
     finds its Auto sync.
-- **Sync of a saved sheet types a new category as a fresh import does.** Review of the branch,
-  19 Nov: the sheet saved from the card keeps the import's `category_types`, and
-  `applySavedMapping` restored them alone, so a category added to the sheet later had no type and
-  its row fell to the amount's sign (an unsigned 12.00 in Pharmacy came in as income). The saved
-  types now win only for the values they name; everything else gets `classifyAfresh()` in
-  `features/import/importFlow.ts`, the keyword guess with the account-by-construction values as
-  accounts, which Map columns also uses now. A source with no saved types follows the same rule,
-  so a Means of Payment value that is also a category name is an account there too, as on Map
-  columns. The daily cron (`worker/src/import-sync.ts`) passes the saved types to
-  `executeImport`, where a category they do not name still takes the amount's sign: the keyword
-  classifier is frontend-only (`frontend/src/core/categoryClassifier.ts`), so the cron is
-  unchanged. Only a sheet saved from the new card has saved types, so nothing released is
-  affected.
-  - **Tests:** `savedSourceCategoryTypes.test.ts` (a category the saved types do not name gets
-    the fresh guess) and `features/__tests__/syncSavedSheet.test.tsx` (the page: import a sheet
-    with unsigned amounts, Save sheet, add a Pharmacy row, Sync: an expense). Both fail on the
-    old restore.
+- **A saved sheet's new categories are typed as a fresh import types them, by hand and
+  overnight.** Review of the branch, 19 Nov: the sheet saved from the card keeps the import's
+  `category_types`, and `applySavedMapping` restored them alone, so a category added to the sheet
+  later had no type and its row fell to the amount's sign (an unsigned 12.00 in Pharmacy came in
+  as income). Round 4 found the daily cron doing the same: it passed the saved types to
+  `executeImport`, where a category they do not name takes the amount's sign
+  (`worker/src/routes/imports.ts`, `typeOfRow`), so with Save sheet and then Auto sync the same
+  row came in as an expense by hand and as income overnight. One rule now, `syncTypes` in
+  `shared/importCategoryTypes.ts`, with `classifyCategory` moved from
+  `frontend/src/core/categoryClassifier.ts` to `shared/categoryClassifier.ts`: the saved types
+  win for the values they name, and every other value is typed as a fresh import types it, the
+  keyword guess with the account-by-construction values as accounts (`freshImportTypes`, which
+  Map columns takes too). Connected sources' Sync takes it on both runtimes and the cron
+  (`worker/src/import-sync.ts`) for every sheet saved with types; Add a sheet now saves the fresh
+  import's types, as the card saves the import's. A sheet saved by an earlier release has no
+  saved types, as no screen wrote them before, and there each sync keeps its released rule: Sync
+  guesses by keyword, the cron takes each amount's sign. Bringing those together retypes rows of
+  sheets people already sync (a signed sheet's refunds and pay corrections, an unsigned sheet's
+  every row overnight), so that is maff's decision.
+  - **Tests:** `worker/test/sheet-sync-types.test.ts` syncs one sheet by hand (fetch, `syncTypes`,
+    `executeImport`, as Sync sends it) and by the cron, and every row gets the same type and
+    account, unsigned and signed, from categories the saved types name and ones they do not, a
+    new Means of Payment value included. Before the change the cron made the unsigned Pharmacy
+    row income. Its second case pins the split for a sheet saved with no types: unsigned, the
+    cron makes every row income; signed, a +15.00 in Returns is income overnight and an expense
+    by hand, and a -50.00 in Salary an expense overnight and income by hand. Treating those like
+    typed sheets fails it. `sheetForms.test.tsx`: Add a sheet saves `Groceries: expense`,
+    `Salary: income` and `Example Card: account` (null before).
+    `savedSourceCategoryTypes.test.ts` and `features/__tests__/syncSavedSheet.test.tsx` as before.
 - **A sheet's tab is the link's, and no runtime makes up its name.** Review of 19 Nov:
   - **No "Sheet1".** Both runtimes answered `POST /api/import/googlesheet` with
     `selectedSheet`/`sheetNames` of the tab name sent, else "Sheet1", though the tab they read is

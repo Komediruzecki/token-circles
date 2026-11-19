@@ -66,9 +66,28 @@ google.visualization.Query.setResponse(${JSON.stringify({
   },
 })});`
 
+/** A sheet with categories and an account column, read the same either way in. */
+const TYPED = 'https://docs.google.com/spreadsheets/d/typed-sheet/edit'
+const TYPED_ROWS = [
+  ['Date', 'Amount', 'Description', 'Category', 'Means of Payment'],
+  ['2026-08-01', '12.00', 'Example shop', 'Groceries', 'Example Card'],
+  ['2026-08-02', '2500.00', 'Example pay', 'Salary', 'Example Card'],
+]
+const TYPED_CSV = `${TYPED_ROWS.map((row) => row.join(',')).join('\n')}\n`
+const TYPED_GVIZ = `/*O_o*/
+google.visualization.Query.setResponse(${JSON.stringify({
+  table: {
+    cols: TYPED_ROWS[0].map((label, i) => ({ id: String.fromCharCode(65 + i), label })),
+    rows: TYPED_ROWS.slice(1).map((row) => ({ c: row.map((v) => ({ v })) })),
+  },
+})});`
+
 /** Google, as local-first's sheet reader meets it: every way in to the ledger works. */
 async function google(input: RequestInfo | URL): Promise<Response> {
   const url = String(input instanceof Request ? input.url : input)
+  if (url.includes('/d/typed-sheet/')) {
+    return new Response(url.includes('/gviz/') ? TYPED_GVIZ : TYPED_CSV, { status: 200 })
+  }
   if (url.includes('/d/ledger-sheet/')) {
     return new Response(url.includes('/gviz/') ? GVIZ : CSV, { status: 200 })
   }
@@ -289,6 +308,23 @@ describe('Connected Sources: Add a sheet', () => {
     await vi.waitFor(() => {
       expect(host.querySelector('[aria-label="Auto sync Bank ledger"]')).not.toBeNull()
     })
+  })
+
+  // Review of 19 Nov, round 4: the daily sync types a sheet's rows as Sync does only where the
+  // sheet was saved with types. One saved with none keeps its amounts' signs overnight, as every
+  // earlier release synced it, so Add a sheet saves the types a fresh import gives its values.
+  it("saves the types a fresh import gives the sheet's categories and accounts", async () => {
+    await openAdd()
+    type(urlInput(), TYPED)
+    submit(save())
+    await vi.waitFor(() => {
+      expect(byTestId('source-add-form')).toBeNull()
+    })
+    expect(await storedSources()).toEqual([
+      expect.objectContaining({
+        category_types: { Groceries: 'expense', Salary: 'income', 'Example Card': 'account' },
+      }),
+    ])
   })
 
   it('names a sheet saved without a name a Google Sheet, and opens empty the next time', async () => {
