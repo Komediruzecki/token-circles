@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 import { login, navigateToRoute } from './test-helpers'
 
 test.describe('Bills', () => {
@@ -152,4 +152,67 @@ test.describe('Bills', () => {
     const upcoming = page.getByTestId('bills-upcoming-section')
     await expect(upcoming).toBeVisible()
   })
+})
+
+/** Each button in the header, as drawn: how many lines its words take, and whether it is whole. */
+function headerButtons(page: Page) {
+  return page.getByTestId('bills-header').evaluate((title) => {
+    const edge = title.closest('.page')!.getBoundingClientRect()
+    const right = Math.min(edge.right, document.documentElement.clientWidth)
+    return [...title.parentElement!.querySelectorAll('button')].map((button) => {
+      const box = button.getBoundingClientRect()
+      const lines = new Set<number>()
+      const words = document.createTreeWalker(button, NodeFilter.SHOW_TEXT)
+      for (let node = words.nextNode(); node; node = words.nextNode()) {
+        if (!node.textContent?.trim()) continue
+        const range = document.createRange()
+        range.selectNodeContents(node)
+        for (const rect of range.getClientRects()) lines.add(Math.round(rect.top))
+      }
+      return {
+        text: button.textContent!.trim(),
+        lines: lines.size,
+        height: box.height,
+        whole:
+          box.left >= Math.max(edge.left, 0) - 0.5 &&
+          box.right <= right + 0.5 &&
+          button.scrollWidth <= button.clientWidth + 1,
+      }
+    })
+  })
+}
+
+// Review of 19 Nov, round 3: at 820 px the header's three buttons took two lines each, and at
+// 390 the third ran past the edge of the screen.
+test.describe("the header's buttons @smoke", () => {
+  for (const touch of [false, true]) {
+    test.describe(touch ? 'on touch' : 'with a mouse', () => {
+      test.use({ hasTouch: touch, isMobile: touch })
+
+      test(`are whole and on one line at 1440, 820 and 390 px${touch ? ', 44 px tall' : ''}`, async ({
+        page,
+      }) => {
+        await navigateToRoute(page, 'bills')
+        for (const size of [
+          { width: 1440, height: 900 },
+          { width: 820, height: 1180 },
+          { width: 390, height: 844 },
+        ]) {
+          await page.setViewportSize(size)
+          for (const tab of ['subscriptions', 'all'] as const) {
+            await page.getByTestId(`bills-tab-${tab}`).click()
+            await expect(page.getByTestId('add-bill-btn')).toBeVisible()
+            const buttons = await headerButtons(page)
+            expect(buttons.length, `${tab} at ${size.width}`).toBe(tab === 'all' ? 1 : 3)
+            for (const button of buttons) {
+              const where = `${button.text} (${tab}) at ${size.width} px`
+              expect(button.lines, where).toBe(1)
+              expect(button.whole, where).toBe(true)
+              if (touch) expect(button.height, where).toBeGreaterThanOrEqual(44)
+            }
+          }
+        }
+      })
+    })
+  }
 })

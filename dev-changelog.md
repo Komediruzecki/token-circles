@@ -2936,6 +2936,21 @@ check')` first, as the cushion and debt cases do.
     have one" (rows, a rescan, a charge that does not recur, no transactions, all tracked). Before
     the change it failed over the empty state; with the `Show` taken out, or with the panel counting
     rows while it scans, it fails at the rescan.
+- **The Bills header's buttons stay whole at every width.** Round 3 of the 19 Nov review. At
+  820 px, beside the sidebar, Scan transactions, Browse catalog and Add Subscription took two lines
+  each next to the title, and at 390 the third ran past the screen's edge: 60 px tall each at both
+  widths, and Add Subscription's right edge at 416 of 390. The header is a container now
+  (`bills-header` in `BillsPage.module.css`): narrower than 640 px, the buttons go under the title
+  and fill its width, two to a row where they fit and one where they don't, and on touch each is
+  44 px tall at least. The rule at 768 px that gave the primary `width: 100%` inside a row that
+  shrank to fit is gone. Measured after, in both themes: one line each at 1440, 820 and 390 px; at
+  820 Scan transactions and Browse catalog share a row (238 and 222 px) above Add Subscription
+  (468), at 390 likewise (177 and 161 above 346); 44 px tall on touch, and 39 with a mouse at 1440
+  as before. The Regular Bills tab's Add Bill fills the width below 640 px too.
+  - **Test:** `bills.spec.ts` "the header's buttons @smoke", with a mouse and on touch, at 1440, 820
+    and 390 px on both tabs. Before the change it failed at 820 (two lines) and, on touch, at 1440
+    (39 px). Taken out one at a time, the container query, the container and the wrap each fail at
+    820, and the touch height at 1440.
 - **Import's messages have no em dashes.** Each is a full stop, a colon or parentheses: the
   preview's notes, the paste help, the bank tab's "no accounts yet", Recent Imports' line and its
   delete confirm, Connected sources' toast and remove confirm, two errors, and a skipped row's

@@ -6,6 +6,8 @@
   flex-direction: column;
   gap: 8px;
   margin-bottom: 24px;
+  /* The header lays its buttons out by its own width, which the sidebar takes from at 820 px. */
+  container: bills-header / inline-size;
 }
 .bills-page .page-header h1 {
   font-size: 24px;
@@ -16,6 +18,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
 }
 .bills-page .page-subtitle {
   color: var(--text-secondary);
@@ -172,6 +175,28 @@
   display: flex;
   gap: 8px;
   align-items: center;
+}
+/* Too narrow for the title and the buttons side by side, the buttons go under the title and fill
+   its width, two to a row where they fit (Scan transactions and Browse catalog on a 390 px phone)
+   and one where they don't, each on one line. Beside the title at 820 px they took two lines
+   each, and at 390 the third ran past the screen's edge. */
+@container bills-header (max-width: 640px) {
+  .bills-page .header-top {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .bills-page .header-actions {
+    flex-wrap: wrap;
+  }
+  .bills-page .header-actions > button {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+}
+@media (pointer: coarse) {
+  .bills-page .header-actions > button {
+    min-height: 44px;
+  }
 }
 .bills-page .btn-sm {
   padding: 4px 10px;
@@ -372,17 +397,6 @@
 @media (max-width: 768px) {
   .bills-page {
     padding: 16px;
-  }
-
-  .bills-page .header-top {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 12px;
-  }
-
-  .bills-page .header-top .btn-primary {
-    width: 100%;
-    justify-content: center;
   }
 
   .bills-page .bill-main {
