@@ -2825,12 +2825,21 @@ check')` first, as the cushion and debt cases do.
   sheet and the import skips the ones in already, so rows this import left out come in with the
   first Sync. The card's sheet row now reads "Sync brings in every row of the sheet that isn't in
   Token Circles yet.", saved or not, and when this import left rows out, "That includes the N rows
-  this import left out." `ImportSummary.leftOut` counts them in `handleImport`: rows not sent
-  (unticked, outside the date range, or a copy left out by Import only new) that are neither a
-  copy of another row, nor here already by the dry run, nor invalid, as Sync would skip those
-  again. What Sync does is unchanged. Tests: the two offer cases in `syncSavedSheet.test.tsx`
-  (both fail on the old copy); `importPageTop.test.tsx` and `import-page-top.spec.ts` read the
-  new line.
+  this import left out." `ImportSummary.leftOut` counts them in `handleImport`. What Sync does is
+  unchanged. Tests: the two offer cases in `syncSavedSheet.test.tsx` (both fail on the old copy);
+  `importPageTop.test.tsx` and `import-page-top.spec.ts` read the new line.
+  - **Round 4: the count is the one Sync's dedupe gives.** It was rows not sent less those here
+    already by the dry run, the invalid ones and every copy of another row, on the reasoning that
+    Sync skips a copy again. It does not: both runtimes skip a row only for a transaction there
+    before the import, one for one, so a copy Import only new left out is new to the first Sync.
+    Two identical "Example coffee" rows: the card said nothing was left out, and the first Sync
+    booked the second coffee. `leftOut` is now the import's own dry run over every row of the
+    sheet once the import is in (`rowsASyncBringsIn`, its `imported`): the rows a Sync would
+    bring in, by the same dedupe on either runtime. Only a sheet import that did not send every
+    row asks; when the dry run fails, the card says only what Sync does. Test:
+    `syncSavedSheet.test.tsx` "counts a copy Import only new left out": the card says one row,
+    and the first Sync of the saved sheet imports exactly one, the second coffee. With the old
+    count it fails at the card.
 - **A failed Sync or Fetch & preview is said at its source's row, and a failed import in the
   preview modal in the modal.** Review of 19 Nov, the rest of the ask to say each message where
   it belongs. `ConnectedSources.tsx` toasted both failures, gone in six seconds from the corner

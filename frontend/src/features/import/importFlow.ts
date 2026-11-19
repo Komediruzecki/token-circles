@@ -174,9 +174,9 @@ export interface ImportSummary {
   /** The id the import's transactions and its Recent Imports entry carry. */
   importId: string
   /**
-   * Rows of the source this import did not send (unticked, outside the date range) that are not
-   * in Token Circles already, a copy of another row, or invalid: a Sync of the sheet, which sends
-   * every row, brings them in.
+   * For a Google Sheet, the rows its first Sync would bring in once this import is in: rows this
+   * import did not send (unticked, outside the date range, a copy Import only new left out) that
+   * the import's dedupe would not skip. Counted by a dry run over every row (round 4).
    */
   leftOut: number
 }
@@ -1562,6 +1562,38 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     setCurrentPage(1)
   }
 
+  /**
+   * The rows a Sync would bring in now: it sends every row of the sheet, and the import skips a
+   * row only for a transaction there before it, one for one (round 4). Asked of the import's own
+   * dry run, so the count is the dedupe Sync goes through on either runtime: a copy of another
+   * row that an import left out comes in with the first Sync, and the count said it would not.
+   * 0 when the dry run cannot say: the card then says only what Sync does.
+   */
+  const rowsASyncBringsIn = async (
+    rows: string[][],
+    mapping: Record<string, number>,
+    types: Record<string, string>
+  ): Promise<number> => {
+    try {
+      const res = await apiFetch('/api/import/execute?dry_run=1', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...profileHeaders() },
+        body: JSON.stringify({
+          rows,
+          mapping,
+          categoryTypes: types,
+          defaultCurrency: getLocalCurrency(),
+          dry_run: true,
+        }),
+      })
+      if (!res.ok) return 0
+      const data = await res.json()
+      return typeof data?.imported === 'number' ? data.imported : 0
+    } catch {
+      return 0
+    }
+  }
+
   // Import execution
   const handleImport = async (mode: 'all' | 'new' | 'selected') => {
     setLoading(true)
@@ -1602,19 +1634,6 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
         })
       }
       const rowsToImport = sent.map((i) => allRows[i])
-      // What a Sync, which sends every row, would still bring in of the rows not sent here.
-      const notNew = new Set<number>([
-        ...duplicateSet(),
-        ...existingDuplicateIndices(),
-        ...previewValidationIssues()
-          .map((issue) => issue.index)
-          .filter((index): index is number => typeof index === 'number'),
-      ])
-      const sentSet = new Set(sent)
-      const leftOut = allRows.reduce(
-        (count, _, i) => (sentSet.has(i) || notNew.has(i) ? count : count + 1),
-        0
-      )
 
       // Reuse a stable id across retries so the worker can de-dupe a re-run of the same import.
       let iid = importId()
@@ -1645,6 +1664,13 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
       const data = await response.json()
 
       if (!response.ok) throw new Error(data.error || 'Import failed')
+
+      // What the first Sync of this sheet brings in, once this import is in: only a sheet's card
+      // says it, and only rows this import did not send can be in it.
+      const leftOut =
+        activeImportTab() === 'google-sheets' && sent.length < allRows.length
+          ? await rowsASyncBringsIn(allRows, mapping, types)
+          : 0
 
       // Compose the outcome text ourselves (rather than trusting data.message)
       // so re-imports are honest in BOTH storage modes: rows the dedup pass

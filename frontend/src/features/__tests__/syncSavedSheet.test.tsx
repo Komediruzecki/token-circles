@@ -322,4 +322,66 @@ describe("the card's Save sheet offer", () => {
     })
     expect(row.textContent).toContain('That includes the one row this import left out.')
   }, 40_000)
+
+  it('counts a copy Import only new left out, as the first Sync brings it in', async () => {
+    // Two coffees on one day, written the same: the import dedupes one for one, so Sync books
+    // the second.
+    sheet =
+      'Date,Description,Amount,Category\n' +
+      '2026-08-01,Example coffee,-5.00,Coffee\n' +
+      '2026-08-01,Example coffee,-5.00,Coffee\n' +
+      '2026-08-02,Example pay,1000.00,Salary\n'
+    await mountImport()
+    byTestId('import-tab-google-sheets')!.click()
+    await vi.waitFor(() => {
+      expect(byTestId('import-sheet-url')).not.toBeNull()
+    })
+    type(byTestId('import-sheet-url') as HTMLInputElement, LINK)
+    byTestId('import-sheet-fetch')!.click()
+    await vi.waitFor(
+      () => {
+        expect(byTestId('import-continue-preview')).not.toBeNull()
+      },
+      { timeout: 8_000 }
+    )
+    byTestId('import-continue-preview')!.click()
+    const onlyNew = await vi.waitFor(
+      () => {
+        const found = byTestId('import-execute-new')
+        expect(found).not.toBeNull()
+        return found!
+      },
+      { timeout: 8_000 }
+    )
+    onlyNew.click()
+    await vi.waitFor(
+      () => {
+        expect(byTestId('import-result')?.textContent).toContain('Imported 2 transactions')
+      },
+      { timeout: 8_000 }
+    )
+    const row = await vi.waitFor(() => {
+      const found = byTestId('import-after-sheet')
+      expect(found).not.toBeNull()
+      return found!
+    })
+    expect(row.textContent).toContain('That includes the one row this import left out.')
+
+    // Saved, its first Sync brings in that one row and nothing else.
+    await saveTheSheet('Example ledger')
+    ;(await syncButton('Example ledger')).click()
+    await vi.waitFor(
+      () => {
+        expect(byTestId('import-result')?.textContent).toBe(
+          'Imported 1 transaction (2 already imported, skipped)'
+        )
+      },
+      { timeout: 8_000 }
+    )
+    expect((await booked()).map(([description]) => description).sort()).toEqual([
+      'Example coffee',
+      'Example coffee',
+      'Example pay',
+    ])
+  }, 40_000)
 })
