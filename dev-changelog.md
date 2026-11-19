@@ -2869,6 +2869,17 @@ check')` first, as the cushion and debt cases do.
   `onboardingForms.test.tsx` "does not say it spotted payments when the scan found none",
   `mappingSource.test.tsx` "says what Category types needs instead of an empty table", both seen
   failing first. The Sheets tab's numbers are from headless Chromium at 1440, 820 and 390 px.
+- **Import starts over as soon as an import is in.** The page's flow went back to its first step
+  three seconds after an import (`setTimeout(resetForm, 3000)`, from when the flow's own banner
+  said the result). The result is the card at the top of the page now, so for those three seconds
+  the preview stayed under it with Import selected and Import all live, for the same rows. It
+  resets at once (`autoResetAfterImport`; Connected sources and setup turn it off and keep their
+  own). Test: `importStartsOver.test.ts`, which fails on the timer. Also from the captures: each
+  balance row in the card is the account and its figure on one line and the way to set it under
+  them (a grid; inline where a name was short, it left the rows ragged at 820 px), and Expected
+  columns is whole on a phone rather than a 60vh box that scrolls (its wrapped rows are 768 px at
+  390). The subscription scan's modal is 96% card rather than 84: over the overlay's near-black, the
+  light theme's read grey, with Rescan's border all but gone.
 - **Import's messages have no em dashes.** Each is a full stop, a colon or parentheses: the
   preview's notes, the paste help, the bank tab's "no accounts yet", Recent Imports' line and its
   delete confirm, Connected sources' toast and remove confirm, two errors, and a skipped row's

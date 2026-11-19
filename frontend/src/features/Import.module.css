@@ -854,6 +854,11 @@
   .previewTable.expectedColumns {
     min-width: 0;
   }
+
+  /* Its rows wrap, so it is taller than a preview's 60vh: whole, not a box that scrolls. */
+  .tableWrapper.expectedWrap {
+    max-height: none;
+  }
 }
 
 /* A phone: the four ways in keep a line each, and the link's field takes the row, Fetch under

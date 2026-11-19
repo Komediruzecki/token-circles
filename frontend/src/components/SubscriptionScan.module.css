@@ -325,7 +325,9 @@
   margin: auto;
   display: flex;
   flex-direction: column;
-  background: color-mix(in oklab, var(--card-bg) 84%, transparent);
+  /* 96%, not 84: over the overlay's near-black, a light theme's card read grey, the page's text
+     showed through its header and Rescan's border all but vanished. */
+  background: color-mix(in oklab, var(--card-bg) 96%, transparent);
   backdrop-filter: blur(18px) saturate(140%);
   -webkit-backdrop-filter: blur(18px) saturate(140%);
   border: 1px solid color-mix(in oklab, var(--primary) 20%, var(--border));

@@ -1788,12 +1788,9 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
             : [],
       })
 
-      // Reset after delay
-      if (opts.autoResetAfterImport !== false) {
-        setTimeout(() => {
-          resetForm()
-        }, 3000)
-      }
+      // Start over at once: the page's card says what came in. Three seconds later, as it was, left
+      // the preview under that card with Import selected and Import all live, for the same rows.
+      if (opts.autoResetAfterImport !== false) resetForm()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Import failed')
     } finally {

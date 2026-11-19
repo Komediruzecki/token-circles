@@ -217,7 +217,10 @@ export function ImportDataEntry(props: {
                 once silently dropped 291 rows). Everything else is optional with the default
                 shown beside the sample, so "optional" never reads as "mysterious".
               */}
-              <div class={styles.tableWrapper} style={{ 'margin-bottom': 0 }}>
+              <div
+                class={`${styles.tableWrapper} ${styles.expectedWrap}`}
+                style={{ 'margin-bottom': 0 }}
+              >
                 <table
                   class={`${styles.previewTable} ${styles.expectedColumns}`}
                   data-test-id="import-expected-columns"
