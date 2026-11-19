@@ -451,17 +451,21 @@ export function SubscriptionScanPanel(props: SubscriptionScanPanelProps) {
             </Show>
           }
         >
-          <div class={styles.list}>
-            <For each={selectable()}>{detectedRow}</For>
-          </div>
-          <Show when={tracked().length > 0}>
-            <p class={styles.trackedLabel}>Already tracked</p>
+          {/* The rows, between the header and the actions: in the modal only they scroll, so the
+              add stays in view however many the scan found. */}
+          <div class={styles.scroll} data-test-id="sub-scan-scroll">
             <div class={styles.list}>
-              <For each={tracked()}>{detectedRow}</For>
+              <For each={selectable()}>{detectedRow}</For>
             </div>
-          </Show>
-          <FormNotice form={form} testId="sub-scan-notice" />
-          <div class={styles.footer}>
+            <Show when={tracked().length > 0}>
+              <p class={styles.trackedLabel}>Already tracked</p>
+              <div class={styles.list}>
+                <For each={tracked()}>{detectedRow}</For>
+              </div>
+            </Show>
+            <FormNotice form={form} testId="sub-scan-notice" />
+          </div>
+          <div class={styles.footer} data-test-id="sub-scan-footer">
             <span class={styles.total}>
               <Show when={chosen().length > 0} fallback="Nothing selected">
                 {chosen().length} selected · <b>{money(monthlyTotal())}</b>/mo

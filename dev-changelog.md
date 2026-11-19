@@ -2478,6 +2478,22 @@ check')` first, as the cushion and debt cases do.
 
 ### Fixed
 
+- **The subscription scan's modal is 720 px tall at most, with its header and actions pinned.**
+  On Bills and Import, `SubscriptionScanModal` was `max-height: calc(100dvh - 2rem)`, and the whole
+  panel scrolled in `.body`: at 2560x1440 it measured 1,408 px from the top of the screen to the
+  bottom, and the Add sat after the last row. `.modal` is now `min(720px, calc(100dvh - 2rem))`
+  (no cap at 620 px wide and below, where a phone keeps the whole screen). The panel's rows, its
+  Already tracked list and its notice are one block, `.scroll` (`data-test-id="sub-scan-scroll"`);
+  inside the modal only that block scrolls (`.modal .scroll`), between the header and the footer
+  (`sub-scan-footer`, the total, Rescan and Add), which gets a top rule. `.body` is a flex column
+  with `overflow: hidden`. Embedded in the setup wizard `.scroll` is a plain column with the
+  panel's 12 px gap, and the wizard's middle scrolls as before. Frontend only. Guards:
+  `SubscriptionScan.test.tsx` "the scan in its modal" (the rows inside the scroll block, the
+  actions and the heading outside it; the cap and the one scrolling block in the stylesheet) and
+  `subscription-scan-server.spec.ts` "the subscription scan modal on a tall screen @smoke" (16
+  detected payments at 2560x1440, 1920x1080 and 390x844: the modal within 720 px, or the screen on
+  the phone; the heading and Add in place before and after the list scrolls to its end). Both fail
+  on the old stylesheet and markup: the spec measured 1,408 px at 2560x1440.
 - **Saving the badge record no longer makes Dashboard, Progress and About this space read their
   settings again.** The badge store (`frontend/src/core/achievementsStore.ts`) keeps the unlocks
   and dismissed advice cards in the settings under `achievements` (`achievements:<profile>` in

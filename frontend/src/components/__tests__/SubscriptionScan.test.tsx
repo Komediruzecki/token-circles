@@ -15,7 +15,7 @@ import { ApiError } from '../../core/apiError'
 import { orientationFacts } from '../../core/orientation'
 import { dayText } from '../../utils/dayText'
 import { localToday } from '../../utils/period'
-import { SubscriptionScanPanel } from '../SubscriptionScan'
+import { SubscriptionScanModal, SubscriptionScanPanel } from '../SubscriptionScan'
 
 const apiMocks = vi.hoisted(() => ({
   apiGet: vi.fn(),
@@ -533,5 +533,50 @@ describe("a row's name", () => {
   it('names a Revolut transfer by its payee, without the "To "', async () => {
     await mountRows()
     expect(nameOf('Example Landlord')).toBe('Regular payment to Example Landlord')
+  })
+})
+
+// maff, 19 Nov: on a full-screen desktop the modal ran from the top of the screen to the bottom,
+// with the add at the end of a long list. Its height is capped; the header and the actions stay in
+// view while the list scrolls between them.
+describe('the scan in its modal', () => {
+  const css = () =>
+    readFileSync(resolve(__dirname, '../SubscriptionScan.module.css'), 'utf8').replace(
+      /\/\*[\s\S]*?\*\//g,
+      ''
+    )
+  /** The declarations of the first rule for exactly `selector`, outside any media query. */
+  const rule = (selector: string) => {
+    const flat = withoutMediaQueries(css())
+    const at = flat.indexOf(`\n${selector} {`)
+    return at < 0 ? '' : flat.slice(at, flat.indexOf('}', at))
+  }
+
+  it('scrolls the list between the header and the actions, which stay outside it', async () => {
+    host = document.createElement('div')
+    document.body.appendChild(host)
+    dispose = render(() => <SubscriptionScanModal isOpen={() => true} onClose={() => {}} />, host)
+    await vi.waitFor(() => {
+      expect(host.querySelectorAll('[data-test-id="sub-scan-row"]')).toHaveLength(2)
+    })
+    const modal = host.querySelector('[data-test-id="sub-scan-modal"]')!
+    const list = modal.querySelector('[data-test-id="sub-scan-scroll"]')!
+    const actions = modal.querySelector('[data-test-id="sub-scan-footer"]')!
+    expect(list).not.toBeNull()
+    expect(actions).not.toBeNull()
+    for (const row of modal.querySelectorAll('[data-test-id="sub-scan-row"]')) {
+      expect(list.contains(row)).toBe(true)
+    }
+    expect(list.contains(actions)).toBe(false)
+    expect(actions.contains(modal.querySelector('[data-test-id="sub-scan-add-btn"]'))).toBe(true)
+    expect(list.contains(modal.querySelector('h2'))).toBe(false)
+  })
+
+  it('caps its height on a tall screen, and scrolls only the list', () => {
+    expect(rule('.modal')).toMatch(/max-height:\s*min\(720px,\s*calc\(100dvh - 2rem\)\)/)
+    expect(rule('.modal .scroll')).toMatch(/overflow-y:\s*auto/)
+    expect(rule('.body')).toMatch(/overflow:\s*hidden/)
+    // Embedded in the setup wizard the panel does not scroll on its own: the wizard's middle does.
+    expect(rule('.scroll')).not.toMatch(/overflow/)
   })
 })

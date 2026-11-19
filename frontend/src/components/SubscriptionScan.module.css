@@ -28,6 +28,14 @@
   opacity: 0.85;
 }
 
+/* The rows, the tracked ones and the notice: one block, spaced as the panel spaces its parts. In
+   the modal it is the part that scrolls (below); in the setup wizard the wizard's middle scrolls. */
+.scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
 .list {
   display: flex;
   flex-direction: column;
@@ -295,11 +303,13 @@
   pointer-events: auto;
 }
 
+/* At most 720 px tall: on a 1440 px screen it ran from the top to the bottom, its add at the end of
+   a long list. The header and the actions stay put and the list scrolls between them (.body). */
 .modal {
   width: 100%;
   max-width: min(640px, calc(100vw - 2rem));
-  max-height: calc(100vh - 2rem);
-  max-height: calc(100dvh - 2rem);
+  max-height: min(720px, calc(100vh - 2rem));
+  max-height: min(720px, calc(100dvh - 2rem));
   box-sizing: border-box;
   margin: auto;
   display: flex;
@@ -355,8 +365,44 @@
 }
 
 .body {
-  padding: 4px 22px 20px;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.modal .panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: 0;
+}
+
+/* The scrollbar at the modal's edge, the rows 22 px in from it. */
+.modal .scroll {
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px 22px 12px;
+}
+
+.modal .footer {
+  flex: none;
+  padding: 12px 22px 18px;
+  border-top: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
+}
+
+.modal .state {
+  padding-inline: 22px;
+}
+
+/* A phone keeps the whole screen: the cap is for tall desktop screens. */
+@media (max-width: 620px) {
+  .modal {
+    max-height: calc(100vh - 2rem);
+    max-height: calc(100dvh - 2rem);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
