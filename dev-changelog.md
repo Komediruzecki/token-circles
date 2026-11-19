@@ -774,11 +774,12 @@ All notable changes to Token Circles are documented here. The format is based on
   Review of 19 Nov (P1, P2, P5, P6, and the wizard not knowing what the Import page did). Frontend
   only: no migration, no API change.
   - **The rule** (`components/onboarding/statementTargets.ts`, pure). For a statement of bank B in
-    currency C (none in the file: the base currency): an account named for B in C
-    (`accountNamesBank`); else the main account, when it is in C, named for no other bank, and B is
-    the bank it takes; else a new account "B C". The main account is the one setup's account step
-    made; with none (setup reopened at the statement, or its account step skipped), the newest
-    account in C named for no bank. The bank it takes is the first it received earlier in this
+    the base currency (none in the file counts as the base): an account named for B in the base
+    currency (`accountNamesBank`); else the main account, when it is in the base currency, named for
+    no other bank, and B is the bank it takes; else a new account named for B and the base currency
+    ("N26 EUR"). A statement in another currency is set aside (round 3, below). The main account is
+    the one setup's account step made; with none (setup reopened at the statement, or its account
+    step skipped), the newest account in the base currency named for no bank. The bank it takes is the first it received earlier in this
     setup, else the first picked into it by hand, else the first statement in the list that fits
     it. maff's decision reads "the first bank of this setup"; taken as the first whose statement
     fits the main account, so a USD statement picked first leaves a EUR main account to the EUR
@@ -801,7 +802,7 @@ All notable changes to Token Circles are documented here. The format is based on
     subscriptions, and Done counts both imports.
   - **Tests:** `statementTargets.test.ts` (12) and `setupStatements.test.tsx` (7: one after
     another, Remove, two currencies of one bank, a hand pick that stays, and three on what setup
-    counts). `onboardingFirstImport.test.tsx` "says when nothing in it is new" starts a fresh run
+    counts). Round 3 took out the cases that gave a statement in another currency an account. `onboardingFirstImport.test.tsx` "says when nothing in it is new" starts a fresh run
     before its second import, as within one run the first import counts and Continue goes to the
     subscriptions. With the old `defaultTarget` back, 4 placement cases fail; with the old wizard
     and step, all 7 of `setupStatements.test.tsx`; without the currency in the main account's
@@ -2888,6 +2889,25 @@ check')` first, as the cushion and debt cases do.
   "(6 imported)" after the 6; a no-break space keeps each count with its word. Measured in
   headless Chromium from the lines each text's boxes take: the name 2 lines at 820 before and 1
   after, the count 2 at 390 before and 1 after, both 1 at every other width and theme.
+- **A statement in another currency stays out of setup, and its card says why.** Round 3 of the
+  19 Nov review. Balances are kept in one currency, and both runtimes answer an account in another
+  with a 409 (`worker/src/base-currency.ts`, `core/storage/baseCurrency.ts`), so the account in
+  the statement's currency that finding 3 asked for cannot exist; changing that is maff's call,
+  not this branch's. A statement that names a currency other than the base (`inOtherCurrency` in
+  `statementTargets.ts`) leaves the import as `add` reads it, as a file from a bank setup does not
+  know does (`FirstImport.tsx`): nothing of it is imported, no account is made or found for it, and
+  it takes the main account from no bank after it. Its card (`other-currency`,
+  `onboarding-import-currency`) reads "This statement is in USD. Your balances are kept in EUR, so
+  importing it would count its amounts as EUR.", and Open in Import hands it over as a file setup
+  cannot read. The rule names a new account for the base currency only, and the main account is
+  the newest in the base currency. No currency in a statement still counts as the base. The Import
+  page is unchanged: there a USD statement goes into an account named for its bank in any
+  currency, or "New account…" offers "Revolut USD" made in EUR, and its amounts count as EUR.
+  - **Tests:** `setupStatements.test.tsx` "a statement in another currency" (beside a EUR one,
+    alone with Open in Import and Skip to Done, added and removed) and four in
+    `statementTargets.test.ts`, replacing the two-currencies cases and the main account in USD.
+    Taken out one at a time: the rule's set-aside fails 4, keeping the statement in the import
+    fails 2, and `setAside` without it fails 2.
 - **Import's messages have no em dashes.** Each is a full stop, a colon or parentheses: the
   preview's notes, the paste help, the bank tab's "no accounts yet", Recent Imports' line and its
   delete confirm, Connected sources' toast and remove confirm, two errors, and a skipped row's

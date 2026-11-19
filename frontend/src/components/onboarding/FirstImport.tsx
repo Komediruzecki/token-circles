@@ -35,7 +35,7 @@ import { IMPORT_ACCOUNT_TYPES } from '../../features/import/accountTypeChoices'
 import { createImportFlow, namesItsAccounts } from '../../features/import/importFlow'
 import { dayText } from '../../utils/dayText'
 import styles from './Onboarding.module.css'
-import { currencyOrBase, newAccountName, statementTargets } from './statementTargets'
+import { inOtherCurrency, newAccountName, statementTargets } from './statementTargets'
 import type { BankId } from '../../core/bankImport'
 import type { SetupSoFar } from '../../core/onboardingStore'
 import type { BankFileRow, ImportSummary } from '../../features/import/importFlow'
@@ -53,13 +53,23 @@ export type FirstImportState =
   | 'failed'
   /** Nothing new to import: what the statements hold is here already. */
   | 'nothing-new'
-  /** No file it can import: banks it does not read, or no transactions came out of them. */
+  /**
+   * No file it can import: banks it does not read, statements in another currency, or no
+   * transactions came out of them.
+   */
   | 'unreadable'
   /** Imported on this visit. */
   | 'imported'
 
 /** Where one file of the step is, on its card. */
-export type FileState = 'reading' | 'ready' | 'failed' | 'nothing-new' | 'unreadable'
+export type FileState =
+  | 'reading'
+  | 'ready'
+  | 'failed'
+  | 'nothing-new'
+  | 'unreadable'
+  /** A statement in a currency other than the base: set aside, for the Import page. */
+  | 'other-currency'
 
 /** A file chosen on the step, in the order chosen. */
 export interface ChosenFile {
@@ -68,6 +78,11 @@ export interface ChosenFile {
   bankId?: BankId | null
   /** It did not read at all. */
   failed?: boolean
+  /**
+   * The currency the statement is in, when it names one that is not the base: set aside, as
+   * balances are kept in the base currency and no account can be made in another (round 3).
+   */
+  currency?: string
 }
 
 /**
@@ -229,6 +244,7 @@ export function createFirstImport(options: FirstImportOptions) {
 
   const stateOf = (entry: ChosenFile): FileState => {
     if (reading() || entry.bankId === undefined) return 'reading'
+    if (entry.currency) return 'other-currency'
     if (entry.failed || entry.bankId === null) return 'unreadable'
     if (failure() !== null) return 'failed'
     const counts = countsOf(entry.file)
@@ -269,8 +285,12 @@ export function createFirstImport(options: FirstImportOptions) {
     return states.includes('nothing-new') ? 'nothing-new' : 'unreadable'
   }
 
-  /** The files the import leaves out, as it cannot read them: each can go to the Import page. */
-  const setAside = (): ChosenFile[] => chosen().filter((entry) => stateOf(entry) === 'unreadable')
+  /**
+   * The files the import leaves out, as it cannot read them or they are in another currency: each
+   * can go to the Import page.
+   */
+  const setAside = (): ChosenFile[] =>
+    chosen().filter((entry) => ['unreadable', 'other-currency'].includes(stateOf(entry)))
 
   /** The accounts a file that names its accounts (YNAB's Register file) names, in its order. */
   const fileAccounts = (row: BankFileRow): string[] => row.meta.accounts ?? []
@@ -332,11 +352,12 @@ export function createFirstImport(options: FirstImportOptions) {
     return names
   }
 
-  /** The account a new statement goes into, when nothing names one: "Revolut EUR". */
+  /**
+   * The account a new statement goes into, when nothing names one: "Revolut EUR". Only a statement
+   * in the base currency is in the import, so the name is never another currency's.
+   */
   const suggestedName = (row: BankFileRow) =>
-    row.bankId
-      ? newAccountName(row.bankId, currencyOrBase(row.meta.currency, getLocalCurrency()))
-      : 'Imported account'
+    row.bankId ? newAccountName(row.bankId, getLocalCurrency()) : 'Imported account'
 
   /**
    * Every statement's account by setup's rule (statementTargets.ts), but the ones the person
@@ -365,8 +386,10 @@ export function createFirstImport(options: FirstImportOptions) {
     let moved = false
     placed.forEach((row, at) => {
       const index = rows.indexOf(row)
-      if (targets[at] === row.targetAccount) return
-      flow.updateBankFile(index, { targetAccount: targets[at] })
+      const target = targets[at]
+      // None for a statement in another currency, which `add` keeps out of the import.
+      if (target === null || target === row.targetAccount) return
+      flow.updateBankFile(index, { targetAccount: target })
       moved = true
     })
     return moved
@@ -431,19 +454,26 @@ export function createFirstImport(options: FirstImportOptions) {
       await flow.addBankFiles(still)
       if (mine !== generation) return
       const rows = flow.bankFiles()
+      const base = getLocalCurrency()
+      const otherCurrency = (row: BankFileRow) => inOtherCurrency(row.meta.currency, base)
       setChosen((list) =>
         list.map((entry) => {
           if (!still.includes(entry.file)) return entry
           const row = rows.find((one) => one.file === entry.file)
-          return row
-            ? { file: entry.file, bankId: row.bankId }
-            : { file: entry.file, bankId: null, failed: true }
+          if (!row) return { file: entry.file, bankId: null, failed: true }
+          return otherCurrency(row)
+            ? {
+                file: entry.file,
+                bankId: row.bankId,
+                currency: row.meta.currency!.trim().toUpperCase(),
+              }
+            : { file: entry.file, bankId: row.bankId }
         })
       )
-      // Only statements go into the import: a file from a bank it does not know waits on its
-      // card, for the Import page.
+      // Only statements in the base currency go into the import: a file from a bank it does not
+      // know, or a statement in another currency, waits on its card, for the Import page.
       for (let index = rows.length - 1; index >= 0; index--) {
-        if (!rows[index].bankId) flow.removeBankFile(index)
+        if (!rows[index].bankId || otherCurrency(rows[index])) flow.removeBankFile(index)
       }
       await placeAndRead(mine)
       if (mine !== generation) return
@@ -641,6 +671,14 @@ function PlusGlyph() {
       <path d="M12 5v14M5 12h14" />
     </svg>
   )
+}
+
+/**
+ * Why a statement in another currency is set aside, in its card's words: what it would do to the
+ * balances, and no promise of converting it, which nothing here does.
+ */
+function otherCurrencyLine(currency: string, base: string): string {
+  return `This statement is in ${currency}. Your balances are kept in ${base}, so importing it would count its amounts as ${base}.`
 }
 
 /** Up to three names, then how many more. */
@@ -863,12 +901,23 @@ export function FirstImportPanel(props: {
           </p>
         </Show>
 
-        <Show when={state() === 'unreadable'}>
-          <p class={styles.cardLine} data-test-id="onboarding-import-problem">
-            {importer.problemOf(entry()) === 'unknown'
-              ? "We don't recognise the bank in this file. The Import page reads it once you match its columns."
-              : "We couldn't read any transactions in this file. The Import page shows what's in it."}
-          </p>
+        <Show when={state() === 'unreadable' || state() === 'other-currency'}>
+          <Show
+            when={entry().currency}
+            fallback={
+              <p class={styles.cardLine} data-test-id="onboarding-import-problem">
+                {importer.problemOf(entry()) === 'unknown'
+                  ? "We don't recognise the bank in this file. The Import page reads it once you match its columns."
+                  : "We couldn't read any transactions in this file. The Import page shows what's in it."}
+              </p>
+            }
+          >
+            {(currency) => (
+              <p class={styles.cardLine} data-test-id="onboarding-import-currency">
+                {otherCurrencyLine(currency(), getLocalCurrency())}
+              </p>
+            )}
+          </Show>
           <Show when={handsOver()}>
             <button
               type="button"

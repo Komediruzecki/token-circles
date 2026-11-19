@@ -1,16 +1,19 @@
 /**
  * Where each statement setup reads goes by default (review of 19 Nov, finding 2). One rule for a
- * statement of bank B in currency C, over the whole setup:
+ * statement of bank B in the base currency, over the whole setup:
  *
- * 1. an account the profile has, named for B, whose currency is C;
- * 2. else the main account, when its currency is C, it is named for no other bank, and B is the
- *    bank it takes: the bank it already received in this setup, or else the first bank of this
- *    setup whose statement fits it and has transactions in it (finding 13). The main account is
- *    the one setup's account step made; with none (setup opened again at the statement), the
- *    newest account in C named for no bank;
- * 3. else a new account "B C".
+ * 1. an account the profile has, named for B, in the base currency;
+ * 2. else the main account, when it is in the base currency, it is named for no other bank, and B
+ *    is the bank it takes: the bank it already received in this setup, or else the first bank of
+ *    this setup whose statement fits it and has transactions in it (finding 13). The main account
+ *    is the one setup's account step made; with none (setup opened again at the statement), the
+ *    newest account in the base currency named for no bank;
+ * 3. else a new account "B" and the base currency.
  *
- * A statement with no currency, and an account with none, count as the base currency. Every
+ * A statement in another currency goes nowhere: balances are kept in the base currency, and
+ * neither runtime makes an account in another one (a 409), so setup sets it aside for the Import
+ * page and says why (round 3). It takes no account, new or found, and no main account from the
+ * banks after it. A statement with no currency, and an account with none, count as the base. Every
  * statement imported earlier in this setup counts, in the wizard or on the Import page while setup
  * waited. A target picked by hand stays as it is, and one into the main account claims it for its
  * bank. The main account holds one bank's statements: a second bank's in it would add two banks'
@@ -43,6 +46,12 @@ export interface StatementToPlace {
   empty?: boolean
 }
 
+/** Whether a statement names a currency, and it is not the base: such a one is set aside. */
+export function inOtherCurrency(code: string | null | undefined, base: string): boolean {
+  const named = (code ?? '').trim().toUpperCase()
+  return named !== '' && named !== base.trim().toUpperCase()
+}
+
 /** A currency code as compared, the base currency for none. */
 export function currencyOrBase(code: string | null | undefined, base: string): string {
   const trimmed = (code ?? '').trim().toUpperCase()
@@ -54,7 +63,7 @@ function labelOf(bankId: BankId): string {
   return listAdapters().find((a) => a.id === bankId)?.label ?? ''
 }
 
-/** The new account a statement of `bankId` in `currency` gets: "Revolut EUR". */
+/** The new account a statement of `bankId` gets, `currency` being the base: "Revolut EUR". */
 export function newAccountName(bankId: BankId, currency: string): string {
   return [labelOf(bankId), currency].filter(Boolean).join(' ') || 'Imported account'
 }
@@ -68,18 +77,18 @@ function namedForAnotherBank(account: TargetAccount, bankId: BankId | null): boo
 }
 
 /**
- * The main account for a statement in `currency`: the one setup's account step made, when the
- * profile has it; else the newest account in that currency named for no bank (setup opened again
- * at the statement, or its account step skipped).
+ * The main account: the one setup's account step made, when the profile has it; else the newest
+ * account in the base currency named for no bank (setup opened again at the statement, or its
+ * account step skipped).
  */
 export function mainAccountOf(
   made: string | null,
   accounts: readonly TargetAccount[],
-  currency: string,
   base: string
 ): TargetAccount | null {
   const byName = made ? accounts.find((a) => a.name === made) : undefined
   if (byName) return byName
+  const currency = currencyOrBase(null, base)
   const fits = accounts.filter(
     (a) => currencyOrBase(a.currency, base) === currency && !namedForAnotherBank(a, null)
   )
@@ -89,7 +98,10 @@ export function mainAccountOf(
   )
 }
 
-/** Each statement's target, in order: its hand-picked one, else the rule's. */
+/**
+ * Each statement's target, in order: its hand-picked one, else the rule's; null for a statement in
+ * another currency, which setup sets aside.
+ */
 export function statementTargets(input: {
   statements: readonly StatementToPlace[]
   earlier: readonly SetupStatement[]
@@ -97,23 +109,25 @@ export function statementTargets(input: {
   /** The account setup's account step made, if any. */
   made: string | null
   base: string
-}): string[] {
+}): Array<string | null> {
   const { accounts, made, base } = input
+  const currency = currencyOrBase(null, base)
   const currencyOf = (account: TargetAccount) => currencyOrBase(account.currency, base)
   // The bank each account takes as a main account: the first it received earlier in this setup,
   // then the first picked into it by hand, then the first whose statement fits it, below.
   const takes = new Map<string, BankId>()
   for (const s of input.earlier) if (!takes.has(s.account)) takes.set(s.account, s.bankId)
   for (const s of input.statements) {
+    if (inOtherCurrency(s.currency, base)) continue
     if (s.byHand !== null && !takes.has(s.byHand)) takes.set(s.byHand, s.bankId)
   }
   return input.statements.map((statement) => {
+    if (inOtherCurrency(statement.currency, base)) return null
     if (statement.byHand !== null) return statement.byHand
     const bank = statement.bankId
-    const currency = currencyOrBase(statement.currency, base)
     const own = accounts.find((a) => currencyOf(a) === currency && accountNamesBank(a, bank))
     if (own) return own.name
-    const main = mainAccountOf(made, accounts, currency, base)
+    const main = mainAccountOf(made, accounts, base)
     const taken = main === null ? undefined : takes.get(main.name)
     const mainFits =
       main !== null &&

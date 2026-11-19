@@ -202,20 +202,6 @@ describe('where a statement goes, over the whole setup', () => {
     expect(targets()).toEqual([['n26.csv', 'Main checking']])
   })
 
-  it('two currencies of one bank: the one in another currency gets an account of its own', async () => {
-    await makeMainAccount('Main checking')
-    choose([
-      ['revolut-eur.csv', REVOLUT_MAY],
-      ['revolut-usd.csv', REVOLUT_USD],
-    ])
-    await untilStates(['ready', 'ready'])
-
-    expect(targets()).toEqual([
-      ['revolut-eur.csv', 'Main checking'],
-      ['revolut-usd.csv', 'New account: Revolut USD'],
-    ])
-  })
-
   it('a target picked by hand stays when another file comes, and the rest follow the rule', async () => {
     await makeMainAccount('Main checking')
     choose([
@@ -238,6 +224,110 @@ describe('where a statement goes, over the whole setup', () => {
       ['n26.csv', 'Main checking'],
       ['revolut-june.csv', 'New account: Revolut EUR'],
     ])
+  })
+})
+
+/**
+ * A statement in a currency other than the base (round 3): balances are kept in one currency, and
+ * neither runtime makes an account in another (a 409), so setup leaves it out and says why.
+ */
+describe('a statement in another currency', () => {
+  const USD_LINE =
+    'This statement is in USD. Your balances are kept in EUR, so importing it would count its amounts as EUR.'
+
+  it('beside a EUR one: the EUR one imports, the USD one is set aside with its sentence, and nothing is made for it', async () => {
+    await makeMainAccount('Main checking')
+    choose([
+      ['revolut-eur.csv', REVOLUT_MAY],
+      ['revolut-usd.csv', REVOLUT_USD],
+    ])
+    await untilStates(['ready', 'other-currency'])
+    expect(targets()).toEqual([
+      ['revolut-eur.csv', 'Main checking'],
+      ['revolut-usd.csv', null],
+    ])
+    expect(all('onboarding-import-currency').map((line) => line.textContent)).toEqual([USD_LINE])
+
+    one('onboarding-import-selected')!.click()
+    await vi.waitFor(() => {
+      expect(one('onboarding-import-done')?.textContent).toBe(
+        'Imported 2 transactions into Main checking.'
+      )
+    }, waitLong)
+
+    const db = await getDB()
+    expect((await db.getAll('accounts')).map((a: { name: string }) => a.name)).toEqual([
+      'Main checking',
+    ])
+    expect(
+      (await db.getAll('transactions')).map((t: { description: string }) => t.description).sort()
+    ).toEqual(['Example Books', 'Example Cafe'])
+    // Set aside, it keeps its card and its way to Import, and no word of converting it.
+    expect(all('onboarding-import-currency').map((line) => line.textContent)).toEqual([USD_LINE])
+    expect(all('onboarding-import-open-file').map((b) => b.textContent)).toEqual([
+      'Open revolut-usd.csv in Import',
+    ])
+    expect(host.textContent).not.toMatch(/conver/i)
+    expect(setupSoFar().imported).toBe(2)
+  })
+
+  it('alone: setup hands it to Import or goes on without it, and the next step and Done agree', async () => {
+    await makeMainAccount('Main checking')
+    choose([['revolut-usd.csv', REVOLUT_USD]])
+    await untilStates(['other-currency'])
+    expect(one('onboarding-import-currency')?.textContent).toBe(USD_LINE)
+    expect(one('onboarding-import-target')).toBeNull()
+
+    // The way on with it: Import, on Bank Imports, while setup waits.
+    one('onboarding-import-open')!.click()
+    await vi.waitFor(() => {
+      expect(onboardingOpen()).toBe(false)
+    })
+    const handed = takeHandedImportFile()
+    expect([handed?.file.name, handed?.tab]).toEqual(['revolut-usd.csv', 'bank-imports'])
+
+    // Back with nothing imported: the statement step, and Skip goes on to Done, which counts no
+    // transaction, as setup counted none.
+    await expect(resumeOnboarding()).resolves.toBe('opened')
+    await vi.waitFor(() => {
+      expect(onboardingStep()).toBe('import')
+    })
+    await settle()
+    one('onboarding-import-skip')!.click()
+    await vi.waitFor(() => {
+      expect(onboardingStep()).toBe('done')
+    }, waitLong)
+    expect(setupSoFar().imported).toBe(0)
+    await vi.waitFor(() => {
+      expect(one('onboarding-done-summary')?.textContent).toBe('Personal has 1 account.')
+    }, waitLong)
+    const db = await getDB()
+    expect((await db.getAll('accounts')).map((a: { name: string }) => a.name)).toEqual([
+      'Main checking',
+    ])
+    expect(await db.count('transactions')).toBe(0)
+  })
+
+  it("added and removed, it moves no other file's target", async () => {
+    await makeMainAccount('Main checking')
+    choose([
+      ['revolut.csv', REVOLUT_MAY],
+      ['n26.csv', N26],
+    ])
+    await untilStates(['ready', 'ready'])
+    const before = targets()
+    expect(before).toEqual([
+      ['revolut.csv', 'Main checking'],
+      ['n26.csv', 'New account: N26 EUR'],
+    ])
+
+    choose([['revolut-usd.csv', REVOLUT_USD]])
+    await untilStates(['ready', 'ready', 'other-currency'])
+    expect(targets()).toEqual([...before, ['revolut-usd.csv', null]])
+
+    all('onboarding-import-remove')[2].click()
+    await untilStates(['ready', 'ready'])
+    expect(targets()).toEqual(before)
   })
 })
 

@@ -3,7 +3,7 @@
  * over plain data. The wizard runs it whenever the set of files changes (setupStatements.test.tsx).
  */
 import { describe, expect, it } from 'vitest'
-import { mainAccountOf, statementTargets } from '../statementTargets'
+import { inOtherCurrency, mainAccountOf, statementTargets } from '../statementTargets'
 import type { SetupStatement } from '../../../core/onboardingStore'
 import type { StatementToPlace, TargetAccount } from '../statementTargets'
 
@@ -17,7 +17,7 @@ function place(
     earlier?: SetupStatement[]
     base?: string
   } = {}
-): string[] {
+): Array<string | null> {
   const accounts = options.accounts ?? [MAIN]
   return statementTargets({
     statements: statements.map((s) => ({ currency: 'EUR', byHand: null, ...s })),
@@ -40,13 +40,13 @@ describe('where a statement goes', () => {
     expect(place([{ bankId: 'revolut' }], { earlier })).toEqual(['Main checking'])
   })
 
-  it('two currencies of one bank: the other currency gets a new account in its name', () => {
+  it('two currencies of one bank: the one not in the base currency is set aside, with no account', () => {
     expect(
       place([
         { bankId: 'revolut', currency: 'EUR' },
         { bankId: 'revolut', currency: 'USD' },
       ])
-    ).toEqual(['Main checking', 'Revolut USD'])
+    ).toEqual(['Main checking', null])
   })
 
   it('an account named for the bank in the statement currency takes it, and the main is free', () => {
@@ -57,16 +57,32 @@ describe('where a statement goes', () => {
     ])
   })
 
-  it('an account named for the bank in another currency is not where its statement goes', () => {
-    const accounts = [MAIN, { id: 2, name: 'Revolut', currency: 'EUR' }]
-    expect(place([{ bankId: 'revolut', currency: 'USD' }], { accounts })).toEqual(['Revolut USD'])
+  it('a statement in another currency goes into no account it finds, in either currency', () => {
+    const accounts = [
+      MAIN,
+      { id: 2, name: 'Revolut', currency: 'EUR' },
+      { id: 3, name: 'Revolut USD', currency: 'USD' },
+    ]
+    expect(place([{ bankId: 'revolut', currency: 'USD' }], { accounts })).toEqual([null])
   })
 
-  it('a statement in another currency than the main account gets a new account', () => {
+  it('a statement in another currency, picked first, leaves the main account to the next bank', () => {
     expect(place([{ bankId: 'revolut', currency: 'USD' }, { bankId: 'n26' }])).toEqual([
-      'Revolut USD',
+      null,
       'Main checking',
     ])
+  })
+
+  it('names a new account for the base currency only', () => {
+    expect(
+      place(
+        [
+          { bankId: 'revolut', currency: 'usd' },
+          { bankId: 'n26', currency: 'eur' },
+        ],
+        { accounts: [], made: null }
+      )
+    ).toEqual([null, 'N26 EUR'])
   })
 
   it('keeps a target picked by hand, and one into the main account claims it', () => {
@@ -124,26 +140,36 @@ describe('an empty statement', () => {
 })
 
 describe('the main account', () => {
-  it('is the one setup made, else the newest in the currency named for no bank', () => {
+  it('is the one setup made, else the newest in the base currency named for no bank', () => {
     const accounts = [
       { id: 1, name: 'Checking', currency: 'EUR' },
       { id: 2, name: 'Erste EUR', currency: 'EUR' },
       { id: 3, name: 'Joint', currency: 'EUR' },
       { id: 4, name: 'Dollars', currency: 'USD' },
     ]
-    expect(mainAccountOf('Checking', accounts, 'EUR', 'EUR')?.name).toBe('Checking')
-    expect(mainAccountOf(null, accounts, 'EUR', 'EUR')?.name).toBe('Joint')
-    expect(mainAccountOf('Gone', accounts.slice(0, 2), 'EUR', 'EUR')?.name).toBe('Checking')
-    expect(mainAccountOf(null, accounts, 'USD', 'EUR')?.name).toBe('Dollars')
-    expect(mainAccountOf(null, [], 'EUR', 'EUR')).toBeNull()
+    expect(mainAccountOf('Checking', accounts, 'EUR')?.name).toBe('Checking')
+    expect(mainAccountOf(null, accounts, 'EUR')?.name).toBe('Joint')
+    expect(mainAccountOf('Gone', accounts.slice(0, 2), 'EUR')?.name).toBe('Checking')
+    expect(mainAccountOf(null, [], 'EUR')).toBeNull()
   })
 
-  it('reopened with no account made, takes the newest in the statement currency', () => {
+  it('reopened with no account made, takes the newest in the base currency', () => {
     const accounts = [
       { id: 1, name: 'Old euros', currency: 'EUR' },
       { id: 2, name: 'New euros', currency: 'EUR' },
       { id: 3, name: 'Dollars', currency: 'USD' },
     ]
     expect(place([{ bankId: 'revolut' }], { accounts, made: null })).toEqual(['New euros'])
+  })
+})
+
+describe('a currency other than the base', () => {
+  it('is one the statement names and the base is not; none counts as the base', () => {
+    expect(inOtherCurrency('USD', 'EUR')).toBe(true)
+    expect(inOtherCurrency(' usd ', 'eur')).toBe(true)
+    expect(inOtherCurrency('EUR', 'EUR')).toBe(false)
+    expect(inOtherCurrency('eur', 'EUR')).toBe(false)
+    expect(inOtherCurrency(null, 'EUR')).toBe(false)
+    expect(inOtherCurrency('', 'EUR')).toBe(false)
   })
 })
