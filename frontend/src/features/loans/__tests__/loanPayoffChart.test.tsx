@@ -57,6 +57,49 @@ const points = (line: Element | null) =>
     .filter(Boolean)
     .map((p) => p.split(',').map(Number))
 
+const num = (el: Element | null | undefined, name: string) => Number(el?.getAttribute(name))
+/** A label's box: 12 px text standing on its y, from 12 px above it to 3 below. */
+const boxOf = (label: Element) => {
+  const x = num(label, 'x')
+  const y = num(label, 'y')
+  const width = (label.textContent ?? '').length * 7.2
+  const x0 = label.getAttribute('text-anchor') === 'end' ? x - width : x
+  return { x0, x1: x0 + width, top: y - 12, bottom: y + 3 }
+}
+type Rect = ReturnType<typeof boxOf>
+const meets = (a: Rect, b: Rect) =>
+  a.x0 < b.x1 && a.x1 > b.x0 && a.top < b.bottom && a.bottom > b.top
+/** The line's highest and lowest y between two x: where it runs inside them. */
+const lineBetween = (line: number[][], x0: number, x1: number) => {
+  const at = (x: number) => {
+    const i = line.findIndex(([px]) => px >= x)
+    if (i <= 0) return line[Math.max(0, i)][1]
+    const [ax, ay] = line[i - 1]
+    const [bx, by] = line[i]
+    return ay + ((by - ay) * (x - ax)) / (bx - ax || 1)
+  }
+  const ys = [at(x0), at(x1), ...line.filter(([px]) => px > x0 && px < x1).map(([, py]) => py)]
+  return { high: Math.min(...ys), low: Math.max(...ys) }
+}
+/** The balance line as one run of [x, y] points, past and future together. */
+const lineOf = (root: HTMLElement) =>
+  [...points(one(root, 'loans-payoff-past')), ...points(one(root, 'loans-payoff-future'))].sort(
+    (a, b) => a[0] - b[0]
+  )
+/** Each label the line runs through, rather than wholly above it or wholly under it. */
+const crossed = (root: HTMLElement) => {
+  const line = lineOf(root)
+  return all(root, 'loans-payoff-extra')
+    .map((extra) => extra.querySelector('text'))
+    .filter((label): label is SVGTextElement => label !== null)
+    .filter((label) => {
+      const b = boxOf(label)
+      const run = lineBetween(line, b.x0, b.x1)
+      return !(run.low < b.top || run.high > b.bottom)
+    })
+    .map((label) => `${label.textContent} (${label.getAttribute('text-anchor')})`)
+}
+
 describe('the payoff chart', () => {
   it('is one image, named and described, for a screen reader', () => {
     const svg = one(draw(BOAT), 'loans-payoff-chart')!
@@ -232,31 +275,6 @@ describe("an extra payment's label on a narrow chart", () => {
     vi.restoreAllMocks()
   })
 
-  const num = (el: Element | null | undefined, name: string) => Number(el?.getAttribute(name))
-  /** A label's box: 12 px text standing on its y, from 12 px above it to 3 below. */
-  const boxOf = (label: Element) => {
-    const x = num(label, 'x')
-    const y = num(label, 'y')
-    const width = (label.textContent ?? '').length * 7.2
-    const x0 = label.getAttribute('text-anchor') === 'end' ? x - width : x
-    return { x0, x1: x0 + width, top: y - 12, bottom: y + 3 }
-  }
-  type Rect = ReturnType<typeof boxOf>
-  const meets = (a: Rect, b: Rect) =>
-    a.x0 < b.x1 && a.x1 > b.x0 && a.top < b.bottom && a.bottom > b.top
-  /** The line's highest and lowest y between two x: where it runs inside them. */
-  const lineBetween = (line: number[][], x0: number, x1: number) => {
-    const at = (x: number) => {
-      const i = line.findIndex(([px]) => px >= x)
-      if (i <= 0) return line[Math.max(0, i)][1]
-      const [ax, ay] = line[i - 1]
-      const [bx, by] = line[i]
-      return ay + ((by - ay) * (x - ax)) / (bx - ax || 1)
-    }
-    const ys = [at(x0), at(x1), ...line.filter(([px]) => px > x0 && px < x1).map(([, py]) => py)]
-    return { high: Math.min(...ys), low: Math.max(...ys) }
-  }
-
   it.each([
     ['on a phone', 308],
     ['in a window 600 px wide', 494],
@@ -310,4 +328,51 @@ describe("an extra payment's label on a narrow chart", () => {
     })
     expect(meets(boxes[0], boxes[1])).toBe(false)
   })
+})
+
+/**
+ * No label stands on the line. A label above its mark and to the left of it sits where the line
+ * has not yet come down to the mark: before, it was placed at the mark's height, and the line ran
+ * through it at every width from 308 to 900 px on the boat's payment 46. An above place now keeps
+ * clear of the line's highest point across its width, as an under place keeps clear of its lowest,
+ * and a label with no room there moves on to the places under the line.
+ */
+describe("an extra payment's label and the line", () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it.each([308, 426, 494, 640, 900])(
+    'keeps the line off the label left of its mark near the end, %i px wide',
+    (width) => {
+      vi.spyOn(Element.prototype, 'clientWidth', 'get').mockReturnValue(width)
+      const root = draw({ ...BOAT, prepayments: [{ month: 46, amount: 1000 }] })
+      expect(one(root, 'loans-payoff-extra')!.querySelector('text')?.textContent).toBe('+€1,000')
+      expect(crossed(root)).toEqual([])
+    }
+  )
+
+  it(
+    'keeps the line off every label, and labels each, one extra payment at each month of the boat',
+    { timeout: 30000 },
+    () => {
+      const found: string[] = []
+      for (const width of [308, 494, 900]) {
+        vi.spyOn(Element.prototype, 'clientWidth', 'get').mockReturnValue(width)
+        for (let month = 1; month <= 46; month++) {
+          const root = draw({ ...BOAT, prepayments: [{ month, amount: 3000 }] })
+          for (const label of crossed(root)) found.push(`${width} px, payment ${month}: ${label}`)
+          // One payment alone always has a place under the line, so it is never left unlabelled.
+          if (!one(root, 'loans-payoff-extra')?.querySelector('text')) {
+            found.push(`${width} px, payment ${month}: no label`)
+          }
+          dispose?.()
+          dispose = undefined
+          host.remove()
+        }
+        vi.restoreAllMocks()
+      }
+      expect(found).toEqual([])
+    }
+  )
 })

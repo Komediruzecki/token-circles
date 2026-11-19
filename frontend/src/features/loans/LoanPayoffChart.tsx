@@ -199,26 +199,35 @@ export default function LoanPayoffChart(props: Props) {
   })
   const bands = () => (12 / n()) * plotW() >= 24
 
-  /** The lowest the line runs between two x, as a y: a label under it starts below this. */
-  const lineLow = (x0: number, x1: number) => {
+  /**
+   * The highest and the lowest the line runs between two x, as y: a label over it ends above
+   * `high`, and a label under it starts below `low`.
+   */
+  const lineRun = (x0: number, x1: number) => {
     const month = (x: number) => Math.min(n(), Math.max(0, ((x - padLeft()) / plotW()) * n()))
     const at = (m: number) => {
       const lo = Math.min(t().rows.length, Math.floor(m))
       const hi = Math.min(t().rows.length, lo + 1)
       return sy(balanceAt(lo)) + (sy(balanceAt(hi)) - sy(balanceAt(lo))) * (m - lo)
     }
+    let high = Math.min(at(month(x0)), at(month(x1)))
     let low = Math.max(at(month(x0)), at(month(x1)))
-    for (let m = Math.ceil(month(x0)); m <= month(x1); m++) low = Math.max(low, sy(balanceAt(m)))
-    return low
+    for (let m = Math.ceil(month(x0)); m <= month(x1); m++) {
+      high = Math.min(high, sy(balanceAt(m)))
+      low = Math.max(low, sy(balanceAt(m)))
+    }
+    return { high, low }
   }
 
   /**
    * Extra payments: a mark on the line each, and a label for the first few that fit. Above the
-   * mark first, right of it or left of it; then under the line, under the mark or under and to its
-   * left, as close under the line as it runs there without crossing it, and lower still, under
-   * today's glow, as a last resort. A label stays inside the plot and covers no other label, nor
-   * the Today pill, nor today's dot and the glow around it; a mark inside that glow has its label
-   * set out past it. A label is left off only when none of those places fits.
+   * mark first, right of it or left of it, raised clear of the line where it runs highest over the
+   * label (to the left of a mark the line has not yet come down to it); then under the line, under
+   * the mark or under and to its left, as close under the line as it runs there without crossing
+   * it, and lower still, under today's glow, as a last resort. No place crosses the line. A label
+   * stays inside the chart and covers no other label, nor the Today pill, nor today's dot and the
+   * glow around it; a mark inside that glow has its label set out past it. A label is left off
+   * only when none of those places fits.
    */
   const extras = createMemo(() => {
     const placed: Rect[] = []
@@ -248,16 +257,20 @@ export default function LoanPayoffChart(props: Props) {
       const y = sy(balanceAt(e.month))
       const text = `+${props.formats.wholeMoney(e.amount)}`
       const width = text.length * CHAR
-      // Above: 12 px text standing on y - 7, from 19 px above the mark to 4 px above.
-      const above = (x0: number, anchor: Label['anchor']): Label => ({
-        x0,
-        x1: x0 + width,
-        top: y - 19,
-        bottom: y - 4,
-        at: anchor === 'start' ? x0 : x0 + width,
-        anchor,
-        baseline: y - 7,
-      })
+      // Above: 12 px text standing 3 px over its bottom, which is 4 px above the mark and 3 px
+      // above the line where it runs highest over the label.
+      const above = (x0: number, anchor: Label['anchor']): Label => {
+        const bottom = Math.min(y - 4, lineRun(x0, x0 + width).high - 3)
+        return {
+          x0,
+          x1: x0 + width,
+          top: bottom - 15,
+          bottom,
+          at: anchor === 'start' ? x0 : x0 + width,
+          anchor,
+          baseline: bottom - 3,
+        }
+      }
       const inGlow =
         glow !== null && glow.top < y - 4 && glow.bottom > y - 19 && Math.abs(x - glow.x) <= HALO
       const rightFrom = glow !== null && inGlow ? glow.x1 + 3 : x + 7
@@ -266,7 +279,7 @@ export default function LoanPayoffChart(props: Props) {
       // over the label and 4 px under the mark; under today's glow too when `clear` says so.
       const under = (from: number, clear: boolean): Label => {
         const x0 = Math.min(Math.max(from, left), right - width)
-        let top = Math.max(y + 4, lineLow(x0, x0 + width) + 3)
+        let top = Math.max(y + 4, lineRun(x0, x0 + width).low + 3)
         if (clear && glow !== null && x0 < glow.x1 && x0 + width > glow.x0) {
           top = Math.max(top, glow.bottom + 2)
         }
@@ -289,6 +302,7 @@ export default function LoanPayoffChart(props: Props) {
         under(x + 4 - width, true),
       ]
       const fits = (label: Label) =>
+        label.top >= 0 &&
         label.x0 >= left &&
         label.x1 <= right &&
         label.bottom <= base() &&

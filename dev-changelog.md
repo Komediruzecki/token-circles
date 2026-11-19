@@ -2528,8 +2528,9 @@ check')` first, as the cushion and debt cases do.
   to fit), extra payments as filled (made) or hollow (planned) dots with a `+€X` label while there
   are at most six and they fit, and the payoff month at the end, or "Never repaid at this rate"
   where the engine stops. A label goes right of its mark, or left where the right runs off the
-  chart or into another label, and never over the Today pill or today's dot and its glow. Where
-  neither side above has room, it goes under the line: under the mark, then under and to its left,
+  chart or into another label, raised 3 px clear of the line where it runs highest over the label,
+  and never over the Today pill or today's dot and its glow. Where neither side above has room, it
+  goes under the line: under the mark, then under and to its left,
   3 px under the line where the line runs lowest over the label, so the line never crosses it, and
   under today's glow only as a last resort. It is left off only when none of those fits. On the
   demo's Investment Property Loan, 5,000 paid extra at payment 20 had no label at 820, 600 or
@@ -2779,6 +2780,23 @@ check')` first, as the cushion and debt cases do.
   `.instrument-deck` and fails unless the tooltip renders outside the chart, inside a scope of the
   deck's class that draws no box; outside a deck it takes none, and nothing is left behind when the
   chart goes.
+- **No extra-payment label stands on the loan's line.** A label above its mark and to the left of it
+  was placed at the mark's height, where the line has not yet come down to the mark, so the line ran
+  through it. The review's sweep (`LoanPayoffChart` in jsdom: the boat with one extra payment at
+  each month, three amounts and five widths from 308 to 900 px, and a mortgage with three extras
+  close together) found 185 such labels, every one left of its mark; the boat's payment 46 was
+  crossed at every width. An above place now rises to stay 3 px over the line where it runs highest
+  across the label, as an under place stays 3 px under where it runs lowest, and stays inside the
+  chart; one with no room there moves on to the places under the line. The same sweep now finds no
+  crossing. A label is still left off only when no place fits: none in the boat's sweep, and in the
+  mortgage's 360 clusters 84 where 62 were before. Of the 24 newly left off, 17 sit in clusters
+  around today (payment 42), whose raised places run into the Today pill or the glow while the
+  places under are taken by their neighbours, and 6 near the end; 2 came back. The sweep also counts
+  101 labels across today's dashed line, 100 before; that line is not part of this change.
+- **Tests:** `src/features/loans/__tests__/loanPayoffChart.test.tsx` draws the boat with an extra
+  payment at 46 at 308, 426, 494, 640 and 900 px, and with one at each month at 308, 494 and 900 px,
+  and fails on any label the line runs through and on any of those payments left unlabelled. All six
+  cases failed before the change.
 - **The heatmap's day detail keeps its edge where the dialog check can see it.** A click on a day
   in Analytics' heatmap opens a dialog whose box was styled inline in `features/Analytics.tsx`, so
   `dialogEdges.test.ts`, which reads the CSS modules, never saw it. Its backdrop and box now live in
