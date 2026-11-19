@@ -2593,30 +2593,48 @@ check')` first, as the cushion and debt cases do.
     the two import cases for a space that has Restaurant pass before and after, as the guard that
     the fold keeps it. `categoryGroups.test.ts` expects Eating out for `UBER EATS`.
 
-- **Reports open on the year the period reaches, and this year's annual PDF stops at the current
-  month.** `Reports` in `frontend/src/features/Settings.tsx` seeded its year and month from
-  `toYYYYMM(period())`, which takes a range's start. The All time pill (`fromPill('all')` in
-  `utils/period.ts`) starts on `1970-01-01`, so the seed was 1970-01: the Year select, whose options
-  are the years with transactions, had no 1970 and showed its first option (this year), while
-  Generate used the signal and made `annual-report-1970.pdf` with every figure at zero (found on dev
-  2abb0d32, 19 Nov). A range now seeds from the month it reaches (`toRange(focus).to`). A seeded
-  year the picker does not offer, one without transactions, split the same way: `year()` falls back
-  to the current year, which `availableYears` always holds, and both the select's `value` and
-  `handleGenerate` read it, so the select takes its value again once the years load. New
-  `utils/reportSpan.ts`: `annualSpan(year)` is the whole year for any year but this one, and January
-  to the end of the current month for this one. `generateAnnualPdf`
-  (`core/storage/clientPdfReports.ts`) reads that span, draws that many months in the chart and the
-  table, skips a row outside it, and its subtitle says `January to November 2026, so far`. Settings
-  shows `2026 so far: January to November.` under the Year select for Annual and for Monthly with
-  All Months (`data-test-id="report-so-far"`). Not changed: the Tax and P&L summaries still read
-  this year to 31 December, and the Worker's text-only `/api/reports/annual-pdf` is untouched.
-  Guards: `utils/__tests__/reportSpan.test.ts` (a past year, this year to the end of this month,
-  January alone, a leap February, December, a later year), `features/__tests__/reportsYear.test.tsx`
-  (All time makes this year's report and opens the monthly on this month; a year without data gives
-  a picker and a report that agree; a year picked by hand; the hint for Annual and All Months and
-  none for a past year) and `core/storage/__tests__/annualPdfSpan.test.ts` (cloud mode: the request
-  stops at the end of this month, the chart draws that many months, a row outside the span is left
-  out, a past year reads to 31 December and draws twelve). Each fails with its change removed.
+- **All time no longer resolves to January 1970, and this year's annual PDF stops at the current
+  month.** `toYYYYMM` (`frontend/src/utils/period.ts`) gives a range its start month, and All time
+  (`fromPill('all')`) starts on `1970-01-01`, a stand-in for everything. Every page that shows one
+  month takes its month from `toYYYYMM(period())`, so on All time: Settings > Exports seeded its
+  year with 1970, and as the Year select only offers years with transactions it showed this year
+  while Generate made `annual-report-1970.pdf` with every figure at zero (found on dev 2abb0d32, 19
+  Nov); Dashboard's `focus()` asked for `/api/analytics/sankey?year=1970&month=1` (Cash flow said
+  "No flows for All time yet.") and the deck's heatmap for `/api/analytics/daily-heatmap?year=1970`,
+  linked "1970 →" (`getDashboard` sends `all=true` and was right); Budgets read
+  `/api/budgets/zero-based?month=1970-01`, every figure zero, under "Copy December 1969 Budgets" and
+  "From December 1969 Expenses", which post year 1970 and month 1; and the bill calendar drew
+  January 1970 from `/api/bills/calendar?year=1970&month=1`. `toYYYYMM` now resolves All time to the
+  month its range reaches, the current month. A year and every other range keep their start month,
+  so Year to date still opens Budgets on January. Separately, `components/PeriodOrbit.tsx` opened
+  its custom range on the range in focus, so on All time it offered `1970-01-01 → <today>` and Apply
+  made a custom range labelled "1 Jan 1970 – 19 Nov 2026". It opens empty on All time now; a custom
+  range and the other pills still open on their own dates. In `Reports` (`features/Settings.tsx`), a
+  seeded year the Year select does not offer, one without transactions, also split the picker from
+  the report: `year()` falls back to the current year, which `availableYears` always holds, and both
+  the select's `value` and `handleGenerate` read it. New `utils/reportSpan.ts`: `annualSpan(year)`
+  is the whole year for any year but this one, and January to the end of the current month for this
+  one. `generateAnnualPdf` (`core/storage/clientPdfReports.ts`) reads that span, draws that many
+  months in the chart and the table, skips a row outside it, and its subtitle says
+  `January to November 2026, so far`; Settings shows `2026 so far: January to November.` under the
+  Year select for Annual and for Monthly with All Months (`data-test-id="report-so-far"`). Looked at
+  and left alone: Tags reads All time from 1970-01-01, which is everything, and its monthly series
+  has only months with entries; Transactions and Dashboard's own totals and charts already skip All
+  time's range; the Tax and P&L summaries total by category with no months, and still read this year
+  to 31 December; the Worker's text-only `/api/reports/annual-pdf` is untouched. Guards:
+  `utils/__tests__/period.test.ts` (All time resolves to its last month; a year, Year to date and
+  Last 90 days keep their first), `features/__tests__/allTimeFocusMonth.test.tsx` (on the real All
+  time, Dashboard asks for this month's cash flow and this year's heatmap and links it with this
+  year, Budgets reads this month and names last month on both buttons, the bill calendar reads this
+  month), `components/__tests__/periodOrbitRange.test.tsx` (All time opens the custom range empty
+  with Apply off; a custom range and Last 30 days still open on their dates),
+  `utils/__tests__/reportSpan.test.ts`, `features/__tests__/reportsYear.test.tsx` (All time makes
+  this year's report and opens the monthly on this month; a year without data gives a picker and a
+  report that agree; the hint) and `core/storage/__tests__/annualPdfSpan.test.ts` (cloud mode: the
+  request stops at the end of this month, the chart draws that many months, a row outside the span
+  is left out, a past year reads to 31 December). Each guard fails with its change taken out; the
+  year and the other ranges in `period.test.ts`, and the custom range and Last 30 days in
+  `periodOrbitRange.test.tsx`, are controls that pass either way.
 
 ### Found in the first-week test run (3 Nov)
 

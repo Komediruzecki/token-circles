@@ -118,6 +118,14 @@ describe('toYYYYMM', () => {
       '2026-05'
     )
   })
+  it('All time is the month it reaches: its 1970-01-01 start stands in for everything', () => {
+    expect(toYYYYMM(fromPill('all', NOW), NOW)).toBe('2026-07')
+  })
+  it('a year and the other range pills keep their start month', () => {
+    expect(toYYYYMM(yearPeriod(2025))).toBe('2025-01')
+    expect(toYYYYMM(fromPill('ytd', NOW), NOW)).toBe('2026-01')
+    expect(toYYYYMM(fromPill('last90', NOW), NOW)).toBe('2026-04')
+  })
 })
 
 describe('label', () => {
