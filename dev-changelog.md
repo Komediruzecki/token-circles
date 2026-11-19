@@ -2543,7 +2543,8 @@ check')` first, as the cushion and debt cases do.
 - **Its box answers for its own width** (`.chart-box`: `container-type: inline-size`, one
   `minmax(0, 1fr)` column). The readout goes four to a row from 600 px of box, two below that,
   and two equal halves below 340 px (`@container`), with `minmax(0, …)` columns so an amount
-  longer than any of those wraps inside the box. Four need about 565 px with seven-figure amounts.
+  longer than any of those wraps inside the box. Four need 525 px with €1,182,363.57 owed and 508 px
+  with €195,000.53, measured at 1440 px.
   The viewport query it replaces left the box overflowing between 769 and 925 px and between 561
   and 637 px: at 820 px, with the sidebar shown, the box had 426 px and the readout needed 532,
   Close was cut to nothing and the SVG was drawn to the overflow. The sentence on top runs the

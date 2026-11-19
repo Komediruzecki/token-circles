@@ -1260,9 +1260,10 @@
 
 /* Four figures sit together on the left, so the eye reads them as one line before the chart. The
    box's width decides how many go in a row, not the window's: with the sidebar shown, a tablet's
-   box is narrower than a phone's. Four need about 565 px with seven-figure amounts, two about
-   330 px. A column can still give way below what its figure needs, so an amount longer than any of
-   those wraps inside the box rather than running out of it. */
+   box is narrower than a phone's. Measured at 1440 px, four need 525 px with €1,182,363.57 owed
+   and 508 px with €195,000.53; two need 281 and 264 px. A column can still give way below what its
+   figure needs, so an amount longer than any of those wraps inside the box rather than running out
+   of it. */
 .readout {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, max-content));
