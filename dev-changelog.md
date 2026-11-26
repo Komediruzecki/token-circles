@@ -2855,6 +2855,32 @@ check')` first, as the cushion and debt cases do.
   unless a press at the button's centre reaches the dialog's backdrop, shuts the form and leaves the
   Guided Orbit shut, and on a 390 x 844 phone opens the drawer and fails while the button is what
   a press there reaches. With the button back at 1400 both fail, and the press alone fails too.
+- **Escape shuts Transactions' entry form, and focus goes back to the button that opened it.**
+  Reproduced on 19 Nov: with the form open from Add transaction, one Escape and then a second left
+  it open, with focus on the add button behind the form (where opening leaves it), in its amount or
+  in its description. The form had no Escape at all; Cancel, the close button and a press outside
+  were the only ways out. Escape now shuts it as Cancel does, from a field or from the add button,
+  and however the form shuts, focus goes back to the button that opened it
+  (`utils/returnFocus.ts`). Something open over the form takes the first Escape for itself: a
+  dialog, a menu, the keyboard shortcuts, or an (i) panel in the form. Some of those shut on Escape
+  without saying so, so the form looks at what is over it as Escape comes in, before any listener
+  has had it, and shuts only when nothing was there and nothing spent the key on its way out
+  (heard on `window`, which hears it last), and only while Transactions is the page shown. The
+  keyboard shortcuts list (`components/KeyboardShortcutsModal.tsx`) now says `aria-modal="true"`,
+  as the other dialogs over a backdrop do: without it, "?" over the form and then Escape shut both,
+  and the half-filled form was cleared. The loan chart's Escape (`LoansOverview.tsx`) looks for a
+  dialog over the page the same way, so it should leave Escape to the list now too; that is read
+  from the code, not tested. The form still takes no focus when it opens; listed, not changed here.
+- **Tests:** `src/features/__tests__/transactionFormEscape.test.tsx` opens the form from the add
+  button and fails unless Escape shuts it from the button and from the amount, and unless focus is
+  back on the button after Escape and after Cancel. It fails if Escape shuts the form while
+  something over it has the key (a dialog that shuts on Escape without saying so, the real
+  shortcuts list, an open (i) panel), once a later listener has spent it, or while another page is
+  shown, and if a dialog left in the page while shut holds Escape back. Each of its eleven guards,
+  taken out, fails at least one case. `frontend/tests/transaction-form-escape.spec.ts` (@smoke)
+  does the same in the browser: Escape from the add button and from the amount, and an (i) panel
+  and the shortcuts list each taking the first Escape. All four failed before the change; with the
+  list not marked modal, the shortcuts case failed with the form shut by the first Escape.
 - **No extra-payment label stands on the loan's line.** A label above its mark and to the left of it
   was placed at the mark's height, where the line has not yet come down to the mark, so the line ran
   through it. The review's sweep (`LoanPayoffChart` in jsdom: the boat with one extra payment at

@@ -83,9 +83,12 @@ export default function KeyboardShortcutsModal(props: { onClose: () => void }) {
 
   return (
     <div class={styles.overlay} onClick={props.onClose}>
+      {/* Modal, and says so: a page that shuts something of its own on Escape (Transactions'
+          entry form, the loan chart) leaves Escape to a dialog that is over it. */}
       <div
         class={styles.modal}
         role="dialog"
+        aria-modal="true"
         aria-label="Keyboard shortcuts"
         data-test-id="shortcuts-modal"
         onClick={(e) => {
