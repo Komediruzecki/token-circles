@@ -232,7 +232,7 @@ function reachDetail(facts: GuidanceFacts, words: LedgerWords, notMet: boolean):
 }
 
 /**
- * Solid ground's debt sentence: the first debt at the line, or the answer the check waits on.
+ * Solid ground's debt sentence: the first debt at the line, or what the check waits on.
  * Met, it says nothing: the circle's line beside it already says "no debt at 10% or more".
  */
 export function debtSentence(facts: GuidanceFacts, place: CirclePlace): string | null {
@@ -241,7 +241,6 @@ export function debtSentence(facts: GuidanceFacts, place: CirclePlace): string |
   if (check.met === true) return null;
   if (check.unknown === 'unread')
     return "The debt check waits on your accounts, which didn't load.";
-  if (check.unknown === 'not-on-file') return 'The debt check waits on one answer.';
   const debt = firstExpensive(facts);
   if (!debt) return null;
   return debt.rate === null
@@ -444,10 +443,7 @@ function gapPhrase(check: Check, facts: GuidanceFacts, words: LedgerWords): stri
 export function waitsOnAnswer(check: Check): boolean {
   return (
     check.unknown === 'not-on-file' &&
-    (check.id === 'no-expensive-debt' ||
-      check.id === 'enough' ||
-      check.id === 'free-money' ||
-      check.id === 'yearly-bills')
+    (check.id === 'enough' || check.id === 'free-money' || check.id === 'yearly-bills')
   );
 }
 

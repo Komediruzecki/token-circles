@@ -16,7 +16,9 @@
  * The circles ask the rest, each when its answer is first needed (guidance.md section 5.5):
  *
  * - `supportCategoryIds`: the income categories that are support the person expects to stop.
- * - `carriesCardBalance`: whether they carry a balance on a credit card or overdraft.
+ * - `carriesCardBalance`: whether they carry a balance on a credit card or overdraft. No longer
+ *   asked (dropped 16 Nov 2026) and read by nothing: kept so stored rows and older clients still
+ *   validate.
  * - `freeMoney`: the free money an employer or the state adds, with the region it was asked for, as
  *   the question names that region's scheme.
  * - `setsAsideYearly`: whether they set the yearly bills on Bills aside each month.
@@ -110,6 +112,7 @@ export interface Answers {
   children?: number;
   /** Income category ids. */
   supportCategoryIds?: number[];
+  /** No longer asked or read; still accepted, so a stored answer or an older client validates. */
   carriesCardBalance?: boolean;
   freeMoney?: FreeMoneyAnswered;
   setsAsideYearly?: boolean;
@@ -239,6 +242,7 @@ export function readAnswers(stored: unknown): Answers {
   if (isSupportList(record.supportCategoryIds)) {
     answers.supportCategoryIds = [...record.supportCategoryIds];
   }
+  // Parsed so the field stays valid, but nothing reads it: the card question is gone.
   if (typeof record.carriesCardBalance === 'boolean') {
     answers.carriesCardBalance = record.carriesCardBalance;
   }
@@ -293,6 +297,7 @@ function wellFormed(field: (typeof ANSWER_FIELDS)[number], value: unknown): bool
       return isCount(value, 0);
     case 'supportCategoryIds':
       return isSupportList(value);
+    // carriesCardBalance is no longer asked or read, and still accepted (see Answers).
     case 'carriesCardBalance':
     case 'setsAsideYearly':
     case 'kindsAsked':
@@ -372,7 +377,6 @@ export function factsAnswersOf(answers: Answers, at: AnswersContext): FactsAnswe
     given !== undefined && given.currency === at.currency ? given.amount : null;
   return {
     supportCategoryIds: answers.supportCategoryIds ?? null,
-    carriesCardBalance: answers.carriesCardBalance ?? null,
     freeMoney: answers.freeMoney?.region === at.region ? answers.freeMoney.answer : null,
     savedElsewhere: inCurrency(answers.savedElsewhere),
     enoughPerYear: inCurrency(answers.enoughPerYear),

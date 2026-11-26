@@ -19,14 +19,8 @@ import {
   SORTED_SHARE,
 } from './circles';
 import { debtName, gapOf, monthsText, rateText, shareOf } from './ledger';
-import {
-  ASKED_ONCE,
-  CARD_QUESTION,
-  ENOUGH_QUESTION,
-  freeMoneyQuestion,
-  YEARLY_BILLS_QUESTION,
-} from './questions';
-import { DAYS_IN_A_MONTH, importYearReason, monthName } from '../orientation';
+import { ASKED_ONCE, ENOUGH_QUESTION, freeMoneyQuestion, YEARLY_BILLS_QUESTION } from './questions';
+import { DAYS_IN_A_MONTH, importYearReason } from '../orientation';
 import type { Check, CircleNumber, Placement } from './circles';
 import { EXPENSIVE_DEBT_NOTE } from './facts';
 import type { Debt, GuidanceFacts } from './facts';
@@ -36,9 +30,6 @@ import type { OrientationStep } from '../orientation';
 import type { ArticleId } from '../articles';
 
 export type NextStepWords = LedgerWords;
-
-/** "August 2026" for "2026-08-14". */
-const monthOf = (date: string): string => `${monthName(date.slice(0, 7))} ${date.slice(0, 4)}`;
 
 /** What the step's button does. */
 export type StepAction =
@@ -204,22 +195,8 @@ function yearlyWhy(facts: GuidanceFacts, words: LedgerWords): string {
 
 function debtStep(facts: GuidanceFacts, check: Check, words: NextStepWords): StepWords | null {
   if (check.unknown === 'unread') return reloadStep('the debt check');
-  if (check.unknown === 'not-on-file') {
-    const card = facts.debts.find((debt) => debt.expensive === null);
-    const name = card ? debtName(card) : 'A card';
-    const since = card?.since ?? null;
-    return {
-      title: CARD_QUESTION,
-      thenText: 'say whether you carry a card balance',
-      why:
-        since === null
-          ? `${name} has too few entries to show whether you clear it each month. Your answer settles the debt check in Solid ground.`
-          : `${name} has been here since ${monthOf(since)}, too short for its entries to show whether you clear it each month. Your answer settles the debt check in Solid ground.`,
-      action: { kind: 'question', question: 'card' },
-      meter: null,
-      fine: ASKED_ONCE,
-    };
-  }
+  // Nothing is asked about a debt: the card question was dropped on 16 Nov 2026, and debtsOf counts
+  // a card too new to say as carried, so the check is never left waiting on an answer.
   const debt: Debt | undefined = facts.debts.find((one) => one.expensive === true);
   if (!debt) return null;
   const name = debtName(debt);

@@ -12,13 +12,7 @@ export const ASKED_ONCE = 'Asked once. You can change it in Settings, About this
 export const SAVE_FAILED = "Couldn't save your answer. Try again.";
 
 /** The questions with chips. */
-export type QuestionId = 'card' | 'yearly-bills' | 'free-money' | 'enough';
-
-export const CARD_QUESTION = 'Do you carry a balance on a credit card or overdraft?';
-export const CARD_OPTIONS: readonly { label: string; answer: boolean }[] = [
-  { label: 'No', answer: false },
-  { label: 'Yes', answer: true },
-];
+export type QuestionId = 'yearly-bills' | 'free-money' | 'enough';
 
 export const YEARLY_BILLS_QUESTION = 'Do you set aside money for yearly bills each month?';
 export const YEARLY_BILLS_OPTIONS: readonly { label: string; answer: boolean }[] = [

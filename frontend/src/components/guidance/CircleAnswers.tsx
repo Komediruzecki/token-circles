@@ -9,8 +9,6 @@
  */
 import { createUniqueId, Show } from 'solid-js'
 import {
-  CARD_OPTIONS,
-  CARD_QUESTION,
   ENOUGH_QUESTION,
   ESSENTIALS_QUESTION,
   freeMoneyQuestion,
@@ -135,8 +133,8 @@ export function CircleAnswers(props: CircleAnswersProps): JSX.Element {
     })
     return names.length === 0 ? 'None of it.' : `${listed.format(names)}.`
   }
+  // A stored carriesCardBalance is not listed: the card question is no longer asked (16 Nov 2026).
   const any = () =>
-    a().carriesCardBalance !== undefined ||
     a().setsAsideYearly !== undefined ||
     freeMoney() !== null ||
     (props.gate && a().tenure !== undefined) ||
@@ -163,26 +161,6 @@ export function CircleAnswers(props: CircleAnswersProps): JSX.Element {
         }
       >
         <p class={styles.hint}>Remove an answer and its circle asks again.</p>
-      </Show>
-
-      <Show when={a().carriesCardBalance !== undefined}>
-        <Answered
-          question={CARD_QUESTION}
-          name="card"
-          disabled={props.disabled}
-          remove={{ carriesCardBalance: null }}
-          onSave={props.onSave}
-        >
-          <AnswerChips
-            name="settings-answer-card"
-            question={CARD_QUESTION}
-            options={CARD_OPTIONS}
-            answered={a().carriesCardBalance}
-            disabled={props.disabled}
-            testId="settings-answer-card-choice"
-            onChoose={(answer) => props.onSave({ carriesCardBalance: answer })}
-          />
-        </Answered>
       </Show>
 
       <Show when={a().setsAsideYearly !== undefined}>

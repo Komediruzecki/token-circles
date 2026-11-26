@@ -235,7 +235,9 @@ describe('Your next step', () => {
     )
   })
 
-  it('asks the card question, shows the choice at once, and hands the answer to the circles', async () => {
+  // Guard: the card question was dropped on 16 Nov 2026. Your next step asks nothing about a card,
+  // whatever was stored for it, and names a carried card as the debt it is.
+  it('asks nothing about a card, whatever the stored card answer', () => {
     const card = {
       kind: 'card' as const,
       id: 3,
@@ -243,26 +245,30 @@ describe('Your next step', () => {
       owed: 400,
       rate: null,
       payment: null,
-      carried: null,
-      expensive: null,
+      carried: true,
+      expensive: true,
     }
-    guidance.set!(viewOf(facts({ debts: [card] })))
-    const c = mount(() => <Progress />)
-    const step = q(c, '[data-test-id="next-step-card"]')
-    expect(step.getAttribute('data-step')).toBe('no-expensive-debt')
-    const choices = [
-      ...step.querySelectorAll<HTMLLabelElement>('[data-test-id="next-step-choice"]'),
-    ]
-    expect(choices.map((choice) => choice.textContent)).toEqual(['No', 'Yes'])
-    expect(step.textContent).toContain(
-      'Asked once. You can change it in Settings, About this space.'
-    )
-    const no = q(choices[0], 'input') as HTMLInputElement
-    no.click()
-    expect(no.checked).toBe(true)
-    await tick()
-    expect(saves.calls).toEqual([{ carriesCardBalance: false }])
-    expect(takeAnswers).toHaveBeenCalledWith(1, { carriesCardBalance: false })
+    // A debt not known to be carried is what the question used to be asked on.
+    const unknown = { ...card, carried: null, expensive: null }
+    for (const stored of [{}, { carriesCardBalance: false }, { carriesCardBalance: true }]) {
+      guidance.set!(viewOf(facts({ debts: [card] }), false, stored))
+      const c = mount(() => <Progress />)
+      const step = q(c, '[data-test-id="next-step-card"]')
+      expect(step.getAttribute('data-step')).toBe('no-expensive-debt')
+      expect(q(step, '[data-test-id="next-step-title"]').textContent).toBe('Visa carries €400')
+      expect(step.querySelectorAll('[data-test-id="next-step-choice"]')).toHaveLength(0)
+      expect(step.textContent).not.toContain('carry a balance')
+      dispose?.()
+      c.remove()
+
+      guidance.set!(viewOf(facts({ debts: [unknown] }), false, stored))
+      const u = mount(() => <Progress />)
+      const asks = q(u, '[data-test-id="next-step-card"]')
+      expect(asks.querySelectorAll('[data-test-id="next-step-choice"]')).toHaveLength(0)
+      expect(asks.textContent).not.toContain('carry a balance')
+      dispose?.()
+      u.remove()
+    }
   })
 
   it('says when an answer did not save, and lets it be given again', async () => {
@@ -466,7 +472,7 @@ describe("a circle's own view", () => {
 })
 
 describe('what a circle checks, and the questions it asks', () => {
-  /** A card whose entries cannot show whether its balance is carried. */
+  /** A card below zero, carried. */
   const visa = {
     kind: 'card' as const,
     id: 3,
@@ -474,8 +480,8 @@ describe('what a circle checks, and the questions it asks', () => {
     owed: 400,
     rate: null,
     payment: null,
-    carried: null,
-    expensive: null,
+    carried: true,
+    expensive: true,
   }
   const category = (over: Partial<WindowCategory>): WindowCategory => ({
     id: 11,
@@ -568,38 +574,42 @@ describe('what a circle checks, and the questions it asks', () => {
     expect(link.textContent).toBe('Change it on Retirement')
   })
 
-  it('asks the card question under the debt check, and saves a change there', async () => {
-    guidance.set!(viewOf(facts({ belowZero: 1 }), false, { carriesCardBalance: false }))
-    const view = open(4)
-    const debt = q(view, '[data-check="no-expensive-debt"]')
-    expect(debt.textContent).toContain('Do you carry a balance on a credit card or overdraft?')
-    const [no, yes] = radios(debt, 'circle-card-choice')
-    expect([no.label, yes.label]).toEqual(['No', 'Yes'])
-    expect(no.input.checked).toBe(true)
-    yes.input.click()
-    expect(yes.input.checked).toBe(true)
-    await tick()
-    expect(saves.calls).toEqual([{ carriesCardBalance: true }])
-    expect(takeAnswers).toHaveBeenCalledWith(1, { carriesCardBalance: true })
+  // Guard: the card question was dropped on 16 Nov 2026. Solid ground's view asks nothing under
+  // the debt check, whatever was stored for it.
+  it('asks nothing under the debt check, with a card below zero and a stored card answer', () => {
+    // belowZero is the count the question was asked on: facts no longer carry it, an older one might.
+    const below = facts({ debts: [visa], belowZero: 1 } as Partial<GuidanceFacts>)
+    for (const stored of [{}, { carriesCardBalance: false }, { carriesCardBalance: true }]) {
+      guidance.set!(viewOf(below, false, stored))
+      const view = open(4)
+      const debt = q(view, '[data-check="no-expensive-debt"]')
+      expect(debt.querySelectorAll('input')).toHaveLength(0)
+      expect(view.textContent).not.toContain('carry a balance')
+      expect(view.querySelector('[data-test-id="circle-question-card"]')).toBeNull()
+      dispose?.()
+      host?.remove()
+    }
   })
 
   it('asks a question once when Your next step on the view asks it', () => {
-    guidance.set!(viewOf(facts({ debts: [visa], belowZero: 1 })))
+    guidance.set!(viewOf(facts({ yearlyBills: { count: 1, perYear: 600, perMonth: 50 } })))
     const view = open(4)
     expect(q(view, '[data-test-id="next-step-card"]').getAttribute('data-step')).toBe(
-      'no-expensive-debt'
+      'yearly-bills'
     )
-    expect(view.querySelectorAll('[data-test-id="circle-card-choice"]')).toHaveLength(0)
+    expect(view.querySelectorAll('[data-test-id="circle-yearly-bills-choice"]')).toHaveLength(0)
     expect(
-      q(view, '[data-check="no-expensive-debt"] [data-test-id="circle-check-waiting"]').textContent
+      q(view, '[data-check="yearly-bills"] [data-test-id="circle-check-waiting"]').textContent
     ).toBe('Waiting on your answer')
   })
 
   it('puts a choice back when it did not save', async () => {
     saves.fail = true
-    guidance.set!(viewOf(facts({ belowZero: 1 }), false, { carriesCardBalance: false }))
+    const bills = { count: 1, perYear: 600, perMonth: 50 }
+    const answered = facts({ yearlyBills: bills, setsAsideYearly: false })
+    guidance.set!(viewOf(answered, false, { setsAsideYearly: false }))
     const view = open(4)
-    const [no, yes] = radios(view, 'circle-card-choice')
+    const [yes, notYet] = radios(view, 'circle-yearly-bills-choice')
     yes.input.click()
     await tick()
     await tick()
@@ -607,7 +617,7 @@ describe('what a circle checks, and the questions it asks', () => {
       "Couldn't save your answer. Try again."
     )
     expect(yes.input.checked).toBe(false)
-    expect(no.input.checked).toBe(true)
+    expect(notYet.input.checked).toBe(true)
     expect(takeAnswers).not.toHaveBeenCalled()
   })
 
@@ -1037,6 +1047,7 @@ describe('How you compare', () => {
 describe('What your circles asked, in Settings', () => {
   it('asks each question again once Settings removes its answer; the essentials live on Categories', async () => {
     const all: Answers = {
+      // Stored before the card question was dropped (16 Nov 2026): not listed, so not removed.
       carriesCardBalance: false,
       setsAsideYearly: true,
       freeMoney: { region: 'DE', answer: 'taken' },
@@ -1081,9 +1092,6 @@ describe('What your circles asked, in Settings', () => {
       settings.remove()
     }
 
-    /** A card whose entries can't show whether its balance is carried. */
-    const visa = { kind: 'card' as const, id: 3, name: 'Visa', owed: 400, rate: null }
-    const unknownCard = { ...visa, payment: null, carried: null, expensive: null }
     const family = {
       id: 12,
       name: 'Family help',
@@ -1097,12 +1105,6 @@ describe('What your circles asked, in Settings', () => {
       string,
       { circle: number; f: GuidanceFacts; list: string; step?: string }
     > = {
-      carriesCardBalance: {
-        circle: 4,
-        f: facts({ debts: [unknownCard], belowZero: 1 }),
-        list: 'circle-question-card',
-        step: 'no-expensive-debt',
-      },
       setsAsideYearly: {
         circle: 4,
         f: facts({ yearlyBills: { count: 1, perYear: 600, perMonth: 50 } }),

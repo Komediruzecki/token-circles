@@ -557,13 +557,13 @@ export function circleNumbers(
 
 /** A question a circle's view asks (design.md 1.8, guidance.md 5.5). */
 export type CircleQuestion =
-  'support' | 'essentials' | 'card' | 'yearly-bills' | 'free-money' | 'saved-elsewhere' | 'enough';
+  'support' | 'essentials' | 'yearly-bills' | 'free-money' | 'saved-elsewhere' | 'enough';
 
 /**
  * The questions circle `circle`'s view asks, each where its answer is first needed: support in
  * Paying your way while there is income to tick; essentials in the cushion circles while some
- * spending counts as needed only because nothing says otherwise; the card question while a card or
- * an overdraft is below zero; yearly bills while Bills holds one; free money while the gate is open
+ * spending counts as needed only because nothing says otherwise; yearly bills while Bills holds
+ * one; free money while the gate is open
  * and the region has a scheme; savings held elsewhere in Room to choose; the own number once More
  * than enough is the circle being worked on.
  */
@@ -588,7 +588,6 @@ export function circleQuestions(
     case 4: {
       const out: CircleQuestion[] = [];
       if (at.gate && freeMoneyQuestion(facts.region)) out.push('free-money');
-      if ((facts.belowZero ?? 0) > 0) out.push('card');
       if (facts.yearlyBills) out.push('yearly-bills');
       if (essentials) out.push('essentials');
       return out;

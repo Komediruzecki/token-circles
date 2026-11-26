@@ -5,6 +5,7 @@
  * benchmarks gate is closed.
  */
 import { describe, expect, it } from 'vitest'
+import { factsAnswersOf, readAnswers } from '../../../../shared/guidance/answers'
 import { regionName } from '../../../../shared/guidance/cards'
 import { placeCircle } from '../../../../shared/guidance/circles'
 import { EXPENSIVE_DEBT_NOTE, guidanceFacts } from '../../../../shared/guidance/facts'
@@ -351,26 +352,59 @@ describe('once a year is on file', () => {
   })
 
   describe('the debt check', () => {
-    it('asks about a card too new to judge, and says since when it is here', () => {
-      const card = debt({
-        rate: null,
-        payment: null,
-        carried: null,
-        expensive: null,
-        since: '2026-08-14',
-      })
-      expect(step(facts({ debts: [card] }))).toMatchObject({
-        id: 'no-expensive-debt',
-        circle: 4,
-        title: 'Do you carry a balance on a credit card or overdraft?',
-        why: 'Visa has been here since August 2026, too short for its entries to show whether you clear it each month. Your answer settles the debt check in Solid ground.',
-        action: { kind: 'question', question: 'card' },
-        fine: ASKED_ONCE,
-      })
-      const nameless = debt({ name: null, rate: null, carried: null, expensive: null })
-      expect(step(facts({ debts: [nameless] })).why).toBe(
-        'A card has too few entries to show whether you clear it each month. Your answer settles the debt check in Solid ground.'
+    // Guard: the card question was dropped on 16 Nov 2026. Whatever was stored for it before, no
+    // step asks it: a card too new to show it cleared counts as carried debt instead.
+    it('never asks the card question, whatever the stored answers', () => {
+      const months = Array.from({ length: 12 }, (_, i) =>
+        new Date(Date.UTC(2025, 9 + i, 1)).toISOString().slice(0, 7)
       )
+      const transactions: FactsEntry[] = [
+        ...months.flatMap((month): FactsEntry[] => [
+          { date: `${month}-01`, type: 'income', amount: 2500, category_id: 9, account_id: 1 },
+          { date: `${month}-02`, type: 'expense', amount: 900, category_id: 1, account_id: 1 },
+          { date: `${month}-03`, type: 'expense', amount: 600, category_id: 1, account_id: 1 },
+        ]),
+        // Opened in September: too new for its entries to show whether it is cleared each month.
+        { date: '2026-09-10', type: 'expense', amount: 300, category_id: 1, account_id: 3 },
+      ]
+      const stored = [
+        '{"freeMoney":{"region":"DE","answer":"taken"}}',
+        '{"freeMoney":{"region":"DE","answer":"taken"},"carriesCardBalance":false}',
+        '{"freeMoney":{"region":"DE","answer":"taken"},"carriesCardBalance":true}',
+      ]
+      for (const record of stored) {
+        const f = guidanceFacts({
+          today: '2026-10-11',
+          region: 'DE',
+          transactions,
+          categories: [
+            { id: 1, name: 'Groceries', type: 'expense', kind: 'groceries' },
+            { id: 9, name: 'Salary', type: 'income' },
+          ],
+          accounts: [
+            { id: 1, type: 'giro', balance: 2000 },
+            { id: 2, type: 'savings', balance: 30000 },
+            { id: 3, type: 'credit', balance: -300, name: 'Travel card' },
+            { id: 4, type: 'giro', balance: -150, name: 'Old current' },
+          ],
+          answers: factsAnswersOf(readAnswers(record), { region: 'DE', currency: 'EUR' }),
+        })
+        const next = nextStepOf({ placement: placeCircle(f), facts: f, orientation: null, words })
+        expect(next, record).toMatchObject({
+          id: 'no-expensive-debt',
+          circle: 4,
+          title: 'Travel card carries €300',
+          action: { kind: 'open', hash: '#accounts', label: 'Open Accounts' },
+        })
+        expect(JSON.stringify(next), record).not.toContain('carry a balance')
+      }
+    })
+
+    it('asks nothing for a debt not known to be expensive, and moves on to the next check', () => {
+      const unknown = debt({ rate: null, payment: null, carried: null, expensive: null })
+      const next = step(facts({ debts: [unknown] }))
+      expect(next.action?.kind).not.toBe('question')
+      expect(next).toMatchObject({ id: 'solid-cushion', circle: 4 })
     })
 
     it('compares paying an expensive loan off faster', () => {
