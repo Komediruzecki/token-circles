@@ -413,18 +413,37 @@ export default function Import() {
                       padding: '10px 14px',
                     }}
                   >
-                    <summary style={{ cursor: 'pointer', 'font-size': '14px' }}>
-                      <strong>{log.source || 'Import'}</strong>
-                      <span style={{ color: 'var(--text-secondary)', 'margin-left': '8px' }}>
-                        <span style={{ 'white-space': 'nowrap' }}>
-                          {new Date(log.created_at).toLocaleString()}
-                        </span>{' '}
-                        {/* A count keeps its word on its line: "(6" and "imported)" broke apart. */}
-                        ({log.imported}
-                        {'\u00a0'}imported
-                        {log.duplicates_skipped > 0 &&
-                          `, ${log.duplicates_skipped}\u00a0duplicates skipped`}
-                        )
+                    {/* The arrow is its own column, so a line that wraps on a phone goes on
+                        under the name, not under the arrow at the row's edge. */}
+                    <summary class={styles.logSummary}>
+                      <svg
+                        class={styles.logArrow}
+                        width="12"
+                        viewBox="0 0 12 12"
+                        fill="none"
+                        aria-hidden="true"
+                      >
+                        <path
+                          d="M4.5 2.5 8 6l-3.5 3.5"
+                          stroke="currentColor"
+                          stroke-width="1.6"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        />
+                      </svg>
+                      <span>
+                        <strong>{log.source || 'Import'}</strong>
+                        <span class={styles.logMeta}>
+                          <span style={{ 'white-space': 'nowrap' }}>
+                            {new Date(log.created_at).toLocaleString()}
+                          </span>{' '}
+                          {/* A count keeps its word on its line: "(6" and "imported)" broke apart. */}
+                          ({log.imported}
+                          {'\u00a0'}imported
+                          {log.duplicates_skipped > 0 &&
+                            `, ${log.duplicates_skipped}\u00a0duplicates skipped`}
+                          )
+                        </span>
                       </span>
                     </summary>
                     <div

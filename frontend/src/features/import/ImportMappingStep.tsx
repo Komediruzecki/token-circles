@@ -279,7 +279,8 @@ export function ImportMappingStep(props: { flow: ImportFlow; embedded?: boolean 
                               />
                             </div>
                           ) : (
-                            <span style="color:var(--text-secondary);font-size:12px;">&mdash;</span>
+                            // In words: a bare dash left the column's empty cell unexplained.
+                            <span class={styles.categoryTableNone}>Not an account</span>
                           )}
                         </td>
                       </tr>

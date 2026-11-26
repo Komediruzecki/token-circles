@@ -94,6 +94,25 @@ describe('Map columns', () => {
     )
   })
 
+  // Review of 19 Nov, round 4: the Account setup cell of a value that is no account said "—".
+  it('says in words that a category has no account to set up', async () => {
+    await flow.readFile(
+      new File(
+        ['Date,Description,Amount,Category\n2026-06-01,Example bakery,-4.20,Food\n'],
+        'typed.csv',
+        { type: 'text/csv' }
+      )
+    )
+    await settled()
+    sourceLine()
+    const table = host!.querySelector('[data-test-id="import-category-types"]')!
+    const food = [...table.querySelectorAll('tbody tr')].find((tr) =>
+      tr.textContent?.includes('Food')
+    )!
+    expect(food.querySelector('td:last-child')?.textContent?.trim()).toBe('Not an account')
+    expect(table.textContent).not.toContain('\u2014')
+  })
+
   it('names a file handed over as setup hands it, read with readFile', async () => {
     await flow.readFile(
       new File(['When,What,How much\n2026-06-01,Groceries,-10.00\n'], 'october-statement.csv', {

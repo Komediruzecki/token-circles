@@ -3119,6 +3119,30 @@ check')` first, as the cushion and debt cases do.
     the page's loading state, which takes the strip off the page. Before the change it failed at
     Calendar at 390 px, not whole in the strip. Taken out one at a time, the effect fails there too,
     and `nowrap` with `flex: 0 0 auto` at "Regular Bills" (two lines).
+- **Map columns says what an empty Account setup cell means, and its heading's words stand
+  apart.** Round 4 of the 19 Nov review, `ImportMappingStep.tsx` and `Import.module.css`.
+  - A value typed as an expense or income had "—" under Account setup. It says "Not an account"
+    now (`.categoryTableNone`). Test: `mappingSource.test.tsx` "says in words that a category has
+    no account to set up", which failed on the dash before.
+  - "Map columns" read almost as one word. It is the space, not `.mappingTitle`, which sets no
+    letter spacing: every `h1` and `h2` is set in Fraunces 600 with -0.01em letter spacing
+    (`styles/index.css`), and in Chromium the space between the two words was 2.86 px at 15 px
+    (0.19em). From the ink of "p" to the ink of "c" that is 0.18em, where Inter leaves 0.27em.
+    `.mappingTitle` adds `word-spacing: 0.08em`, for 4.06 px (0.27em), measured in both themes at
+    1440, 820 and 390 px. The other headings in the display face have the same narrow space; only
+    this one changes here. Test: `import.spec.ts` "the words of the Map columns heading stand
+    apart": the space is at least 0.25em, in Fraunces. Without the rule it fails at 0.19em.
+- **Recent Imports' line wraps under its name.** At 390 px an entry's line went on under the
+  summary's own marker, so "(12 imported)" started at the row's edge, at 42 px against the name's
+  56.3. The marker is an SVG arrow in a column of its own now (`.logSummary` in
+  `Import.module.css`: a two-column grid with the native marker hidden, and the arrow turns down
+  while the entry is open), so the line goes on under the name: both lines start at the name's
+  edge, 60 px, in the captures at 390.
+  - **Test:** `import-page-top.spec.ts` "Recent Imports goes on under the name where its line
+    wraps, at 390 px @smoke": the arrow sits before the name on its line, and each line of the
+    words starts where the name does. Before the change it failed at 42 against 56.3. With the grid
+    taken out the arrow, a block by the preflight's `svg { display: block }`, sits above the name,
+    and the test fails at the arrow (its right edge at 54, the name at 42).
 - **Import's messages have no em dashes.** Each is a full stop, a colon or parentheses: the
   preview's notes, the paste help, the bank tab's "no accounts yet", Recent Imports' line and its
   delete confirm, Connected sources' toast and remove confirm, two errors, and a skipped row's

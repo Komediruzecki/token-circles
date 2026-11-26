@@ -71,6 +71,36 @@ test.describe('import page', () => {
     await expect(page.getByTestId('sub-scan-modal')).toBeVisible()
   })
 
+  // Review of 19 Nov, round 4: "Map columns" read almost as one word. Fraunces has a narrow space,
+  // and the headings' -0.01em letter spacing takes from it: 2.9 px at 15 px, under a fifth of an em.
+  test('the words of the Map columns heading stand apart', async ({ page }) => {
+    await gotoServerless(page, 'import', 'import-header')
+    await page.getByTestId('import-tab-paste-csv').click()
+    await page.getByTestId('import-paste-textarea').fill(PASTED_CSV)
+    await page.getByTestId('import-paste-parse').click()
+    await page.getByTestId('import-continue-mapping').click()
+    const title = page.getByRole('heading', { name: 'Map columns' })
+    await expect(title).toBeVisible()
+
+    const space = await title.evaluate(async (heading) => {
+      await document.fonts.ready
+      const style = window.getComputedStyle(heading)
+      const range = document.createRange()
+      range.setStart(heading.firstChild!, 3)
+      range.setEnd(heading.firstChild!, 4)
+      return {
+        // Set in Fraunces, so a fallback face with a wider space cannot pass for the fix.
+        fraunces: document.fonts.check(`${style.fontWeight} ${style.fontSize} Fraunces`),
+        text: range.toString(),
+        em: range.getBoundingClientRect().width / parseFloat(style.fontSize),
+      }
+    })
+    expect(space.fraunces).toBe(true)
+    expect(space.text).toBe(' ')
+    // Inter, the body face, leaves 0.27em between words.
+    expect(space.em).toBeGreaterThanOrEqual(0.25)
+  })
+
   test('re-importing the same rows says nothing is new and logs the skips', async ({ page }) => {
     test.setTimeout(90000)
     await gotoServerless(page, 'import', 'import-header')

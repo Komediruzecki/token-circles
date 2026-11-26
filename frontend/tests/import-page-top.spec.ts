@@ -59,6 +59,34 @@ async function seedAccounts(page: Page): Promise<void> {
   )
 }
 
+/** A browser with nothing in it but twelve accounts, and the sheet read and imported into them. */
+async function importTheSheet(page: Page): Promise<void> {
+  await page.route('https://docs.google.com/**', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'text/csv',
+      headers: { 'access-control-allow-origin': '*' },
+      body: CSV,
+    })
+  )
+  await page.route('https://corsproxy.io/**', (route) => route.abort())
+  await gotoServerlessZeroState(page, 'dashboard', 'onboarding-wizard')
+  await page.getByTestId('onboarding-skip').click()
+  await page.getByTestId('confirm-accept').click()
+  await expect(page.getByTestId('onboarding-wizard')).toHaveCount(0)
+  await seedAccounts(page)
+
+  await page.evaluate(() => {
+    window.location.hash = 'import'
+  })
+  await expect(page.getByTestId('import-header')).toBeVisible({ timeout: 30_000 })
+  await page.getByTestId('import-tab-google-sheets').click()
+  await page.getByTestId('import-sheet-url').fill(LINK)
+  await page.getByTestId('import-sheet-fetch').click()
+  await page.getByTestId('import-continue-preview').click({ timeout: 20_000 })
+  await page.getByTestId('import-execute-all').click({ timeout: 20_000 })
+}
+
 for (const size of [
   { width: 1440, height: 900 },
   { width: 390, height: 844 },
@@ -68,30 +96,7 @@ for (const size of [
   }) => {
     test.setTimeout(90_000)
     await page.setViewportSize(size)
-    await page.route('https://docs.google.com/**', (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'text/csv',
-        headers: { 'access-control-allow-origin': '*' },
-        body: CSV,
-      })
-    )
-    await page.route('https://corsproxy.io/**', (route) => route.abort())
-    await gotoServerlessZeroState(page, 'dashboard', 'onboarding-wizard')
-    await page.getByTestId('onboarding-skip').click()
-    await page.getByTestId('confirm-accept').click()
-    await expect(page.getByTestId('onboarding-wizard')).toHaveCount(0)
-    await seedAccounts(page)
-
-    await page.evaluate(() => {
-      window.location.hash = 'import'
-    })
-    await expect(page.getByTestId('import-header')).toBeVisible({ timeout: 30_000 })
-    await page.getByTestId('import-tab-google-sheets').click()
-    await page.getByTestId('import-sheet-url').fill(LINK)
-    await page.getByTestId('import-sheet-fetch').click()
-    await page.getByTestId('import-continue-preview').click({ timeout: 20_000 })
-    await page.getByTestId('import-execute-all').click({ timeout: 20_000 })
+    await importTheSheet(page)
 
     await expect(page.getByTestId('import-result')).toHaveText('Imported 12 transactions', {
       timeout: 20_000,
@@ -130,3 +135,45 @@ for (const size of [
     await expect(page.getByRole('button', { name: 'Auto sync Example ledger' })).toBeVisible()
   })
 }
+
+// Review of 19 Nov, round 4: at 390 px the entry's line went on under the arrow at the row's
+// edge, "(12 imported)" starting left of the name above it.
+test('Recent Imports goes on under the name where its line wraps, at 390 px @smoke', async ({
+  page,
+}) => {
+  test.setTimeout(90_000)
+  await page.setViewportSize({ width: 390, height: 844 })
+  await importTheSheet(page)
+  const entry = page.locator('details').filter({ hasText: '12\u00a0imported' })
+  await expect(entry).toBeVisible({ timeout: 20_000 })
+
+  const lines = await entry.locator('summary').evaluate((summary) => {
+    const name = summary.querySelector('strong')!.getBoundingClientRect()
+    const arrow = summary.querySelector('svg')!.getBoundingClientRect()
+    // Where each line of its words starts: the text, not the arrow before it.
+    const starts = new Map<number, number>()
+    const words = document.createTreeWalker(summary, NodeFilter.SHOW_TEXT)
+    for (let node = words.nextNode(); node; node = words.nextNode()) {
+      if (!node.textContent?.trim()) continue
+      const range = document.createRange()
+      range.selectNodeContents(node)
+      for (const rect of range.getClientRects()) {
+        if (rect.width === 0) continue
+        const top = Math.round(rect.top)
+        starts.set(top, Math.min(starts.get(top) ?? Infinity, rect.left))
+      }
+    }
+    return {
+      name: { left: name.left, top: name.top, bottom: name.bottom },
+      arrow: { right: arrow.right, top: arrow.top, bottom: arrow.bottom },
+      starts: [...starts.values()],
+    }
+  })
+  // The arrow sits before the name, on its line.
+  expect(lines.arrow.right).toBeLessThanOrEqual(lines.name.left + 0.5)
+  expect(lines.arrow.top).toBeLessThan(lines.name.bottom)
+  expect(lines.arrow.bottom).toBeGreaterThan(lines.name.top)
+  // The line wraps at this width, and each of its lines starts where the name does.
+  expect(lines.starts.length).toBeGreaterThan(1)
+  for (const start of lines.starts) expect(start).toBeGreaterThanOrEqual(lines.name.left - 0.5)
+})
