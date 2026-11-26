@@ -467,12 +467,6 @@ test.describe('Transactions CRUD Operations', () => {
 
       // Wait for modal to potentially close
       await page.waitForTimeout(500)
-
-      // Check if modal still exists or was closed
-      await page
-        .locator('[data-test-id="tx-modal"]')
-        .isVisible({ timeout: 1000 })
-        .catch(() => false)
       // Modal may close after save, which is acceptable
     }
   })

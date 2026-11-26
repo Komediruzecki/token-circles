@@ -2965,6 +2965,15 @@ check')` first, as the cushion and debt cases do.
   offer ends 8 px or more above the button with its right edge on the button's, and the button is
   its size at its gaps from the edges (56 px at 22 on the desktop, 52 at 16 on the phone). Both
   failed before the change, with the offer's bottom at 884 and 828.
+- **Specs: an `isVisible({ timeout })` read as an assertion is an assertion now.** Playwright
+  ignores `isVisible`'s `timeout` (deprecated: it returns at once, Playwright 1.64.1's types say),
+  so these checks never waited. `housing-crud.spec.ts` asserts the add button with `toBeVisible`,
+  `retirement-crud.spec.ts` its two empty-state checks with `toBeHidden`, and a call in
+  `transactions-crud.spec.ts` whose answer nothing read is gone. Left as conditions, which they
+  are, and listed: the setup wizard's leave confirmation in 13 specs and `form-errors-helpers.ts`
+  (Skip always asks today, and the confirmation is up in the same click, so each check is true
+  whenever it runs), and in `transactions-crud.spec.ts` four receipt cases and a type-selector
+  case that never open what they check for, so their bodies never run.
 - **No extra-payment label stands on the loan's line.** A label above its mark and to the left of it
   was placed at the mark's height, where the line has not yet come down to the mark, so the line ran
   through it. The review's sweep (`LoanPayoffChart` in jsdom: the boat with one extra payment at
