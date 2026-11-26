@@ -2903,22 +2903,33 @@ check')` first, as the cushion and debt cases do.
   `core/bankImport/__tests__/bankImport.test.ts` ("account resolver"): the review's names, and
   the seven names of the first version (five that name their bank, Shopping and Booking that do
   not). Before the change the new case failed on "Erstes Konto" and "Mein erstes Girokonto".
-- **The subscription scan's modal is 720 px tall at most, with its header and actions pinned.**
-  On Bills and Import, `SubscriptionScanModal` was `max-height: calc(100dvh - 2rem)`, and the whole
-  panel scrolled in `.body`: at 2560x1440 it measured 1,408 px from the top of the screen to the
-  bottom, and the Add sat after the last row. `.modal` is now `min(720px, calc(100dvh - 2rem))`
-  (no cap at 620 px wide and below, where a phone keeps the whole screen). The panel's rows, its
-  Already tracked list and its notice are one block, `.scroll` (`data-test-id="sub-scan-scroll"`);
-  inside the modal only that block scrolls (`.modal .scroll`), between the header and the footer
-  (`sub-scan-footer`, the total, Rescan and Add), which gets a top rule. `.body` is a flex column
-  with `overflow: hidden`. Embedded in the setup wizard `.scroll` is a plain column with the
-  panel's 12 px gap, and the wizard's middle scrolls as before. Frontend only. Guards:
-  `SubscriptionScan.test.tsx` "the scan in its modal" (the rows inside the scroll block, the
-  actions and the heading outside it; the cap and the one scrolling block in the stylesheet) and
-  `subscription-scan-server.spec.ts` "the subscription scan modal on a tall screen @smoke" (16
-  detected payments at 2560x1440, 1920x1080 and 390x844: the modal within 720 px, or the screen on
-  the phone; the heading and Add in place before and after the list scrolls to its end). Both fail
-  on the old stylesheet and markup: the spec measured 1,408 px at 2560x1440.
+  - **Round 4: compound tails, other scripts and digits.** Whole words dropped every German
+    compound: "Stadtsparkasse Giro" and "Kreissparkasse Köln", common names, no longer named
+    Sparkasse. Whole word stays the default; a bank commonly at the tail of a compound
+    (`COMPOUND_TAILS`) is named by a word that ends in it, letters before and none after
+    ("Kreissparkasse Köln" yes, "Sparkassen Giro" and "Sparkassenbuch" no). Of the banks the app
+    reads, only `sparkasse` is marked; Volksbank and Raiffeisenbank have no reader. A letter of
+    another script is now an edge, as only Latin letters (and marks) join a word made of a Latin
+    id: "Revolut口座" and "ING銀行" name their banks, "éING" still does not. A digit joins the
+    word only on a side where the id's own character is a digit: "N267 account" is not N26,
+    "ING2" and "Erste2" still name theirs. "Erstes Konto" still does not name Erste. Tests: three
+    cases in the same file, one per rule; with `COMPOUND_TAILS` empty, with `\p{L}` in place of
+    the Latin script, or with digits never joining, its case fails.
+    On Bills and Import, `SubscriptionScanModal` was `max-height: calc(100dvh - 2rem)`, and the whole
+    panel scrolled in `.body`: at 2560x1440 it measured 1,408 px from the top of the screen to the
+    bottom, and the Add sat after the last row. `.modal` is now `min(720px, calc(100dvh - 2rem))`
+    (no cap at 620 px wide and below, where a phone keeps the whole screen). The panel's rows, its
+    Already tracked list and its notice are one block, `.scroll` (`data-test-id="sub-scan-scroll"`);
+    inside the modal only that block scrolls (`.modal .scroll`), between the header and the footer
+    (`sub-scan-footer`, the total, Rescan and Add), which gets a top rule. `.body` is a flex column
+    with `overflow: hidden`. Embedded in the setup wizard `.scroll` is a plain column with the
+    panel's 12 px gap, and the wizard's middle scrolls as before. Frontend only. Guards:
+    `SubscriptionScan.test.tsx` "the scan in its modal" (the rows inside the scroll block, the
+    actions and the heading outside it; the cap and the one scrolling block in the stylesheet) and
+    `subscription-scan-server.spec.ts` "the subscription scan modal on a tall screen @smoke" (16
+    detected payments at 2560x1440, 1920x1080 and 390x844: the modal within 720 px, or the screen on
+    the phone; the heading and Add in place before and after the list scrolls to its end). Both fail
+    on the old stylesheet and markup: the spec measured 1,408 px at 2560x1440.
 - **A failed Add in the scan says so above the Add, in the pinned footer.** Review of 19 Nov: the
   scan's notice (`FormNotice`, `sub-scan-notice`) sat at the end of the rows inside `.scroll`, so
   under a long list a refused subscription ("Couldn't add ...") was out of view while the Add it
