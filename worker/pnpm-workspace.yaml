@@ -1,0 +1,10 @@
+# worker/ is outside the root workspace and installs on its own (--ignore-workspace).
+#
+# The same overrides as package.json's "pnpm.overrides", in the place pnpm 11 reads them. pnpm 10
+# under --ignore-workspace reads only package.json; pnpm 11, which Dependabot writes lockfiles
+# with, reads only this file. CI's frozen pnpm 10 install refuses a lockfile whose overrides block
+# does not match (ERR_PNPM_LOCKFILE_CONFIG_MISMATCH), so both files carry the same list.
+# frontend/src/__tests__/pnpmOverridesInSync.test.ts fails when they drift.
+overrides:
+  "sharp@<0.35.5": "0.35.5"
+  "undici@<7.30.1": "7.30.1"
