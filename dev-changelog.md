@@ -3054,6 +3054,12 @@ check')` first, as the cushion and debt cases do.
   passed on the loan-chart branch, which has no such wait; on the merge they failed every time.
   Both specs now look inside
   `bill-calendar-grid`.
+- **The scan's notice for a deleted category is the one the spec expects.**
+  `subscription-form-errors.spec.ts` still expected the Worker's words, "Choose a category from
+  the list, or leave it blank.", for a scan row whose category was deleted in another tab. Since
+  `fix(scan)` (9429abd3) the scan says what failed and sends you to Bills: "The scan chose a
+  category this profile doesn't have. Add it from Bills and pick one there." The spec now expects
+  that, in both modes.
 - **A bank's name counts in an account's name only where no letter touches it.**
   `resolveTargetAccount` (`shared/bankImport/accountResolver.ts`) took an account whose name or
   bank name held the bank's id anywhere, so an ING statement went into the first account with
