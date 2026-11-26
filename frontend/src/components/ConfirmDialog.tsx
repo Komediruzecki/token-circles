@@ -1,5 +1,10 @@
 import { For, Index, Show } from 'solid-js'
-import { acceptConfirm, confirmRequests, resolveConfirm } from '../core/confirmStore'
+import {
+  acceptConfirm,
+  chooseAlternative,
+  confirmRequests,
+  resolveConfirm,
+} from '../core/confirmStore'
 import { dialogFocus } from '../utils/dialogFocus'
 import styles from './ConfirmDialog.module.css'
 import { OrbitSpinner } from './OrbitSpinner'
@@ -103,6 +108,20 @@ export default function ConfirmDialog() {
                 >
                   {req().error || req().stalled ? 'Close' : req().cancelText}
                 </button>
+                <Show when={req().alternativeText}>
+                  {(text) => (
+                    <button
+                      class={styles.btnCancel}
+                      data-test-id="confirm-alternative"
+                      disabled={req().busy}
+                      onClick={() => {
+                        chooseAlternative(req().id)
+                      }}
+                    >
+                      {text()}
+                    </button>
+                  )}
+                </Show>
                 <button
                   class={`${styles.btnConfirm} ${req().danger ? styles.btnDanger : ''}`}
                   data-test-id="confirm-accept"

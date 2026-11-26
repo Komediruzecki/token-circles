@@ -197,10 +197,15 @@ vi.mock('../../core/api', async (importOriginal) => {
   }
 })
 
-// Deletes ask first through the shared modal. Answer yes, so the click runs the write.
+// Deletes ask first through the shared modal, and a buy of a ticker already held asks whether to
+// merge. Answer yes and Merge, so the click runs the write.
 vi.mock('../../core/confirmStore', async (importOriginal) => {
   const original = await importOriginal<Record<string, unknown>>()
-  return { ...original, showConfirm: vi.fn(async () => true) }
+  return {
+    ...original,
+    showConfirm: vi.fn(async () => true),
+    showChoice: vi.fn(async () => 'confirm'),
+  }
 })
 
 let host: HTMLDivElement

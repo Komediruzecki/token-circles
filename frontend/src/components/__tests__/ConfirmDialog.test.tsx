@@ -9,7 +9,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { render } from 'solid-js/web'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { confirmRequests, resolveConfirm, showConfirm } from '../../core/confirmStore'
+import { confirmRequests, resolveConfirm, showChoice, showConfirm } from '../../core/confirmStore'
 import ConfirmDialog from '../ConfirmDialog'
 
 let host: HTMLDivElement
@@ -76,6 +76,42 @@ describe('the confirm dialog', () => {
     await expect(answer).resolves.toBe(false)
     expect(deleted).toBe(false)
     expect(confirmRequests()).toHaveLength(0)
+  })
+
+  it('shows a third choice between Cancel and Confirm only when asked for one', async () => {
+    void showConfirm('Delete it?')
+    expect([...shown().dialog.querySelectorAll('button')].map((b) => b.textContent)).toEqual([
+      'Cancel',
+      'Confirm',
+    ])
+    dispose?.()
+    for (const req of confirmRequests()) resolveConfirm(req.id, false)
+
+    const answer = showChoice('Merge this buy in?', {
+      confirmText: 'Merge',
+      alternativeText: 'Add separately',
+    })
+    const { dialog } = shown()
+    expect([...dialog.querySelectorAll('button')].map((b) => b.textContent)).toEqual([
+      'Cancel',
+      'Add separately',
+      'Merge',
+    ])
+    dialog.querySelector<HTMLButtonElement>('[data-test-id="confirm-alternative"]')!.click()
+    await expect(answer).resolves.toBe('alternative')
+  })
+
+  it('takes Escape on a question with three choices as Cancel', async () => {
+    const answer = showChoice('Merge this buy in?', {
+      confirmText: 'Merge',
+      alternativeText: 'Add separately',
+    })
+    shown()
+    await new Promise((r) => setTimeout(r, 0))
+    ;(document.activeElement ?? document.body).dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+    )
+    await expect(answer).resolves.toBe('cancel')
   })
 
   it('makes its buttons 44px tall on a phone', () => {

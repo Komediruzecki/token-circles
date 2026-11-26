@@ -3103,6 +3103,23 @@ check')` first, as the cushion and debt cases do.
   Categories and Budgets, which failed its six alone). Its seventh case Tabs to the (i) in Add
   transaction: the panel opens on focus, Escape shuts it with the form still open, Enter pins it
   and Enter shuts it, and Tab goes on inside the form.
+- **The holding merge question has three answers: Merge, Add separately and Cancel.** Adding a
+  buy of a ticker the profile already holds asked one question with two buttons, and Cancel meant
+  "add it as a holding of its own", so Escape or a click outside saved a second holding. Cancel,
+  Escape and a click outside now save nothing and leave the form as it was typed (the form's
+  `NOT_SENT`), Add separately adds the holding of its own, and Merge merges as before. The
+  question ends "Add separately keeps it as a holding of its own." in place of "Choose Cancel to
+  add it as a separate holding." `core/confirmStore.ts` has `showChoice`, which asks with a third
+  button (`alternativeText`) between Cancel and Confirm and answers 'confirm', 'alternative' or
+  'cancel'; `showConfirm` answers true or false as before.
+- **Tests:** `holdingForm.test.tsx` asks the question in the real dialog. Escape saves nothing
+  and keeps the shares, price and date as typed; before the change it saved a second holding
+  (shares `[10, 2]` where `[10]` was expected). A click outside and Cancel do the same. The
+  buttons read Cancel, Add separately, Merge, and Add separately adds the holding. With the Cancel
+  line taken out of `holdingForm.ts`, Escape and Cancel merge (`[12]`) and both cases fail.
+  `pagesFollowWrites.test.tsx`, which answers deletes with yes, answers the merge with Merge.
+  `confirmStore.test.ts` checks the three answers and that a plain confirm has no third button,
+  and `ConfirmDialog.test.tsx` the third button's place and that Escape answers 'cancel'.
 - **No extra-payment label stands on the loan's line.** A label above its mark and to the left of it
   was placed at the mark's height, where the line has not yet come down to the mark, so the line ran
   through it. The review's sweep (`LoanPayoffChart` in jsdom: the boat with one extra payment at
