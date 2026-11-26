@@ -48,5 +48,11 @@ export default defineConfig({
       '../packages/pwa-kit/test/**/*.test.ts',
     ],
     setupFiles: ['./src/test-setup.ts'],
+    // Load solid-js natively, as vite-plugin-solid did for every jsdom run up to 2.11.14. 2.11.17
+    // inlines it through Vite instead unless the project says otherwise, and an inlined runtime is
+    // one more module `vi.resetModules()` throws away: a component imported after the reset gets a
+    // fresh Solid while the test's static `render` keeps the first, so onMount and effects never
+    // run (Turnstile.blocked, captchaForms and nine more files failed 127 tests that way).
+    server: { deps: { external: [/solid-js/] } },
   },
 })
