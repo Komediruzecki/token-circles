@@ -3032,6 +3032,16 @@ check')` first, as the cushion and debt cases do.
 - **Tests:** `src/features/__tests__/apiAccess.test.tsx` creates a token from a focused Create
   token, acknowledges it and fails unless focus is on the name field; before the change focus was
   on `<body>`.
+- **Specs: five cases that never ran say so, and two that check little say what they check.** In
+  `transactions-crud.spec.ts` four receipt cases look for the receipt viewer, which no transaction
+  in the e2e fixture can open (none has a receipt), and the type-selector case looks inside the
+  entry form without opening it. Their bodies never ran, and round 7's full run counted all five as
+  passed. Each is `test.fixme` now with its reason as an annotation, so the report lists them as
+  skipped: 5 skipped and 99 passed over this spec and `retirement-crud.spec.ts`. The two
+  `retirement-crud.spec.ts` cases titled for the empty state both check that nothing with the
+  test id `empty-state` is shown, and Retirement renders nothing with that test id, so they pass
+  whatever the page shows; they are named for that now, the second as the same check again
+  (Playwright refuses two tests with one title).
 - **No extra-payment label stands on the loan's line.** A label above its mark and to the left of it
   was placed at the mark's height, where the line has not yet come down to the mark, so the line ran
   through it. The review's sweep (`LoanPayoffChart` in jsdom: the boat with one extra payment at

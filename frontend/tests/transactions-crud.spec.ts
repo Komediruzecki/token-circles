@@ -218,8 +218,19 @@ test.describe('Transactions CRUD Operations', () => {
     expect(true).toBeTruthy()
   })
 
-  test('should have receipt modal with preview', async ({ page }) => {
-    // Dormant unless a receipt is open; selectors migrated to test-ids for when it is.
+  // These four look for the receipt viewer, which opens from a transaction's receipt. No transaction
+  // in the e2e fixture has one, and none of them opens it, so their bodies never ran, and the report
+  // counted them as passed. Marked fixme with that reason until a receipt is seeded and opened.
+  const noReceipt = {
+    annotation: {
+      type: 'reason',
+      description:
+        'No transaction in the e2e fixture has a receipt, so the receipt viewer never opens.',
+    },
+  }
+
+  test.fixme('should have receipt modal with preview', noReceipt, async ({ page }) => {
+    // Selectors migrated to test-ids for when a receipt is open.
     const receiptModal = page.getByTestId('receipt-modal')
     if (await receiptModal.isVisible({ timeout: 1000 }).catch(() => false)) {
       await expect(receiptModal).toBeVisible()
@@ -227,21 +238,21 @@ test.describe('Transactions CRUD Operations', () => {
     }
   })
 
-  test('should have receipt metadata section', async ({ page }) => {
+  test.fixme('should have receipt metadata section', noReceipt, async ({ page }) => {
     const receiptModal = page.getByTestId('receipt-modal')
     if (await receiptModal.isVisible({ timeout: 1000 }).catch(() => false)) {
       await expect(page.getByTestId('receipt-meta-item')).toHaveCount(4)
     }
   })
 
-  test('should have receipt download button', async ({ page }) => {
+  test.fixme('should have receipt download button', noReceipt, async ({ page }) => {
     const receiptModal = page.getByTestId('receipt-modal')
     if (await receiptModal.isVisible({ timeout: 1000 }).catch(() => false)) {
       await expect(page.getByTestId('receipt-download')).toBeVisible()
     }
   })
 
-  test('should have receipt delete button', async ({ page }) => {
+  test.fixme('should have receipt delete button', noReceipt, async ({ page }) => {
     const receiptModal = page.getByTestId('receipt-modal')
     if (await receiptModal.isVisible({ timeout: 1000 }).catch(() => false)) {
       await expect(page.getByTestId('receipt-delete')).toBeVisible()
@@ -418,16 +429,25 @@ test.describe('Transactions CRUD Operations', () => {
     expect(await page.getByTestId('transactions-row').count()).toBeGreaterThan(0)
   })
 
-  test('should have filter buttons (if visible)', async ({ page }) => {
-    await navigateToRoute(page, 'transactions')
+  // The type selector is inside the entry form, which is shut here, so the body never ran.
+  test.fixme(
+    'should have filter buttons (if visible)',
+    {
+      annotation: {
+        type: 'reason',
+        description: 'The type selector is inside the entry form, which this case never opens.',
+      },
+    },
+    async ({ page }) => {
+      await navigateToRoute(page, 'transactions')
 
-    // The type selector lives inside the (closed) transaction modal here, so this stays guarded.
-    const txTypeSelector = page.getByTestId('tx-type-selector')
-    const hasSelector = await txTypeSelector.isVisible({ timeout: 2000 }).catch(() => false)
-    if (hasSelector) {
-      await expect(txTypeSelector).toBeVisible()
+      const txTypeSelector = page.getByTestId('tx-type-selector')
+      const hasSelector = await txTypeSelector.isVisible({ timeout: 2000 }).catch(() => false)
+      if (hasSelector) {
+        await expect(txTypeSelector).toBeVisible()
+      }
     }
-  })
+  )
 
   test('should allow submitting transaction form with valid data', async ({ page }) => {
     await navigateToRoute(page, 'transactions')
