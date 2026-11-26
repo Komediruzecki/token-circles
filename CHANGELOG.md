@@ -55,7 +55,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Starting balances stay with their file.** Cancel an import or remove a file in setup, and the next file's accounts could open on the starting balances of the one you set aside, like a YNAB register's, instead of their own.
 - **The three-dot menu on a subscription works from the keyboard.** It opens on its first item with a ring around it, the arrows move through the rest, and Escape or Tab takes you back to the button.
 - **The (i) on Dashboard's Net Worth, Income, Expenses and Balance cards opens its explanation right under the icon.** It opened about 430 px lower, where the card cut it off, so on a laptop or a phone you saw nothing.
-- **Dialogs open with the cursor inside, close with Escape, and put you back on the button that opened them.** The Quick add button no longer sits on top of an open dialog.
+- **Dialogs open with the cursor inside, keep Tab inside them, close with Escape, and put you back on the button that opened them.** The Quick add button no longer sits on top of an open dialog.
 
 ## [5.17.6] — 2026-11-01
 
