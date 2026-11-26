@@ -173,6 +173,7 @@ export async function settleFetches(page: Page, quietMs = 1500, timeoutMs = 20_0
     } else if (Date.now() - since >= quietMs) {
       return
     }
+    // eslint-disable-next-line sonarjs/no-fixed-wait-in-tests -- the poll interval of the quiet-period loop above
     await page.waitForTimeout(200)
   }
 }

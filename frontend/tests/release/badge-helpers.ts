@@ -147,6 +147,7 @@ export async function environmentBadges(page: Page): Promise<string[]> {
  * come from the app's own trigger, never from this call.
  */
 export async function settleBadges(page: Page): Promise<void> {
+  // eslint-disable-next-line sonarjs/no-fixed-wait-in-tests -- outlasts AchievementsHost's 1.2 s debounce, which has no observable end
   await page.waitForTimeout(1_500)
   await page.evaluate(async () => {
     const spec = '/src/core/achievementsStore.ts'

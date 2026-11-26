@@ -68,6 +68,7 @@ export async function openProfileMenu(page: Page): Promise<void> {
   if (!(await profileMenuIsOpen(page))) await profileButton(page).click()
   await expect.poll(() => profileMenuIsOpen(page), { message: 'profile menu opens' }).toBe(true)
   // Let the max-height transition finish, so a row is not still moving under the click.
+  // eslint-disable-next-line sonarjs/no-fixed-wait-in-tests -- the max-height transition fires no event to wait on
   await page.waitForTimeout(250)
 }
 
@@ -173,6 +174,7 @@ export function trackApi(page: Page) {
       const end = Date.now() + timeoutMs
       while (Date.now() < end) {
         if (Date.now() - lastAt >= quietMs) return
+        // eslint-disable-next-line sonarjs/no-fixed-wait-in-tests -- the poll interval of the quiet-period loop above
         await page.waitForTimeout(200)
       }
     },
