@@ -189,10 +189,11 @@ export function ImportDataEntry(props: {
               name: a list of tabs to choose from here only ever held that one, and choosing it read
               the same tab again. So the line says how to pick a tab instead. In the form, under
               the field it explains: after it, the page's 24 px gap put it 40 px below the field.
+              It no longer offers "or publish it": neither runtime can fetch a published link.
             */}
             <p class={`${styles.sheetsInfo} ${styles.sheetsHelp}`} data-test-id="import-sheet-help">
-              Share the sheet so anyone with the link can view it, or publish it. It reads the tab
-              your link opens on: for another tab, open that tab and copy its link.
+              Share the sheet so anyone with the link can view it. It reads the tab your link opens
+              on: for another tab, open that tab and copy its link.
             </p>
           </form>
           <StepMessage flow={flow} />

@@ -50,6 +50,8 @@ vi.mock('../../../core/apiFetch', async (importOriginal) => {
 const LEDGER = 'https://docs.google.com/spreadsheets/d/ledger-sheet/edit#gid=0'
 const PRIVATE = 'https://docs.google.com/spreadsheets/d/private-sheet/edit'
 const EMPTY = 'https://docs.google.com/spreadsheets/d/empty-sheet/edit'
+/** A link from Publish to web: its id comes after /d/e/, and neither runtime can fetch it. */
+const PUBLISHED = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vExampleOnly/pubhtml'
 const CSV = 'Date,Amount,Description\n2026-08-01,-5.00,Coffee\n2026-08-02,-12.40,Lunch\n'
 const GVIZ = `/*O_o*/
 google.visualization.Query.setResponse(${JSON.stringify({
@@ -152,6 +154,13 @@ const describedBy = (el: HTMLElement): string =>
     .join(' | ')
 
 const byTestId = (id: string) => host.querySelector<HTMLElement>(`[data-test-id="${id}"]`)
+
+/** What local-first asked Google, or the proxy in front of it, for. */
+const googleAsked = () =>
+  vi
+    .mocked(globalThis.fetch)
+    .mock.calls.map(([input]) => String(input instanceof Request ? input.url : input))
+    .filter((url) => url.includes('docs.google.com') || url.includes('corsproxy'))
 const inputOf = (id: string) => byTestId(id) as HTMLInputElement
 const buttonOf = (id: string) => byTestId(id) as HTMLButtonElement
 
@@ -215,6 +224,28 @@ describe('Connected Sources: Add a sheet', () => {
     expect(net.sent).toEqual([])
     expect(await storedSources()).toEqual([])
     expect(failureToasts()).toEqual([])
+  })
+
+  it('marks a link from Publish to web in its own words, and sends nothing', async () => {
+    await openAdd()
+    type(urlInput(), PUBLISHED)
+    submit(save())
+    await vi.waitFor(() => {
+      expect(urlInput().getAttribute('aria-invalid')).toBe('true')
+    })
+    expect(describedBy(urlInput())).toContain(M.published)
+    expect(describedBy(urlInput())).not.toContain(M.url)
+    expect(net.sent).toEqual([])
+    expect(googleAsked()).toEqual([])
+    expect(await storedSources()).toEqual([])
+  })
+
+  it('asks for a sheet shared by its link, not a published one', async () => {
+    await openAdd()
+    expect(urlInput().placeholder).not.toMatch(/publish/i)
+    const form = byTestId('source-add-form')?.textContent ?? ''
+    expect(form).toContain('Share the sheet so anyone with the link can view it.')
+    expect(form).not.toMatch(/publish/i)
   })
 
   it('marks a name too long to keep, and sends nothing', async () => {
@@ -391,6 +422,29 @@ describe("the Import page's Google Sheets link", () => {
     expect(net.sent).toEqual([])
     expect(flow.error()).toBeNull()
     expect(failureToasts()).toEqual([])
+  })
+
+  it('marks a link from Publish to web in its own words, fetches nothing, and leaves the banner empty', async () => {
+    const flow = await openSheets()
+    type(urlInput(), PUBLISHED)
+    submit(fetchButton())
+    await vi.waitFor(() => {
+      expect(urlInput().getAttribute('aria-invalid')).toBe('true')
+    })
+    expect(describedBy(urlInput())).toContain(M.published)
+    expect(describedBy(urlInput())).not.toContain(M.url)
+    expect(document.activeElement).toBe(urlInput())
+    expect(net.sent).toEqual([])
+    expect(googleAsked()).toEqual([])
+    expect(flow.error()).toBeNull()
+    expect(failureToasts()).toEqual([])
+  })
+
+  it('asks for a sheet shared by its link, not a published one', async () => {
+    await openSheets()
+    const help = byTestId('import-sheet-help')?.textContent ?? ''
+    expect(help).toContain('Share the sheet so anyone with the link can view it.')
+    expect(help).not.toMatch(/publish/i)
   })
 
   it('marks a sheet that cannot be read at its link, not in the banner', async () => {

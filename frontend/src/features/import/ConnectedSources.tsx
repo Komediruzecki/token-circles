@@ -236,7 +236,7 @@ export function ConnectedSources(props: {
                   class={styles.input}
                   type="url"
                   inputmode="url"
-                  placeholder="Google Sheets link (shared or published)"
+                  placeholder="Google Sheets link"
                   required
                   data-test-id="source-url-input"
                   value={addForm.values.url}
@@ -263,9 +263,10 @@ export function ConnectedSources(props: {
               )}
             </Field>
           </div>
+          {/* Not "or Publish": neither runtime can fetch a published link (importSourceSchema). */}
           <p class={styles.hint}>
-            The sheet must be shared as "anyone with the link can view" (or File &rarr; Share &rarr;
-            Publish). We fetch it once to remember its columns.
+            Share the sheet so anyone with the link can view it. We fetch it once to remember its
+            columns.
           </p>
           <div class={styles.addActions}>
             <button

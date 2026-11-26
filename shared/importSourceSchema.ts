@@ -82,6 +82,9 @@ export const IMPORT_SOURCE_LABEL_MAX = 200;
 /** The words for each refusal. A form shows them under the field; a summary joins them. */
 export const IMPORT_SOURCE_MESSAGES = {
   url: 'Paste the link to a Google Sheet. It starts with https://docs.google.com/spreadsheets/d/.',
+  // A link from Publish to web (/d/e/2PACX-...): neither runtime can fetch one.
+  published:
+    'A "Publish to web" link can\'t be read. In Google Sheets, choose Share, set General access to "Anyone with the link", and paste that link instead.',
   label: 'Give the source a name as text, or leave it blank.',
   labelLength: `Keep the name to ${IMPORT_SOURCE_LABEL_MAX} characters or fewer.`,
   kind: 'Choose google_sheet, google_drive_folder or bank_aggregator.',
@@ -101,9 +104,14 @@ export interface SheetLink {
   gid: string | null;
 }
 
-/** A Google Sheet's link, trimmed, or why not: it needs `/d/<the sheet's id>`. */
+/**
+ * A Google Sheet's link, trimmed, or why not: it needs `/d/<the sheet's id>`. A link from Publish
+ * to web, `/d/e/<an id of its own>`, has its own words: neither runtime can fetch one (its id was
+ * read as "e"), so the person is told which link to paste instead of being sent to a failed fetch.
+ */
 export function readSheetUrl(raw: unknown): Read<SheetLink> {
   const url = typeof raw === 'string' ? raw.trim() : '';
+  if (/\/d\/e\/[a-zA-Z0-9-_]+/.test(url)) return { error: M.published };
   const id = url.match(/\/d\/([a-zA-Z0-9-_]+)/)?.[1];
   if (!id) return { error: M.url };
   return { value: { url, id, gid: url.match(/[?&#]gid=([0-9]+)/)?.[1] ?? null } };

@@ -416,6 +416,17 @@ export const imports = [
       error: IMPORT_SOURCE_MESSAGES.url,
       fields: { url: IMPORT_SOURCE_MESSAGES.url },
     });
+
+    // A link from Publish to web names no sheet either runtime can fetch (its id was read as "e"),
+    // so it is refused at the link in words that say which link to paste, and nothing is fetched.
+    const published = await api.post('/api/import/googlesheet', {
+      url: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vContractOnly/pubhtml',
+    });
+    expect(published.status).toBe(400);
+    expect(published.body).toEqual({
+      error: IMPORT_SOURCE_MESSAGES.published,
+      fields: { url: IMPORT_SOURCE_MESSAGES.published },
+    });
   }),
 
   scenario('a spreadsheet file is uploaded for the mapping step', async (api, expect) => {

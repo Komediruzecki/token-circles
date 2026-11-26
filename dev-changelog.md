@@ -2814,6 +2814,30 @@ check')` first, as the cushion and debt cases do.
     published link (`/d/e/2PACX…`) as id `e`, so `sourceForSheet` took any two published sheets
     for one. It reads the id after the `e` now. Fetching a published link is unchanged: both
     runtimes read it as id `e` and fail to fetch it, as before.
+  - **A published link is refused at its field, and no line asks for one.** Round 4 of the review:
+    the Import page's help said "or publish it" and Add a sheet's "(or File → Share → Publish)",
+    though neither runtime can fetch the link Publish to web gives. `readSheetUrl`
+    (`shared/importSourceSchema.ts`) now refuses a `/d/e/` link in words of its own,
+    `IMPORT_SOURCE_MESSAGES.published`: "A "Publish to web" link can't be read. In Google Sheets,
+    choose Share, set General access to "Anyone with the link", and paste that link instead." So
+    the Import page's link, Add a sheet's, and `POST /api/import/googlesheet` and
+    `/api/import-sources` on both runtimes mark it at the link before anything is fetched. Both
+    lines ask for a sheet shared by its link, and Add a sheet's placeholder lost "(shared or
+    published)". Fetching is unchanged. A source saved with a published link before (only the API
+    could: Add a sheet reads the sheet first) keeps it, as does a backup restore, which checks no
+    link: its Sync says these words at its row where it said the read failed, and the daily sync
+    skips it as it did.
+  - **Tests:** `importSourceSchema.test.ts` (three published links refused by the link rule, the
+    fetch's check and a new source's; an id that starts with `e` still read), the contract
+    scenarios "a shared Google Sheet is read for the mapping step" and "a connected source that
+    cannot be stored is refused at its field, and nothing is saved" on both runtimes,
+    `sheetForms.test.tsx` (each form marks one at the link and asks Google for nothing; neither
+    line nor the placeholder says publish) and `connectedSources.autoSyncError.test.tsx` (a saved
+    one's Sync). With the rule taken out, the Worker answered 501 and local-first 422, each after
+    asking Google, both saved a source with one (201), the forms asked Google and marked "Could
+    not access the Google Sheet from the browser.", and a saved one's Sync asked the runtime to
+    read it. `destructive-data-integrity.test.ts` saved a source with a published link; it uses
+    a shared one now.
   - **A link with no gid is tab 0.** `sourceForSheet` takes a link with no gid and one with
     `gid=0` as the same tab: Google opens a link without a gid on the first tab, and both runtimes
     read the first tab for it, which is gid 0 unless that tab was deleted or moved. No runtime

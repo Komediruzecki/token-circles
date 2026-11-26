@@ -10,14 +10,17 @@
  */
 import { render } from 'solid-js/web'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { IMPORT_SOURCE_MESSAGES } from '../../../../../shared/importSourceSchema'
 import { setPage } from '../../../core/appStore'
+
+const SHARED = 'https://docs.google.com/spreadsheets/d/abc123/edit'
 
 const source = {
   id: 1,
   profile_id: 7,
   kind: 'google_sheet',
   label: 'Main',
-  config: { url: 'https://docs.google.com/spreadsheets/d/abc123/edit', sheetName: 'Sheet1' },
+  config: { url: SHARED, sheetName: 'Sheet1' },
   mapping: { date: 'Date', amount: 'Amount', description: 'Description' },
   category_types: null,
   schedule: 'manual',
@@ -102,6 +105,7 @@ let dispose: (() => void) | undefined
 beforeEach(() => {
   executeShouldFail = false
   fetchShouldFail = false
+  source.config.url = SHARED
   apiFetch.mockClear()
   addToast.mockClear()
   host = document.createElement('div')
@@ -164,6 +168,18 @@ describe('Auto sync error surfacing', () => {
 
     expect(rowError()).toBeNull()
     expect(addToast.mock.calls.some(([, kind]) => kind === 'success')).toBe(true)
+  })
+
+  // Only the API could save one (Add a sheet reads the sheet first), but a source saved with a link
+  // from Publish to web says which link would work, where its Sync said the read failed.
+  it("says a published link's words at the source's row, and asks no runtime to read it", async () => {
+    source.config.url = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vExampleOnly/pubhtml'
+    await mount()
+    await sync()
+
+    expect(rowError()?.textContent).toBe(IMPORT_SOURCE_MESSAGES.published)
+    expect(apiFetch.mock.calls.map(([url]) => url)).not.toContain('/api/import/googlesheet')
+    expect(addToast).not.toHaveBeenCalled()
   })
 
   it('does not add an error when the import succeeds', async () => {
