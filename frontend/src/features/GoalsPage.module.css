@@ -546,7 +546,6 @@
 
 .goals-page .goal-progress .progress-percent {
   font-family: var(--font-display);
-  word-spacing: var(--font-display-word-spacing);
   font-size: 22px;
   font-weight: 600;
   color: var(--text);

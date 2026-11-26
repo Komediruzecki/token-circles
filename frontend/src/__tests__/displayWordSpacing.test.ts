@@ -1,12 +1,19 @@
 /**
- * Words in the display face stand as far apart as the body's.
+ * Words in the display face stand as far apart as the body's. Figures keep the face's own space.
  *
  * Fraunces, the display face, has a narrow space: 0.19em once a heading's -0.01em tracking takes
  * its share, where Inter, the body face, leaves 0.27em. At 15 px that is 2.9 px against 4, and
  * "Map columns" read almost as one word (review of 19 Nov 2026). Widening that one heading left
  * "Recent Imports", on the same page, with the narrow space. So the space goes wherever the face
- * does: every rule that sets `--font-display` also sets `--font-display-word-spacing`. The h1/h2
- * rule sets it on every heading, so a heading that a class moves to another face gives it back.
+ * sets words: every rule that sets `--font-display` for a heading or a title also sets
+ * `--font-display-word-spacing`. The h1/h2 rule sets it on every heading, so a heading that a
+ * class moves to another face gives it back.
+ *
+ * A figure goes without. An amount written the hr-HR or de-DE way has a no-break space in it
+ * ("1.234,00 €"), and Chromium widens that space too: by 2.24 px in a 28 px `.metric-value`, which
+ * keeps to one line and ends in an ellipsis, so an amount that just fit would lose its last
+ * characters, and nothing reads better for it. A rule that tracks its letters open, like the boot
+ * screen's name at +0.02em, goes without as well.
  *
  * Like cssModuleNaming.test.ts, these read the files off disk: no component test applies the
  * stylesheets.
@@ -47,6 +54,10 @@ const SETS_DISPLAY_FACE = /(?:^|[;\s])font-family\s*:\s*var\(--font-display\b/
 const SETS_DISPLAY_SPACE = /(?:^|[;\s])word-spacing\s*:\s*var\(--font-display-word-spacing\)/
 const FONT_FAMILY = /(?:^|[;\s])font-family\s*:\s*([^;]+)/
 const GIVES_SPACE_BACK = /(?:^|[;\s])word-spacing\s*:\s*normal\b/
+const TRACKING = /(?:^|[;\s])letter-spacing\s*:\s*([^;]+)/
+
+/** The words of a class name that say it holds a figure: an amount, a value or a percentage. */
+const FIGURE_WORDS = new Set(['value', 'amount', 'amt', 'percent', 'pct'])
 
 const toCamel = (name: string) => name.replace(/-(\w)/g, (_, c: string) => c.toUpperCase())
 
@@ -56,21 +67,59 @@ function endsOnClass(selector: string, name: string): boolean {
   return [...last.matchAll(/\.([\w-]+)/g)].some(([, cls]) => cls === name || toCamel(cls) === name)
 }
 
-describe('the display face word spacing', () => {
-  it('is set by every rule that sets the display face', () => {
-    const display: string[] = []
-    const bare: string[] = []
-    for (const file of files(SRC, /\.css$/)) {
-      for (const rule of rules(file)) {
-        if (!SETS_DISPLAY_FACE.test(rule.body)) continue
-        const where = `${relative(SRC, file)}: ${rule.selectors.join(', ')}`
-        display.push(where)
-        if (!SETS_DISPLAY_SPACE.test(rule.body)) bare.push(where)
-      }
+/**
+ * Whether a selector's last compound carries a class named for a figure, like `.coreValue` or
+ * `.metric-value`.
+ */
+function endsOnFigure(selector: string): boolean {
+  const last = selector.split(/[\s>+~]+/).pop() ?? ''
+  return [...last.matchAll(/\.([\w-]+)/g)].some(([, cls]) =>
+    cls.split(/-|(?=[A-Z])/).some((word) => FIGURE_WORDS.has(word.toLowerCase()))
+  )
+}
+
+interface DisplayRule {
+  where: string
+  /** Sets words: not a figure, and its letters are not tracked open. */
+  words: boolean
+  spaced: boolean
+}
+
+/** Every rule that sets the display face, and what it sets. */
+function displayRules(): DisplayRule[] {
+  const found: DisplayRule[] = []
+  for (const file of files(SRC, /\.css$/)) {
+    for (const rule of rules(file)) {
+      if (!SETS_DISPLAY_FACE.test(rule.body)) continue
+      const tracksOpen = Number.parseFloat(TRACKING.exec(rule.body)?.[1] ?? '0') > 0
+      found.push({
+        where: `${relative(SRC, file)}: ${rule.selectors.join(', ')}`,
+        words: !rule.selectors.some(endsOnFigure) && !tracksOpen,
+        spaced: SETS_DISPLAY_SPACE.test(rule.body),
+      })
     }
+  }
+  return found
+}
+
+describe('the display face word spacing', () => {
+  it('is set by every rule that sets words in the display face', () => {
+    const words = displayRules().filter((rule) => rule.words)
     // The walk found the rule every heading takes, so an empty list below means something.
-    expect(display).toContain(`${join('styles', 'index.css')}: h1, h2`)
-    expect(bare).toEqual([])
+    expect(words.map((rule) => rule.where)).toContain(`${join('styles', 'index.css')}: h1, h2`)
+    expect(words.filter((rule) => !rule.spaced).map((rule) => rule.where)).toEqual([])
+  })
+
+  it('is left off a figure, and off a name that tracks its letters open', () => {
+    const without = displayRules().filter((rule) => !rule.words)
+    // The walk found both kinds: the Dashboard's money figures and the boot screen's name.
+    expect(without.map((rule) => rule.where)).toEqual(
+      expect.arrayContaining([
+        `${join('features', 'DashboardPage.module.css')}: .metric-value`,
+        `${join('components', 'OrbitSpinner.module.css')}: .boot-name`,
+      ])
+    )
+    expect(without.filter((rule) => rule.spaced).map((rule) => rule.where)).toEqual([])
   })
 
   it('is 0.08em, declared once beside the face', () => {

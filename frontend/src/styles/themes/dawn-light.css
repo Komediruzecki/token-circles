@@ -137,8 +137,9 @@
   --font-inter: 'Inter', system-ui, -apple-system, sans-serif;
   --font-display: 'Fraunces', Georgia, 'Times New Roman', serif;
   /* Fraunces has a narrow space: 0.19em once a heading's -0.01em tracking takes its share, where
-     Inter leaves 0.27em between words. Every rule that sets the display face adds this, which
-     brings its space to Inter's. */
+     Inter leaves 0.27em between words. Every rule that sets words in the display face (a heading,
+     a title) adds this, which brings its space to Inter's. A figure goes without: the no-break
+     space in an amount like "1.234,00 €" would widen too. */
   --font-display-word-spacing: 0.08em;
   --font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
 

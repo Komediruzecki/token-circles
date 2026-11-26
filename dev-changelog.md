@@ -3189,26 +3189,43 @@ check')` first, as the cushion and debt cases do.
   (`styles/index.css`), and in Chromium the space between the two words was 2.86 px at 15 px
   (0.19em). From the ink of "p" to the ink of "c" that is 0.18em, where Inter leaves 0.27em. Round
   4 widened that heading alone, which left "Recent Imports", on the same page, at 0.205em. The space
-  belongs to the face now: `--font-display-word-spacing: 0.08em` sits beside `--font-display`
-  (`themes/dawn-light.css`), and every rule that sets the face sets `word-spacing` to it: `h1, h2`
-  and the 20 other rules that use the face (titles, card headings, the orbit and ring values, the
-  boot screen's name). `.mappingTitle`'s own rule is gone. Progress's "Your next step" is an h2 that
-  `.eyebrow` sets in Inter, and it takes `word-spacing: normal` back. Measured on 22 screens (every
-  route, a page that does not exist and the sign-in screen) at 1440, 820 and 390 px in both themes,
-  before and after: 690 `h1` and `h2`, and not one gained or lost a line. The two that take two
-  lines, "Compound Interest Projector" and "Emergency Fund Tracker" at 390, took two before. The
-  192 other elements in the face on those screens (values, card titles), measured with the space
-  and again without it, take the same lines and overflow their boxes no more. A value with a no-break space in it (an
-  amount shown with a currency code, "CHF 1,234.00") is 0.08em wider, 2.24 px in a 28 px
-  `.metric-value`; the demo data has none. The PWA install screenshots in `public/screenshots/`
-  show headings in the face and would change if re-shot; they were not, and no test compares them.
+  belongs to the face's words now: `--font-display-word-spacing: 0.08em` sits beside
+  `--font-display` (`themes/dawn-light.css`), and every rule that sets words in the face sets
+  `word-spacing` to it: `h1, h2` and 11 other rules (titles and card headings). The face's figures
+  and the boot screen's name go without it (round 6, below). `.mappingTitle`'s own rule is gone.
+  Progress's "Your next step" is an h2 that `.eyebrow` sets in Inter, and it takes
+  `word-spacing: normal` back. Measured on 22 screens (every route, a page that does not exist and
+  the sign-in screen) at 1440, 820 and 390 px in both themes, before and after: 690 `h1` and `h2`,
+  and not one gained or lost a line. The two that take two lines, "Compound Interest Projector" and
+  "Emergency Fund Tracker" at 390, took two before. The 192 other elements in the face on those
+  screens (values, card titles), measured with the space and again without it, take the same lines
+  and overflow their boxes no more. The PWA install screenshots in `public/screenshots/` show
+  headings in the face and would change if re-shot; they were not, and no test compares them.
   - **Tests:** `import.spec.ts` "the words of each heading on the Import page stand apart": Map
     columns, then Recent Imports after an import, each at least 0.25em and in Fraunces. On round
     4's stylesheets it failed at Recent Imports (0.205em); with the `h1, h2` rule's line taken out
     it fails at Map columns (0.19em). `src/__tests__/displayWordSpacing.test.ts` reads the
-    stylesheets: every rule that sets the face sets the word spacing, the token is 0.08em and
-    declared once, and an `h1` or `h2` that a class sets in another face gives the space back. All
-    three fail on round 4's stylesheets.
+    stylesheets: every rule that sets words in the face sets the word spacing, a rule for a figure
+    or one that tracks its letters open does not, the token is 0.08em and declared once, and an
+    `h1` or `h2` that a class sets in another face gives the space back. All but the second fail
+    on round 4's stylesheets.
+  - **Round 6: figures keep the face's own space.** Round 5 put the word spacing on every rule in
+    the face, figures too. An amount written the hr-HR or de-DE way has a no-break space in it
+    ("1.234,00 €"), and Chromium widens that space like any other. In the Dashboard's net worth
+    figure (`.metric-value`: 28 px, one line, an ellipsis at its end) "1.234,00 €" measured
+    143.45 px with the word spacing and 141.20 px without, so an amount that just fit would be cut
+    short for nothing. The word spacing is on the rules that set words now and off the 8 that set
+    a figure (`.metric-value`, a goal's `.progress-percent`, `.ringAmt`, the four `.coreValue`
+    rules and `.radarPct`) and off the boot screen's name (`.boot-name`), which its +0.02em
+    tracking already opens. The same amount in `.metric-value` measures 141.20 px now, its width
+    with no word spacing. Getting started's heading is an `h3`, which nothing tracks (only the
+    `h1, h2` rule takes -0.01em), and it keeps the word spacing as a heading: set the way its rule
+    sets it (16 px, 600, no tracking), its space is 0.19em without the word spacing and 0.27em
+    with it.
+    - **Tests:** `displayWordSpacing.test.ts` "is left off a figure, and off a name that tracks
+      its letters open" failed on round 5's stylesheets, naming those 9 rules; "is set by every
+      rule that sets words in the display face" fails at `h1, h2` with that rule's line taken
+      out.
 - **Recent Imports' line wraps under its name.** At 390 px an entry's line went on under the
   summary's own marker, so "(12 imported)" started at the row's edge, at 42 px against the name's
   56.3. The marker is an SVG arrow in a column of its own now (`.logSummary` in

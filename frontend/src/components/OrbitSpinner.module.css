@@ -112,7 +112,6 @@
 
 .boot-name {
   font-family: var(--font-display, inherit);
-  word-spacing: var(--font-display-word-spacing);
   font-size: 21px;
   font-weight: 600;
   letter-spacing: 0.02em;

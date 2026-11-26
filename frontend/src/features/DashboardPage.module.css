@@ -167,7 +167,6 @@
 
 .metric-value {
   font-family: var(--font-display);
-  word-spacing: var(--font-display-word-spacing);
   font-size: 28px;
   font-weight: 600;
   letter-spacing: -0.01em;

@@ -169,7 +169,6 @@
 .radarPct {
   margin: 0;
   font-family: var(--font-display);
-  word-spacing: var(--font-display-word-spacing);
   font-size: 30px;
   font-weight: 600;
   color: var(--text);

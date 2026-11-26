@@ -101,7 +101,6 @@
 }
 .ringAmt {
   font-family: var(--font-display, inherit);
-  word-spacing: var(--font-display-word-spacing);
   font-size: 18px;
   font-weight: 700;
   color: var(--text);
