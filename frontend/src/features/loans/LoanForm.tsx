@@ -7,7 +7,7 @@
  * field it is about, a rate period's under the field of its row, and what belongs to no field in
  * the notice at the top.
  */
-import { createEffect, Index, on, onCleanup, onMount, Show } from 'solid-js'
+import { createEffect, Index, on, Show } from 'solid-js'
 import { Field, FormNotice, SubmitButton } from '../../components/form'
 import { apiGet } from '../../core/api'
 import { dialogFocus } from '../../utils/dialogFocus'
@@ -69,7 +69,7 @@ export default function LoanForm(props: Props) {
 
   // Focus goes to the name when the form opens, and back to what opened it when it shuts
   // (dialogFocus). Opened at its rate periods, the first rate field takes it instead, where the
-  // effect above scrolled.
+  // effect above scrolled. Escape shuts it as Cancel does, unless a dialog is open over it.
   const takeFocus = (dialog: HTMLElement) => {
     dialogFocus(dialog, {
       first: () =>
@@ -77,18 +77,11 @@ export default function LoanForm(props: Props) {
           ? ratesRef?.querySelector<HTMLElement>('input, button:not(:disabled)')
           : null) ?? nameRef,
       preventScroll: props.focusRates === true,
+      onEscape: () => {
+        props.onClose()
+      },
     })
   }
-
-  onMount(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') props.onClose()
-    }
-    document.addEventListener('keydown', onKey)
-    onCleanup(() => {
-      document.removeEventListener('keydown', onKey)
-    })
-  })
 
   return (
     <div

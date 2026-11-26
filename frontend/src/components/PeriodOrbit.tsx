@@ -123,10 +123,6 @@ export default function PeriodOrbit(props: Props) {
 
   const onKeyDown = (e: KeyboardEvent) => {
     switch (e.key) {
-      case 'Escape':
-        e.preventDefault()
-        props.onClose()
-        break
       case 'ArrowLeft':
         e.preventDefault()
         setFocusMonth((m) => (m + 11) % 12)
@@ -178,7 +174,13 @@ export default function PeriodOrbit(props: Props) {
         }}
       >
         <div
-          ref={dialogFocus}
+          ref={(el) => {
+            dialogFocus(el, {
+              onEscape: () => {
+                props.onClose()
+              },
+            })
+          }}
           class={styles.panel}
           role="dialog"
           aria-label="Choose period"

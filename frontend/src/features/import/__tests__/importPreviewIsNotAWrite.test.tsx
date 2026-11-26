@@ -152,7 +152,8 @@ describe('the preview dialog', () => {
     await waitFor(() => dialog() !== null, 'the preview to open')
     await waitFor(() => dialog()?.contains(document.activeElement) === true, 'focus in the preview')
 
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    // As a key press sends it: up to the window, where the dialog hears it (dialogFocus).
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
     await waitFor(() => dialog() === null, 'the preview to shut')
     expect(document.activeElement).toBe(button('Fetch and preview Main'))
   })

@@ -330,6 +330,35 @@ test.describe('every dialog takes focus and gives it back @smoke', () => {
     await expect(menus).toHaveCount(loans)
   })
 
+  test('Escape over Add a loan or Add transaction shuts only the shortcuts list on top', async ({
+    page,
+  }) => {
+    // "?" opens the list over the dialog from one of its buttons (in a field it is typed). The
+    // first Escape shuts the list and puts focus back on that button; the next shuts the dialog.
+    const list = page.getByTestId('shortcuts-modal')
+    const listOver = async (dialog: Locator, button: Locator) => {
+      await expect.poll(() => holdsFocus(dialog)).toBe(true)
+      await button.focus()
+      await page.keyboard.type('?')
+      await expect(list).toBeVisible()
+      await page.keyboard.press('Escape')
+      await expect(list).toBeHidden()
+      await expect(dialog).toBeVisible()
+      await expect(button).toBeFocused()
+      await page.keyboard.press('Escape')
+      await expect(dialog).toBeHidden()
+    }
+
+    await navigateToRoute(page, 'loans')
+    await page.getByTestId('add-loan-btn').click()
+    const loan = page.getByTestId('loans-modal')
+    await listOver(loan, loan.getByRole('button', { name: 'Cancel', exact: true }))
+
+    await navigateToRoute(page, 'transactions')
+    await page.getByTestId('add-transaction-btn').click()
+    await listOver(page.getByTestId('tx-modal'), page.getByTestId('tx-cancel-btn'))
+  })
+
   test('The shell: Dashboard Views, Take a Tour, Create Profile, the period and Quick add', async ({
     page,
   }) => {

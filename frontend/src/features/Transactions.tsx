@@ -69,7 +69,7 @@ import { txBaseValue } from '../core/currency'
 import { asOneWrite, entityVersion } from '../core/dataVersions'
 import { handFocusTo } from '../core/domFocus'
 import { takeHashFlag } from '../core/hashRoute'
-import { refetchOnActive, usePageActive } from '../core/pageVisibility'
+import { refetchOnActive } from '../core/pageVisibility'
 import { setPeriod, usePeriod } from '../core/periodStore'
 import { rowsOfProfile } from '../core/quickEntryLists'
 import { dialogFocus, dialogFocusWhile } from '../utils/dialogFocus'
@@ -421,43 +421,11 @@ export default function Transactions() {
   }
 
   // The form stays on the page while shut: focus goes into it each time it opens and back to what
-  // opened it each time it shuts, however it shuts (dialogFocusWhile).
-  //
-  // Escape shuts the entry form, as Cancel does, wherever focus is. Escape is read twice. On its
-  // way in, before anything has had it: is something over the form? A dialog, a menu or an (i)
-  // panel takes Escape for itself, and some shut without saying so, so by the way out they are
-  // gone. On its way out, after every other listener (window hears it last): did something spend
-  // it? Only when neither, and only while this page is shown, does the form shut.
+  // opened it each time it shuts, however it shuts (dialogFocusWhile). Escape shuts it as Cancel
+  // does, wherever focus is, unless something is open over it (a dialog, a menu, an (i) panel) or
+  // another page is shown.
   let txModalRef: HTMLDivElement | undefined
-  dialogFocusWhile(isTransactionModalOpen, () => txModalRef)
-  const transactionsShown = usePageActive('transactions')
-  // An (i) panel exists only while it is open. A dialog can stay in the page while shut and still
-  // say aria-modal, but then it has no box.
-  const somethingOverForm = () =>
-    document.querySelector('[role="tooltip"]') !== null ||
-    Array.from(document.querySelectorAll('[aria-modal="true"], [role="menu"]')).some(
-      (el) => el !== txModalRef && el.getClientRects().length > 0
-    )
-  createEffect(
-    on(isTransactionModalOpen, (open) => {
-      if (!open) return
-      let covered = false
-      const onWayIn = (e: KeyboardEvent) => {
-        if (e.key === 'Escape') covered = somethingOverForm()
-      }
-      const onWayOut = (e: KeyboardEvent) => {
-        if (e.key !== 'Escape' || e.defaultPrevented || covered || !transactionsShown()) return
-        e.preventDefault()
-        _closeModals()
-      }
-      window.addEventListener('keydown', onWayIn, true)
-      window.addEventListener('keydown', onWayOut)
-      onCleanup(() => {
-        window.removeEventListener('keydown', onWayIn, true)
-        window.removeEventListener('keydown', onWayOut)
-      })
-    })
-  )
+  dialogFocusWhile(isTransactionModalOpen, () => txModalRef, { onEscape: _closeModals })
 
   // Close receipt modal
   const closeReceiptModal = () => {
@@ -2338,7 +2306,9 @@ export default function Transactions() {
           }}
         >
           <div
-            ref={dialogFocus}
+            ref={(el) => {
+              dialogFocus(el, { onEscape: closeReceiptModal })
+            }}
             class={`${styles.modal} ${styles.receiptModal}`}
             role="dialog"
             aria-modal="true"

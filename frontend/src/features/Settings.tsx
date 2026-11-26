@@ -1905,12 +1905,17 @@ export default function Settings() {
                             }
                           >
                             <form
-                              ref={dialogFocus}
+                              ref={(el) => {
+                                // Opens in place: Escape cancels it only from inside it.
+                                dialogFocus(el, {
+                                  inPlace: true,
+                                  onEscape: () => {
+                                    closeRename(profile.id)
+                                  },
+                                })
+                              }}
                               {...renameForm.attrs}
                               class={styles.householdRename}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Escape') closeRename(profile.id)
-                              }}
                             >
                               <FormNotice form={renameForm} />
                               <div class={styles.householdRenameRow}>

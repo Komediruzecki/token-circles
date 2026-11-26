@@ -128,8 +128,11 @@ async function sendCode() {
   await settle()
 }
 
+/** Escape as a key press sends it: up to the window, where the dialog hears it (dialogFocus). */
+const escapeKey = () => new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
+
 async function escape() {
-  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+  document.dispatchEvent(escapeKey())
   await settle()
 }
 
@@ -262,8 +265,8 @@ describe('closing the dialog by its own controls takes the entry with it', () =>
     expect(history.length).toBe(length + 1)
     const go = vi.spyOn(history, 'go')
     const popped = nextPop()
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    document.dispatchEvent(escapeKey())
+    document.dispatchEvent(escapeKey())
     expect(await popped).toBe(true)
     await settle()
 

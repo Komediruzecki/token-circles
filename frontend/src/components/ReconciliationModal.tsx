@@ -2,7 +2,7 @@
  * Reconciliation Modal Component
  * Mark transactions as reconciled
  */
-import { createSignal, onCleanup, onMount, Show } from 'solid-js'
+import { createSignal, onMount, Show } from 'solid-js'
 import { api, toast } from '../core/api'
 import { dialogFocusWhile } from '../utils/dialogFocus'
 
@@ -76,17 +76,13 @@ export default function ReconciliationModal(props: ReconciliationModalProps) {
     loadSummary()
   })
 
-  const handleKeyDown = (e: KeyboardEvent) => {
-    if (e.key === 'Escape' && props.isOpen()) props.onClose()
-  }
-  document.addEventListener('keydown', handleKeyDown)
-  onCleanup(() => {
-    document.removeEventListener('keydown', handleKeyDown)
-  })
-
   // Stays on the page while shut: focus goes in each time it opens and back each time it shuts.
   let panelRef: HTMLDivElement | undefined
-  dialogFocusWhile(props.isOpen, () => panelRef)
+  dialogFocusWhile(props.isOpen, () => panelRef, {
+    onEscape: () => {
+      props.onClose()
+    },
+  })
 
   return (
     <div style={{ display: props.isOpen() ? 'block' : 'none' }}>

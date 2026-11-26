@@ -37,6 +37,12 @@ export interface DialogFocusOptions {
    * Either way a dialog under it hears nothing.
    */
   onEscape?: () => void
+  /**
+   * A form that opens in place on the page, not over it (Add money, a profile's rename, Delete
+   * account, the 2FA step). It hears Escape only while focus is in it, and one with no `onEscape`
+   * passes Escape on to the dialog it is in.
+   */
+  inPlace?: boolean
 }
 
 const FIELDS = 'input:not([type="hidden"]), select, textarea, [contenteditable="true"]'
@@ -122,6 +128,7 @@ function giveBack(
 interface OpenDialog {
   dialog: () => HTMLElement | undefined
   onEscape: (() => void) | undefined
+  inPlace: boolean
 }
 
 const openDialogs: OpenDialog[] = []
@@ -138,11 +145,19 @@ function opened(entry: OpenDialog): void {
   listenForEscape()
 }
 
-/** The dialog on top: the last one opened that is drawn. One on a page not shown is not. */
+/**
+ * The dialog Escape is for: the last one opened that is drawn (one on a page not shown is not). A
+ * form open in place is not over the page: it takes Escape only from inside it, and otherwise
+ * Escape goes on to what is under it.
+ */
 function onTop(): OpenDialog | undefined {
+  const active = document.activeElement
   for (let i = openDialogs.length - 1; i >= 0; i--) {
-    const el = openDialogs[i].dialog()
-    if (el && drawn(el)) return openDialogs[i]
+    const entry = openDialogs[i]
+    const el = entry.dialog()
+    if (!el || !drawn(el)) continue
+    if (entry.inPlace && !(entry.onEscape && active !== null && el.contains(active))) continue
+    return entry
   }
   return undefined
 }
@@ -167,7 +182,8 @@ function takenElsewhere(): boolean {
     if (menu.getClientRects().length > 0) return true
   }
   for (const modal of document.querySelectorAll<HTMLElement>('[aria-modal="true"]')) {
-    if (known(modal) || !drawn(modal)) continue
+    // No box: on a page not shown, or taken out of the layout while shut.
+    if (known(modal) || !drawn(modal) || modal.getClientRects().length === 0) continue
     const style = window.getComputedStyle(modal)
     if (style.visibility === 'hidden' || style.pointerEvents === 'none') continue
     return true
@@ -215,7 +231,11 @@ function listenForEscape(): void {
 export function dialogFocus(dialog: HTMLElement, options: DialogFocusOptions = {}): void {
   // Read now, as the dialog is made: nothing inside it has taken focus yet.
   const opener = document.activeElement
-  const entry: OpenDialog = { dialog: () => dialog, onEscape: options.onEscape }
+  const entry: OpenDialog = {
+    dialog: () => dialog,
+    onEscape: options.onEscape,
+    inPlace: options.inPlace === true,
+  }
   opened(entry)
   queueMicrotask(() => {
     focusInto(dialog, options, () => dialog.isConnected)
@@ -233,7 +253,11 @@ export function dialogFocusWhile(
   options: DialogFocusOptions = {}
 ): void {
   let opener: Element | null = null
-  const entry: OpenDialog = { dialog, onEscape: options.onEscape }
+  const entry: OpenDialog = {
+    dialog,
+    onEscape: options.onEscape,
+    inPlace: options.inPlace === true,
+  }
   createEffect(
     on(open, (isOpen, wasOpen) => {
       if (isOpen) {

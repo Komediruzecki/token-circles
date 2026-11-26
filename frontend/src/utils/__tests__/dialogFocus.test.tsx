@@ -381,6 +381,11 @@ describe('Escape, through onEscape', () => {
     return event
   }
 
+  /** jsdom lays nothing out; in a browser a modal on screen has a box. */
+  const onScreen = (el: HTMLElement) => {
+    el.getClientRects = () => [{}] as unknown as DOMRectList
+  }
+
   function Dialog(props: {
     open: () => boolean
     onEscape?: () => void
@@ -609,7 +614,7 @@ describe('Escape, through onEscape', () => {
       <>
         <Dialog open={open} name="bill" onEscape={() => setOpen(false)} />
         <Show when={bar()}>
-          <div role="dialog" aria-modal="true">
+          <div role="dialog" aria-modal="true" ref={onScreen}>
             <input data-test-id="bar-input" />
           </div>
         </Show>
@@ -633,13 +638,77 @@ describe('Escape, through onEscape', () => {
     mount(() => (
       <>
         <Dialog open={open} name="bill" onEscape={() => setOpen(false)} />
-        {/* The scan, faded out and taking no clicks; Auto Categorize, hidden. */}
-        <div role="dialog" aria-modal="true" style={{ 'pointer-events': 'none' }} />
-        <div role="dialog" aria-modal="true" style={{ visibility: 'hidden' }} />
+        {/* The scan, faded out and taking no clicks, and Auto Categorize, hidden: each still has
+            a box. A dialog on a page not shown has none. */}
+        <div role="dialog" aria-modal="true" ref={onScreen} style={{ 'pointer-events': 'none' }} />
+        <div role="dialog" aria-modal="true" ref={onScreen} style={{ visibility: 'hidden' }} />
+        <div role="dialog" aria-modal="true" />
       </>
     ))
     setOpen(true)
     await settle()
+
+    escape()
+    expect(open()).toBe(false)
+  })
+
+  it('gives Escape to a form open in place only while focus is in it', async () => {
+    const [open, setOpen] = createSignal(false)
+    mount(() => (
+      <>
+        <button data-test-id="elsewhere">Edit</button>
+        <Show when={open()}>
+          <form
+            ref={(el) => {
+              dialogFocus(el, { inPlace: true, onEscape: () => setOpen(false) })
+            }}
+          >
+            <input data-test-id="rename" />
+            <button type="button" data-test-id="save">
+              Save
+            </button>
+          </form>
+        </Show>
+      </>
+    ))
+    setOpen(true)
+    await settle()
+    expect(document.activeElement).toBe(byTestId('rename'))
+
+    // Not over the page: Escape on the page around it is not its own.
+    byTestId('elsewhere').focus()
+    escape()
+    expect(open()).toBe(true)
+    // From any control in it.
+    byTestId('save').focus()
+    escape()
+    expect(open()).toBe(false)
+  })
+
+  it('passes Escape from a part open in place, with none of its own, to the dialog around it', async () => {
+    const [open, setOpen] = createSignal(false)
+    mount(() => (
+      <Show when={open()}>
+        <div
+          role="dialog"
+          ref={(el) => {
+            dialogFocus(el, { onEscape: () => setOpen(false) })
+          }}
+        >
+          {/* The 2FA step inside the sign-in dialog: it takes focus, and Escape is the dialog's. */}
+          <form
+            ref={(el) => {
+              dialogFocus(el, { inPlace: true })
+            }}
+          >
+            <input data-test-id="code" />
+          </form>
+        </div>
+      </Show>
+    ))
+    setOpen(true)
+    await settle()
+    expect(document.activeElement).toBe(byTestId('code'))
 
     escape()
     expect(open()).toBe(false)

@@ -3046,6 +3046,33 @@ check')` first, as the cushion and debt cases do.
   Escape, and put you back on the button that opened them. The Quick add button no longer sits on
   top of an open dialog." It replaces a line that listed dialogs by name and said Escape closed
   only Add transaction. The passkey offer's place above the add button stays here only.
+- **Escape has one path: the dialog helper's.** The 14 dialogs and forms that still heard Escape
+  themselves hear it through `onEscape` now: the loan form, the keyboard shortcuts list, Auto
+  Categorize, Reconcile, the import preview and the sign-in dialog (each listened on the whole
+  document), Create Profile, the icon gallery, the period picker, the Guided Orbit, Transactions'
+  entry form, and three forms that open in place (Add money, a profile's rename, Delete account's
+  confirmation). With the shortcuts list ("?") open over the loan form, one Escape shut both,
+  because the form heard Escape at the document whatever was over it. It shuts only the list now,
+  and the next Escape the form. The receipt viewer, which had no Escape, shuts on it too. The
+  command bar, the setup wizard and the menus keep their own.
+- A form that opens in place (`inPlace`) is not over the page: it takes Escape only while focus is
+  in it. The 2FA step is in place with no `onEscape`, so Escape goes on to the sign-in dialog
+  around it. A modal the helper does not know holds Escape only while it has a box, so one left on
+  the page while shut holds nothing. Transactions' own two-step listener and its page check are
+  gone: the helper reads Escape the same way, and a dialog on a page not shown is not drawn, so it
+  is never on top.
+- **Tests:** `src/utils/__tests__/dialogFocus.test.tsx` has two new cases and one changed (27 in
+  all): a form open in place takes Escape only with focus in it; a step in place with no
+  `onEscape` passes Escape to the dialog around it; a modal with no box holds nothing. All three
+  failed before the change. `transactionFormEscape.test.tsx`: the receipt viewer shuts on Escape
+  (it failed before), and the case for another page now hides the page as the shell does (it fails
+  with the helper's drawn check taken out). `IconPicker.test.tsx`: Escape closes the gallery and
+  not the dialog under it (it fails with the gallery's `onEscape` taken out).
+  `loginModal.backGesture.test.tsx` and `importPreviewIsNotAWrite.test.tsx` send Escape as a key
+  press does, bubbling up to the window. `frontend/tests/dialog-focus.spec.ts` has a new @smoke
+  case: "?" over Add a loan and over Add transaction, then Escape shuts only the list and puts
+  focus back on the button it was opened from, and the next Escape shuts the dialog. On the code
+  before the change it fails at the loan form, where the first Escape shut both.
 - **No extra-payment label stands on the loan's line.** A label above its mark and to the left of it
   was placed at the mark's height, where the line has not yet come down to the mark, so the line ran
   through it. The review's sweep (`LoanPayoffChart` in jsdom: the boat with one extra payment at

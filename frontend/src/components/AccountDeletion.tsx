@@ -88,8 +88,13 @@ export default function AccountDeletion() {
       <Show when={confirming()}>
         <div
           ref={(el) => {
-            // Delete account is taken off while this asks, and made again when it shuts.
-            dialogFocus(el, { returnTo: () => deleteItem?.querySelector<HTMLElement>('button') })
+            // Delete account is taken off while this asks, and made again when it shuts. It opens
+            // in place, so Escape cancels it only from inside it.
+            dialogFocus(el, {
+              returnTo: () => deleteItem?.querySelector<HTMLElement>('button'),
+              inPlace: true,
+              onEscape: cancel,
+            })
           }}
           class={styles['danger-zone-item']}
         >
@@ -104,7 +109,6 @@ export default function AccountDeletion() {
               onInput={(e) => setConfirmText(e.currentTarget.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') void handleDelete()
-                if (e.key === 'Escape') cancel()
               }}
               placeholder="you@example.com"
               autocomplete="off"

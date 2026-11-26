@@ -392,13 +392,16 @@ export default function Goals() {
                     {contributingGoalId() === goal.id && (
                       <form
                         // Add Funds is taken off the card while this is open, and made again
-                        // when it shuts: focus goes to the new one.
+                        // when it shuts: focus goes to the new one. It opens in place, so Escape
+                        // cancels it only from inside it.
                         ref={(el) => {
                           dialogFocus(el, {
                             returnTo: () =>
                               card?.querySelector<HTMLElement>(
                                 '[data-test-id="goal-contribute-btn"]'
                               ),
+                            inPlace: true,
+                            onEscape: cancelContribute,
                           })
                         }}
                         data-test-id="goal-contribute-form"
@@ -426,9 +429,6 @@ export default function Goals() {
                                 onInput={(e) =>
                                   contributionForm.set('amount', e.currentTarget.value)
                                 }
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Escape') cancelContribute()
-                                }}
                               />
                             )}
                           </Field>

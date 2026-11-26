@@ -1,4 +1,4 @@
-import { createSignal, onCleanup, onMount, Show } from 'solid-js'
+import { createSignal, Show } from 'solid-js'
 import { CAPTCHA_ACTIONS } from '../../../shared/captchaActions'
 import { api } from '../core/api'
 import { afterHistoryStep, createHistoryStep } from '../core/historyStep'
@@ -70,18 +70,6 @@ export default function LoginModal(props: LoginModalProps) {
     })
   }
 
-  // Document-level so Escape keeps working on the steps after the form, when the form (and with
-  // it any focused child) is unmounted.
-  onMount(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') close()
-    }
-    document.addEventListener('keydown', handleKeyDown)
-    onCleanup(() => {
-      document.removeEventListener('keydown', handleKeyDown)
-    })
-  })
-
   const saved = (outcome: SignInOutcome) => {
     if (outcome.kind === 'second-factor') setStage('twofa')
     else if (outcome.kind === 'check-inbox') {
@@ -138,7 +126,14 @@ export default function LoginModal(props: LoginModalProps) {
         if (e.target === e.currentTarget) close()
       }}
     >
-      <div ref={dialogFocus} class={styles.modal}>
+      {/* Escape closes it wherever focus is, so it keeps working on the steps after the form,
+          when the form (and with it any focused child) is gone. */}
+      <div
+        ref={(el) => {
+          dialogFocus(el, { onEscape: close })
+        }}
+        class={styles.modal}
+      >
         <h3 class={styles.title}>{mode() === 'register' ? 'Create account' : 'Sign In'}</h3>
         <p style={{ 'margin-bottom': '16px', color: 'var(--text-secondary)', 'font-size': '14px' }}>
           {stage() === 'inbox'

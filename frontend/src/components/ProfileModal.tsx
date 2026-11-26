@@ -46,16 +46,18 @@ export default function ProfileModal(props: ProfileModalProps) {
     >
       <div
         ref={(el) => {
-          dialogFocus(el, { returnTo: () => props.returnFocusTo?.() })
+          dialogFocus(el, {
+            returnTo: () => props.returnFocusTo?.(),
+            onEscape: () => {
+              props.onClose()
+            },
+          })
         }}
         class={styles.modal}
         data-test-id="profile-modal"
         role="dialog"
         aria-modal="true"
         aria-labelledby="profile-modal-title"
-        onKeyDown={(e) => {
-          if (e.key === 'Escape') props.onClose()
-        }}
       >
         <h3 class={styles.title} id="profile-modal-title">
           Create Profile

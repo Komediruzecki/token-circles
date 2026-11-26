@@ -118,7 +118,11 @@ export function GuidedOrbit(props: GuidedOrbitProps) {
   // Open, focus starts in the sheet; shut, it goes back to what had it before: the shut sheet is
   // inert, and focus left inside it would be lost (dialogFocusWhile).
   let sheetRef: HTMLDivElement | undefined
-  dialogFocusWhile(props.isOpen, () => sheetRef)
+  dialogFocusWhile(props.isOpen, () => sheetRef, {
+    onEscape: () => {
+      props.onClose()
+    },
+  })
   createEffect(() => {
     if (props.isOpen()) reset()
   })
@@ -228,15 +232,10 @@ export function GuidedOrbit(props: GuidedOrbitProps) {
   // Desktop keyboard support: this modal shows on desktop too, so typing digits
   // should go straight to the amount instead of forcing clicks on the on-screen
   // keypad. Active only while open; the confirm step's text/date inputs keep
-  // their own typing. Escape closes.
+  // their own typing. Escape closes it through dialogFocusWhile above.
   createEffect(() => {
     if (!props.isOpen()) return
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault()
-        props.onClose()
-        return
-      }
       // Never hijack keyboard shortcuts (⌘K, Ctrl+digit tab-switch, …) — only
       // plain keystrokes drive the amount.
       if (e.ctrlKey || e.metaKey || e.altKey) return

@@ -1,4 +1,4 @@
-import { createMemo, createSignal, For, onCleanup, onMount } from 'solid-js'
+import { createMemo, createSignal, For } from 'solid-js'
 import { dialogFocus } from '../utils/dialogFocus'
 import { iconSvgByKey, PICKABLE_ICON_NAMES } from './CategoryIcon'
 import styles from './IconPicker.module.css'
@@ -33,22 +33,6 @@ export default function IconPicker(props: IconPickerProps) {
 
   const selected = () => (props.value ?? '').trim().toLowerCase()
 
-  // Escape closes, from wherever the focus happens to be inside the panel.
-  onMount(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        // The category modal underneath listens for Escape too; without this it closes as well,
-        // and dismissing the gallery would throw away the half-filled form behind it.
-        e.stopPropagation()
-        props.onClose()
-      }
-    }
-    document.addEventListener('keydown', onKey, true)
-    onCleanup(() => {
-      document.removeEventListener('keydown', onKey, true)
-    })
-  })
-
   return (
     <div
       class={styles.pickerOverlay}
@@ -59,7 +43,15 @@ export default function IconPicker(props: IconPickerProps) {
       }}
     >
       <div
-        ref={dialogFocus}
+        ref={(el) => {
+          // Escape closes the gallery only: it is on top of the category form, which keeps what
+          // was typed in it.
+          dialogFocus(el, {
+            onEscape: () => {
+              props.onClose()
+            },
+          })
+        }}
         class={styles.picker}
         role="dialog"
         aria-modal="true"

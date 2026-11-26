@@ -19,7 +19,7 @@
  * close the same way whatever came back, so a refused pick looked like a saved one until the row
  * turned up uncategorized again.
  */
-import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from 'solid-js'
+import { createEffect, createMemo, createSignal, For, Show } from 'solid-js'
 import { api, getLocalCurrency, toast } from '../core/api'
 import { asOneWrite } from '../core/dataVersions'
 import { dialogFocusWhile } from '../utils/dialogFocus'
@@ -139,17 +139,6 @@ export function AutoCategorizeModal(props: AutoCategorizeModalProps) {
     toast(`Couldn't categorize ${failures} of ${staged.length}. Try again.`, 'error')
   }
 
-  const handleKeyDown = (e: KeyboardEvent) => {
-    if (e.key === 'Escape') props.onClose()
-  }
-
-  onMount(() => {
-    document.addEventListener('keydown', handleKeyDown)
-    onCleanup(() => {
-      document.removeEventListener('keydown', handleKeyDown)
-    })
-  })
-
   const uncategorized = createMemo(() => props.uncategorizedTransactions())
   const matchCount = createMemo(
     () => uncategorized().filter((tx) => findMatchingCategory(tx.description)).length
@@ -193,7 +182,11 @@ export function AutoCategorizeModal(props: AutoCategorizeModalProps) {
 
   // Stays on the page while shut: focus goes in each time it opens and back each time it shuts.
   let modalRef: HTMLDivElement | undefined
-  dialogFocusWhile(props.isOpen, () => modalRef)
+  dialogFocusWhile(props.isOpen, () => modalRef, {
+    onEscape: () => {
+      props.onClose()
+    },
+  })
 
   return (
     <div

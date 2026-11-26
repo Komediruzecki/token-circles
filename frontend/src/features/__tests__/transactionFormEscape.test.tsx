@@ -238,10 +238,16 @@ describe("Transactions' entry form and Escape", () => {
 
   it('leaves Escape alone while another page is shown', async () => {
     await openFromTheAddButton()
+    // The shell keeps the page and hides it (App.tsx): the form is still open, and not drawn.
     setPage('loans')
-    await pressEscape(document)
-    expect(formIsOpen()).toBe(true)
-    setPage('transactions')
+    host.style.display = 'none'
+    try {
+      await pressEscape(document)
+      expect(formIsOpen()).toBe(true)
+    } finally {
+      host.style.display = ''
+      setPage('transactions')
+    }
   })
 })
 
@@ -285,6 +291,14 @@ describe('the receipt viewer', () => {
 
     viewer.querySelector<HTMLButtonElement>('button[aria-label="Close modal"]')!.click()
     await settle()
+    expect(host.querySelector('[data-test-id="receipt-modal"]')).toBeNull()
+    expect(document.activeElement).toBe(chip)
+
+    // Escape shuts it too, as its close button does.
+    chip.click()
+    await settle()
+    expect(host.querySelector('[data-test-id="receipt-modal"]')).not.toBeNull()
+    await pressEscape()
     expect(host.querySelector('[data-test-id="receipt-modal"]')).toBeNull()
     expect(document.activeElement).toBe(chip)
   })
