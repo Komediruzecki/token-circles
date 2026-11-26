@@ -3042,6 +3042,10 @@ check')` first, as the cushion and debt cases do.
   test id `empty-state` is shown, and Retirement renders nothing with that test id, so they pass
   whatever the page shows; they are named for that now, the second as the same check again
   (Playwright refuses two tests with one title).
+- **CHANGELOG: the dialog line is two sentences.** "Dialogs open with the cursor inside, close with
+  Escape, and put you back on the button that opened them. The Quick add button no longer sits on
+  top of an open dialog." It replaces a line that listed dialogs by name and said Escape closed
+  only Add transaction. The passkey offer's place above the add button stays here only.
 - **No extra-payment label stands on the loan's line.** A label above its mark and to the left of it
   was placed at the mark's height, where the line has not yet come down to the mark, so the line ran
   through it. The review's sweep (`LoanPayoffChart` in jsdom: the boat with one extra payment at
