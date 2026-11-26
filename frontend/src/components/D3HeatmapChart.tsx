@@ -30,6 +30,9 @@ export default function D3HeatmapChart(props: Props) {
   // the chart sits in: on Analytics that is the deck, and without it the tooltip painted Orbit's
   // navy pair over graphite. `display: contents` draws no box of its own.
   let tooltipScope: HTMLDivElement | undefined
+  // Set when the chart goes. A render still waiting for d3 then stops: drawing on, it would put up
+  // a new tooltip that nothing removes.
+  let gone = false
 
   const ensureTooltip = () => {
     if (!tooltipEl || !tooltipScope?.isConnected) {
@@ -61,6 +64,7 @@ export default function D3HeatmapChart(props: Props) {
     const height = Math.max(props.height || 0, Math.round(margin.top + 7 * cellSize + 42))
 
     const d3 = await getD3()
+    if (gone) return
     d3.select(container).selectAll('svg').remove()
 
     ensureTooltip()
@@ -206,6 +210,7 @@ export default function D3HeatmapChart(props: Props) {
     })
     if (containerRef) observer.observe(containerRef)
     onCleanup(() => {
+      gone = true
       observer.disconnect()
       tooltipScope?.remove()
     })

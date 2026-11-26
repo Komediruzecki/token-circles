@@ -2781,6 +2781,16 @@ check')` first, as the cushion and debt cases do.
   `.instrument-deck` and fails unless the tooltip renders outside the chart, inside a scope of the
   deck's class that draws no box; outside a deck it takes none, and nothing is left behind when the
   chart goes.
+- **A heatmap that goes while d3 is loading leaves no tooltip behind.** The chart loads d3 the first
+  time it draws, and a render still waiting for it came back after the chart had gone: it found no
+  tooltip and put up a new one at the end of the page, which nothing removed. That was so before the
+  wrapper above (the old check was the tooltip's parent). The full unit suite caught it on 26 Nov:
+  "nothing is left behind" failed once with eight workers, when d3 arrived between two cases, and
+  passed three times run alone, where d3 arrives only after the last case. A render now stops after
+  the wait once the chart has gone.
+- **Tests:** `heatmapTooltipScope.test.tsx` now disposes the chart, waits for every dynamic import
+  to settle (`vi.dynamicImportSettled()`), and fails on any tooltip or wrapper left on the page. It
+  failed every time before the change; with either half of the guard taken out it fails again.
 - **Text on a floating surface reads 4.5:1 in every theme.** Measured in the browser on 19 Nov,
   the card menu's Delete was 4.35:1 on the floating surface in Dawn Light, 3.71:1 in Orbit Dark and
   4.18:1 in the deck, and the bill calendar popover's overdue amount 3.48:1 on its overdue row in

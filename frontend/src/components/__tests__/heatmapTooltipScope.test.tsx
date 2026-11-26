@@ -65,4 +65,17 @@ describe("the heatmap's tooltip", () => {
     expect(document.getElementById('heatmap-tooltip')).toBeNull()
     expect(wrappers()).toEqual([])
   })
+
+  it('leaves nothing behind when the chart goes while a render still waits for d3', async () => {
+    // The chart loads d3 the first time it draws. A render still waiting for it came back after
+    // the chart had gone and put up a new tooltip, which nothing removed. The full suite caught one
+    // on 26 Nov, when d3 happened to arrive between two cases.
+    mountIn('instrument-deck')
+    dispose!()
+    dispose = undefined
+    await vi.dynamicImportSettled()
+    await new Promise((r) => setTimeout(r, 0))
+    expect(document.getElementById('heatmap-tooltip')).toBeNull()
+    expect(wrappers()).toEqual([])
+  })
 })
