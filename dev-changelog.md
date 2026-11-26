@@ -3123,10 +3123,25 @@ check')` first, as the cushion and debt cases do.
   strip: an effect on `billTab` in `Bills.tsx` scrolls the strip, not the page.
   - **Test:** `bills.spec.ts` "the tab strip @smoke", at 1440, 820 and 390 px: each tab, chosen
     with the strip scrolled back to its start, ends whole in the strip, each label is one line,
-    and at 390 the strip scrolls. It loads the calendar once first: the calendar's first load shows
-    the page's loading state, which takes the strip off the page. Before the change it failed at
-    Calendar at 390 px, not whole in the strip. Taken out one at a time, the effect fails there too,
-    and `nowrap` with `flex: 0 0 auto` at "Regular Bills" (two lines).
+    and at 390 the strip scrolls. Before the change it failed at Calendar at 390 px, not whole in
+    the strip. Taken out one at a time, the effect fails there too, and `nowrap` with
+    `flex: 0 0 auto` at "Regular Bills" (two lines).
+- **The Bills calendar's first load waits in the calendar's place.** Round 5 of the 19 Nov
+  review. The first switch to Calendar swapped the whole page, header and tab strip with it, for
+  the page-level loading state until the month came in. `BillCalendar.tsx` read its month with
+  `calendarData.latest`, and before a resource's first answer `.latest` reads it as
+  `calendarData()` does, which hands the wait to the nearest `<Suspense>`: App's, around the page.
+  The comment above it said it never did. `cal()` now reads `.latest` only once the resource has
+  answered (its `state` is neither `unresolved` nor `pending`), so until then the calendar's own
+  "Loading calendar..." stands in its place. An error still reaches the page as before: `.latest`
+  throws it. The loading state and the grid have test ids (`bill-calendar-loading`,
+  `bill-calendar-grid`).
+  - **Tests:** `bills.spec.ts` "the calendar @smoke" holds `/api/bills/calendar` and switches to
+    Calendar: the tab strip and the header stay on the page and the calendar's loading state shows,
+    and once the month is let through the grid replaces it. Before the change it failed at the
+    strip (not found). "The tab strip @smoke" no longer loads the calendar once before measuring,
+    and each tab's tap now has to leave the strip on the page: before the change it failed at
+    Calendar at 1440 px, the strip gone.
 - **Map columns says what an empty Account setup cell means.** Round 4 of the 19 Nov review,
   `ImportMappingStep.tsx`. A value typed as an expense or income had "—" under Account setup. It
   says "Not an account" now (`.categoryTableNone`). Test: `mappingSource.test.tsx` "says in words

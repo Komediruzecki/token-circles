@@ -282,7 +282,7 @@ test.describe("the header's description @smoke", () => {
 
 /**
  * The tab strip as drawn: each tab's lines, whether it scrolls, and whether `active` is whole.
- * Null while the page is not drawn: the calendar's first load shows the page's loading state.
+ * Null while the strip or the tab is not on the page.
  */
 function tabStrip(page: Page, active: string) {
   return page.evaluate((activeId) => {
@@ -316,31 +316,66 @@ test.describe('the tab strip @smoke', () => {
     page,
   }) => {
     await navigateToRoute(page, 'bills')
-    // The calendar's first load shows the page's loading state, the strip with it: load it once
-    // before measuring, so the strip stays on the page.
-    const calendar = page.waitForResponse((response) =>
-      response.url().includes('/api/bills/calendar')
-    )
-    await page.getByTestId('bills-tab-calendar').click()
-    await calendar
-    await page.getByTestId('bills-tab-all').click()
     for (const size of SIZES) {
       await page.setViewportSize(size)
       for (const tab of ['calendar', 'subscriptions', 'all'] as const) {
         const id = `bills-tab-${tab}`
         await expect(page.locator('[data-tour="bills-tabs"]')).toBeVisible()
         // A tap on the part of a tab the strip shows: the strip does not scroll to it by itself,
-        // where a click from the test would.
-        await page.evaluate((tabId) => {
-          document.querySelector<HTMLElement>('[data-tour="bills-tabs"]')!.scrollLeft = 0
+        // where a click from the test would. The strip it was tapped in is still on the page once
+        // the tab has opened: the calendar's first load used to swap the page for its loading
+        // state, the strip with it.
+        const stays = await page.evaluate((tabId) => {
+          const strip = document.querySelector<HTMLElement>('[data-tour="bills-tabs"]')!
+          strip.scrollLeft = 0
           document.querySelector<HTMLElement>(`[data-test-id="${tabId}"]`)!.click()
+          return strip.isConnected
         }, id)
         const where = `${tab} at ${size.width} px`
+        expect(stays, `the strip, as ${where} opens`).toBe(true)
         await expect.poll(async () => (await tabStrip(page, id))?.whole, where).toBe(true)
         const strip = (await tabStrip(page, id))!
         for (const each of strip.tabs) expect(each.lines, `${each.text}, ${where}`).toBe(1)
         if (size.width === 390) expect(strip.scrolls, where).toBe(true)
       }
     }
+  })
+})
+
+// Review of 19 Nov, round 5: the calendar's first load swapped the whole page, the tab strip with
+// it, for the page's loading state. Only the calendar's place waits now.
+test.describe('the calendar @smoke', () => {
+  test('waits for its first month in its own place, with the header and the tab strip on the page', async ({
+    page,
+  }) => {
+    await navigateToRoute(page, 'bills')
+    await expect(page.locator('[data-tour="bills-tabs"]')).toBeVisible()
+    // The month is held until the page has been looked at, so the wait is on the screen.
+    let release!: () => void
+    const held = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    let asked!: () => void
+    const asking = new Promise<void>((resolve) => {
+      asked = resolve
+    })
+    await page.route(
+      (url) => url.pathname === '/api/bills/calendar',
+      async (route) => {
+        asked()
+        await held
+        await route.continue()
+      }
+    )
+    await page.getByTestId('bills-tab-calendar').click()
+    await asking
+
+    await expect(page.locator('[data-tour="bills-tabs"]')).toBeVisible()
+    await expect(page.getByTestId('bills-header')).toBeVisible()
+    await expect(page.getByTestId('bill-calendar-loading')).toBeVisible()
+
+    release()
+    await expect(page.getByTestId('bill-calendar-grid')).toBeVisible()
+    await expect(page.getByTestId('bill-calendar-loading')).toHaveCount(0)
   })
 })
