@@ -27,7 +27,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Changed
 
 - **The setup wizard follows your account.** Signed in, a new account meets the setup wizard once, on whichever device it signs in first, and a wizard left part way reopens at the step you reached. Finish or skip it on one device and no other device shows it. An account that already has data, or that finished or skipped the wizard before, does not see it again.
-- **A shorter setup wizard that fits a phone.** It asks for your space's name, your main account and your bank statements, and a statement it can't read opens on the Import page, where Back to setup carries on at the subscription check.
+- **A shorter setup wizard that fits a phone.** It asks for your space's name, your main account and your bank statements, and a statement it can't read opens on the Import page, where Back to setup carries on at the subscription check once something is imported, or goes back to the statements if nothing is yet.
 - **Setup takes several statements at once.** Choose or drop them and it imports them in one tap, each into an account named for its bank, your main account for the first bank, or a new account like "N26 EUR", with a transaction two statements share brought in once.
 - **A statement in another currency waits for the Import page.** Setup says why on its card: your balances are kept in one currency, and importing it would count its amounts in that one.
 - **Auto sync types a sheet's rows as Sync does.** For a sheet you save from now on, a category it gains later comes in overnight as it does when you press Sync, not as income or spending by the sign of its amount.
