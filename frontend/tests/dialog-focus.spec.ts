@@ -419,3 +419,65 @@ test.describe('every dialog takes focus and gives it back @smoke', () => {
     })
   })
 })
+
+/**
+ * Every control Tab stops on, from the top of the page until it comes round again, and the dialog
+ * each is in. `walk` names the round, so a second walk on the same page counts afresh.
+ */
+async function tabStops(page: Page, walk: string, limit = 600) {
+  await page.evaluate(() => {
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
+  })
+  const stops: { name: string; dialog: string | null }[] = []
+  for (let i = 0; i < limit; i++) {
+    await page.keyboard.press('Tab')
+    const stop = await page.evaluate((round) => {
+      const el = document.activeElement
+      if (!(el instanceof HTMLElement) || el === document.body) return null
+      if (el.dataset.tabWalk === round) return 'again'
+      el.dataset.tabWalk = round
+      const dialog = el.closest('[role="dialog"], [role="alertdialog"]')
+      const name = el.getAttribute('aria-label') ?? (el.textContent ?? '').trim().slice(0, 30)
+      return {
+        name: `${el.tagName.toLowerCase()} "${name}"`,
+        dialog: dialog === null ? null : (dialog.getAttribute('aria-label') ?? 'a dialog'),
+      }
+    }, walk)
+    if (stop === 'again') break
+    if (stop) stops.push(stop)
+  }
+  return stops
+}
+
+test.describe('a shut dialog is out of the tab order @smoke', () => {
+  test.beforeEach(async ({ page }) => {
+    test.setTimeout(120_000)
+    await login(page)
+  })
+
+  // The subscription scan and catalog stay on the page while shut, faded out to nothing. Tab
+  // walked into them: the catalog's 126 controls and the scan's Close, on Bills, and the scan's
+  // Close on Import. Nothing is open in these walks, so a stop in any dialog is a stop in a shut one.
+  test('Tab through Bills and Import never lands inside a shut dialog', async ({ page }) => {
+    const inDialogs = async (walk: string) => {
+      const stops = await tabStops(page, walk)
+      expect(stops.length, `Tab stops on ${walk}`).toBeGreaterThan(10)
+      return stops.filter((s) => s.dialog !== null).map((s) => `${s.dialog}: ${s.name}`)
+    }
+
+    await navigateToRoute(page, 'bills')
+    await expect(page.getByTestId('add-bill-btn')).toBeVisible()
+    await expect(page.getByTestId('sub-scan-modal').first()).toBeAttached()
+    expect(await inDialogs('bills')).toEqual([])
+
+    await page.getByTestId('bills-tab-subscriptions').click()
+    await expect(page.getByTestId('scan-subscriptions-btn')).toBeVisible()
+    expect(await inDialogs('subscriptions')).toEqual([])
+
+    // Bills can stay on the page, hidden, a moment after it is left: two scans then.
+    await navigateToRoute(page, 'import')
+    await expect(page.getByTestId('import-header')).toBeVisible()
+    await expect(page.getByTestId('sub-scan-modal').last()).toBeAttached()
+    expect(await inDialogs('import')).toEqual([])
+  })
+})

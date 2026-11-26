@@ -300,4 +300,24 @@ describe('SubscriptionCatalogModal focus', () => {
     await settle()
     expect(document.activeElement).toBe(opener)
   })
+
+  // Faded out to nothing while shut, but still on the page: without inert, Tab walked through its
+  // 126 controls on the Bills page.
+  it('is inert while shut, so Tab cannot reach it, and not while it is open', () => {
+    const [open, setOpen] = createSignal(false)
+    host = document.createElement('div')
+    document.body.appendChild(host)
+    dispose = render(
+      () => <SubscriptionCatalogModal isOpen={open} onClose={onClose} categories={() => []} />,
+      host
+    )
+    // Solid sets inert as a property, which jsdom does not reflect to the attribute.
+    const overlay = host.querySelector('[role="dialog"]')!.parentElement!
+    const inert = () => overlay.inert || overlay.hasAttribute('inert')
+    expect(inert()).toBe(true)
+    setOpen(true)
+    expect(inert()).toBe(false)
+    setOpen(false)
+    expect(inert()).toBe(true)
+  })
 })

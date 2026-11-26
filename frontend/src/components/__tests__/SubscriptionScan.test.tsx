@@ -568,4 +568,24 @@ describe('the scan dialog and focus', () => {
     await settle()
     expect(document.activeElement).toBe(opener)
   })
+
+  // Faded out to nothing while shut, but still on the page: without inert, Tab walked into its
+  // Close button from the Bills and Import pages.
+  it('is inert while shut, so Tab cannot reach it, and not while it is open', () => {
+    const [open, setOpen] = createSignal(false)
+    host = document.createElement('div')
+    document.body.appendChild(host)
+    dispose = render(
+      () => <SubscriptionScanModal isOpen={open} onClose={() => setOpen(false)} />,
+      host
+    )
+    // Solid sets inert as a property, which jsdom does not reflect to the attribute.
+    const overlay = host.querySelector('[role="dialog"]')!.parentElement!
+    const inert = () => overlay.inert || overlay.hasAttribute('inert')
+    expect(inert()).toBe(true)
+    setOpen(true)
+    expect(inert()).toBe(false)
+    setOpen(false)
+    expect(inert()).toBe(true)
+  })
 })

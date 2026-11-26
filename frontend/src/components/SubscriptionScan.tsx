@@ -554,6 +554,9 @@ export function SubscriptionScanModal(props: SubscriptionScanModalProps) {
     <div
       class={styles.overlay}
       classList={{ [styles.open]: props.isOpen() }}
+      // Faded out while shut but still on the page: inert then, out of the tab order and the
+      // accessibility tree, as the Guided Orbit is.
+      inert={!props.isOpen()}
       onClick={(e) => {
         if (e.target === e.currentTarget) props.onClose()
       }}

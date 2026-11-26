@@ -3008,6 +3008,22 @@ check')` first, as the cushion and debt cases do.
   Category button, then Add bill with focus on Add bill), Categories shuts Add Category with
   Escape, and Loans checks the loan count is the same after the confirm's Escape. With the helper's
   Escape listener taken out, all eight fail, each at its first dialog wired here.
+- **A shut subscription scan or catalog is out of the tab order.** Both stay on the page while
+  shut, faded to nothing (`opacity: 0`, `pointer-events: none`), and Tab walked into them:
+  measured on 26 Nov with nothing open, Tab stopped 126 times in the shut catalog and once in the
+  shut scan (its Close) on Bills, and once in the scan on Import. Each is `inert` while shut now,
+  as the Guided Orbit and the command bar are, so neither Tab nor a screen reader finds it. A probe
+  of every page (21 page views, 104 dialog elements, nothing open) found no other shut dialog Tab
+  could reach before or after: Transactions' entry form and Reconciliation are `display: none`
+  while shut, Auto Categorize is `visibility: hidden`, and the Guided Orbit and the command bar
+  were already inert. Only the overlay around each dialog changed; what the scan shows is as it
+  was.
+- **Tests:** `SubscriptionScan.test.tsx` and `SubscriptionCatalogModal.test.tsx` each fail unless
+  the overlay is inert while shut and not while open; both failed before the change.
+  `frontend/tests/dialog-focus.spec.ts` has a ninth case (@smoke): Tab through Bills, its
+  Subscriptions tab and Import, from the top until focus comes round again, never stops inside a
+  dialog. Before the change, and again with the two `inert` lines taken out, it failed on Bills
+  with 127 stops in the shut dialogs (126 in the catalog, the scan's Close).
 - **No extra-payment label stands on the loan's line.** A label above its mark and to the left of it
   was placed at the mark's height, where the line has not yet come down to the mark, so the line ran
   through it. The review's sweep (`LoanPayoffChart` in jsdom: the boat with one extra payment at
