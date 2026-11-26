@@ -3100,6 +3100,25 @@ check')` first, as the cushion and debt cases do.
     and 390 px on both tabs. Before the change it failed at 820 (two lines) and, on touch, at 1440
     (39 px). Taken out one at a time, the container query, the container and the wrap each fail at
     820, and the touch height at 1440.
+- **The Bills header's description stays with its title.** Round 4 of the 19 Nov review. Where
+  the buttons go under the title (narrower than 640 px: 820 beside the sidebar, and 390), they sat
+  between "Bills" and the line that says what the page is for: at 820 that line was 116 px below
+  the title. The title and its line are one block now (`header-title` in `Bills.tsx` and
+  `BillsPage.module.css`), so the buttons sit beside both at 1440 px and come after both below 640.
+  - **Test:** `bills.spec.ts` "the header's description @smoke", at 1440, 820 and 390 px on both
+    tabs: the line starts under the title and within 24 px of it, and each button is under the line
+    or to its right. Before the change it failed at 820 (116 px).
+- **The Bills tabs keep their labels on one line.** At 390 px the three tabs shrank to fit and
+  "Regular Bills" took two lines. Each tab keeps its width and its label on one line
+  (`flex: 0 0 auto` and `white-space: nowrap` on `.tabBtn`), so the strip scrolls sideways, and the
+  tab chosen, by a tap on the part of it the strip shows or by a link, is brought whole into the
+  strip: an effect on `billTab` in `Bills.tsx` scrolls the strip, not the page.
+  - **Test:** `bills.spec.ts` "the tab strip @smoke", at 1440, 820 and 390 px: each tab, chosen
+    with the strip scrolled back to its start, ends whole in the strip, each label is one line,
+    and at 390 the strip scrolls. It loads the calendar once first: the calendar's first load shows
+    the page's loading state, which takes the strip off the page. Before the change it failed at
+    Calendar at 390 px, not whole in the strip. Taken out one at a time, the effect fails there too,
+    and `nowrap` with `flex: 0 0 auto` at "Regular Bills" (two lines).
 - **Import's messages have no em dashes.** Each is a full stop, a colon or parentheses: the
   preview's notes, the paste help, the bank tab's "no accounts yet", Recent Imports' line and its
   delete confirm, Connected sources' toast and remove confirm, two errors, and a skipped row's

@@ -154,12 +154,23 @@ test.describe('Bills', () => {
   })
 })
 
+/** The header's buttons, on either tab. */
+const HEADER_BUTTONS = ['scan-subscriptions-btn', 'browse-catalog-btn', 'add-bill-btn']
+  .map((id) => `[data-test-id="${id}"]`)
+  .join(', ')
+
+const SIZES = [
+  { width: 1440, height: 900 },
+  { width: 820, height: 1180 },
+  { width: 390, height: 844 },
+]
+
 /** Each button in the header, as drawn: how many lines its words take, and whether it is whole. */
 function headerButtons(page: Page) {
-  return page.getByTestId('bills-header').evaluate((title) => {
+  return page.getByTestId('bills-header').evaluate((title, selector) => {
     const edge = title.closest('.page')!.getBoundingClientRect()
     const right = Math.min(edge.right, document.documentElement.clientWidth)
-    return [...title.parentElement!.querySelectorAll('button')].map((button) => {
+    return [...document.querySelectorAll(selector)].map((button) => {
       const box = button.getBoundingClientRect()
       const lines = new Set<number>()
       const words = document.createTreeWalker(button, NodeFilter.SHOW_TEXT)
@@ -179,7 +190,7 @@ function headerButtons(page: Page) {
           button.scrollWidth <= button.clientWidth + 1,
       }
     })
-  })
+  }, HEADER_BUTTONS)
 }
 
 // Review of 19 Nov, round 3: at 820 px the header's three buttons took two lines each, and at
@@ -215,4 +226,121 @@ test.describe("the header's buttons @smoke", () => {
       })
     })
   }
+})
+
+/** The title's words, the line under it that says what the page is for, and the header's buttons. */
+function headerBoxes(page: Page) {
+  return page.evaluate((selector) => {
+    const box = (rect: DOMRect) => ({
+      top: rect.top,
+      bottom: rect.bottom,
+      left: rect.left,
+      right: rect.right,
+    })
+    // The words, not the block: the line's paragraph runs the header's whole width.
+    const words = (testId: string) => {
+      const range = document.createRange()
+      range.selectNodeContents(document.querySelector(`[data-test-id="${testId}"]`)!)
+      return box(range.getBoundingClientRect())
+    }
+    return {
+      title: words('bills-header'),
+      subtitle: words('bills-subtitle'),
+      buttons: [...document.querySelectorAll(selector)].map((b) => box(b.getBoundingClientRect())),
+    }
+  }, HEADER_BUTTONS)
+}
+
+// Review of 19 Nov, round 4: at 820 and 390 px the buttons went under the title, between it and
+// the line that says what the page is for.
+test.describe("the header's description @smoke", () => {
+  test('stays with the title, and the buttons come after both, at 1440, 820 and 390 px', async ({
+    page,
+  }) => {
+    await navigateToRoute(page, 'bills')
+    for (const size of SIZES) {
+      await page.setViewportSize(size)
+      for (const tab of ['subscriptions', 'all'] as const) {
+        await page.getByTestId(`bills-tab-${tab}`).click()
+        await expect(page.getByTestId('add-bill-btn')).toBeVisible()
+        const { title, subtitle, buttons } = await headerBoxes(page)
+        const where = `${tab} at ${size.width} px`
+        expect(subtitle.top, where).toBeGreaterThanOrEqual(title.bottom - 0.5)
+        expect(subtitle.top - title.bottom, where).toBeLessThanOrEqual(24)
+        for (const button of buttons) {
+          // Under the title, a button is under its description too; beside it, to its right.
+          if (button.top >= title.bottom - 0.5) {
+            expect(button.top, where).toBeGreaterThanOrEqual(subtitle.bottom - 0.5)
+          } else {
+            expect(button.left, where).toBeGreaterThanOrEqual(subtitle.right - 0.5)
+          }
+        }
+      }
+    }
+  })
+})
+
+/**
+ * The tab strip as drawn: each tab's lines, whether it scrolls, and whether `active` is whole.
+ * Null while the page is not drawn: the calendar's first load shows the page's loading state.
+ */
+function tabStrip(page: Page, active: string) {
+  return page.evaluate((activeId) => {
+    const strip = document.querySelector<HTMLElement>('[data-tour="bills-tabs"]')
+    const chosen = document.querySelector(`[data-test-id="${activeId}"]`)
+    if (!strip || !chosen) return null
+    const edge = strip.getBoundingClientRect()
+    const tabs = [...strip.querySelectorAll<HTMLElement>('button')].map((tab) => {
+      const tops = new Set<number>()
+      const words = document.createTreeWalker(tab, NodeFilter.SHOW_TEXT)
+      for (let node = words.nextNode(); node; node = words.nextNode()) {
+        if (!node.textContent?.trim()) continue
+        const range = document.createRange()
+        range.selectNodeContents(node)
+        for (const rect of range.getClientRects()) tops.add(Math.round(rect.top))
+      }
+      return { text: tab.textContent!.trim(), lines: tops.size }
+    })
+    const box = chosen.getBoundingClientRect()
+    return {
+      tabs,
+      scrolls: strip.scrollWidth > strip.clientWidth,
+      whole: box.left >= edge.left - 0.5 && box.right <= edge.right + 0.5,
+    }
+  }, active)
+}
+
+// Review of 19 Nov, round 4: at 390 px "Regular Bills" took two lines in the tab strip.
+test.describe('the tab strip @smoke', () => {
+  test('keeps each tab on one line, scrolls sideways where they do not fit, and shows the tab chosen', async ({
+    page,
+  }) => {
+    await navigateToRoute(page, 'bills')
+    // The calendar's first load shows the page's loading state, the strip with it: load it once
+    // before measuring, so the strip stays on the page.
+    const calendar = page.waitForResponse((response) =>
+      response.url().includes('/api/bills/calendar')
+    )
+    await page.getByTestId('bills-tab-calendar').click()
+    await calendar
+    await page.getByTestId('bills-tab-all').click()
+    for (const size of SIZES) {
+      await page.setViewportSize(size)
+      for (const tab of ['calendar', 'subscriptions', 'all'] as const) {
+        const id = `bills-tab-${tab}`
+        await expect(page.locator('[data-tour="bills-tabs"]')).toBeVisible()
+        // A tap on the part of a tab the strip shows: the strip does not scroll to it by itself,
+        // where a click from the test would.
+        await page.evaluate((tabId) => {
+          document.querySelector<HTMLElement>('[data-tour="bills-tabs"]')!.scrollLeft = 0
+          document.querySelector<HTMLElement>(`[data-test-id="${tabId}"]`)!.click()
+        }, id)
+        const where = `${tab} at ${size.width} px`
+        await expect.poll(async () => (await tabStrip(page, id))?.whole, where).toBe(true)
+        const strip = (await tabStrip(page, id))!
+        for (const each of strip.tabs) expect(each.lines, `${each.text}, ${where}`).toBe(1)
+        if (size.width === 390) expect(strip.scrolls, where).toBe(true)
+      }
+    }
+  })
 })

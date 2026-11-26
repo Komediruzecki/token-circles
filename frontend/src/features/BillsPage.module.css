@@ -20,6 +20,13 @@
   align-items: center;
   gap: 12px;
 }
+/* The title and the line under it, one block: the buttons sit beside it or after it. */
+.bills-page .header-title {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
 .bills-page .page-subtitle {
   color: var(--text-secondary);
   font-size: 14px;
@@ -176,10 +183,10 @@
   gap: 8px;
   align-items: center;
 }
-/* Too narrow for the title and the buttons side by side, the buttons go under the title and fill
-   its width, two to a row where they fit (Scan transactions and Browse catalog on a 390 px phone)
-   and one where they don't, each on one line. Beside the title at 820 px they took two lines
-   each, and at 390 the third ran past the screen's edge. */
+/* Too narrow for the title and the buttons side by side, the buttons go under the title and its
+   line and fill their width, two to a row where they fit (Scan transactions and Browse catalog on
+   a 390 px phone) and one where they don't, each on one line. Beside the title at 820 px they took
+   two lines each, and at 390 the third ran past the screen's edge. */
 @container bills-header (max-width: 640px) {
   .bills-page .header-top {
     flex-direction: column;
@@ -472,7 +479,11 @@
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
+/* Each tab keeps its width and its label one line, so the strip scrolls where they do not fit: at
+   390 px the tabs shrank instead, and "Regular Bills" took two lines. */
 .tabBtn {
+  flex: 0 0 auto;
+  white-space: nowrap;
   display: inline-flex;
   align-items: center;
   gap: 6px;

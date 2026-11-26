@@ -56,7 +56,17 @@
  * THEN: The bill is removed from all lists with confirmation
  */
 
-import { createMemo, createResource, createSignal, For, onCleanup, onMount, Show } from 'solid-js'
+import {
+  createEffect,
+  createMemo,
+  createResource,
+  createSignal,
+  For,
+  on,
+  onCleanup,
+  onMount,
+  Show,
+} from 'solid-js'
 import ConfirmButton from '../components/ConfirmButton'
 import { Field, FormNotice, SubmitButton } from '../components/form'
 import OrbitalAccent from '../components/OrbitalAccent'
@@ -203,6 +213,30 @@ export default function Bills() {
     window.removeEventListener('hashchange', openScanFromLink)
   })
 
+  // On a phone the tabs are wider than their strip, which scrolls sideways (BillsPage.module.css).
+  // The tab chosen, by a tap on the part of it the strip shows or by a link, is brought whole into
+  // the strip: the strip moves, the page does not.
+  let tabStrip: HTMLDivElement | undefined
+  createEffect(
+    on(billTab, () => {
+      requestAnimationFrame(() => {
+        if (!tabStrip) return
+        const active = [...tabStrip.children].find((tab) =>
+          tab.classList.contains(styles.tabActive)
+        )
+        if (!active) return
+        // Inside the strip's padding, as the first tab sits before any scroll.
+        const inset = parseFloat(window.getComputedStyle(tabStrip).paddingLeft) || 0
+        const edge = tabStrip.getBoundingClientRect()
+        const tab = active.getBoundingClientRect()
+        if (tab.left < edge.left + inset) tabStrip.scrollLeft -= edge.left + inset - tab.left
+        else if (tab.right > edge.right - inset) {
+          tabStrip.scrollLeft += tab.right - (edge.right - inset)
+        }
+      })
+    })
+  )
+
   // Memoized filtered lists
   const subscriptions = createMemo(() =>
     bills().filter((b) => (b.type || 'bill') === 'subscription')
@@ -328,9 +362,16 @@ export default function Bills() {
     <div class={`${styles.billsPage} page page-bills page-enter`}>
       <div class={styles.pageHeader}>
         <div class={styles.headerTop}>
-          <h1 data-test-id="bills-header" data-tour="bills-header">
-            Bills
-          </h1>
+          {/* The title and the line that says what the page is for stay together: where the
+              buttons go under the title (BillsPage.module.css), they come after both. */}
+          <div class={styles.headerTitle}>
+            <h1 data-test-id="bills-header" data-tour="bills-header">
+              Bills
+            </h1>
+            <p data-test-id="bills-subtitle" class={styles.pageSubtitle}>
+              Track upcoming payments and never miss a due date
+            </p>
+          </div>
           <div class={styles.headerActions}>
             <Show when={billTab() === 'subscriptions'}>
               <button
@@ -386,13 +427,16 @@ export default function Bills() {
             </button>
           </div>
         </div>
-        <p data-test-id="bills-subtitle" class={styles.pageSubtitle}>
-          Track upcoming payments and never miss a due date
-        </p>
       </div>
 
       {/* Tab navigation */}
-      <div class={styles.tabs} data-tour="bills-tabs">
+      <div
+        class={styles.tabs}
+        data-tour="bills-tabs"
+        ref={(el) => {
+          tabStrip = el
+        }}
+      >
         <button
           class={`${styles.tabBtn} ${billTab() === 'all' ? styles.tabActive : ''}`}
           data-test-id="bills-tab-all"
@@ -432,6 +476,7 @@ export default function Bills() {
         </button>
         <button
           class={`${styles.tabBtn} ${billTab() === 'calendar' ? styles.tabActive : ''}`}
+          data-test-id="bills-tab-calendar"
           onClick={() => setBillTab('calendar')}
         >
           <svg
