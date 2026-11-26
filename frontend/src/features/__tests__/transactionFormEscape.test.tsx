@@ -13,15 +13,18 @@ import { render } from 'solid-js/web'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import KeyboardShortcutsModal from '../../components/KeyboardShortcutsModal'
 import { setCurrentProfile, setPage, setProfiles } from '../../core/appStore'
-import { __resetDataVersionsForTest } from '../../core/dataVersions'
+import { __resetDataVersionsForTest, invalidateEntity } from '../../core/dataVersions'
 import { setPeriod } from '../../core/periodStore'
 import { removeToast, toasts } from '../../core/toastStore'
+
+/** What a test answers in place of an empty list, by api method. */
+const answers = vi.hoisted(() => ({}) as Record<string, (...args: unknown[]) => Promise<unknown>>)
 
 vi.mock('../../core/api', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   api: new Proxy({} as Record<string, unknown>, {
-    // Every list the page and its children read is empty.
-    get: (target, name: string) => target[name] ?? (async () => []),
+    // Every list the page and its children read is empty, unless a test answers it.
+    get: (target, name: string) => answers[name] ?? target[name] ?? (async () => []),
   }),
 }))
 
@@ -65,6 +68,7 @@ beforeEach(async () => {
 })
 
 afterEach(() => {
+  for (const name of Object.keys(answers)) delete answers[name]
   dispose?.()
   dispose = undefined
   host.remove()
@@ -113,8 +117,10 @@ function dialogThatShutsOnEscape() {
 }
 
 describe("Transactions' entry form and Escape", () => {
-  it('shuts on Escape with focus where it opened, and focus stays on the add button', async () => {
+  it('takes focus when it opens, and gives it back to the add button on Escape', async () => {
     await openFromTheAddButton()
+    const form = host.querySelector<HTMLElement>('[data-test-id="tx-modal"]')!
+    expect(form.contains(document.activeElement)).toBe(true)
     await pressEscape()
     expect(formIsOpen()).toBe(false)
     expect(document.activeElement).toBe(addButton())
@@ -236,5 +242,50 @@ describe("Transactions' entry form and Escape", () => {
     await pressEscape(document)
     expect(formIsOpen()).toBe(true)
     setPage('transactions')
+  })
+})
+
+describe('the receipt viewer', () => {
+  it('takes focus when it opens, and gives it back to the receipt chip when it shuts', async () => {
+    answers.getTransactions = async () => [
+      {
+        id: 7,
+        date: '2026-11-02',
+        description: 'Corner shop',
+        amount: 12.5,
+        type: 'expense',
+        receipt_id: 3,
+        receipt_name: 'till-roll.png',
+      },
+    ]
+    answers.getReceipt = async () => ({
+      id: 3,
+      original_name: 'till-roll.png',
+      mime_type: 'image/png',
+      size: 10,
+    })
+    answers.getReceiptFile = async () => new Blob(['x'], { type: 'image/png' })
+    // jsdom has no object URLs.
+    vi.stubGlobal(
+      'URL',
+      class extends URL {
+        static readonly createObjectURL = () => 'blob:receipt'
+        static readonly revokeObjectURL = () => {}
+      }
+    )
+    invalidateEntity('transactions')
+    await settle()
+
+    const chip = host.querySelector<HTMLButtonElement>('button[aria-label="View receipt"]')!
+    chip.focus()
+    chip.click()
+    await settle()
+    const viewer = host.querySelector('[role="dialog"][aria-label="Receipt"]')!
+    expect(viewer.contains(document.activeElement)).toBe(true)
+
+    viewer.querySelector<HTMLButtonElement>('button[aria-label="Close modal"]')!.click()
+    await settle()
+    expect(host.querySelector('[data-test-id="receipt-modal"]')).toBeNull()
+    expect(document.activeElement).toBe(chip)
   })
 })

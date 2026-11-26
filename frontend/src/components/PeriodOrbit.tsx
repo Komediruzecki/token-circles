@@ -8,6 +8,7 @@
 import { createMemo, createSignal, For, onCleanup, onMount, Show } from 'solid-js'
 import { Portal } from 'solid-js/web'
 import { setOrbitOpen, usePeriod } from '../core/periodStore'
+import { dialogFocus } from '../utils/dialogFocus'
 import { isoDate, MONTH_NAMES, MONTH_NAMES_SHORT, monthPeriod, periodPills } from '../utils/period'
 import styles from './PeriodOrbit.module.css'
 import type { Period } from '../utils/period'
@@ -177,6 +178,7 @@ export default function PeriodOrbit(props: Props) {
         }}
       >
         <div
+          ref={dialogFocus}
           class={styles.panel}
           role="dialog"
           aria-label="Choose period"

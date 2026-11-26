@@ -10,7 +10,7 @@
 import { createEffect, Index, on, onCleanup, onMount, Show } from 'solid-js'
 import { Field, FormNotice, SubmitButton } from '../../components/form'
 import { apiGet } from '../../core/api'
-import { returnFocus } from '../../utils/returnFocus'
+import { dialogFocus } from '../../utils/dialogFocus'
 import { createLoanForm } from './loanForm'
 import pageStyles from './LoanForm.module.css'
 import styles from './Loans.module.css'
@@ -31,10 +31,7 @@ export default function LoanForm(props: Props) {
     },
   })
   let ratesRef: HTMLDivElement | undefined
-  let dialogRef: HTMLDivElement | undefined
   let nameRef: HTMLInputElement | undefined
-  // What had focus when the form opened: the add button, or the card menu's button.
-  const opener = document.activeElement
 
   // Fill the form from the loan being edited, at once: it is typed into straight away. Its rate
   // periods come with a local-first row; in cloud mode they come from the loan's own read, which
@@ -70,21 +67,18 @@ export default function LoanForm(props: Props) {
     )
   )
 
-  // Focus goes to the first field when the form opens, and back to what opened it when it shuts.
-  // `autofocus` cannot do the first: the browser applies it only while a page loads, and this
-  // dialog is put on the page later. Opened at its rate periods, the first rate field takes focus
-  // where the effect above scrolled, before this runs.
-  onMount(() => {
-    queueMicrotask(() => {
-      const rate = props.focusRates
-        ? ratesRef?.querySelector<HTMLElement>('input, button:not(:disabled)')
-        : null
-      ;(rate ?? nameRef)?.focus({ preventScroll: props.focusRates === true })
+  // Focus goes to the name when the form opens, and back to what opened it when it shuts
+  // (dialogFocus). Opened at its rate periods, the first rate field takes it instead, where the
+  // effect above scrolled.
+  const takeFocus = (dialog: HTMLElement) => {
+    dialogFocus(dialog, {
+      first: () =>
+        (props.focusRates
+          ? ratesRef?.querySelector<HTMLElement>('input, button:not(:disabled)')
+          : null) ?? nameRef,
+      preventScroll: props.focusRates === true,
     })
-  })
-  onCleanup(() => {
-    returnFocus(opener, dialogRef)
-  })
+  }
 
   onMount(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -98,7 +92,7 @@ export default function LoanForm(props: Props) {
 
   return (
     <div
-      ref={dialogRef}
+      ref={takeFocus}
       data-test-id="loans-modal"
       class={pageStyles.modalOverlay}
       role="dialog"

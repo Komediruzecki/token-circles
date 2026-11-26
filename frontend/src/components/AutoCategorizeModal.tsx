@@ -22,6 +22,7 @@
 import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from 'solid-js'
 import { api, getLocalCurrency, toast } from '../core/api'
 import { asOneWrite } from '../core/dataVersions'
+import { dialogFocusWhile } from '../utils/dialogFocus'
 import autoCategorizeModalStyles from './AutoCategorizeModal.module.css'
 import type { CategoryMapping } from '../types/models'
 
@@ -190,12 +191,16 @@ export function AutoCategorizeModal(props: AutoCategorizeModalProps) {
     return all
   }
 
+  // Stays on the page while shut: focus goes in each time it opens and back each time it shuts.
+  let modalRef: HTMLDivElement | undefined
+  dialogFocusWhile(props.isOpen, () => modalRef)
+
   return (
     <div
       class={autoCategorizeModalStyles.overlay}
       classList={{ [autoCategorizeModalStyles.isOpen]: props.isOpen() }}
     >
-      <div class={autoCategorizeModalStyles.modal}>
+      <div class={autoCategorizeModalStyles.modal} ref={modalRef} data-test-id="auto-cat-modal">
         <div class={autoCategorizeModalStyles.header}>
           <h2 class={autoCategorizeModalStyles.title}>Auto Categorize</h2>
           <button

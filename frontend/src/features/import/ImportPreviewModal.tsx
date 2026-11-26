@@ -5,6 +5,7 @@
  * verdict, date filter — is the exact same component the Import page uses.
  */
 import { onCleanup, onMount, Show } from 'solid-js'
+import { dialogFocus } from '../../utils/dialogFocus'
 import importStyles from '../Import.module.css'
 import styles from './ImportPreviewModal.module.css'
 import { ImportPreviewStep } from './ImportPreviewStep'
@@ -38,7 +39,13 @@ export function ImportPreviewModal(props: {
           if (e.target === e.currentTarget) props.onClose()
         }}
       >
-        <div class={styles.modal} role="dialog" aria-modal="true" aria-label={props.title}>
+        <div
+          ref={dialogFocus}
+          class={styles.modal}
+          role="dialog"
+          aria-modal="true"
+          aria-label={props.title}
+        >
           <div class={styles.header}>
             <h2 class={styles.title}>
               {props.title}

@@ -72,8 +72,8 @@ import { takeHashFlag } from '../core/hashRoute'
 import { refetchOnActive, usePageActive } from '../core/pageVisibility'
 import { setPeriod, usePeriod } from '../core/periodStore'
 import { rowsOfProfile } from '../core/quickEntryLists'
+import { dialogFocus, dialogFocusWhile } from '../utils/dialogFocus'
 import { fromPill, toRange } from '../utils/period'
-import { returnFocus } from '../utils/returnFocus'
 import {
   blankTransaction,
   checkTransactionForm,
@@ -420,15 +420,16 @@ export default function Transactions() {
     setTransactionModalOpen(false)
   }
 
-  // Escape shuts the entry form, as Cancel does: from one of its fields, or with focus still on
-  // the button that opened it (the form takes none when it opens). However the form shuts, focus
-  // goes back to that button. Escape is read twice. On its way in, before anything has had it:
-  // is something over the form? A dialog, a menu or an (i) panel takes Escape for itself, and
-  // some shut without saying so, so by the way out they are gone. On its way out, after every
-  // other listener (window hears it last): did something spend it? Only when neither, and only
-  // while this page is shown, does the form shut.
+  // The form stays on the page while shut: focus goes into it each time it opens and back to what
+  // opened it each time it shuts, however it shuts (dialogFocusWhile).
+  //
+  // Escape shuts the entry form, as Cancel does, wherever focus is. Escape is read twice. On its
+  // way in, before anything has had it: is something over the form? A dialog, a menu or an (i)
+  // panel takes Escape for itself, and some shut without saying so, so by the way out they are
+  // gone. On its way out, after every other listener (window hears it last): did something spend
+  // it? Only when neither, and only while this page is shown, does the form shut.
   let txModalRef: HTMLDivElement | undefined
-  let txOpener: Element | null = null
+  dialogFocusWhile(isTransactionModalOpen, () => txModalRef)
   const transactionsShown = usePageActive('transactions')
   // An (i) panel exists only while it is open. A dialog can stay in the page while shut and still
   // say aria-modal, but then it has no box.
@@ -438,12 +439,8 @@ export default function Transactions() {
       (el) => el !== txModalRef && el.getClientRects().length > 0
     )
   createEffect(
-    on(isTransactionModalOpen, (open, wasOpen) => {
-      if (!open) {
-        if (wasOpen) returnFocus(txOpener, txModalRef)
-        return
-      }
-      txOpener = document.activeElement
+    on(isTransactionModalOpen, (open) => {
+      if (!open) return
       let covered = false
       const onWayIn = (e: KeyboardEvent) => {
         if (e.key === 'Escape') covered = somethingOverForm()
@@ -2341,7 +2338,11 @@ export default function Transactions() {
           }}
         >
           <div
+            ref={dialogFocus}
             class={`${styles.modal} ${styles.receiptModal}`}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Receipt"
             onclick={(e) => {
               e.stopPropagation()
             }}

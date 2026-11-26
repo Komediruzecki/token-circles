@@ -1,3 +1,4 @@
+import { createSignal } from 'solid-js'
 import { render } from 'solid-js/web'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { BILL_MESSAGES } from '../../../../shared/billSchema'
@@ -266,5 +267,37 @@ describe('SubscriptionCatalogModal currency', () => {
 
     expect(catalog.price.previousElementSibling?.textContent).toBe('CHF')
     expect(catalog.total().textContent).toMatch(/^1 selected · CHF\s13\.99\/mo$/)
+  })
+})
+
+describe('SubscriptionCatalogModal focus', () => {
+  // It stays on the page while shut, faded out: it must not take focus until it opens.
+  it('takes focus only when it opens, and gives it back to the opener when it shuts', async () => {
+    const settle = () => new Promise((r) => setTimeout(r, 0))
+    const [open, setOpen] = createSignal(false)
+    host = document.createElement('div')
+    document.body.appendChild(host)
+    dispose = render(
+      () => (
+        <>
+          <button data-test-id="browse">Browse catalog</button>
+          <SubscriptionCatalogModal isOpen={open} onClose={onClose} categories={() => []} />
+        </>
+      ),
+      host
+    )
+    const opener = host.querySelector<HTMLButtonElement>('[data-test-id="browse"]')!
+    const dialog = host.querySelector('[role="dialog"]')!
+    opener.focus()
+    await settle()
+    expect(document.activeElement).toBe(opener)
+
+    setOpen(true)
+    await settle()
+    expect(dialog.contains(document.activeElement)).toBe(true)
+
+    setOpen(false)
+    await settle()
+    expect(document.activeElement).toBe(opener)
   })
 })

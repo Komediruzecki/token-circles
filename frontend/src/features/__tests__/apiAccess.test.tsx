@@ -181,6 +181,18 @@ describe('the secret reveal', () => {
     expect(root.textContent).not.toContain('tc_pat_SECRETVALUE')
   })
 
+  it('puts focus on its one way out, and is named by its heading', async () => {
+    const root = await mount()
+    await fillName(root, 'My token')
+    byText(root, 'Create token')!.click()
+    await flush()
+
+    expect(document.activeElement).toBe(ackButton())
+    const dialog = document.querySelector('[role="alertdialog"]')!
+    const title = document.getElementById(dialog.getAttribute('aria-labelledby') ?? '')
+    expect(title?.textContent).toBe('Copy your token now')
+  })
+
   it('names the API origin as the MCP endpoint, not the page it is being viewed on', async () => {
     // Derived from window.location this reads https://api.localhost:3800/mcp in development and
     // the SPA's own host in a same-origin build -- neither of which serves /mcp.

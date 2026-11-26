@@ -1,5 +1,6 @@
 import { For, Index, Show } from 'solid-js'
 import { acceptConfirm, confirmRequests, resolveConfirm } from '../core/confirmStore'
+import { dialogFocus } from '../utils/dialogFocus'
 import styles from './ConfirmDialog.module.css'
 import { OrbitSpinner } from './OrbitSpinner'
 
@@ -31,6 +32,7 @@ export default function ConfirmDialog() {
             }}
           >
             <div
+              ref={dialogFocus}
               class={styles.dialog}
               role="alertdialog"
               aria-modal="true"

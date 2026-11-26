@@ -45,6 +45,7 @@ import { apiDelete, apiGet, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
 import { entityVersion } from '../core/dataVersions'
 import { refetchOnActive } from '../core/pageVisibility'
+import { dialogFocus } from '../utils/dialogFocus'
 import { createRetirementGoalForm } from './retirementGoalForm'
 import styles from './RetirementPage.module.css'
 import RetirementPlanner from './RetirementPlanner'
@@ -370,6 +371,7 @@ export default function Retirement() {
       {/* Add/Edit Modal */}
       {showAddModal() && (
         <div
+          ref={dialogFocus}
           data-test-id="retirement-modal-overlay"
           class={styles.modalOverlay}
           role="dialog"

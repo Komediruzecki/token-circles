@@ -14,6 +14,7 @@ import {
   startFullTour,
   startTour,
 } from '../core/spotlightStore'
+import { dialogFocus } from '../utils/dialogFocus'
 import styles from './TourSelectionModal.module.css'
 
 export default function TourSelectionModal() {
@@ -25,7 +26,11 @@ export default function TourSelectionModal() {
   return (
     <div class={styles.overlay} onClick={() => setShowTourSelection(false)}>
       <div
+        ref={dialogFocus}
         class={styles.modal}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Take a Tour"
         onClick={(e) => {
           e.stopPropagation()
         }}
@@ -39,6 +44,7 @@ export default function TourSelectionModal() {
           </div>
           <button
             class={styles.closeBtn}
+            aria-label="Close"
             onClick={() => {
               setShowTourSelection(false)
             }}

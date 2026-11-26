@@ -76,6 +76,7 @@ import {
 import { theme } from '../core/theme'
 import { setStickyPeriodBar, stickyPeriodBar } from '../core/uiPrefs'
 import { loadChartExportSettings, saveChartExportSettings } from '../utils/chartExportSettings'
+import { dialogFocus } from '../utils/dialogFocus'
 import { localToday, toYYYYMM } from '../utils/period'
 import ApiAccess from './ApiAccess'
 import { createBaseCurrencyForm } from './baseCurrencyForm'
@@ -1904,6 +1905,7 @@ export default function Settings() {
                             }
                           >
                             <form
+                              ref={dialogFocus}
                               {...renameForm.attrs}
                               class={styles.householdRename}
                               onKeyDown={(e) => {
@@ -1925,7 +1927,6 @@ export default function Settings() {
                                       data-test-id="household-rename-input"
                                       value={renameForm.values.name}
                                       onInput={(e) => renameForm.set('name', e.currentTarget.value)}
-                                      autofocus
                                       required
                                     />
                                   )}

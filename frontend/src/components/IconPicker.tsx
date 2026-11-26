@@ -1,4 +1,5 @@
 import { createMemo, createSignal, For, onCleanup, onMount } from 'solid-js'
+import { dialogFocus } from '../utils/dialogFocus'
 import { iconSvgByKey, PICKABLE_ICON_NAMES } from './CategoryIcon'
 import styles from './IconPicker.module.css'
 
@@ -58,6 +59,7 @@ export default function IconPicker(props: IconPickerProps) {
       }}
     >
       <div
+        ref={dialogFocus}
         class={styles.picker}
         role="dialog"
         aria-modal="true"

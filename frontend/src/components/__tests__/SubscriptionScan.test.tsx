@@ -8,6 +8,7 @@
 /* eslint-disable security/detect-non-literal-fs-filename -- the one stylesheet named below */
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { createSignal } from 'solid-js'
 import { render } from 'solid-js/web'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { BILL_MESSAGES } from '../../../../shared/billSchema'
@@ -15,7 +16,7 @@ import { ApiError } from '../../core/apiError'
 import { orientationFacts } from '../../core/orientation'
 import { dayText } from '../../utils/dayText'
 import { localToday } from '../../utils/period'
-import { SubscriptionScanPanel } from '../SubscriptionScan'
+import { SubscriptionScanModal, SubscriptionScanPanel } from '../SubscriptionScan'
 
 const apiMocks = vi.hoisted(() => ({
   apiGet: vi.fn(),
@@ -533,5 +534,38 @@ describe("a row's name", () => {
   it('names a Revolut transfer by its payee, without the "To "', async () => {
     await mountRows()
     expect(nameOf('Example Landlord')).toBe('Regular payment to Example Landlord')
+  })
+})
+
+describe('the scan dialog and focus', () => {
+  // It stays on the page while shut, faded out: it must not take focus until it opens.
+  it('takes focus only when it opens, and gives it back to the opener when it shuts', async () => {
+    const settle = () => new Promise((r) => setTimeout(r, 0))
+    const [open, setOpen] = createSignal(false)
+    host = document.createElement('div')
+    document.body.appendChild(host)
+    dispose = render(
+      () => (
+        <>
+          <button data-test-id="scan">Scan</button>
+          <SubscriptionScanModal isOpen={open} onClose={() => setOpen(false)} />
+        </>
+      ),
+      host
+    )
+    const opener = host.querySelector<HTMLButtonElement>('[data-test-id="scan"]')!
+    const dialog = host.querySelector('[role="dialog"]')!
+    opener.focus()
+    await settle()
+    expect(document.activeElement).toBe(opener)
+
+    setOpen(true)
+    await vi.waitFor(() => {
+      expect(dialog.contains(document.activeElement)).toBe(true)
+    })
+
+    setOpen(false)
+    await settle()
+    expect(document.activeElement).toBe(opener)
   })
 })

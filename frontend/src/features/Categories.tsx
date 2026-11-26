@@ -50,6 +50,7 @@ import { useAppState } from '../core/appStore'
 import { CATEGORY_PALETTE } from '../core/brandPalette'
 import { entityVersion } from '../core/dataVersions'
 import { gatedSource } from '../core/pageVisibility'
+import { dialogFocus } from '../utils/dialogFocus'
 import { localMonth } from '../utils/period'
 import { createBudgetForm } from './budgetForm'
 import styles from './CategoriesPage.module.css'
@@ -485,6 +486,7 @@ export default function Categories() {
           }}
         >
           <div
+            ref={dialogFocus}
             class={styles.modal}
             onclick={(e) => {
               e.stopPropagation()
@@ -727,6 +729,7 @@ export default function Categories() {
           }}
         >
           <div
+            ref={dialogFocus}
             class={styles.modal}
             onclick={(e) => {
               e.stopPropagation()

@@ -4,6 +4,7 @@
  */
 import { createSignal, onCleanup, onMount, Show } from 'solid-js'
 import { api, toast } from '../core/api'
+import { dialogFocusWhile } from '../utils/dialogFocus'
 
 export interface ReconciliationModalProps {
   isOpen: () => boolean
@@ -83,6 +84,10 @@ export default function ReconciliationModal(props: ReconciliationModalProps) {
     document.removeEventListener('keydown', handleKeyDown)
   })
 
+  // Stays on the page while shut: focus goes in each time it opens and back each time it shuts.
+  let panelRef: HTMLDivElement | undefined
+  dialogFocusWhile(props.isOpen, () => panelRef)
+
   return (
     <div style={{ display: props.isOpen() ? 'block' : 'none' }}>
       <div
@@ -98,6 +103,8 @@ export default function ReconciliationModal(props: ReconciliationModalProps) {
         onClick={props.onClose}
       >
         <div
+          ref={panelRef}
+          data-test-id="reconcile-modal"
           style={{
             background: 'var(--card-bg)',
             'border-radius': 'var(--radius)',

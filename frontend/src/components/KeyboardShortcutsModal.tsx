@@ -4,6 +4,7 @@
  * ChangelogModal overlay pattern; closes on backdrop click, the X, or Esc.
  */
 import { For, onCleanup, onMount } from 'solid-js'
+import { dialogFocus } from '../utils/dialogFocus'
 import styles from './KeyboardShortcutsModal.module.css'
 
 interface Shortcut {
@@ -86,6 +87,7 @@ export default function KeyboardShortcutsModal(props: { onClose: () => void }) {
       {/* Modal, and says so: a page that shuts something of its own on Escape (Transactions'
           entry form, the loan chart) leaves Escape to a dialog that is over it. */}
       <div
+        ref={dialogFocus}
         class={styles.modal}
         role="dialog"
         aria-modal="true"

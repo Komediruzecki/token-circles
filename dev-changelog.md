@@ -2880,7 +2880,8 @@ check')` first, as the cushion and debt cases do.
   as the other dialogs over a backdrop do: without it, "?" over the form and then Escape shut both,
   and the half-filled form was cleared. The loan chart's Escape (`LoansOverview.tsx`) looks for a
   dialog over the page the same way, so it should leave Escape to the list now too; that is read
-  from the code, not tested. The form still takes no focus when it opens; listed, not changed here.
+  from the code, not tested. The form takes focus when it opens since "Every dialog takes focus",
+  below.
 - **Tests:** `src/features/__tests__/transactionFormEscape.test.tsx` opens the form from the add
   button and fails unless Escape shuts it from the button and from the amount, and unless focus is
   back on the button after Escape and after Cancel. It fails if Escape shuts the form while
@@ -2891,6 +2892,53 @@ check')` first, as the cushion and debt cases do.
   does the same in the browser: Escape from the add button and from the amount, and an (i) panel
   and the shortcuts list each taking the first Escape. All four failed before the change; with the
   list not marked modal, the shortcuts case failed with the form shut by the first Escape.
+- **Every dialog takes focus when it opens and gives it back when it shuts**
+  (`utils/dialogFocus.ts`). A dialog put on the page after it loaded left focus on the button that
+  opened it, behind the dialog: `autofocus` works only while a page loads, so the eight fields
+  that had it (Add bill and its Add Category, New Goal and its Add Category, Add money, the
+  household rename, Create Profile, the 2FA code) never had the cursor, and Tab walked the page
+  under the dialog. One helper does both halves now. Opening puts focus on the first field a
+  person can type in or choose from (not hidden, disabled or undrawn), or on the dialog itself when
+  it has none, which then gets `tabindex="-1"` and no ring round the whole panel
+  (`styles/index.css`). Shutting gives focus back through `returnFocus`. `ref={dialogFocus}` is
+  for a dialog put on the page when it opens; `dialogFocusWhile(open, () => el)` for one that
+  stays on the page, shown by a class: Transactions' entry form, Auto Categorize, Reconciliation,
+  the Guided Orbit, and the subscription scan and catalog. A dialog fading in from
+  `visibility: hidden` (Auto Categorize) cannot hold focus until its first frame is drawn, so the
+  helper tries again for up to ten frames, while the dialog is open and nobody else has moved
+  focus. `first` names another start (the loan form's rates; the token reveal's "I've saved it",
+  its only way out, which focused itself before). `returnTo` names where focus goes when the
+  opener has gone by the time the dialog shuts: Add money and Delete account take their buttons'
+  place and make them again, and Create Profile is an item in the profile menu, so focus goes to
+  the profile button. 41 dialogs use it. The ones with no field now have a role and a name, so
+  focus on them reads something: Dashboard Views, the receipt viewer, the changelog, Take a Tour
+  and the bill calendar's day popover; the token reveal is named by its heading, and Take a Tour's
+  close button is named Close. Left as they are, each with its own focus: the command bar (its
+  input, after its 60 ms open), the setup wizard (its panel and each step's heading), Tags' rename
+  (a field that focuses itself), the menus (the card, profile and filter menus), and the phone
+  drawer, the spotlight tour and the (i) panels, which are not dialogs. The transaction form's
+  `txOpener`, the Guided Orbit's own opener and the loan form's focus code are gone into the
+  helper. Not changed here: the subscription scan and catalog stay in the tab order while shut
+  (`opacity: 0` and `pointer-events: none`, nothing that takes them out of it), and most dialogs
+  still have no Escape, so the spec below shuts those with Cancel or Close.
+- **Tests:** `src/utils/__tests__/dialogFocus.test.tsx` (14 cases) covers both shapes: the first
+  field, a skipped hidden, disabled or undrawn one, the dialog itself when it has no field, a field
+  that focused itself, `first`, `returnTo`, focus moved away before the dialog shut, two rounds of
+  a class-shown form, one shut again before focus could move, and a dialog fading in (focus taken
+  on a later frame, left where someone moved it, ten frames at most). Each of its twelve guards,
+  taken out, fails at least one case. `frontend/tests/dialog-focus.spec.ts` (@smoke, 8 cases)
+  opens 36 dialogs on nine pages the way a person does, checks focus is in each, shuts it with
+  Escape, Cancel or Close, and checks focus is back on what opened it. With the helper taken out
+  all eight fail at their first dialog, focus not going in; with only its giving back taken out,
+  all eight fail with focus not coming back. Five more open where the
+  browser cannot reach them from the fixture, so a unit test opens each: the sign-in dialog
+  (`loginModal.backGesture.test.tsx`), the 2FA step (`TwofaChallenge.test.tsx`), the token
+  reveal (`apiAccess.test.tsx`), the bank import preview (`importPreviewIsNotAWrite.test.tsx`)
+  and the receipt viewer (`transactionFormEscape.test.tsx`). The scan and the catalog each have
+  one that fails if they take focus while shut (`SubscriptionScan.test.tsx`,
+  `SubscriptionCatalogModal.test.tsx`). `transaction-form-escape.spec.ts` now expects focus in
+  the form once it opens, and types "?" from its close button rather than from the add button
+  behind it.
 - **No extra-payment label stands on the loan's line.** A label above its mark and to the left of it
   was placed at the mark's height, where the line has not yet come down to the mark, so the line ran
   through it. The review's sweep (`LoanPayoffChart` in jsdom: the boat with one extra payment at

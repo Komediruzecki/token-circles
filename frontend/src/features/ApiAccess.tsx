@@ -16,6 +16,7 @@ import { API_ORIGIN, apiFetch } from '../core/apiFetch'
 import { activeProfileId } from '../core/apiProfileScope'
 import { getProfileVersion } from '../core/appStore'
 import { showConfirm } from '../core/confirmStore'
+import { dialogFocus } from '../utils/dialogFocus'
 import styles from './ApiAccess.module.css'
 
 /** The scopes the worker accepts; `VALID_SCOPES` in worker/src/routes/api-tokens.ts. */
@@ -74,6 +75,9 @@ export default function ApiAccess() {
   const [loading, setLoading] = createSignal(true)
   const [loadFailed, setLoadFailed] = createSignal(false)
   const [creating, setCreating] = createSignal(false)
+  // The reveal's only way out, where focus starts. The Create button that had focus is disabled
+  // the moment the create lands, which drops focus to <body>, outside a dialog with no other exit.
+  let ackButton: HTMLButtonElement | undefined
 
   const [name, setName] = createSignal('')
   const [scopes, setScopes] = createSignal<ScopeId[]>(['read'])
@@ -373,8 +377,18 @@ export default function ApiAccess() {
               {/* No overlay click-to-close and no escape hatch: closing without saving the secret
                 loses it for good, so the acknowledgement is the only way out. Focus moves to the
                 acknowledge button, or a keyboard user is left tabbing through covered controls. */}
-              <div class={styles.dialog} role="alertdialog" aria-modal="true">
-                <h3 class={styles.dialogTitle}>Copy your token now</h3>
+              <div
+                ref={(el) => {
+                  dialogFocus(el, { first: () => ackButton })
+                }}
+                class={styles.dialog}
+                role="alertdialog"
+                aria-modal="true"
+                aria-labelledby="api-token-reveal-title"
+              >
+                <h3 class={styles.dialogTitle} id="api-token-reveal-title">
+                  Copy your token now
+                </h3>
                 <p class={styles.dialogBody}>
                   This is the only time it can be shown. We store only a hash of it, so if you lose
                   it you will need to revoke this token and create another.
@@ -400,13 +414,7 @@ export default function ApiAccess() {
                   type="button"
                   class={styles.primaryBtn}
                   data-test-id="api-token-ack"
-                  ref={(el) => {
-                    // The Create button that had focus is disabled the moment the create lands,
-                    // which drops focus to <body> — outside a dialog that has no other way out.
-                    queueMicrotask(() => {
-                      el.focus()
-                    })
-                  }}
+                  ref={ackButton}
                   onClick={() => {
                     setMinted(null)
                   }}

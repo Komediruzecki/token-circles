@@ -3,6 +3,7 @@ import { CAPTCHA_ACTIONS } from '../../../shared/captchaActions'
 import { api } from '../core/api'
 import { afterHistoryStep, createHistoryStep } from '../core/historyStep'
 import { markPasskeyNudgeAfterLogin, passkeysSupported, signInWithPasskey } from '../core/webauthn'
+import { dialogFocus } from '../utils/dialogFocus'
 import CaptchaCheck from './CaptchaCheck'
 import { createCaptchaGate } from './captchaGate'
 import CheckInbox from './CheckInbox'
@@ -137,7 +138,7 @@ export default function LoginModal(props: LoginModalProps) {
         if (e.target === e.currentTarget) close()
       }}
     >
-      <div class={styles.modal}>
+      <div ref={dialogFocus} class={styles.modal}>
         <h3 class={styles.title}>{mode() === 'register' ? 'Create account' : 'Sign In'}</h3>
         <p style={{ 'margin-bottom': '16px', color: 'var(--text-secondary)', 'font-size': '14px' }}>
           {stage() === 'inbox'

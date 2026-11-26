@@ -107,6 +107,14 @@ h2 {
   max-width: 100%;
 }
 
+/* A dialog with no field takes focus itself when it opens (utils/dialogFocus.ts), which is what
+   gives it tabindex="-1". It is not a control: no ring around the whole panel. The first Tab moves
+   to a button, which draws its own. */
+[role='dialog'][tabindex='-1']:focus,
+[role='alertdialog'][tabindex='-1']:focus {
+  outline: none;
+}
+
 /* iOS-safe form controls: mobile Safari force-zooms the page when a focused
    input/select/textarea has a font-size below 16px — with our overflow-x:hidden
    containers that reads as the app breaking/"crashing" when a dropdown is opened.

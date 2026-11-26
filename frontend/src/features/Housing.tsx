@@ -41,6 +41,7 @@ import { useAppState } from '../core/appStore'
 import { paletteColor } from '../core/brandPalette'
 import { entityVersion } from '../core/dataVersions'
 import { refetchOnActive } from '../core/pageVisibility'
+import { dialogFocus } from '../utils/dialogFocus'
 import { createHousingForm } from './housingForm'
 import styles from './HousingPage.module.css'
 
@@ -388,6 +389,7 @@ export default function HousingForm() {
       {/* Add Housing Modal */}
       {showAddModal() && (
         <div
+          ref={dialogFocus}
           class={styles.modalOverlay}
           role="dialog"
           aria-modal="true"

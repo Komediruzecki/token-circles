@@ -1,6 +1,7 @@
 import { createSignal, Show } from 'solid-js'
 import { toast } from '../core/api'
 import { apiFetch } from '../core/apiFetch'
+import { dialogFocus } from '../utils/dialogFocus'
 import styles from './DangerZone.module.css'
 
 /**
@@ -54,6 +55,7 @@ export default function AccountDeletion() {
     }
   }
 
+  let deleteItem: HTMLDivElement | undefined
   return (
     <div class={styles['danger-zone']}>
       <div class={styles['danger-zone-title']}>
@@ -63,7 +65,7 @@ export default function AccountDeletion() {
         Delete account
       </div>
 
-      <div class={styles['danger-zone-item']}>
+      <div ref={deleteItem} class={styles['danger-zone-item']}>
         <div>
           <div class={styles['danger-zone-item-title']}>Delete your account</div>
           <div class={styles['danger-zone-item-desc']}>
@@ -84,7 +86,13 @@ export default function AccountDeletion() {
       </div>
 
       <Show when={confirming()}>
-        <div class={styles['danger-zone-item']}>
+        <div
+          ref={(el) => {
+            // Delete account is taken off while this asks, and made again when it shuts.
+            dialogFocus(el, { returnTo: () => deleteItem?.querySelector<HTMLElement>('button') })
+          }}
+          class={styles['danger-zone-item']}
+        >
           <div style="flex: 1;">
             <div class={styles['danger-zone-item-title']}>Are you absolutely sure?</div>
             <div class={styles['danger-zone-item-desc']}>

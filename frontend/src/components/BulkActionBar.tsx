@@ -4,6 +4,7 @@
  * Includes Change Category and Change Type modals (ported from old JS app)
  */
 import { createEffect, createSignal, For, Show } from 'solid-js'
+import { dialogFocus } from '../utils/dialogFocus'
 import styles from './BulkActionBar.module.css'
 
 interface Category {
@@ -155,7 +156,9 @@ export default function BulkActionBar(props: BulkActionBarProps) {
           }}
         >
           <div
+            ref={dialogFocus}
             class={styles.modal}
+            data-test-id="bulk-category-modal"
             onClick={(e) => {
               e.stopPropagation()
             }}
@@ -233,7 +236,9 @@ export default function BulkActionBar(props: BulkActionBarProps) {
           }}
         >
           <div
+            ref={dialogFocus}
             class={styles.modal}
+            data-test-id="bulk-type-modal"
             onClick={(e) => {
               e.stopPropagation()
             }}
@@ -303,6 +308,7 @@ export default function BulkActionBar(props: BulkActionBarProps) {
           }}
         >
           <div
+            ref={dialogFocus}
             class={styles.modal}
             data-test-id="bulk-tag-modal"
             onClick={(e) => {

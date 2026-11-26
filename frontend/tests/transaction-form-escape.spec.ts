@@ -13,14 +13,14 @@ test.describe("Escape and Transactions' entry form @smoke", () => {
     await navigateToRoute(page, 'transactions')
   })
 
-  test('Escape shuts the form with focus still on Add transaction, where opening leaves it', async ({
+  test('opening puts focus in the form, and Escape gives it back to Add transaction', async ({
     page,
   }) => {
     const add = page.getByTestId('add-transaction-btn')
     await add.click()
     const form = page.getByTestId('tx-modal')
     await expect(form).toBeVisible()
-    await expect(add).toBeFocused()
+    await expect.poll(() => form.evaluate((el) => el.contains(document.activeElement))).toBe(true)
 
     await page.keyboard.press('Escape')
     await expect(form).toBeHidden()
@@ -68,7 +68,8 @@ test.describe("Escape and Transactions' entry form @smoke", () => {
     await add.click()
     const form = page.getByTestId('tx-modal')
     await expect(form).toBeVisible()
-    // Focus is still on the add button behind the form, so "?" is not typing.
+    // On a button in the form, not a field, so "?" is not typing.
+    await form.getByRole('button', { name: 'Close modal' }).focus()
     await page.keyboard.type('?')
     const list = page.getByTestId('shortcuts-modal')
     await expect(list).toBeVisible()

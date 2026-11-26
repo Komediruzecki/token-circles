@@ -8,6 +8,7 @@
  */
 import { For, Show } from 'solid-js'
 import rawChangelog from '../../../CHANGELOG.md?raw'
+import { dialogFocus } from '../utils/dialogFocus'
 import styles from './ChangelogModal.module.css'
 import type { JSX } from 'solid-js'
 
@@ -108,7 +109,11 @@ export default function ChangelogModal(props: { onClose: () => void }) {
   return (
     <div class={styles.overlay} onClick={props.onClose}>
       <div
+        ref={dialogFocus}
         class={styles.modal}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Changelog"
         onClick={(e) => {
           e.stopPropagation()
         }}

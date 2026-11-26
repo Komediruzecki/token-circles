@@ -335,3 +335,20 @@ describe('signing in from the dialog reloads with no entry of its own left', () 
     expect(closes).toBe(1)
   })
 })
+
+describe('focus', () => {
+  it('starts in the email field, and goes back to the button that opened it on Escape', async () => {
+    const opener = document.createElement('button')
+    opener.textContent = 'Sign In'
+    document.body.appendChild(opener)
+    opener.focus()
+
+    await mount()
+    expect(document.activeElement).toBe(host.querySelector('#login-modal-email'))
+
+    await escape()
+    expect(isOpen()).toBeNull()
+    expect(document.activeElement).toBe(opener)
+    opener.remove()
+  })
+})

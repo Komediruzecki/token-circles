@@ -26,6 +26,7 @@ import { currencySymbol } from '../core/currencies'
 import { parseDecimalInput } from '../core/decimalInput'
 import { matchBrand } from '../features/subscriptionBrands'
 import { CATALOG_ITEMS, SUBSCRIPTION_CATALOG } from '../features/subscriptionCatalog'
+import { dialogFocusWhile } from '../utils/dialogFocus'
 import { localToday } from '../utils/period'
 import { createForm, FormNotice, SubmitButton } from './form'
 import { refusedMessages } from './refusedSubscriptions'
@@ -389,6 +390,11 @@ export function SubscriptionCatalogModal(props: SubscriptionCatalogModalProps) {
     )
   }
 
+  // Stays on the page while shut, faded out: focus goes in each time it opens and back each time
+  // it shuts.
+  let modalRef: HTMLDivElement | undefined
+  dialogFocusWhile(props.isOpen, () => modalRef)
+
   return (
     <div
       class={styles.overlay}
@@ -397,7 +403,13 @@ export function SubscriptionCatalogModal(props: SubscriptionCatalogModalProps) {
         if (e.target === e.currentTarget) props.onClose()
       }}
     >
-      <div class={styles.modal} role="dialog" aria-modal="true" aria-label="Subscription catalog">
+      <div
+        ref={modalRef}
+        class={styles.modal}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Subscription catalog"
+      >
         <div class={styles.head}>
           <div>
             <h2 class={styles.title}>Add subscriptions</h2>

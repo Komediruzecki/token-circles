@@ -61,6 +61,7 @@ import { entityVersion } from '../core/dataVersions'
 import { gatedSource, refetchOnActive } from '../core/pageVisibility'
 import { usePeriod } from '../core/periodStore'
 import { theme } from '../core/theme'
+import { dialogFocus } from '../utils/dialogFocus'
 import { toYYYYMM } from '../utils/period'
 import { createBudgetForm } from './budgetForm'
 import styles from './BudgetsPage.module.css'
@@ -1207,6 +1208,7 @@ export default function Budgets() {
           }}
         >
           <div
+            ref={dialogFocus}
             data-test-id="budgets-allocate-modal"
             class={`${styles.modal} ${styles.modalSmall}`}
             onClick={(e) => {
@@ -1319,6 +1321,7 @@ export default function Budgets() {
           }}
         >
           <div
+            ref={dialogFocus}
             class={styles.modal}
             onClick={(e) => {
               e.stopPropagation()
@@ -1464,6 +1467,7 @@ export default function Budgets() {
           }}
         >
           <div
+            ref={dialogFocus}
             class={styles.modal}
             onClick={(e) => {
               e.stopPropagation()

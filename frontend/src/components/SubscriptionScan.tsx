@@ -44,6 +44,7 @@ import {
   worthTracking,
 } from '../features/subscriptionDetection'
 import { dayText } from '../utils/dayText'
+import { dialogFocusWhile } from '../utils/dialogFocus'
 import { createForm, FormNotice, SubmitButton } from './form'
 import { OrbitSpinner } from './OrbitSpinner'
 import { refusedMessages } from './refusedSubscriptions'
@@ -541,6 +542,10 @@ export interface SubscriptionScanModalProps {
 }
 
 export function SubscriptionScanModal(props: SubscriptionScanModalProps) {
+  // Stays on the page while shut, faded out: focus goes in each time it opens and back each time
+  // it shuts.
+  let modalRef: HTMLDivElement | undefined
+  dialogFocusWhile(props.isOpen, () => modalRef)
   return (
     <div
       class={styles.overlay}
@@ -550,6 +555,7 @@ export function SubscriptionScanModal(props: SubscriptionScanModalProps) {
       }}
     >
       <div
+        ref={modalRef}
         class={styles.modal}
         role="dialog"
         aria-modal="true"
