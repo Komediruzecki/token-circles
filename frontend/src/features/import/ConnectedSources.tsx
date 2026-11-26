@@ -13,12 +13,7 @@ import { Field, FormNotice, SubmitButton } from '../../components/form'
 import { useAppState } from '../../core/appStore'
 import { showConfirm } from '../../core/confirmStore'
 import { entityVersion } from '../../core/dataVersions'
-import {
-  deleteImportSource,
-  listImportSources,
-  parseSheetUrl,
-  updateImportSource,
-} from '../../core/importSources'
+import { deleteImportSource, listImportSources, updateImportSource } from '../../core/importSources'
 import { refetchOnActive } from '../../core/pageVisibility'
 import { getStorageMode } from '../../core/storage/storageFactory'
 import { addToast } from '../../core/toastStore'
@@ -28,20 +23,34 @@ import { createImportFlow } from './importFlow'
 import { ImportPreviewModal } from './ImportPreviewModal'
 import { createSheetSourceForm } from './sheetSourceForm'
 import type { ImportSource } from '../../core/importSources'
+import type { ImportSummary } from './importFlow'
 
-export function ConnectedSources() {
+/** A sheet the flow could not read, when it said nothing itself. */
+const SHEET_NOT_READ = "Couldn't read the sheet. Try again."
+
+export function ConnectedSources(props: {
+  /** Before a Sync's or a preview's import runs: the page's card goes (Import.tsx). */
+  beforeImport?: () => Promise<void>
+  /** Its import landed: the page's card takes its result. */
+  onImported?: (summary: ImportSummary) => void
+}) {
   const [sources, setSources] = createSignal<ImportSource[]>([])
   const [showAdd, setShowAdd] = createSignal(false)
   const [busy, setBusy] = createSignal<{ id: number; action: 'sync' | 'preview' } | null>(null)
   const [previewOpen, setPreviewOpen] = createSignal(false)
   const [activeSource, setActiveSource] = createSignal<ImportSource | null>(null)
+  // What went wrong with a source's last Sync or Fetch & preview, said at its row until the next
+  // try (review of 19 Nov): a toast was gone in six seconds, from the corner of the screen.
+  const [failed, setFailed] = createSignal<{ id: number; message: string } | null>(null)
   // The daily auto-sync runs on the Worker cron, so only offer it in self-hosted / cloud mode.
   const canSchedule = getStorageMode() !== 'serverless'
 
   // A hidden flow this section drives. autoResetAfterImport off so we control the modal lifecycle.
   const flow = createImportFlow({
     autoResetAfterImport: false,
+    beforeImport: () => props.beforeImport?.() ?? Promise.resolve(),
     onImported: (summary) => {
+      props.onImported?.(summary)
       const src = activeSource()
       if (src) {
         const now = new Date().toISOString()
@@ -53,7 +62,7 @@ export function ConnectedSources() {
         summary.imported > 0
           ? `${summary.imported} imported${summary.duplicatesSkipped ? ` · ${summary.duplicatesSkipped} skipped` : ''}`
           : summary.duplicatesSkipped
-            ? `Nothing new — ${summary.duplicatesSkipped} already imported`
+            ? `Nothing new: ${summary.duplicatesSkipped} already imported`
             : 'Nothing new to import'
       addToast(text, summary.imported > 0 ? 'success' : 'info')
     },
@@ -84,11 +93,12 @@ export function ConnectedSources() {
   async function autoSync(src: ImportSource) {
     if (busy()) return
     setBusy({ id: src.id, action: 'sync' })
+    setFailed(null)
     setActiveSource(src)
     prime(src)
     const ok = await flow.fetchGoogleSheet({ navigate: false })
     if (!ok) {
-      addToast(flow.error() ?? 'Could not fetch that sheet', 'error')
+      setFailed({ id: src.id, message: flow.error() ?? SHEET_NOT_READ })
       setBusy(null)
       return
     }
@@ -97,21 +107,22 @@ export function ConnectedSources() {
     // re-sync of a growing ledger only lands genuinely new rows and never duplicates.
     await flow.handleImport('all')
     // handleImport swallows failures into flow.error() and never calls onImported. Auto sync has
-    // no preview or result screen, so without this toast a rejected import ends in silence — the
+    // no preview or result screen, so without this a rejected import ends in silence — the
     // spinner stops and the button just looks like it did nothing.
     const importError = flow.error()
-    if (importError) addToast(importError, 'error')
+    if (importError) setFailed({ id: src.id, message: importError })
     setBusy(null)
   }
 
   async function preview(src: ImportSource) {
     if (busy()) return
     setBusy({ id: src.id, action: 'preview' })
+    setFailed(null)
     setActiveSource(src)
     prime(src)
     const ok = await flow.fetchGoogleSheet({ navigate: false })
     if (!ok) {
-      addToast(flow.error() ?? 'Could not fetch that sheet', 'error')
+      setFailed({ id: src.id, message: flow.error() ?? SHEET_NOT_READ })
       setBusy(null)
       return
     }
@@ -138,7 +149,7 @@ export function ConnectedSources() {
 
   async function removeSource(src: ImportSource) {
     const ok = await showConfirm(
-      `Remove "${src.label}"? This deletes only the saved link — your imported transactions stay.`,
+      `Remove "${src.label}"? This deletes only the saved link. Your imported transactions stay.`,
       { danger: true, confirmText: 'Remove' }
     )
     if (!ok) return
@@ -177,11 +188,9 @@ export function ConnectedSources() {
     return `synced ${Math.round(h / 24)}d ago`
   }
 
-  const sheetMeta = (src: ImportSource): string => {
-    const { id, gid } = parseSheetUrl(src.config?.url ?? '')
-    const idShort = id ? `${id.slice(0, 6)}…` : 'sheet'
-    return `${idShort}${gid ? ` · gid ${gid}` : ''} · ${relTime(src.last_synced_at)}`
-  }
+  // When it last synced. It led with six characters of the sheet's id and its tab's gid, which
+  // say nothing to a person: the label names the sheet.
+  const sheetMeta = (src: ImportSource): string => relTime(src.last_synced_at)
 
   const isSyncing = (id: number) => busy()?.id === id && busy()?.action === 'sync'
 
@@ -227,7 +236,7 @@ export function ConnectedSources() {
                   class={styles.input}
                   type="url"
                   inputmode="url"
-                  placeholder="Google Sheets link (shared or published)"
+                  placeholder="Google Sheets link"
                   required
                   data-test-id="source-url-input"
                   value={addForm.values.url}
@@ -254,9 +263,10 @@ export function ConnectedSources() {
               )}
             </Field>
           </div>
+          {/* Not "or Publish": neither runtime can fetch a published link (importSourceSchema). */}
           <p class={styles.hint}>
-            The sheet must be shared as "anyone with the link can view" (or File &rarr; Share &rarr;
-            Publish). We fetch it once to remember its columns.
+            Share the sheet so anyone with the link can view it. We fetch it once to remember its
+            columns.
           </p>
           <div class={styles.addActions}>
             <button
@@ -426,6 +436,14 @@ export function ConnectedSources() {
                     <path d="M4 7h16M10 11v6M14 11v6M5 7l1 13a2 2 0 002 2h8a2 2 0 002-2l1-13M9 7V4h6v3" />
                   </svg>
                 </button>
+
+                <Show when={failed()?.id === src.id ? failed() : null}>
+                  {(failure) => (
+                    <p class={styles.rowError} role="alert" data-test-id="source-error">
+                      {failure().message}
+                    </p>
+                  )}
+                </Show>
               </div>
             )}
           </For>

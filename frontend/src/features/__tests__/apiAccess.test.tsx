@@ -181,6 +181,18 @@ describe('the secret reveal', () => {
     expect(root.textContent).not.toContain('tc_pat_SECRETVALUE')
   })
 
+  it('puts focus on its one way out, and is named by its heading', async () => {
+    const root = await mount()
+    await fillName(root, 'My token')
+    byText(root, 'Create token')!.click()
+    await flush()
+
+    expect(document.activeElement).toBe(ackButton())
+    const dialog = document.querySelector('[role="alertdialog"]')!
+    const title = document.getElementById(dialog.getAttribute('aria-labelledby') ?? '')
+    expect(title?.textContent).toBe('Copy your token now')
+  })
+
   it('names the API origin as the MCP endpoint, not the page it is being viewed on', async () => {
     // Derived from window.location this reads https://api.localhost:3800/mcp in development and
     // the SPA's own host in a same-origin build -- neither of which serves /mcp.
@@ -192,6 +204,23 @@ describe('the secret reveal', () => {
     const dialog = reveal()!
     expect(dialog.textContent).toContain('https://api.example.test/mcp')
     expect(dialog.textContent).toContain('Authorization: Bearer tc_pat_SECRETVALUE')
+  })
+
+  // Create token is disabled while it creates and again once the name is cleared, so focus cannot
+  // go back to it: it dropped to the page, and Tab started over from the top.
+  it('gives focus to the name field once it is acknowledged', async () => {
+    const root = await mount()
+    await fillName(root, 'My token')
+    const create = byText(root, 'Create token')!
+    create.focus()
+    create.click()
+    await flush()
+    expect(document.activeElement).toBe(ackButton())
+
+    ackButton()!.click()
+    await flush()
+    expect(reveal()).toBeNull()
+    expect(document.activeElement).toBe(nameInput(root))
   })
 
   it('clears the name field so the next token cannot silently reuse it', async () => {

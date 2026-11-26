@@ -50,9 +50,13 @@ import {
   goToOnboardingStep,
   markLocalSetupPending,
   nextOnboardingStep,
+  noteSetupAccount,
+  noteSetupImport,
   onboardingOpen,
   onboardingStep,
+  pauseOnboarding,
   prevOnboardingStep,
+  setupSoFar,
   skipOnboarding,
 } from '../../core/onboardingStore'
 import { rememberTypedBalance, typedBalances } from '../../core/setupTypedBalances'
@@ -89,7 +93,6 @@ import { workBackTypedBalances } from './setupBalances'
 import type { AnswerChanges, Answers } from '../../../../shared/guidance/answers'
 import type { OrientationStep } from '../../../../shared/orientation'
 import type { AchievementsSnapshot } from '../../core/achievementsStore'
-import type { ImportSummary } from '../../features/import/importFlow'
 import type { AccountType } from '../../types/models'
 import type { ProfileHolds } from './doneLine'
 import type { LocalWorkspace, ProfileCounts } from './localOnly'
@@ -248,10 +251,11 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
   const state = useAppState()
 
   // ---- what this visit did, for Done's summary ----
+  // What setup imported is the store's (setupSoFar): the wizard closes while setup waits on the
+  // Import page and opens anew, and the page's imports meanwhile count as setup's own.
   const [createdAccounts, setCreatedAccounts] = createSignal<
     (CreatedAccount & { type: AccountType })[]
   >([])
-  const [importSummary, setImportSummary] = createSignal<ImportSummary | null>(null)
   const [subsAdded, setSubsAdded] = createSignal(0)
 
   // ---- step: your space ----
@@ -409,6 +413,7 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
   const accountForm = createFirstAccountForm({
     onCreated: async (account) => {
       setCreatedAccounts((prev) => [...prev, { ...account, type: account.type as AccountType }])
+      noteSetupAccount(account)
       // What the bank shows now, kept for the statements to come (review M2).
       if (account.typed && account.id !== null) {
         rememberTypedBalance({ id: account.id, figure: account.balance, asOf: localToday() })
@@ -435,19 +440,20 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
 
   // ---- step: a statement ----
   const firstImport = createFirstImport({
-    preferredAccount: () => createdAccounts().at(-1)?.name ?? null,
+    preferredAccount: () => {
+      const made = createdAccounts().at(-1)
+      return setupSoFar().main ?? (made ? { id: made.id, name: made.name } : null)
+    },
+    soFar: setupSoFar,
     onImported: (summary) => {
-      // Totals add up across statements: "Bring in another statement" keeps the earlier ones.
-      setImportSummary((prev) =>
-        prev
-          ? {
-              ...summary,
-              imported: prev.imported + summary.imported,
-              duplicatesSkipped: prev.duplicatesSkipped + summary.duplicatesSkipped,
-              createdAccounts: [...new Set([...prev.createdAccounts, ...summary.createdAccounts])],
-            }
-          : summary
-      )
+      // Totals add up across statements and visits: "Bring in another statement" keeps the
+      // earlier ones, and so does a wizard opened again after waiting on the Import page.
+      noteSetupImport({
+        imported: summary.imported,
+        createdAccounts: summary.createdAccounts,
+        statements: summary.statements,
+        into: firstImport.importedInto() ?? undefined,
+      })
       // "Balance today" is what the bank shows now (review M2): the accounts this visit made with
       // one typed read it again, with the statement worked back from it.
       if (summary.imported > 0) {
@@ -456,8 +462,11 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
           showToast("Couldn't set your account's balance today. Accounts can set it.", 'warning')
         })
       }
-      // On to what the import made possible. With nothing new, the step says so and stays.
-      if (summary.imported > 0) goToOnboardingStep('subscriptions')
+      // On to what the import made possible. With nothing new, the step says so and stays; so it
+      // does with a file it set aside, for the way to Import on that file's card.
+      if (summary.imported > 0 && firstImport.setAside().length === 0) {
+        goToOnboardingStep('subscriptions')
+      }
     },
   })
   const importFlow = firstImport.flow
@@ -465,15 +474,20 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
 
   /** Past the statement: its subscriptions when an import brought transactions in, else Done. */
   const afterStatement = () => {
-    goToOnboardingStep((importSummary()?.imported ?? 0) > 0 ? 'subscriptions' : 'done')
+    goToOnboardingStep(setupSoFar().imported > 0 ? 'subscriptions' : 'done')
   }
 
-  /** Skip, with a statement ready: it asks, since the file would be dropped. */
+  /** Skip, with a statement ready: it asks, since the files would be dropped. */
   const skipStatement = async () => {
     if (firstImport.state() === 'ready') {
+      const ready = firstImport.files().filter((one) => firstImport.stateOf(one) === 'ready')
       const sure = await showConfirm(
-        'Leave this statement out? Nothing from it is imported. The Import page can bring it in later.',
-        { confirmText: 'Leave it out', cancelText: 'Keep it' }
+        ready.length > 1
+          ? `Leave these ${ready.length} statements out? Nothing from them is imported. The Import page can bring them in later.`
+          : 'Leave this statement out? Nothing from it is imported. The Import page can bring it in later.',
+        ready.length > 1
+          ? { confirmText: 'Leave them out', cancelText: 'Keep them' }
+          : { confirmText: 'Leave it out', cancelText: 'Keep it' }
       )
       if (!sure) return
     }
@@ -481,14 +495,18 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
     afterStatement()
   }
 
-  /** The way out for a file this step cannot import: setup finishes, and Import opens with it. */
-  const openInImport = () => {
-    const handed = firstImport.handOver()
+  /**
+   * The way out for a file this step cannot import: Import opens with it, and setup waits there
+   * (onboardingStore.ts, pauseOnboarding) until Back to setup brings it back, at the subscriptions
+   * in what came in. It used to finish setup, and left no way back to the subscriptions or Done.
+   */
+  const openInImport = (file?: File) => {
+    const handed = firstImport.handOver(file)
     if (!handed) return
-    // The balances typed here go with the file: finishing forgets setup's copy, and the file's
-    // import on the Import page works back from them, as setup's own import would have (M2).
+    // The balances typed here go with the file, for its import on the Import page to work back
+    // from, as setup's own import would have (M2).
     handFileToImport(handed.file, handed.tab, typedBalances())
-    completeOnboarding()
+    pauseOnboarding()
     window.location.hash = 'import'
   }
 
@@ -497,6 +515,7 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
     chosenCount: () => number
     submitting: () => boolean
     addSelected: () => Promise<number>
+    found: () => number | null
   } | null>(null)
 
   // ---- step: done, with the next steps from what the profile now holds ----
@@ -525,7 +544,7 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
   const accountsHeld = () =>
     Math.max(
       profileAccounts().length,
-      createdAccounts().length + (importSummary()?.createdAccounts.length ?? 0)
+      createdAccounts().length + setupSoFar().createdAccounts.length
     )
 
   /** "Personal Profile has 1 account, 69 transactions and 1 regular payment tracked on Bills." */
@@ -536,7 +555,7 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
       from === 'visit'
         ? {
             accounts: accountsHeld(),
-            transactions: importSummary()?.imported ?? 0,
+            transactions: setupSoFar().imported,
             bills: subsAdded(),
           }
         : holdsOf(from, accountsHeld())
@@ -607,7 +626,7 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
     if (leavePromptOpen) return
     leavePromptOpen = true
     try {
-      const imported = (importSummary()?.imported ?? 0) > 0
+      const imported = setupSoFar().imported > 0
       const sure = await showConfirm(
         leaveSetupQuestion(onboardingStep(), spaceScreen(), imported),
         {
@@ -1049,22 +1068,27 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
         Bring in a statement
       </h2>
       <p class={styles.lead}>
-        Export a CSV or Excel file from your bank's app, then choose it here.
+        Export a CSV or Excel file from your bank's app, then choose it here. More than one bank?
+        Choose them all.
       </p>
       <div class={styles.stack}>
-        <FirstImportPanel importer={firstImport} />
+        <FirstImportPanel importer={firstImport} onOpenInImport={openInImport} />
       </div>
     </div>
   )
 
+  /** The scan found some: the step says it spotted them only then (it said so over none). */
+  const spotted = () => (subScan()?.found() ?? 0) > 0
   const subscriptionsStep = () => (
     <div class={styles.step} data-test-id="onboarding-step-subscriptions">
       <h2 class={styles.title} tabindex="-1" data-step-heading>
-        Regular payments we spotted
+        {spotted() ? 'Regular payments we spotted' : 'Regular payments'}
       </h2>
-      <p class={styles.lead}>
-        Tick the ones to track. They go under Bills, where you can change them.
-      </p>
+      <Show when={spotted()}>
+        <p class={styles.lead}>
+          Tick the ones to track. They go under Bills, where you can change them.
+        </p>
+      </Show>
       <div class={`${styles.stack} ${styles.subscriptions}`}>
         <SubscriptionScanPanel
           active={() => onboardingOpen() && onboardingStep() === 'subscriptions'}
@@ -1154,10 +1178,20 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
           testId: 'onboarding-import-selected',
           skip: skip(firstImport.importing()),
         }
+      case 'failed':
+        return {
+          label: 'Try again',
+          run: () => void firstImport.retry(),
+          disabled: false,
+          testId: 'onboarding-import-retry',
+          skip: skip(),
+        }
       case 'unreadable':
         return {
           label: 'Open in Import',
-          run: openInImport,
+          run: () => {
+            openInImport()
+          },
           disabled: false,
           testId: 'onboarding-import-open',
           skip: skip(),

@@ -1,6 +1,6 @@
 import { ACCOUNT_MESSAGES, importedAccountTypeError } from '../../accountSchema';
 import { IMPORT_UPLOAD_MESSAGES } from '../../importUpload';
-import { IMPORT_SOURCE_MESSAGES } from '../../importSourceSchema';
+import { IMPORT_SOURCE_MESSAGES, SHEET_UNREADABLE } from '../../importSourceSchema';
 import { addCategory, balanceOf, expectMoney, listTransactions, rowsOf } from '../helpers';
 import { SHEETS } from '../outbound';
 import { expectOk, scenario } from '../types';
@@ -393,10 +393,19 @@ export const imports = [
         ['2026-03-01', 'Salary', '2500', 'Salary'],
         ['2026-03-02', 'Groceries', '-45.50', 'Food'],
       ],
-      sheetNames: ['Sheet1'],
-      selectedSheet: 'Sheet1',
+      // The tab is the link's gid, or the first: its name is not known, and none is made up.
+      sheetNames: [],
+      selectedSheet: '',
     });
     expect(SHEETS['contract-sheet']).toContain('Groceries');
+
+    // A tab name sent back is not taken as the tab read: the link says which tab that is.
+    const named = await api.post('/api/import/googlesheet', {
+      url: 'https://docs.google.com/spreadsheets/d/contract-sheet/edit#gid=0',
+      sheetName: 'Sheet1',
+    });
+    expectOk(expect, named, 'POST /api/import/googlesheet');
+    expect(named.body).toMatchObject({ sheetNames: [], selectedSheet: '' });
 
     // A link that is not a Google Sheet's is refused at the link, in the words the page shows.
     const refused = await api.post('/api/import/googlesheet', {
@@ -407,6 +416,28 @@ export const imports = [
       error: IMPORT_SOURCE_MESSAGES.url,
       fields: { url: IMPORT_SOURCE_MESSAGES.url },
     });
+
+    // A link from Publish to web names no sheet either runtime can fetch (its id was read as "e"),
+    // so it is refused at the link in words that say which link to paste, and nothing is fetched.
+    const published = await api.post('/api/import/googlesheet', {
+      url: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vContractOnly/pubhtml',
+    });
+    expect(published.status).toBe(400);
+    expect(published.body).toEqual({
+      error: IMPORT_SOURCE_MESSAGES.published,
+      fields: { url: IMPORT_SOURCE_MESSAGES.published },
+    });
+
+    // A sheet shared with no one cannot be read in any way either runtime tries. Both say how to
+    // share it, or to upload it instead, in one set of words as `error` and with no field named:
+    // the Import page and Add a sheet show that at the link.
+    const unread = await api.post('/api/import/googlesheet', {
+      url: 'https://docs.google.com/spreadsheets/d/contract-unshared-sheet/edit',
+    });
+    // DIFFERENCE sheet-unread-status
+    expect(unread.status).toBe(api.runtime === 'worker' ? 501 : 422);
+    expect(unread.body).toMatchObject({ error: SHEET_UNREADABLE });
+    expect(unread.body.fields).toBeUndefined();
   }),
 
   scenario('a spreadsheet file is uploaded for the mapping step', async (api, expect) => {

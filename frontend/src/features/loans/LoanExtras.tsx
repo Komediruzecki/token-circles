@@ -8,7 +8,7 @@
  * above the fields. Saving goes through apiFetch, which bumps the `loans` data version, so the page
  * reloads the loan on its own.
  */
-import { createEffect, createMemo, createSignal, For, Show } from 'solid-js'
+import { createEffect, createMemo, createSignal, For, onMount, Show } from 'solid-js'
 import { addCalendarMonths } from '../../../../shared/loanSchedule'
 import ConfirmButton from '../../components/ConfirmButton'
 import { Field, FormNotice, SubmitButton } from '../../components/form'
@@ -35,6 +35,9 @@ interface Props {
   canWrite: boolean
   ownerName: string
   compareHref: string
+  /** Opened from a card's Add an extra payment: the amount to add takes focus. */
+  focusAdd?: boolean
+  onFocusAdd?: () => void
   formats: Formats
   onDelete: (extra: SavedExtra) => Promise<void>
   onEditRates: () => void
@@ -110,6 +113,19 @@ export default function LoanExtras(props: Props) {
     const span = end ? `Payments ${start} to ${end}` : `From payment ${start}`
     return from ? `${span} (from ${dayLabel(from)})` : span
   }
+
+  // From a card's Add an extra payment: the payment it goes with is already the next one, so the
+  // amount is what is left to type. Brought to the middle of the screen, past the saved ones.
+  let addFormEl: HTMLFormElement | undefined
+  onMount(() => {
+    if (!props.focusAdd) return
+    const amount = addFormEl?.querySelector<HTMLInputElement>('[data-test-id="loans-extra-amount"]')
+    if (amount) {
+      amount.scrollIntoView?.({ block: 'center' })
+      amount.focus({ preventScroll: true })
+    }
+    props.onFocusAdd?.()
+  })
 
   const focusIn = (selector: string) => {
     queueMicrotask(() => list?.querySelector<HTMLElement>(selector)?.focus())
@@ -337,7 +353,12 @@ export default function LoanExtras(props: Props) {
             </p>
           }
         >
-          <form class={styles.form} data-test-id="loans-extra-form" {...addForm.attrs}>
+          <form
+            ref={addFormEl}
+            class={styles.form}
+            data-test-id="loans-extra-form"
+            {...addForm.attrs}
+          >
             <FormNotice form={addForm} testId="loans-extra-notice" />
             <div class={styles.formFields}>
               {fields(addForm, months, {

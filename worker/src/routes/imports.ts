@@ -12,7 +12,7 @@ import { requireAuth } from '../auth';
 import { getProfileId } from '../profile';
 import { accept, HttpError } from '../http';
 import { refusalOf, summarizeFields } from '../../../shared/refusal';
-import { readSheetUrl } from '../../../shared/importSourceSchema';
+import { readSheetUrl, SHEET_EMPTY, SHEET_UNREADABLE } from '../../../shared/importSourceSchema';
 import {
   IMPORT_UPLOAD_MAX_BYTES,
   IMPORT_UPLOAD_MESSAGES,
@@ -54,8 +54,9 @@ export function parseCsv(text: string): { headers: string[]; rows: string[][] } 
 // What's ported (pure DB / pure-JS text work — Workers-safe):
 //   - POST /api/import/execute    — insert transactions (+ create accounts/categories
 //                                   on the fly) from an already-parsed JSON `rows` array.
-//   - POST /api/import/googlesheet — fetch a published Google Sheet as CSV and parse it
-//                                   in pure JS (preview only; the actual insert is /execute).
+//   - POST /api/import/googlesheet — fetch a Google Sheet shared by its link as its CSV export
+//                                   and parse it in pure JS (preview only; the actual insert is
+//                                   /execute). A "Publish to web" link is refused at the link.
 //
 // What's left 501 (needs a Workers-compatible spreadsheet parser + R2/upload handling):
 //   - POST /api/import/upload      — multipart xlsx/csv FILE upload + SheetJS parse.
@@ -271,16 +272,22 @@ importRoutes.post('/api/import/file-sheet', requireAuth, async (c) => {
   );
 });
 
-/** A reason fetchGoogleSheetRows writes itself, safe to show in its 501. */
+/** A reason fetchGoogleSheetRows writes itself, safe to answer as its 501's `reason`. */
 class SheetUnreadable extends Error {}
+/** A sheet read with nothing in it: its words say so, not how to share it. */
+class SheetEmpty extends SheetUnreadable {}
 
-// ── fetchGoogleSheetRows — fetch + parse a published sheet as CSV (Workers-safe) ──
+// ── fetchGoogleSheetRows — fetch + parse a link-shared sheet's CSV export (Workers-safe) ──
 // Extracted from the HTTP handler so the route, the daily cron sync and email-in can all call
 // it. Returns a { status, body } pair. Pure-JS CSV path only; the XLSX fallback (multi-tab
 // enumeration) needs a spreadsheet parser and still surfaces as a 501-style error.
+//
+// The tab read is the link's gid, or the first tab: a tab name sent with it is not what is read,
+// and the CSV export does not say the tab's name. So the answer names no tab (`sheetNames` empty,
+// `selectedSheet` ''); it said "Sheet1", which a saved source then kept as its tab and its name,
+// and local-first sent back to Google as the tab to read (review of 19 Nov).
 export async function fetchGoogleSheetRows(
-  url: unknown,
-  sheetName?: string
+  url: unknown
 ): Promise<{ status: number; body: Record<string, unknown> }> {
   // The link's words are shared with local-first and the Import page (shared/importSourceSchema.ts).
   const link = readSheetUrl(url);
@@ -303,12 +310,12 @@ export async function fetchGoogleSheetRows(
         body: {
           headers,
           rows,
-          selectedSheet: sheetName || 'Sheet1',
-          sheetNames: [sheetName || 'Sheet1'],
+          selectedSheet: '',
+          sheetNames: [],
         },
       };
     }
-    throw new SheetUnreadable('No rows found');
+    throw new SheetEmpty('No rows found');
   } catch (err) {
     // CSV export failed / returned nothing. The Express fallback parses the XLSX export to
     // enumerate tabs, which the spreadsheet parser can't do on Workers yet.
@@ -328,25 +335,22 @@ export async function fetchGoogleSheetRows(
         })
       );
     }
+    // The words are local-first's for a sheet it cannot read, and the page shows them at the link:
+    // how to share it, or to upload it. They named the reason ("got HTML instead of CSV") and an
+    // XLSX fallback this deployment lacks; the reason is beside them now, as `reason`.
     return {
       status: 501,
-      body: {
-        error:
-          'Could not import this Google Sheet via CSV export: ' +
-          reason +
-          ". Make sure the sheet is shared as 'Anyone with link can view'. " +
-          'The XLSX fallback is not available on this deployment yet.',
-      },
+      body: { error: err instanceof SheetEmpty ? SHEET_EMPTY : SHEET_UNREADABLE, reason },
     };
   }
 }
 
-// ── POST /api/import/googlesheet — fetch + parse a published sheet as CSV ──────
+// ── POST /api/import/googlesheet — fetch + parse a link-shared sheet's CSV export ──
 importRoutes.post('/api/import/googlesheet', requireAuth, async (c) => {
   const rl = await enforce(c, `import:${c.get('userId')}`, 30, 300);
   if (rl) return rl;
   const b = (await c.req.json()) as Record<string, any>;
-  const { status, body } = await fetchGoogleSheetRows(b.url, b.sheetName);
+  const { status, body } = await fetchGoogleSheetRows(b.url);
   return c.json(body, status as 200);
 });
 
@@ -928,7 +932,7 @@ export async function executeImport(
       })();
       skippedItems.push({
         index: ri,
-        reason: detail ? `${invariantError} — ${detail}` : invariantError,
+        reason: detail ? `${invariantError}: ${detail}` : invariantError,
         label: importRowLabel(dateRaw, description),
       });
       continue;

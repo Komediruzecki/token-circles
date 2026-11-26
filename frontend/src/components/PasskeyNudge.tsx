@@ -3,6 +3,7 @@ import { toast } from '../core/api'
 import { apiFetch } from '../core/apiFetch'
 import { consumePasskeyNudge, passkeysSupported, registerPasskey } from '../core/webauthn'
 import layoutStyles from './Layout.module.css'
+import styles from './PasskeyNudge.module.css'
 
 /**
  * One-time offer after a fresh sign-in on a WebAuthn-capable device with no passkey yet:
@@ -47,27 +48,12 @@ export default function PasskeyNudge() {
 
   return (
     <Show when={visible()}>
-      <div
-        data-test-id="passkey-nudge"
-        style={{
-          position: 'fixed',
-          right: '16px',
-          bottom: '16px',
-          'z-index': 60,
-          'max-width': '340px',
-          padding: '14px 16px',
-          'border-radius': '12px',
-          background: 'var(--surface, #151a23)',
-          border: '1px solid var(--border, rgba(255,255,255,0.12))',
-          'box-shadow': '0 8px 30px rgba(0,0,0,0.35)',
-          'font-size': '13.5px',
-        }}
-      >
-        <div style={{ 'font-weight': 600, margin: '0 0 4px' }}>Sign in faster next time</div>
-        <p style={{ margin: '0 0 10px', color: 'var(--text-secondary)' }}>
+      <div data-test-id="passkey-nudge" class={styles.nudge}>
+        <div class={styles.title}>Sign in faster next time</div>
+        <p class={styles.text}>
           This device supports passkeys — add one and your screen lock signs you in, no password.
         </p>
-        <div style={{ display: 'flex', gap: '8px' }}>
+        <div class={styles.actions}>
           <button
             data-test-id="passkey-nudge-add"
             class={`${layoutStyles.btn} ${layoutStyles.btnPrimary}`}

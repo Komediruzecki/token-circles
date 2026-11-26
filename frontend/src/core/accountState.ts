@@ -83,6 +83,17 @@ export function readAccountState(): Promise<UserState | null> {
 }
 
 /**
+ * Read the account's state from the Worker again, for a change another device may have made since
+ * the read this session keeps: setup finished or left there while it waited here
+ * (onboardingStore.ts, resumeOnboarding). Null as readAccountState answers it.
+ */
+export function rereadAccountState(): Promise<UserState | null> {
+  if (!isServerAccount(owner)) return Promise.resolve(null)
+  reading = null
+  return readAccountState()
+}
+
+/**
  * Store `body` under `key` for the signed-in account, and keep the value the Worker answers.
  * Resolves to that value; rejects when the write fails. Local-first and nobody write nothing and
  * resolve to null.

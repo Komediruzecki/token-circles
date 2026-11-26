@@ -35,7 +35,7 @@
   background: color-mix(in oklab, var(--card-bg) 88%, transparent);
   backdrop-filter: blur(18px) saturate(140%);
   -webkit-backdrop-filter: blur(18px) saturate(140%);
-  border: 1px solid color-mix(in oklab, var(--primary) 18%, var(--border));
+  border: 1px solid color-mix(in oklab, var(--primary) 18%, var(--border-dialog));
   border-radius: 22px 22px 0 0;
   box-shadow: 0 -20px 60px -30px rgba(0, 0, 0, 0.7);
   padding: 20px 20px 18px;
@@ -60,6 +60,7 @@
   margin: 0 0 8px;
   padding-right: 32px; /* clear the absolute close button */
   font-family: var(--font-display, inherit);
+  word-spacing: var(--font-display-word-spacing);
   font-size: 16px;
   font-weight: 700;
   color: var(--text);

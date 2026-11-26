@@ -300,6 +300,23 @@ All notable changes to Token Circles are documented here. The format is based on
   `weekOneAhead`, and saves by itself when flipped. After a general unsubscribe it shows off and
   disabled. `ToggleField` takes `disabled`.
 
+- **The Welcome's Find your subscriptions opens the scan.** Its link was `#bills`, the list of
+  bills, with the scan one tab and one button away. It is `#bills?scan=1` now, the address Getting
+  started's subscription step already used: Bills opens on Subscriptions with the scan running
+  (`openScanFromLink`, `takeHashFlag`). New `shared/billsRoute.ts` holds `SUBSCRIPTION_SCAN_HASH`
+  for both (`WELCOME_STEPS` in `worker/src/emailTemplates.ts`, and `shared/orientation.ts`), as
+  `shared/importRoute.ts` does for `#import/bank`, and the step's link reads Scan for subscriptions
+  instead of Open Bills. `SubscriptionScanPanel` (`frontend/src/components/SubscriptionScan.tsx`)
+  now tells no transactions at all from none that recur: with none it says "No transactions to scan
+  yet." and, given `onImport` (the modal passes its `onClose`), offers Import a statement, a link to
+  `#import/bank` that closes the modal as it goes. The setup wizard passes no `onImport`. Guards:
+  `worker/test/email-templates.test.ts`, `welcome-once.test.ts` and `email-verification.test.ts`
+  (the step links `#bills?scan=1`, in the html and the text), and
+  `frontend/src/features/__tests__/billsScanLink.test.tsx` (an empty space gets the nothing-to-scan
+  state and the link to `#import/bank`, which closes the scan; a space with one transaction and no
+  subscription keeps the old empty state with no import offer, as the control). Each guard fails
+  with its change taken out.
+
 ### The first week, lived locally
 
 - **The week-one run counts from its scheduled time** (`worker/src/index.ts`, scheduled): the
@@ -521,7 +538,8 @@ All notable changes to Token Circles are documented here. The format is based on
     and in that list too, so subtracting the dry run's count took them off twice
     (`firstImportCount.test.ts`). A statement with nothing new says so. A file the defaults cannot
     import (a bank the adapters do not know, a table of any other kind, a file that does not read)
-    offers Open in Import, which finishes setup and hands the file to the Import page
+    offers Open in Import, which leaves setup waiting (see "Setup waits on the Import page" below)
+    and hands the file to the Import page
     (`features/import/importHandoff.ts`; `Import.tsx` takes it once the page is active, on Bank
     Imports for a bank it knows, else on File Upload, which goes on to the column mapping), or Skip.
   - **A YNAB Register file in the statement step.** Main's #674 made a Register file (Export
@@ -629,8 +647,10 @@ All notable changes to Token Circles are documented here. The format is based on
   | `subscriptions` | past the import step, imported or not | imported transactions on the statement step              |
   | `done`          | past the subscriptions step           | past subscriptions, or past the statement with no import |
 
-  `outcome: completed` came only from Done's Finish. It now also comes from Open in Import, at
-  step `import`, and from Escape on Done: before this build Escape there asked "Leave setup?" and,
+  `outcome: completed` came only from Done's Finish. It now also comes from Escape on Done
+  (Open in Import decides nothing: the record stays unfinished at `import`, or at `subscriptions`
+  once anything came in, until setup is finished or left): before this build Escape there asked
+  "Leave setup?" and,
   confirmed, recorded `skipped` at step `done`; now it finishes as Finish does, records
   `completed` and asks nothing, since the person reached Done. An old `skipped` at `done` is
   therefore a new `completed` at `done`: count them together. So the comparable counts are: old `welcome` and `space` together against new `space`
@@ -652,6 +672,204 @@ All notable changes to Token Circles are documented here. The format is based on
   GROUP BY 1, 2, 3
   ORDER BY 1, 2, 3;
   ```
+
+- **The statement step takes several files at once, a card each, imported in one tap.** maff,
+  19 Nov: the picker took one file and nothing could add a second. Frontend only: no migration,
+  no API change.
+  - **Files** (`components/onboarding/FirstImport.tsx`): the picker is `multiple`, a drop of files
+    anywhere on the step adds them (a drag depth counter for the highlight, as `ImportDataEntry`
+    does), and Add another file opens the picker again. Changes run one at a time through a
+    queue, each reading the whole batch, so a second pick waits for the first; Remove and another
+    account read it again. Clear bumps a generation that drops what is under way.
+  - **One batch** (`features/import/importFlow.ts`): the statements are the flow's `bankFiles`,
+    processed together by `processBankFiles`, which now keeps `bankFileRows`, each file's first
+    row and count in `currentRows()`, from `processFiles`' `perFile` (one entry per file, in
+    order). Each card's counts come from its range: new (picked, not matched by the dry run), here
+    already (`existingDuplicateIndices`), and repeats of an earlier file (the batch's
+    `duplicateSet`, which `goToPreview` leaves unpicked, whose canonical row an earlier file
+    holds). A row a statement repeats of its own is not one of those, as before. The dedup key is
+    the target account plus the bank's raw row (`classify.ts`), so two overlapping exports of one
+    account import each transaction once; the Worker's execute dedups only against stored rows,
+    which is why the batch's own pass is the one that counts here.
+  - **Set aside**: a file from a bank the app does not know, or one that does not read, keeps a
+    card with what is wrong and stays out of the batch. With nothing waiting to import (after the
+    import, or no statement ready) its card offers Open in Import for that file
+    (`handOver(file)`); after an import with such a file the step stays, so the card is seen,
+    and Continue goes on.
+  - **Goes into, per file.** What the code did: an account named for the bank
+    (`resolveTargetAccount`), else the account setup made on this visit, else the newest account
+    in the statement's currency, else a new account named for the bank. maff's Revolut statement
+    read "Goes into: Erste" through the second rule. The rule now is the one under "Each statement
+    goes into its own bank's account" below. One select per card, "Goes into" beside it on one
+    row (`.target`).
+  - A YNAB Register file keeps sending each row to the account it names, beside other files.
+  - Tests: `onboardingFirstImport.test.tsx` "several statements at once" (8) and "the account
+    each file goes into" (3); with the one-file step put back, all 11 fail. Without the first-bank
+    rule 1 fails, without the other-bank filter 2, and counting a statement's own repeat as an
+    earlier file's fails "counts a row the statement repeats once". `firstImportCount.test.ts`'s
+    flow stub gained the signals the counts read. In e2e, the `@smoke` "takes several statements
+    at once" case of `tests/onboarding.spec.ts` at 390x844: four files, the overlap counted once,
+    no wider than the screen, Import in view, and the set-aside file's way to Import after.
+- **Setup waits on the Import page for a file it hands over, and Back to setup picks up again.**
+  maff, 19 Nov: Open in Import finished setup, so after matching the columns and importing there
+  was no way back to the subscription step or Done. Frontend only: no migration, no API change.
+  - **The wait** (`core/onboardingStore.ts`): `pauseOnboarding()` closes the wizard with
+    nothing decided and keeps `{ id, owner, rerun, decidedBefore, here }` in memory; what setup
+    imported is in its record (`setupSoFar()`, below). The account's record (or local-first's
+    pending marker) stays at the step reached, moved to `subscriptions` when anything came in.
+    `noteImportWhileSetupWaits(n)`, called by `Import.tsx`'s `onImported`, adds an import made on
+    the page and records `subscriptions`. `resumeOnboarding()` opens setup at `subscriptions` with
+    anything imported, else at `import`. Before it opens a first run, it reads the account's record
+    again (`rereadAccountState()` in `core/accountState.ts`): finished or left on another device or
+    in another tab answers `finished` and setup stays closed; an account it cannot read answers
+    `unknown` and the wait stays, to be tried again. A rerun (Settings, the tour menu) asks
+    nothing, as its record never changes again. A new owner, `startOnboarding` or a decision ends
+    the wait.
+  - **Nothing opens setup over the page while it waits.** `maybeOfferOnboarding` runs only at
+    boot and after sign-in, so the columns are matched without the wizard in the way. Someone who
+    never comes back meets setup at the next start, on any device, at the step reached: the
+    subscriptions once an import landed. The balances typed in setup stay until setup is decided,
+    for the statements still to come.
+  - **The strip** (`features/import/SetupStrip.tsx`, `ImportNotices.module.css`) sits under the
+    page header while setup waits: "Setup is waiting for this statement" with a secondary Back to
+    setup, then "N transactions are in" with a primary one. N is `here`, the page's own imports:
+    setup's, made before it handed a set-aside file over, are not the file's. The page's own
+    subscription offer is
+    not set while setup waits, as setup's next step is that scan.
+  - Tests: `onboardingStore.test.ts` and `onboardingOnTheAccount.test.ts` ("setup waiting on the
+    Import page", 13 cases), `onboardingFirstImport.test.tsx` (Open in Import leaves setup
+    waiting; after an import it comes back at the subscriptions), `importOpensHandedFile.test.tsx`
+    (the strip, both ways back, no scan offer while waiting), and in e2e the `@smoke` Open in
+    Import case of `tests/onboarding.spec.ts` (map, import, Back to setup, Done) and "a file setup
+    cannot read leaves it waiting on Import, and a skip elsewhere keeps it closed" in
+    `tests/onboarding-server.spec.ts`. Guards checked by putting the old code back: resuming
+    without reading the account fails 4 store cases; the page not noting its import fails 1; the
+    wizard finishing on Open in Import fails 3.
+- **While setup waits, nothing but setup decides it, and the way back tells a finished setup
+  truly.** Review of 19 Nov (P3, P4), `core/onboardingStore.ts` and `core/onboardingFlag.ts`:
+  - Each wait has an `id`; `noteImportWhileSetupWaits` replaces the object and keeps it, and
+    `resumeOnboarding` compares ids after reading the account, then opens at the step the wait
+    holds then. By the object, an import that ended during that read answered `finished` and left
+    setup shut.
+  - `countProfileMadeAsDecided` (the profile menu's Create Profile) decides nothing while setup
+    waits for that owner, so Back to setup opens it at the step reached. When it does decide, it
+    clears the local marker as leaving setup does.
+  - Local-first, `decidedSince` compares the flag with the one held as the wait began
+    (`decidedBefore`): a decision the demo left before a local-only switch's setup made the way
+    back answer `finished` for a setup still under way. The pause writes the same thing beside the
+    marker (`finance_local_setup_waiting`, cleared with the marker and when setup opens), and
+    `whereToOfferOnboarding` drops a marker whose setup was decided while it waited instead of
+    opening the wizard over the decision. The marker over an older decision (review M7) still
+    opens it.
+  - **Round 4: a decision stamp, not the status.** The flag compared by value could not tell
+    another tab's skip from the skip the demo had left, so the way back opened setup again over a
+    decision made while it waited (the same for completed). `setOnboardingStatus` now writes a
+    stamp beside every decision (`finance_onboarding_stamp:<owner>`, a time and a few letters,
+    `stampOnboardingDecision` in `core/onboardingFlag.ts`), and the wait holds `decisionMark`: the
+    status with that stamp. `decidedSince` (local-first) and `whereToOfferOnboarding`'s note
+    beside the marker compare marks, so any decision kept since counts, the same one included.
+    The status stays in the mark for a tab still on a build that writes no stamp, which the old
+    comparison already caught when its decision differed; a note written by such a build (the
+    status alone) is compared by status.
+  - **Round 4: a sign-out during the account's re-read ends the wait and says nothing.** The owner
+    change took the wait, and `resumeOnboarding` read that as another tap having taken it:
+    `finished`, so the strip said "Setup is already finished, here or on another device." It now
+    answers `ended` when the owner changed during the read, and the strip says nothing for it.
+  - "Setup is already finished, here or on another device." comes only from `finished`: a
+    decision made since the wait began, read from the account signed in or the flag and its stamp
+    local-first, or the wait taken by another tap with setup closed.
+  - **Tests:** `onboardingStore.test.ts`: a profile made while setup waits leaves it undecided and
+    the way back opens it; one made with nothing waiting decides and drops the marker; a decision
+    made while waiting is not reopened at the next start and the marker goes; over a decision the
+    demo left, the way back and the next start open setup. `onboardingOnTheAccount.test.ts`: an
+    import landing while the account is read again opens setup at the subscriptions. All five
+    fail on the old store. Round 4 added, in `onboardingStore.test.ts`, the reviewer's two cases
+    (over the demo's skip, another tab's skip; over its finish, another tab's finish: the way back
+    answers `finished`), the next start over the same skip made again with the marker left, and
+    a stamp anew with every decision; in `onboardingOnTheAccount.test.ts`, a sign-out during the
+    re-read answers `ended`, and with the real strip mounted no toast is shown. With the status
+    alone in the mark the first three fail, without `ended` the two sign-out cases, and without
+    the stamp written the stamp case.
+- **Each statement goes into its own bank's account, and setup counts every import made for it.**
+  Review of 19 Nov (P1, P2, P5, P6, and the wizard not knowing what the Import page did). Frontend
+  only: no migration, no API change.
+  - **The rule** (`components/onboarding/statementTargets.ts`, pure). For a statement of bank B in
+    the base currency (none in the file counts as the base): an account named for B in the base
+    currency (`accountNamesBank`) that no other bank holds; else the main account, when it is in the
+    base currency, named for no other bank, and B is the bank it takes; else a new account named for
+    B and the base currency ("N26 EUR", or "N26 EUR 2" when another bank holds that name). A
+    statement in another currency is set aside (round 3, below). The main account is
+    the one setup's account step made; with none (setup reopened at the statement, or its account
+    step skipped), the newest account in the base currency named for no bank. The bank it takes is
+    the first it received earlier in this setup, else the first picked into it by hand, else the
+    first statement in the list that fits it. maff's decision reads "the first bank of this setup"; taken as the first whose statement
+    fits the main account, so a USD statement picked first leaves a EUR main account to the EUR
+    bank after it. Round 4: a pick by hand claims its account for its bank, whichever account it
+    is, and no default puts a second bank into an account another bank holds, by an earlier
+    statement or a pick by hand; only two picks by hand can share one.
+  - **Placed again** (`FirstImport.tsx`, `placeStatements`) whenever a file is added or removed,
+    and at every pick by hand (round 4), every file but those picked by hand (`byHand`, kept until
+    the file goes or the step clears). The old code placed a file once, as it came: picked one
+    after another, a second bank went into the main account, and Remove left the other file on a
+    new account with the main one empty. Until round 4 a pick by hand read the batch again without
+    placing it: N26 picked into the main account left Revolut there too, the next file added or
+    removed moved Revolut out, and an import before that put both banks into the main account. A
+    file's default now changes at the action that changes it; an add or a remove that has nothing
+    to do with it moves nothing. Placing reads the account list and setup's record as they are at
+    that action, so an account made in another tab while the step is open counts from the next
+    one.
+  - **Accounts held by id** (round 4). `takes` and `setupSoFar().main` held an account by name, so
+    a main account renamed while setup waited (on the Accounts page, say) was one no bank held,
+    and the next bank's statement went into it. `SetupSoFar.main` is now `{ id, name }`
+    (`noteSetupAccount` takes the created account), `SetupStatement` and `ImportSummary.statements`
+    carry `accountId` (`handleImport` reads the accounts back when the import made one), and
+    `statementTargets` keys every claim by id: an earlier statement's own, or the id of the
+    account of that name; only an account the import is yet to make goes by name.
+    `mainAccountOf` finds the made account by id. Tests: `setupStatements.test.tsx` "a main
+    account renamed while setup runs keeps its bank" (Revolut into Main checking, renamed to
+    Everyday, then N26 gets a new account and Revolut's next statement goes into Everyday) and
+    `statementTargets.test.ts` "holds an account by its id" (with another account given the old
+    name). With earlier statements keyed by name, both fail; with the made account found by name,
+    the second; with `accountId` left null in the summary, the first.
+  - **Not the Import page's guess.** Setup no longer keeps `resolveTargetAccount`'s answer for a
+    file: a choice remembered for its signature, else an account named for the bank in any
+    currency. `processBankFiles` remembers every file's account, setup's defaults included, so the
+    map is no sign of a person's choice. The Import page still reads it.
+  - **One record of the setup** (`core/onboardingStore.ts`). `setupSoFar()` holds the main account,
+    the transactions imported, the accounts created, each statement and where it went, and the
+    accounts imported into, for the owner, until setup is decided, started again or the owner
+    changes. The statement step, the step after it, the leave question and Done all read it, and
+    `noteImportWhileSetupWaits` adds an Import page import to it (`ImportSummary` now carries
+    `statements` for bank imports). After Back to setup the step says "Imported N transactions."
+    where it offered the handed-over file's Open in Import, Back then Skip goes on to the
+    subscriptions, and Done counts both imports.
+  - **Tests:** `statementTargets.test.ts`, and in `setupStatements.test.tsx` one after another,
+    Remove, a hand pick that stays and three on what setup counts. Round 3 replaced the cases that
+    gave a statement in another currency an account (below). `onboardingFirstImport.test.tsx` "says
+    when nothing in it is new" starts a fresh run before its second import, as within one run the
+    first import counts and Continue goes to the subscriptions. Measured in round 2: with the old
+    `defaultTarget` back, 4 placement cases failed; with the old wizard and step, all 7 cases
+    `setupStatements.test.tsx` had then; without the currency in the main account's choice, the
+    case that picked the newest account in the statement's currency. Round 4 added "a pick by hand
+    into the main account claims it" (`setupStatements.test.tsx`: the reviewer's sequence, then a
+    file added and one removed, then the import, one bank per account) and "puts no second bank
+    by default into an account another bank holds" (`statementTargets.test.ts`). With the pick
+    reading again without placing, the first fails; without the hold check on the bank's own
+    account, or without the name of its own, the second does.
+- **The statement step says why its files were not read, and an empty export takes no
+  account.** Review of 19 Nov, `components/onboarding/FirstImport.tsx`:
+  - A read that stops before it counts any file (the category list not read, say) showed
+    `flow.error()` only once a statement was ready, so every card said "We couldn't read any
+    transactions in this file" and offered Open in Import. Now the cards are `failed` with nothing
+    on them, the reason sits on the step (`onboarding-import-error`, `role="alert"`), and the
+    footer's main button is Try again (`onboarding-import-retry`), which reads them again.
+  - A statement read with no transaction in it never takes the main account for its bank
+    (`empty` in `statementTargets.ts`): an empty Revolut export picked first sent the N26
+    statement after it to a new account. Picked together, nothing is counted before the first
+    read, so the step places the files again once read and reads them again when a target moved.
+  - **Tests:** three in `setupStatements.test.tsx` and one in `statementTargets.test.ts`. Taken
+    out one at a time: the `empty` check fails 3, the placing after the read fails "picked
+    together", and the `failed` state fails "says why the files were not read".
 
 ### State that follows the account
 
@@ -2476,8 +2694,1402 @@ check')` first, as the cushion and debt cases do.
   made after it and confirmed an hour later counts (1 of 2, 50%); with no row for 0033, nothing
   counts. Fails before the change (5 tests).
 
+### The top of the Import page
+
+- **An import leaves one card at the top of the page, and the flow's messages are on their
+  step.** maff, 19 Nov: after a Google Sheets import with twelve accounts, the offers above the
+  import tabs pushed the form out of view, and a sheet's error was in red above them. Frontend
+  only.
+  - **The card** (`features/import/ImportAfter.tsx`, `import-after`, styles in
+    `ImportNotices.module.css` beside the setup strip): the result line as its heading
+    (`import-result`), a Dismiss button, then one row each for Balances today
+    (`import-after-balances`) and the subscription scan (`import-scan-offer`, `import-scan-open`).
+    The balances row says how many accounts changed; its list (`ImportBalances` with the new
+    `plain` prop: no card of its own, the heading for assistive tech only) opens by itself up to
+    `BALANCES_OPEN_UP_TO` (2) accounts, the case of a bank statement, and otherwise behind Show
+    balances (`import-after-balances-toggle`, `aria-expanded`, `aria-controls`). The scan row's
+    copy has no dash: "Find the subscriptions and other regular payments in what you've
+    imported." `Import.tsx` keeps the last import in `after` (set in `onImported`, replaced by the
+    next import that lands, cleared by Dismiss, a delete of its import and a profile change); the
+    scan row is left out while setup waits.
+  - **The result line comes with the import.** `ImportSummary` carries `text`, and `handleImport`
+    no longer puts it in `resultMessage`: in that banner it sat on the next step's form for the
+    rest of its six seconds. "No new transactions" is now "No new transactions. All 3 rows were
+    imported before, so they were skipped." (one row: "Its one row was imported before, so it was
+    skipped.").
+  - **Messages on their step** (`features/import/StepMessage.tsx`): `flow.error()`
+    (`import-error`, `role="alert"`), or else the flow's short notice (`import-notice`,
+    `role="status"`; only "Preview recalculated from your rules." is left). One is drawn per
+    step: each upload tab under its own form (the Bank Imports tab under Process & continue), Map
+    columns under the workbook's sheets, the preview under its buttons (not in Connected
+    sources' preview modal) and the bank summary under its actions. The page-wide banners are
+    gone. `flow.chooseImportTab(tab)`, which the tab bar now calls, clears the error when the tab
+    changes, so a bank file's error does not follow onto the Google Sheets form.
+  - **The Google Sheets tab puts its form first.** The Expected columns table (about 690 px)
+    moved under the link, its help line and Continue to mapping.
+  - **Measured** at 1440x900 after a sheet import into twelve accounts: the tabs from 775 px to
+    305 px down the page, the link field from 1,467 to 381; at 390x844, 1,159 to 450 and 1,890
+    to 547.
+  - **Tests:** `features/__tests__/importPageTop.test.tsx` (the page in local-first): the card's
+    rows, the list shut for three accounts and opened by its toggle, the methods straight after
+    the card once the flow starts over, Dismiss; "No new transactions" on a second import with
+    no rows to do; a Bank Imports error under Process & continue, gone on another tab; an empty
+    sheet's error under the sheets on Map columns. All four fail on the old page. Guards: without
+    the clear in `chooseImportTab` the error stays on the Sheets tab; with the threshold at 12
+    the list is open; with the message over the tab bar it is not under the button.
+    `tests/import-page-top.spec.ts` (`@smoke`, 1440x900 and 390x844): after the twelve-account
+    import the tabs start and the link field ends inside the viewport, and a link that is not a
+    sheet's marks the field with no `import-error`. It fails on the old page, and with the list
+    open (the link field's bottom at 971 px of 900; the tabs at 1,297 px of 844 on a phone).
+- **After a Google Sheets import, the card offers to keep the sheet in Connected sources.** maff,
+  19 Nov: after importing from a sheet, its Sync should be a click away, or offered when the link
+  was never saved. `Import.tsx` reads the sheet as the import ends (`sheetToKeep`: the link, its
+  tab's name, the columns as matched, by header name with `mappingToHeaderNames`, and the
+  category types), before the flow starts over; any other tab gives `null`. The card's last row
+  (`import-after-sheet`, `SheetRow` in `ImportAfter.tsx`) reads the saved sources first and shows
+  nothing until then: a source for the same spreadsheet and tab (`sourceForSheet` in
+  `features/import/keepSheet.ts`, a link with no gid being tab 0) is named, in Connected sources
+  below (`import-after-saved`); otherwise a form on the kit (`createKeepSheetForm`, the name
+  checked with `checkImportSourceCreate`, refusals under the field or in its notice) saves it with
+  Save sheet (`import-after-save-sheet`). The body is Add a sheet's (`keepSheetBody`: the name, or
+  the tab's, or "Google Sheet"; `schedule: 'manual'`) plus the import's `mapping` and
+  `category_types`, and `last_synced_at` now, since its rows just came in. The write bumps
+  `import-sources`, so Connected sources lists it with Auto sync. No API change: both runtimes
+  took these fields on create already. The name and Save sheet share a line at every width
+  (`.keepRow`; the input is 16 px on a phone). With this row, after the twelve-account import the
+  tabs start at 374 px and the link field at 450 at 1440x900, and at 585 and 682 at 390x844.
+  - **Tests:** `importPageTop.test.tsx`: Save sheet with a name stores one `google_sheet` source
+    with the link, `manual`, the four columns by name and a `last_synced_at`, and Connected
+    sources shows its Auto sync; a sheet saved before is named with no form and no second row,
+    and one saved with no name reads as "Google Sheet" rather than offering a second copy; a
+    file import has no sheet row; `sourceForSheet` matches the same tab, a link with no gid as
+    tab 0, and not another tab or spreadsheet. Without `sheetToKeep` the first two fail; with a
+    raw gid compare the saved-before case and the matcher fail; reading the label alone fails
+    the no-name case. `import-page-top.spec.ts` saves the sheet from the card in the browser and
+    finds its Auto sync.
+- **A saved sheet's new categories are typed as a fresh import types them, by hand and
+  overnight.** Review of the branch, 19 Nov: the sheet saved from the card keeps the import's
+  `category_types`, and `applySavedMapping` restored them alone, so a category added to the sheet
+  later had no type and its row fell to the amount's sign (an unsigned 12.00 in Pharmacy came in
+  as income). Round 4 found the daily cron doing the same: it passed the saved types to
+  `executeImport`, where a category they do not name takes the amount's sign
+  (`worker/src/routes/imports.ts`, `typeOfRow`), so with Save sheet and then Auto sync the same
+  row came in as an expense by hand and as income overnight. One rule now, `syncTypes` in
+  `shared/importCategoryTypes.ts`, with `classifyCategory` moved from
+  `frontend/src/core/categoryClassifier.ts` to `shared/categoryClassifier.ts`: the saved types
+  win for the values they name, and every other value is typed as a fresh import types it, the
+  keyword guess with the account-by-construction values as accounts (`freshImportTypes`, which
+  Map columns takes too). Connected sources' Sync takes it on both runtimes and the cron
+  (`worker/src/import-sync.ts`) for every sheet saved with types; Add a sheet now saves the fresh
+  import's types, as the card saves the import's. A sheet saved by an earlier release has no
+  saved types, as no screen wrote them before, and there each sync keeps its released rule: Sync
+  guesses by keyword, the cron takes each amount's sign. Bringing those together retypes rows of
+  sheets people already sync (a signed sheet's refunds and pay corrections, an unsigned sheet's
+  every row overnight), so that is maff's decision.
+  - **Tests:** `worker/test/sheet-sync-types.test.ts` syncs one sheet by hand (fetch, `syncTypes`,
+    `executeImport`, as Sync sends it) and by the cron, and every row gets the same type and
+    account, unsigned and signed, from categories the saved types name and ones they do not, a
+    new Means of Payment value included. Before the change the cron made the unsigned Pharmacy
+    row income. Its second case pins the split for a sheet saved with no types: unsigned, the
+    cron makes every row income; signed, a +15.00 in Returns is income overnight and an expense
+    by hand, and a -50.00 in Salary an expense overnight and income by hand. Treating those like
+    typed sheets fails it. `sheetForms.test.tsx`: Add a sheet saves `Groceries: expense`,
+    `Salary: income` and `Example Card: account` (null before).
+    `savedSourceCategoryTypes.test.ts` and `features/__tests__/syncSavedSheet.test.tsx` as before.
+- **A sheet's tab is the link's, and no runtime makes up its name.** Review of 19 Nov:
+  - **No "Sheet1".** Both runtimes answered `POST /api/import/googlesheet` with
+    `selectedSheet`/`sheetNames` of the tab name sent, else "Sheet1", though the tab they read is
+    the link's gid (or the first tab) and the CSV does not carry its name. A sheet saved from the
+    card or with Add a sheet then kept "Sheet1" as its tab and as its name, Recent Imports logged
+    "Google Sheet (Sheet1)", and local-first sent the name back to Google as `&sheet=` on its
+    Visualization API try, which reads that name instead of the gid. Now both answer
+    `sheetNames: []` and `selectedSheet: ''` (`fetchGoogleSheetRows` in
+    `worker/src/routes/imports.ts`, which no longer takes a tab name, and `importGoogleSheet` in
+    `core/storage/handlers/importFlow.ts`, whose `gviz` URL carries the gid alone). The page goes
+    on to Map columns on the headers alone (`fetchGoogleSheet` waited on a tab name, the made-up
+    one). A source saved with no tab name stores none and is named "Google Sheet"
+    (`keepSheetBody`, `sheetSourceForm.ts`). Sources saved earlier keep their `sheetName`; the
+    Worker never read it for the fetch, and local-first no longer sends it.
+  - **A published link is its own sheet.** `parseSheetUrl` (`core/importSources.ts`) read a
+    published link (`/d/e/2PACX…`) as id `e`, so `sourceForSheet` took any two published sheets
+    for one. It reads the id after the `e` now. Fetching a published link is unchanged: both
+    runtimes read it as id `e` and fail to fetch it, as before.
+  - **A published link is refused at its field, and no line asks for one.** Round 4 of the review:
+    the Import page's help said "or publish it" and Add a sheet's "(or File → Share → Publish)",
+    though neither runtime can fetch the link Publish to web gives. `readSheetUrl`
+    (`shared/importSourceSchema.ts`) now refuses a `/d/e/` link in words of its own,
+    `IMPORT_SOURCE_MESSAGES.published`: "A "Publish to web" link can't be read. In Google Sheets,
+    choose Share, set General access to "Anyone with the link", and paste that link instead." So
+    the Import page's link, Add a sheet's, and `POST /api/import/googlesheet` and
+    `/api/import-sources` on both runtimes mark it at the link before anything is fetched. Both
+    lines ask for a sheet shared by its link, and Add a sheet's placeholder lost "(shared or
+    published)". Fetching is unchanged. A source saved with a published link before (only the API
+    could: Add a sheet reads the sheet first) keeps it, as does a backup restore, which checks no
+    link: its Sync says these words at its row where it said the read failed, and the daily sync
+    skips it as it did.
+  - **Tests:** `importSourceSchema.test.ts` (three published links refused by the link rule, the
+    fetch's check and a new source's; an id that starts with `e` still read), the contract
+    scenarios "a shared Google Sheet is read for the mapping step" and "a connected source that
+    cannot be stored is refused at its field, and nothing is saved" on both runtimes,
+    `sheetForms.test.tsx` (each form marks one at the link and asks Google for nothing; neither
+    line nor the placeholder says publish) and `connectedSources.autoSyncError.test.tsx` (a saved
+    one's Sync). With the rule taken out, the Worker answered 501 and local-first 422, each after
+    asking Google, both saved a source with one (201), the forms asked Google and marked "Could
+    not access the Google Sheet from the browser.", and a saved one's Sync asked the runtime to
+    read it. `destructive-data-integrity.test.ts` saved a source with a published link; it uses
+    a shared one now.
+  - **A link with no gid is tab 0.** `sourceForSheet` takes a link with no gid and one with
+    `gid=0` as the same tab: Google opens a link without a gid on the first tab, and both runtimes
+    read the first tab for it, which is gid 0 unless that tab was deleted or moved. No runtime
+    can read a tab's gid from the sheet, so the two stay equal.
+  - **Tests:** `keepSheetEdges.test.ts` (two published sheets told apart; no gid is gid 0 and not
+    gid 7; no tab name kept or made up), `core/storage/__tests__/googleSheetTab.test.ts` (local-first
+    sends no `sheet=` to Google, even for "Sheet1", and answers no tab name), and the contract
+    scenario "a shared Google Sheet is read for the mapping step" on both runtimes (no tab name,
+    with or without one sent). Before the change all of them failed but "no gid is gid 0".
+    `sheetForms.test.tsx` expected the made-up name ("Sheet1" stored as tab and label) and now
+    expects none and "Google Sheet".
+- **The card after an import is about the last import, or it goes.** Review of 19 Nov:
+  - **A Sync's result takes it.** Connected sources drives its own flow, so after a Sync or a
+    Fetch & preview import the card still said "Imported 2 transactions" while the toast said
+    "1 imported · 2 skipped". `ConnectedSources` now takes `beforeImport` and `onImported` from
+    the page, which runs both flows' imports through one `landed()` in `Import.tsx`: an import
+    that lands takes the card, with the balances it changed. A Sync's card has no sheet row (the
+    sheet is saved). The toast stays, as the Sync button can be a screen below the card.
+  - **A failed import leaves it as it was** (round 4). `beforeImport` took the card down as any
+    import started, so a failed one, a Sync of another sheet say, left no card, and an unsaved
+    Save sheet offer went with it. `beforeAnImport` now only reads the balances; `landed()`
+    replaces the card and clears the balances list it showed. Test: `importPageTop.test.tsx`
+    "stays as it was when a Sync fails": the same card element, its text and the name typed into
+    the offer after the failed Sync; then a Sync that lands takes it, and one with nothing new
+    shows no balances from the import before. With the card taken down at the start again, it
+    fails at the failed Sync; without the balances cleared in `landed()`, at the nothing-new
+    Sync.
+  - **Deleting its import in Recent Imports clears it.** `ImportSummary` and the card carry the
+    import's `importId`, which the history entry holds as `import_id` (`ImportLogEntry` now names
+    it); a delete of that entry drops the card, and a delete of another entry leaves it.
+  - **A quick-add keeps it.** The floating add button's save bumps `profileVersion`, which
+    cleared the card and an unsaved Save sheet offer with it. The card now goes only when the
+    current profile changes; on a bump with the same profile its balances are read again, as the
+    entry may have moved one (the balances list remounts on the new array, so it reads them).
+  - **"Imported 1 transaction"**, where the result line said "1 transactions".
+  - **Tests** (`features/__tests__/syncSavedSheet.test.tsx`): a Sync's result in the card, the
+    card gone after its import is deleted, the card and its offer through a quick-add, and the
+    balances read again after one. The first three fail on the old page; with the balances not
+    read again, the last fails. `importFollowsWrites.test.tsx` counts the card's two reads of
+    the accounts after a Sync. Round 4 of the review: "stays when a different import is deleted
+    in Recent Imports" imports the ledger without its coffee, then a day later with it, and
+    deletes the first; the card about the second stays. With the entry's `import_id` no longer
+    compared, it fails at the card.
+- **The Save sheet offer says what Sync does.** Review of 19 Nov: Sync sends every row of the
+  sheet and the import skips the ones in already, so rows this import left out come in with the
+  first Sync. The card's sheet row now reads "Sync brings in every row of the sheet that isn't in
+  Token Circles yet.", saved or not, and when this import left rows out, "That includes the N rows
+  this import left out." `ImportSummary.leftOut` counts them in `handleImport`. What Sync does is
+  unchanged. Tests: the two offer cases in `syncSavedSheet.test.tsx` (both fail on the old copy);
+  `importPageTop.test.tsx` and `import-page-top.spec.ts` read the new line.
+  - **Round 4: the count is the one Sync's dedupe gives.** It was rows not sent less those here
+    already by the dry run, the invalid ones and every copy of another row, on the reasoning that
+    Sync skips a copy again. It does not: both runtimes skip a row only for a transaction there
+    before the import, one for one, so a copy Import only new left out is new to the first Sync.
+    Two identical "Example coffee" rows: the card said nothing was left out, and the first Sync
+    booked the second coffee. `leftOut` is now the import's own dry run over every row of the
+    sheet once the import is in (`rowsASyncBringsIn`, its `imported`): the rows a Sync would
+    bring in, by the same dedupe on either runtime. Only a sheet import that did not send every
+    row asks; when the dry run fails, the card says only what Sync does. Test:
+    `syncSavedSheet.test.tsx` "counts a copy Import only new left out": the card says one row,
+    and the first Sync of the saved sheet imports exactly one, the second coffee. With the old
+    count it fails at the card.
+- **A failed Sync or Fetch & preview is said at its source's row, and a failed import in the
+  preview modal in the modal.** Review of 19 Nov, the rest of the ask to say each message where
+  it belongs. `ConnectedSources.tsx` toasted both failures, gone in six seconds from the corner
+  of the screen; now the row says it in a `role="alert"` line under its controls
+  (`source-error`, `.rowError`; the row wraps at every width so the line takes its own), until
+  the next Sync or Fetch & preview of any source. `ImportPreviewModal.tsx` showed nothing when its
+  import failed (its step's message is not drawn embedded); the flow's error now sits in the
+  footer, a line of its own above the buttons (`import-preview-error`). The success toast stays.
+  Tests: `connectedSources.autoSyncError.test.tsx` (the import's error at the row with no toast;
+  an unread sheet at the row, cleared by the next try; the modal's error above Import selected).
+  All three fail on the old code.
+
+### Loans: a chart under the card, and a card menu
+
+- **The chart under a card** (`frontend/src/features/loans/LoanChartPanel.tsx`,
+  `LoanPayoffChart.tsx`, `loanTimeline.ts`). A card's name is a stretched button
+  (`loans-item-name`, `aria-expanded`, `aria-controls`) that opens a full-row panel straight after
+  its `<article>`: `.chart-panel` spans `grid-column: 1 / -1`, and `.cards` has
+  `grid-auto-flow: row dense`, so the cards beside the opened one fill its row back in above the
+  panel instead of wrapping below it. One chart at a time: `openId` lives in `Loans.tsx`, so Back
+  from a loan's page finds it still open. It goes with its loan: a list read without the loan
+  clears it, and so does a profile switch (`state.currentProfile?.id`), so switching away and back
+  from another page does not find it open again. A second click, the panel's Close or Escape
+  closes it. Escape counts only while the Loans page is shown (`usePageActive('loans')`: pages
+  stay in the document as `display: none`), from the cards, the chart or with focus nowhere; not
+  from elsewhere on the page, not for a key another listener handled (`defaultPrevented`), and not
+  while an `aria-modal` dialog or a `role="menu"` with a box is open. A box, because Transactions'
+  entry form and the subscription scan stay in the DOM saying `aria-modal` while shut, and a hidden
+  page's dialogs do too: with every page visited, four sit in the document on Loans, none shown.
+  `getClientRects()` replaces `checkVisibility`. Closing gives focus back to the card's button and
+  scrolls it into view (`block: 'nearest'`), as Escape from another card left it out of sight.
+  When a chart higher up closes as another opens, `toggle` scrolls by the distance the clicked
+  card moved, so it stays under the pointer.
+- **Focus order stays card A, A's chart, then B and C**, though B and C sit above the chart in A's
+  row: the chart belongs to A and follows its card in the document. Deliberate.
+- **What it draws.** `loanTimeline(loan, today)` splits the shared engine's rows (`amortizeLoan`,
+  no fork) where the card does: a payment due on or before today counts as made. `today` is the
+  day the list was read (`listToday` in `Loans.tsx`), as the card's figures are, so a list read
+  after midnight on a payment day moves both. It gives made, owed, repaid (the principal: amount
+  borrowed less owed, what the card's "% repaid" measures), months left, the payoff month, extras
+  made or planned, paid off, never repaid and dated. The SVG is drawn at its measured width
+  (ResizeObserver), so its text stays 12 px: the past as a solid line in the ring gradient over a
+  filled area, the future dotted, today a dashed warm line with a Today pill and a dot on the line
+  at what is owed, the years along the axis (this year always named and banded, the rest thinned
+  to fit), extra payments as filled (made) or hollow (planned) dots with a `+€X` label while there
+  are at most six and they fit, and the payoff month at the end, or "Never repaid at this rate"
+  where the engine stops. A label goes right of its mark, or left where the right runs off the
+  chart or into another label, raised 3 px clear of the line where it runs highest over the label,
+  and never over the Today pill or today's dot and its glow. Where neither side above has room, it
+  goes under the line: under the mark, then under and to its left,
+  3 px under the line where the line runs lowest over the label, so the line never crosses it, and
+  under today's glow only as a last resort. It is left off only when none of those fits. On the
+  demo's Investment Property Loan, 5,000 paid extra at payment 20 had no label at 820, 600 or
+  390 px: the Today pill above it, the plot's edge to its left. It now sits under its mark at 820
+  and 600 px, and at 390 px, with today's glow 13 px from the mark, under that glow. A loan
+  whose first payment falls in a later year has no Today: its axis starts in that year. The
+  sentence above it (`timelineSentence`) and a four-figure readout (Repaid so far, Still owed,
+  Months left, Last payment) carry the numbers. Each figure's key is its own mark on the line: the
+  solid stretch for Repaid so far (its fall from the amount borrowed to today is that figure), the
+  dotted stretch for Still owed, the end mark for Last payment; Months left has none. A loan with
+  no schedule (no amount, or no term) shows its sentence only. The SVG is one `role="img"` named
+  by its `<title>` and described by its `<desc>` (`timelineDescription`). Motion: the box fades in
+  and drops 8 px in 280 ms, the line draws left to right (`clip-path`, 900 ms) and today fades in
+  after it; with reduced motion, a 120 ms fade only. It plays once per open: once
+  `getAnimations({ subtree: true })` have settled the panel gets `data-played` and
+  `animation: none`, as `display: none` on the hidden page started them over on every return.
+- **Its box answers for its own width** (`.chart-box`: `container-type: inline-size`, one
+  `minmax(0, 1fr)` column). The readout goes four to a row from 600 px of box, two below that,
+  two equal halves below 340 px and one to a row below 286 px (`@container`), and a figure never
+  breaks inside ("A figure in the loan chart's readout never breaks inside", below). Four need 525
+  px with €1,182,363.57 owed and 508 px
+  with €195,000.53, measured at 1440 px.
+  The viewport query it replaces left the box overflowing between 769 and 925 px and between 561
+  and 637 px: at 820 px, with the sidebar shown, the box had 426 px and the readout needed 532,
+  Close was cut to nothing and the SVG was drawn to the overflow. The sentence on top runs the
+  box's width (`max-width: 70ch` left "November 2038." alone on a second line) and wraps balanced.
+- **Loading.** `createLoanRecord` (`loanRecord.ts`, taken out of `LoanDetail.tsx`, which uses it
+  too) gives the panel the listed row when it carries its rate periods and extra payments
+  (local-first) and fetches `GET /api/loans/:id` when it does not (the Worker's list leaves them
+  out); the newest answer wins, and a failure shows Try again. Once the loan is there, a frame
+  later, the panel scrolls itself into view (`scrollBy`, smooth unless motion is reduced) without
+  taking its card off the top, or under what the page keeps clear there: the page's
+  `scroll-padding-top`, which on a phone is the floating menu button's 48 px (at 390 x 600 the
+  card stopped at 16 px, under the button). `LoansOverview` loops over loan ids rather than row
+  objects, so a list read again after a write keeps the same card and chart nodes: no replayed
+  draw, no lost focus. The page keeps no bottom room of its own for the floating add button any
+  more: `.main` keeps it for every page (Layout.module.css).
+- **The card menu** (`frontend/src/components/OverflowMenu.tsx`, shared with `SubscriptionCard`):
+  Add an extra payment (a loan you can change, with payments left), See every payment, and Edit and
+  Delete (a loan you can change). Its items are a memo of whether the loan can be changed and is
+  paid off, and read the card's latest row when picked: built from the row, a list read with the
+  menu open built its buttons again and dropped focus. Delete asks through `showConfirm`, in the
+  words the card's delete button used. Add an extra payment sets `pendingExtra` in `Loans.tsx` and
+  opens `#loans/<id>/extras`; `LoanExtras` focuses `loans-extra-amount` when it mounts with
+  `focusAdd`, and `LoanDetail` drops the hand-off when another tab is picked before the loan
+  loaded. The card's edit and delete icon buttons and the name's link to the schedule are gone;
+  What if stays.
+- **`OverflowMenu` follows the WAI-ARIA menu button pattern.** The menu is portalled, which took it
+  out of the tab order. Opening now focuses its first item (ArrowUp on the trigger, the last), the
+  arrows wrap, Home and End jump, Escape and Tab close it with focus back on the trigger (Tab is not
+  prevented, so the browser moves on from there), and an item closes the menu before it runs. A menu
+  with no room below opens above. A scroll closes it only when the trigger has moved since it
+  opened: scroll events come a frame late, and the one for a scroll that came with the opening press
+  closed the menu at once (seen at 390 px when the page scrolled to the trigger as it was pressed).
+  Items are 44 px tall on a coarse pointer, and the trigger and icons fall back to
+  `--text-secondary`, as `--text-muted` is not a theme token. The focused item draws a 2 px
+  `--primary` ring (4.6:1 on Dawn's menu, 5.2:1 on Orbit's); hover keeps the tint, which focus used
+  to share at 1.14:1. The menu paints the floating pair, `--surface-floating` and
+  `--border-floating` ("Every floating surface draws its own edge", below): #222b47 with a #5b698c
+  edge in Orbit Dark and white with #a1a9bd in Dawn Light, an edge of 3.07 and 2.35:1 on the card,
+  where it was the card's own colour with a 1.32:1 border. It sits at z-index 1500, above the
+  floating add button, which covered its corner on a phone.
+- **Card figures** (`.figures`): `repeat(3, minmax(max-content, 1fr))` and a 12 px column gap, so
+  an amount takes the width it needs. With `minmax(0, 1fr)` and `overflow-wrap: anywhere`,
+  €175,923.83 broke after the 8 at 390 px.
+- The Loans tour's "Your loans" step says what a card opens and what its menu holds. Its anchors
+  are unchanged.
+- **Tests:** `loanTimeline.test.ts`, `loanPayoffChart.test.tsx` and new cases in `loanCopy.test.ts`
+  (the split at today and the due-today boundary, today on the line, this year, extra labels only
+  while few, on the left at the right edge and clear of today's glow, the demo loan's two extras
+  labelled at a phone's, a 600 px and an 820 px chart width, by their marks and clear of the line,
+  Today and each other, paid off, never repaid, no
+  start date, a first payment next year, the title and description, every sentence and the
+  description). `loansPage.test.tsx`: open and close, one at a time, Escape and each exception (a
+  shut dialog with no box, another page shown), the card brought into view on Escape, the scroll
+  that keeps a clicked card in place, the same chart node after the list is read again, today from
+  the list, a loan with no schedule, a deleted loan, a list read and a profile switch that forget
+  the open chart, a fetched loan and Try again, the readout's labels and keys, the menu by state
+  and kept open with its focus through a list read, the extras focus hand-off and its drop, See
+  every payment. `overflowMenu.test.tsx`: the keyboard pattern, a scroll that moves nothing, and
+  where it opens (under, above, under when neither has room). `frontend/tests/loan-chart.spec.ts`
+  (`@smoke`, local-first, its own loans): same-row cards keep their place and the panel spans the
+  grid, Escape and focus, today and the sentence, one chart at a time, the opening played once,
+  the menu by keyboard to a saved extra payment and its planned mark, its focus ring and its edge
+  in both themes, a seven-figure loan's chart inside its box from 1440 to 390 px, and on a phone
+  the panel straight under its card and in view, its card clear of the menu button on a short
+  screen, amounts on one line, the menu staying open and above the add button, and the only
+  loan's chart ending above the add button when scrolled to the end. Specs that edited, deleted
+  or opened the schedule from a card go through the menu now (`loans.spec.ts`,
+  `amortization-table.spec.ts`, `loan-form-errors.spec.ts`,
+  `release/s02-pages-follow-writes.spec.ts`). Each guard was taken out and its test seen failing.
+
 ### Fixed
 
+- **The dialog specs click a calendar day, not the shut catalog's 1Password row.**
+  `dialog-focus.spec.ts` and `dialog-tab-trap.spec.ts` (Bills) took the first
+  `[role="button"][tabindex="0"]` on the page whose text starts with a digit. The shut
+  subscription catalog stays on the page, faded out and inert, and its 1Password row is such a
+  button; Playwright counts opacity 0 as visible. Since the calendar's first load waits in the
+  calendar's place instead of suspending the page (`fix(bills)`, ff73ade5), that row was the first
+  match while the month loaded, and the click on it was intercepted until the test timed out. The specs
+  passed on the loan-chart branch, which has no such wait; on the merge they failed every time.
+  Both specs now look inside
+  `bill-calendar-grid`.
+- **The scan's notice for a deleted category is the one the spec expects.**
+  `subscription-form-errors.spec.ts` still expected the Worker's words, "Choose a category from
+  the list, or leave it blank.", for a scan row whose category was deleted in another tab. Since
+  `fix(scan)` (9429abd3) the scan says what failed and sends you to Bills: "The scan chose a
+  category this profile doesn't have. Add it from Bills and pick one there." The spec now expects
+  that, in both modes.
+- **A bank's name counts in an account's name only where no letter touches it.**
+  `resolveTargetAccount` (`shared/bankImport/accountResolver.ts`) took an account whose name or
+  bank name held the bank's id anywhere, so an ING statement went into the first account with
+  "ing" in it (Main Checking, Savings, Spending), on Bank Imports and in setup. The test is now
+  `accountNamesBank(account, bankId)`: the id, of any length, with no letter on either side
+  (Unicode letters and the marks that join them, compared in NFC; digits, spaces and punctuation
+  are edges). The first version of this branch kept a longer id inside a word, for German names
+  ("Stadtsparkasse"); the review of 19 Nov found "Erstes Konto" and "Mein erstes Girokonto"
+  naming Erste, "Otherwise" Wise and "Revolution" Revolut, and a digit hiding a short id ("ING2",
+  "pbz2"), and maff chose one rule for every id. So "Stadtsparkasse Giro" no longer names the
+  Sparkasse adapter; "Sparkasse Giro" does. No lookbehind in the pattern, as Safari before 16.4
+  throws on one. A remembered choice and stored identifiers come first, as before. Setup's
+  statement step uses the same test (`statementTargets.ts`). Tests in
+  `core/bankImport/__tests__/bankImport.test.ts` ("account resolver"): the review's names, and
+  the seven names of the first version (five that name their bank, Shopping and Booking that do
+  not). Before the change the new case failed on "Erstes Konto" and "Mein erstes Girokonto".
+  - **Round 4: compound tails, other scripts and digits.** Whole words dropped every German
+    compound: "Stadtsparkasse Giro" and "Kreissparkasse Köln", common names, no longer named
+    Sparkasse. Whole word stays the default; a bank commonly at the tail of a compound
+    (`COMPOUND_TAILS`) is named by a word that ends in it, letters before and none after
+    ("Kreissparkasse Köln" yes, "Sparkassen Giro" and "Sparkassenbuch" no). Of the banks the app
+    reads, only `sparkasse` is marked; Volksbank and Raiffeisenbank have no reader. A letter of
+    another script is now an edge, as only Latin letters (and marks) join a word made of a Latin
+    id: "Revolut口座" and "ING銀行" name their banks, "éING" still does not. A digit joins the
+    word only on a side where the id's own character is a digit: "N267 account" is not N26,
+    "ING2" and "Erste2" still name theirs. "Erstes Konto" still does not name Erste. Tests: three
+    cases in the same file, one per rule; with `COMPOUND_TAILS` empty, with `\p{L}` in place of
+    the Latin script, or with digits never joining, its case fails.
+    On Bills and Import, `SubscriptionScanModal` was `max-height: calc(100dvh - 2rem)`, and the whole
+    panel scrolled in `.body`: at 2560x1440 it measured 1,408 px from the top of the screen to the
+    bottom, and the Add sat after the last row. `.modal` is now `min(720px, calc(100dvh - 2rem))`
+    (no cap at 620 px wide and below, where a phone keeps the whole screen). The panel's rows, its
+    Already tracked list and its notice are one block, `.scroll` (`data-test-id="sub-scan-scroll"`);
+    inside the modal only that block scrolls (`.modal .scroll`), between the header and the footer
+    (`sub-scan-footer`, the total, Rescan and Add), which gets a top rule. `.body` is a flex column
+    with `overflow: hidden`. Embedded in the setup wizard `.scroll` is a plain column with the
+    panel's 12 px gap, and the wizard's middle scrolls as before. Frontend only. Guards:
+    `SubscriptionScan.test.tsx` "the scan in its modal" (the rows inside the scroll block, the
+    actions and the heading outside it; the cap and the one scrolling block in the stylesheet) and
+    `subscription-scan-server.spec.ts` "the subscription scan modal on a tall screen @smoke" (16
+    detected payments at 2560x1440, 1920x1080 and 390x844: the modal within 720 px, or the screen on
+    the phone; the heading and Add in place before and after the list scrolls to its end). Both fail
+    on the old stylesheet and markup: the spec measured 1,408 px at 2560x1440.
+- **A failed Add in the scan says so above the Add, in the pinned footer.** Review of 19 Nov: the
+  scan's notice (`FormNotice`, `sub-scan-notice`) sat at the end of the rows inside `.scroll`, so
+  under a long list a refused subscription ("Couldn't add ...") was out of view while the Add it
+  answered stayed pinned. It is now the footer's first line (`.footer` a column, the total and the
+  buttons in `.footer-row`, the notice's margin 10 px), directly above the buttons, in the modal
+  and embedded in setup alike. Test: `SubscriptionScan.test.tsx` "says a failed add in the pinned
+  footer, directly above the buttons" (in the footer, not the scroll block, before Add), which
+  fails on the old place. Checked in headless Chromium with sixteen rows and a refused add (a
+  routed 400 on `POST /api/bills`): the notice in the footer, the sixteen rows still listed, at
+  1440, 820 and 390 px, light and dark.
+- **What the setup and Import captures showed out of line.** Review of 19 Nov, every capture
+  opened at full size. Sheets tab: Fetch 42 px like the link's field (39 and 43 px; the input's
+  `flex: 1` sized its height in the field's column), the help line in the form 8 px under the
+  field (the page's 24 px gap and the row's 16 px margin put it 40 px down, and 60 px above
+  Expected columns, now 24). At 480 px and under: each tab one line (13 px, 6 px padding; they were
+  64 px tall in two lines at 390), the link's field the row's width with Fetch under it, so its
+  message wraps in two lines instead of leaving "with" alone, and Expected columns' cells wrap
+  (`min-width: 540px` at 768 and under gave it a sideways scroll in a 334 px box). The card said
+  "Use the downloadable template below", which was on File Upload only: the button is in the card.
+  Map columns: a line instead of a Category types table with a header and no rows, "2 rows · 3 of
+  12 columns mapped" instead of "Total rows: 2 | Mapped: 3/12", and Cancel neutral rather than
+  outlined like Continue. Connected sources: the row's line says when it synced (it led with six
+  characters of the sheet id and "gid 0"), and on a phone Remove stays beside the name (order) at
+  40 px. Recent Imports keeps its date on one line. Setup: the
+  subscriptions step reads "Regular payments" with no lead until the scan found some
+  (`found` on the scan's exposed API), a file card with only a name has no 24 px band under it
+  (Remove's negative margins), and the link buttons sit on the paragraph's edge. Tests:
+  `onboardingForms.test.tsx` "does not say it spotted payments when the scan found none",
+  `mappingSource.test.tsx` "says what Category types needs instead of an empty table", both seen
+  failing first. The Sheets tab's numbers are from headless Chromium at 1440, 820 and 390 px.
+- **Import starts over as soon as an import is in.** The page's flow went back to its first step
+  three seconds after an import (`setTimeout(resetForm, 3000)`, from when the flow's own banner
+  said the result). The result is the card at the top of the page now, so for those three seconds
+  the preview stayed under it with Import selected and Import all live, for the same rows. It
+  resets at once (`autoResetAfterImport`; Connected sources and setup turn it off and keep their
+  own). Test: `importStartsOver.test.ts`, which fails on the timer. Also from the captures: each
+  balance row in the card is the account and its figure on one line and the way to set it under
+  them (a grid; inline where a name was short, it left the rows ragged at 820 px), and Expected
+  columns is whole on a phone rather than a 60vh box that scrolls (its wrapped rows are 768 px at
+  390). The subscription scan's modal is 96% card rather than 84: over the overlay's near-black, the
+  light theme's read grey, with Rescan's border all but gone.
+- **A saved sheet's name and an import's count stay whole.** From the second set of captures:
+  beside the sidebar at 820 px, Connected sources gave the name 113 px next to the Auto sync and
+  Preview capsule, so "Google Sheet" broke onto two lines (the made-up "Sheet1" it replaced was
+  short enough to fit). The list is a size container now, and under 600 px its rows lay out as on a
+  phone: the capsule on a line of its own, Remove beside the name. Recent Imports at 390 px broke
+  "(6 imported)" after the 6; a no-break space keeps each count with its word. Measured in
+  headless Chromium from the lines each text's boxes take: the name 2 lines at 820 before and 1
+  after, the count 2 at 390 before and 1 after, both 1 at every other width and theme.
+- **A statement in another currency stays out of setup, and its card says why.** Round 3 of the
+  19 Nov review. Balances are kept in one currency, and both runtimes answer an account in another
+  with a 409 (`worker/src/base-currency.ts`, `core/storage/baseCurrency.ts`), so the account in
+  the statement's currency that finding 3 asked for cannot exist; changing that is maff's call,
+  not this branch's. A statement that names a currency other than the base (`inOtherCurrency` in
+  `statementTargets.ts`) leaves the import as `add` reads it, as a file from a bank setup does not
+  know does (`FirstImport.tsx`): nothing of it is imported, no account is made or found for it, and
+  it takes the main account from no bank after it. Its card (`other-currency`,
+  `onboarding-import-currency`) reads "This statement is in USD. Your balances are kept in EUR, so
+  importing it would count its amounts as EUR.", and Open in Import hands it over as a file setup
+  cannot read. The rule names a new account for the base currency only, and the main account is
+  the newest in the base currency. No currency in a statement still counts as the base. The Import
+  page is unchanged: there a USD statement goes into an account named for its bank in any
+  currency, or "New account…" offers "Revolut USD" made in EUR, and its amounts count as EUR.
+  - **Tests:** `setupStatements.test.tsx` "a statement in another currency" (beside a EUR one,
+    alone with Open in Import and Skip to Done, added and removed) and four in
+    `statementTargets.test.ts`, replacing the two-currencies cases and the main account in USD.
+    Taken out one at a time: the rule's set-aside fails 4, keeping the statement in the import
+    fails 2, and `setAside` without it fails 2.
+- **A transaction sent without a currency is in the base currency on the Worker too.** Round 3 of
+  the 19 Nov review: the scan's price fields read USD beside a total in EUR. `SubscriptionScan`
+  prices a row in the currency its transactions share (`commonCurrency`, `features/chargePatterns.ts`)
+  and takes the base currency only when they have none. The capture fixture posted its transactions
+  without a currency, and the Worker's `transactionDefaults` (`worker/src/routes/transactions.ts`)
+  filled in 'USD', the column's DEFAULT, where local-first takes the base currency
+  (`localTransactionDefaults`). The Worker now reads the base currency as a paid bill does
+  (`configuredBaseCurrency(...) ?? 'EUR'`), on create and on edit. The app's own requests always
+  name one (the transaction form, quick entry, the guided orbit), and the MCP server and
+  `/api/v1/import` go through the import, which already took the base currency, so only a
+  hand-written request, a script or a fixture met it: `frontend/tests/e2e-seed.ts` posts its
+  transactions without one, so a freshly seeded fixture's rows are in EUR now. Rows already stored
+  as USD stay as they are. The scan's and Bills' own code names no fixed currency; the other hit is
+  `DEFAULT 'USD'` on `transactions.currency` and `accounts.currency` in `0001_init.sql`, which stays
+  (migrations are append-only).
+  - **Test:** contract scenario "a transaction sent without a currency is in the base currency"
+    (`shared/contract/scenarios/transactions.ts`, both runtimes): before the change it passed on
+    local-first and failed on the Worker (expected 'USD' to be 'EUR'); it passes on both after.
+  - **Round 4 of the review: the scenario's profile keeps pounds.** It expected 'EUR', the default
+    on both runtimes, so a default hard-coded to 'EUR' passed it. It now sets GBP with
+    `PUT /api/settings` first, and checks an edit that empties the currency as well as a new row.
+    That showed local-first never read a stored base currency for a transaction:
+    `localTransactionDefaults` reads the browser's (`localCurrency` in localStorage), which only
+    Settings and setup keep in step with the stored one, so local-first answered 'EUR'.
+    `transactionsCreate` and `transactionsUpdate` (`core/storage/handlers/transactions.ts`) now
+    take `ensureBaseCurrency(undefined, false)`: the stored base currency, or the browser's while
+    none is stored, as a new account does. The app's forms name a currency, so they are not
+    affected. With either runtime's default hard-coded to 'EUR' the scenario fails there (expected
+    'EUR' to be 'GBP'), and it failed the same way on local-first before its change. A paid bill
+    and a recurring rule on local-first took the browser's currency until round 5 (the next
+    point).
+  - **Round 5: a paid bill and a recurring rule take the stored base currency too.** Local-first's
+    mark-paid (`billsPayOrMarkPaid`, `core/storage/handlers/bills.ts`), a rule's run and the next
+    30 days' payments (`recurringPopulate` and `recurringUpcoming`, `recurring.ts`) wrote or
+    counted in the browser's currency (`getLocalCurrency()`), whatever base currency was stored,
+    where the Worker reads the profile's. All three take `ensureBaseCurrency(undefined, false)` now,
+    as a transaction does. Tests, one per site, each setting the base to GBP first: contract
+    scenarios "a paid bill's expense is in the base currency", "a rule adds its transaction in the
+    base currency" and "upcoming recurring payments are counted in the base currency". Each failed
+    on local-first before its change (expected 'EUR' to be 'GBP') and passed on the Worker; all
+    three pass on both now. `localHandlers.recurring.test.ts` clears the stored settings between
+    its tests: its base-currency test set the browser's to GBP over the 'EUR' an earlier test's
+    account had stored, and passed only while the browser's was read.
+  - **A quick entry test waits for what it did not wait for.** The read of the stored base
+    currency moved the handling of a save in `quickEntryOffersActiveProfile.test.tsx` ("files an
+    entry under the active profile", which waits only for the request to be sent) into the next
+    test's seed, which clears the profiles. The local router found the save's profile gone, made a
+    "Personal Profile" (id 4) and made it current, and the next test's App opened on it: "the
+    command bar matches only the active profile's categories" failed three runs in three, at
+    `expected 4 to be 1`. The file's `apiFetch` stand-in keeps the requests still being answered,
+    and each test ends when they are; without that wait it fails again.
+- **The scan's modal asks to adjust a price or period only over rows that have one.** Round 3 of
+  the 19 Nov review: "Recurring charges we recognized · adjust price or period" sat over "No known
+  subscriptions found". `SubscriptionScanModal` (Bills and Import) reads `adjustable` from the
+  panel's `expose` (the rows not tracked yet, none while it scans) and shows the line only when it
+  is above zero: not over the empty state, "No transactions to scan yet.", a rescan's spinner or
+  rows that are all tracked already. The setup wizard has no such line.
+  - **Test:** `SubscriptionScan.test.tsx` "asks to adjust a price or period only over rows that
+    have one" (rows, a rescan, a charge that does not recur, no transactions, all tracked). Before
+    the change it failed over the empty state; with the `Show` taken out, or with the panel counting
+    rows while it scans, it fails at the rescan.
+- **A refused add in the scan says what failed and what to do, for a detail it shows no control
+  for.** Round 4 of the review: the notice passed the runtime's words through, "Couldn't add
+  "Spotify". Choose a category from the list, or leave it blank.", in a modal with no category
+  control. A row has a price and a billing period; a refused price is marked at its row and a
+  refused period keeps the runtime's words. For anything else `insteadOf` (`SubscriptionScan.tsx`)
+  says it in the scan's words, about one subscription or several: a category ("The scan chose a
+  category this profile doesn't have. Add it from Bills and pick one there."), a name over
+  `BILL_NAME_MAX`, a due date, and any other detail ("A detail the scan doesn't show was refused.
+  Add it from Bills, where every detail can be changed."). `refusedMessages`
+  (`refusedSubscriptions.ts`) takes a host's own words (`instead`) and still says each reason once;
+  the catalog sends none, so it is unchanged. The category case is real in local-first with
+  several profiles selected: there `GET /api/categories` and the transactions answer every
+  selected profile's, the scan filed a row under a category from them, and the bill goes to the
+  current profile, which refuses another profile's category. Round 5 makes the scan pick the
+  current profile's (the next entry).
+  - **Tests:** `SubscriptionScan.test.tsx` (each of the four details, a refused period in the
+    runtime's words, two refused for one detail said once with "them", and the two notice tests
+    that expected the runtime's words) and `refusedSubscriptions.test.ts` (a host's words, one or
+    several). With the scan's words taken out, seven fail; with `refusedMessages` ignoring them,
+    eight.
+- **The scan files what it adds under its own profile's categories.** Round 5 of the 19 Nov
+  review. In local-first with several profiles selected, the scan reads every selected profile's
+  categories and charges (the list handlers read the selection; for the scan's requests the
+  Worker answers the active profile alone), and it filed a row under the first category of the
+  name it looked for, or, for a regular payment, under the category its charges are filed under:
+  another profile's as often as its own. The bill goes to the active profile, and both runtimes
+  refuse another profile's category, so the add was refused. `categoryOf` (`SubscriptionScan.tsx`)
+  files a row only under a category of the profile the add writes to (`activeProfileId()`): a
+  named find takes the first of its hints that profile has, and a regular payment whose charges
+  are filed under another profile's category takes the active profile's of the same name and
+  type, or none. Detection still reads every category it is given, so a home's charges filed
+  under another profile's Housing still make a bill. A category without a `profile_id` counts as
+  the active profile's; both runtimes send one.
+  - **Neither runtime takes such a bill:** the contract scenario "another profile's bill is not
+    read, changed, paid or removed" posts one on the other profile's category from the active
+    profile alone and, new here, with both profiles selected, as a household's scan sends it. Both
+    are refused at `category_id` (400) in local-first and on the Worker, and neither profile gains a
+    bill.
+  - **Tests:** `SubscriptionScan.test.tsx` "in a household": a find whose first hint only the
+    other profile has goes under the active profile's Streaming, and one with no hint the active
+    profile has goes under none (before: the other profile's Entertainment, 21 for 11); a regular
+    payment filed under the other profile's Housing goes under the active profile's and is still a
+    bill, and one whose category has no namesake here goes under none (before: 22 for 12). With
+    the active-profile filter taken out both fail; with the same-name match taken out, the second.
+  - **Round 6: the scan reads only the active profile's charges.** In local-first
+    `GET /api/transactions` answers every selected profile's rows (the list handlers read the
+    selection), so a household's scan proposed another profile's subscriptions as bills for the
+    active one, and Add put them there. `ofActiveProfile` (`SubscriptionScan.tsx`) keeps the
+    charges of the active profile, as the Worker answers the scan, and `ownCategories` uses it too.
+    A row without a `profile_id` counts as the active profile's; both runtimes send one. With only
+    another profile's charges, the scan says there is nothing to scan, as it does on the Worker.
+    The list handlers are unchanged: reading the scope there is a follow-up.
+    - **Tests:** `SubscriptionScan.localFirst.test.tsx`, on the real router and fake-indexeddb
+      with two profiles selected: the active profile's Spotify is found and the other's Netflix is
+      not (before: both), and with only the other profile's charges the scan says there is nothing
+      to scan (before: it proposed Netflix).
+- **The Bills header's buttons stay whole at every width.** Round 3 of the 19 Nov review. At
+  820 px, beside the sidebar, Scan transactions, Browse catalog and Add Subscription took two lines
+  each next to the title, and at 390 the third ran past the screen's edge: 60 px tall each at both
+  widths, and Add Subscription's right edge at 416 of 390. The header is a container now
+  (`bills-header` in `BillsPage.module.css`): narrower than 640 px, the buttons go under the title
+  and fill its width, two to a row where they fit and one where they don't, and on touch each is
+  44 px tall at least. The rule at 768 px that gave the primary `width: 100%` inside a row that
+  shrank to fit is gone. Measured after, in both themes: one line each at 1440, 820 and 390 px; at
+  820 Scan transactions and Browse catalog share a row (238 and 222 px) above Add Subscription
+  (468), at 390 likewise (177 and 161 above 346); 44 px tall on touch, and 39 with a mouse at 1440
+  as before. The Regular Bills tab's Add Bill fills the width below 640 px too.
+  - **Test:** `bills.spec.ts` "the header's buttons @smoke", with a mouse and on touch, at 1440, 820
+    and 390 px on both tabs. Before the change it failed at 820 (two lines) and, on touch, at 1440
+    (39 px). Taken out one at a time, the container query, the container and the wrap each fail at
+    820, and the touch height at 1440.
+- **The Bills header's description stays with its title.** Round 4 of the 19 Nov review. Where
+  the buttons go under the title (narrower than 640 px: 820 beside the sidebar, and 390), they sat
+  between "Bills" and the line that says what the page is for: at 820 that line was 116 px below
+  the title. The title and its line are one block now (`header-title` in `Bills.tsx` and
+  `BillsPage.module.css`), so the buttons sit beside both at 1440 px and come after both below 640.
+  - **Test:** `bills.spec.ts` "the header's description @smoke", at 1440, 820 and 390 px on both
+    tabs: the line starts under the title and within 24 px of it, and each button is under the line
+    or to its right. Before the change it failed at 820 (116 px).
+- **The Bills tabs keep their labels on one line.** At 390 px the three tabs shrank to fit and
+  "Regular Bills" took two lines. Each tab keeps its width and its label on one line
+  (`flex: 0 0 auto` and `white-space: nowrap` on `.tabBtn`), so the strip scrolls sideways, and the
+  tab chosen, by a tap on the part of it the strip shows or by a link, is brought whole into the
+  strip: an effect on `billTab` in `Bills.tsx` scrolls the strip, not the page.
+  - **Test:** `bills.spec.ts` "the tab strip @smoke", at 1440, 820 and 390 px: each tab, chosen
+    with the strip scrolled back to its start, ends whole in the strip, each label is one line,
+    and at 390 the strip scrolls. Before the change it failed at Calendar at 390 px, not whole in
+    the strip. Taken out one at a time, the effect fails there too, and `nowrap` with
+    `flex: 0 0 auto` at "Regular Bills" (two lines).
+- **The Bills calendar's first load waits in the calendar's place.** Round 5 of the 19 Nov
+  review. The first switch to Calendar swapped the whole page, header and tab strip with it, for
+  the page-level loading state until the month came in. `BillCalendar.tsx` read its month with
+  `calendarData.latest`, and before a resource's first answer `.latest` reads it as
+  `calendarData()` does, which hands the wait to the nearest `<Suspense>`: App's, around the page.
+  The comment above it said it never did. `cal()` now reads `.latest` only once the resource has
+  answered (its `state` is neither `unresolved` nor `pending`), so until then the calendar's own
+  "Loading calendar..." stands in its place. An error still reaches the page as before: `.latest`
+  throws it. The loading state and the grid have test ids (`bill-calendar-loading`,
+  `bill-calendar-grid`).
+  - **Tests:** `bills.spec.ts` "the calendar @smoke" holds `/api/bills/calendar` and switches to
+    Calendar: the tab strip and the header stay on the page and the calendar's loading state shows,
+    and once the month is let through the grid replaces it. Before the change it failed at the
+    strip (not found). "The tab strip @smoke" no longer loads the calendar once before measuring,
+    and each tab's tap now has to leave the strip on the page: before the change it failed at
+    Calendar at 1440 px, the strip gone.
+- **Map columns says what an empty Account setup cell means.** Round 4 of the 19 Nov review,
+  `ImportMappingStep.tsx`. A value typed as an expense or income had "—" under Account setup. It
+  says "Not an account" now (`.categoryTableNone`). Test: `mappingSource.test.tsx` "says in words
+  that a category has no account to set up", which failed on the dash before.
+- **Words in the display face stand apart, on every page.** "Map columns" read almost as one word
+  (round 4 of the 19 Nov review). It is the space, not `.mappingTitle`, which sets no letter
+  spacing: every `h1` and `h2` is set in Fraunces 600 with -0.01em letter spacing
+  (`styles/index.css`), and in Chromium the space between the two words was 2.86 px at 15 px
+  (0.19em). From the ink of "p" to the ink of "c" that is 0.18em, where Inter leaves 0.27em. Round
+  4 widened that heading alone, which left "Recent Imports", on the same page, at 0.205em. The space
+  belongs to the face's words now: `--font-display-word-spacing: 0.08em` sits beside
+  `--font-display` (`themes/dawn-light.css`), and every rule that sets words in the face sets
+  `word-spacing` to it: `h1, h2` and 11 other rules (titles and card headings). The face's figures
+  and the boot screen's name go without it (round 6, below). `.mappingTitle`'s own rule is gone.
+  Progress's "Your next step" is an h2 that `.eyebrow` sets in Inter, and it takes
+  `word-spacing: normal` back. Measured on 22 screens (every route, a page that does not exist and
+  the sign-in screen) at 1440, 820 and 390 px in both themes, before and after: 690 `h1` and `h2`,
+  and not one gained or lost a line. The two that take two lines, "Compound Interest Projector" and
+  "Emergency Fund Tracker" at 390, took two before. The 192 other elements in the face on those
+  screens (values, card titles), measured with the space and again without it, take the same lines
+  and overflow their boxes no more. The PWA install screenshots in `public/screenshots/` show
+  headings in the face and would change if re-shot; they were not, and no test compares them.
+  - **Tests:** `import.spec.ts` "the words of each heading on the Import page stand apart": Map
+    columns, then Recent Imports after an import, each at least 0.25em and in Fraunces. On round
+    4's stylesheets it failed at Recent Imports (0.205em); with the `h1, h2` rule's line taken out
+    it fails at Map columns (0.19em). `src/__tests__/displayWordSpacing.test.ts` reads the
+    stylesheets: every rule that sets words in the face sets the word spacing, a rule for a figure
+    or one that tracks its letters open does not, the token is 0.08em and declared once, and an
+    `h1` or `h2` that a class sets in another face gives the space back. All but the second fail
+    on round 4's stylesheets.
+  - **Round 6: figures keep the face's own space.** Round 5 put the word spacing on every rule in
+    the face, figures too. An amount written the hr-HR or de-DE way has a no-break space in it
+    ("1.234,00 €"), and Chromium widens that space like any other. In the Dashboard's net worth
+    figure (`.metric-value`: 28 px, one line, an ellipsis at its end) "1.234,00 €" measured
+    143.45 px with the word spacing and 141.20 px without, so an amount that just fit would be cut
+    short for nothing. The word spacing is on the rules that set words now and off the 8 that set
+    a figure (`.metric-value`, a goal's `.progress-percent`, `.ringAmt`, the four `.coreValue`
+    rules and `.radarPct`) and off the boot screen's name (`.boot-name`), which its +0.02em
+    tracking already opens. The same amount in `.metric-value` measures 141.20 px now, its width
+    with no word spacing. Getting started's heading is an `h3`, which nothing tracks (only the
+    `h1, h2` rule takes -0.01em), and it keeps the word spacing as a heading: set the way its rule
+    sets it (16 px, 600, no tracking), its space is 0.19em without the word spacing and 0.27em
+    with it.
+    - **Tests:** `displayWordSpacing.test.ts` "is left off a figure, and off a name that tracks
+      its letters open" failed on round 5's stylesheets, naming those 9 rules; "is set by every
+      rule that sets words in the display face" fails at `h1, h2` with that rule's line taken
+      out.
+- **Recent Imports' line wraps under its name.** At 390 px an entry's line went on under the
+  summary's own marker, so "(12 imported)" started at the row's edge, at 42 px against the name's
+  56.3. The marker is an SVG arrow in a column of its own now (`.logSummary` in
+  `Import.module.css`: a two-column grid with the native marker hidden, and the arrow turns down
+  while the entry is open), so the line goes on under the name: both lines start at the name's
+  edge, 60 px, in the captures at 390.
+  - **Test:** `import-page-top.spec.ts` "Recent Imports goes on under the name where its line
+    wraps, at 390 px @smoke": the arrow sits before the name on its line, and each line of the
+    words starts where the name does. Before the change it failed at 42 against 56.3. With the grid
+    taken out the arrow, a block by the preflight's `svg { display: block }`, sits above the name,
+    and the test fails at the arrow (its right edge at 54, the name at 42).
+- **A sheet neither runtime can read is marked at its link with how to share it.** Rounds 5 and 6
+  of the 19 Nov review. When every way local-first has of reading a sheet fails, `importGoogleSheet`
+  (`core/storage/handlers/importFlow.ts`) answers 422; when the Worker cannot read a sheet's CSV
+  export, `fetchGoogleSheetRows` (`worker/src/routes/imports.ts`) answers 501. The Import page and
+  Add a sheet mark either at the link with the answer's `error`, and the two said different things,
+  neither of them how to fix it. Local-first said "Could not access the Google Sheet from the
+  browser.", with advice in a `message` that nothing showed and that first said to publish the
+  sheet to the web, whose link the field refuses. The Worker said "Could not import this Google
+  Sheet via CSV export: HTTP 404. Make sure the sheet is shared as 'Anyone with link can view'. The
+  XLSX fallback is not available on this deployment yet." Both answer one `error` now,
+  `SHEET_UNREADABLE` (`shared/importSourceSchema.ts`): "Couldn't read that sheet.", then
+  `SHARE_SHEET_BY_LINK`, the advice `M.published` ends with ("In Google Sheets, choose Share, set
+  General access to "Anyone with the link", and paste that link instead."), then "Or download the
+  sheet as CSV and use the File Upload tab." Local-first's `message` is gone. The Worker keeps its
+  own reason ("HTTP 404", "got HTML instead of CSV") as `reason`, which the page does not show, and
+  an unexpected error still goes to the log in its place. An empty sheet on the Worker ("No rows
+  found") says `SHEET_EMPTY` instead, the words the page already gave local-first's empty answer,
+  moved to the shared file: "That sheet has no header row to read. Check the link points at the tab
+  with your transactions." The statuses stay 422 and 501 (contract difference
+  `sheet-unread-status`). A `/d/e/` link reaches neither answer: both runtimes refuse it at the
+  link before anything is fetched. The Worker's comments that said it fetches a "published" sheet
+  say what it does: the CSV export of a sheet shared by its link.
+  - **Tests:** the contract scenario "a shared Google Sheet is read for the mapping step" asks both
+    runtimes for a sheet shared with no one: 501 on the Worker and 422 in local-first, each with
+    `SHEET_UNREADABLE` as `error` and no field. Before round 6 it failed on both, at "Could not
+    import this Google Sheet via CSV export: HTTP 404. ..." and at "Could not access the Google
+    Sheet from the browser.". `sheetForms.test.tsx` "marks a sheet it cannot read at its link,
+    saying how to share it or upload it instead" (Add a sheet) and "marks a sheet it cannot read at
+    its link, saying how to share it, not in the banner" (the Import page) read local-first's
+    answer at the field; both failed on "Could not access the Google Sheet from the browser.".
+    "marks the Worker's answer for a sheet it cannot read, or an empty one, at the link" gives the
+    page the Worker's two 501s: each is marked in its words, without its reason. It passed on round
+    5's page too, which already marked a 501 at the link; nothing tested that before.
+    `worker/test/google-sheet-errors.test.ts` pins the Worker's `error` and `reason` for an
+    unexpected error, a sign-in page, an empty sheet and a 404: all four failed on the old answer,
+    and with the empty sheet's words taken out, its case fails. The contract's stand-in for Google
+    (`shared/contract/outbound.ts`) now answers corsproxy.io, local-first's last way in, as the
+    export it fetches: it threw "a contract scenario reached the network" there, inside the
+    handler, which swallowed it.
+- **Import's messages have no em dashes.** Each is a full stop, a colon or parentheses: the
+  preview's notes, the paste help, the bank tab's "no accounts yet", Recent Imports' line and its
+  delete confirm, Connected sources' toast and remove confirm, two errors, and a skipped row's
+  reason in both runtimes (`${invariant}: ${detail}`).
+- **A workbook's sheets are chosen on Map columns, and the Google Sheets tab lists no tabs.**
+  maff, 19 Nov: what choosing an "Available sheets" chip did was unclear, and the label sat above
+  the chips' line. File Upload drew a workbook's sheets as chips, but an upload that reads goes
+  straight on to Map columns (`handleFileUpload` calls `goToMapping`), so they were never on
+  screen. `ImportMappingStep` now draws them under the source line as a labelled group
+  (`import-map-sheets`: role `group`, label "Sheet", `aria-pressed` on the sheet read,
+  `chooseUploadedSheet` on click) with a line that says choosing another matches its columns
+  instead. The Google Sheets tab listed `sheetNames`, which both runtimes answer as the one tab
+  the link opens on, and `resetForm` kept them: after an import "Sheet1" sat under the emptied
+  link, and choosing it read a link that was no longer there into the page's error banner. The list
+  and `handleSheetTabClick` are gone, `resetForm` clears `sheetNames`, and the line under the link
+  (`import-sheet-help`) says the link picks the tab. `.sheetPicker` puts the label on the pills'
+  middle line (flex, `align-items: center`), and the pills are 32 px tall. Tests:
+  `features/__tests__/importPageTop.test.tsx`, the page in local-first with Google's CSV stubbed:
+  no "Sheet1" button after an import and its reset, and a two-sheet workbook shows the group on
+  Map columns, where choosing April moves `aria-pressed` and the source line. Both fail on the old
+  code (`expected [ …(13) ] to not include 'Sheet1'`; `expected null not to be null`).
+- **Every page leaves room for the floating add button.** The button (`.fab`, fixed bottom right)
+  sat over the end of a page's last row: `main`'s content ran 54 px below the button's top on every
+  page. With the example data something was painted under it at the end of 11 of 19 pages at 390 px
+  wide (the View all link on Accounts, What if on the last loan, the storage line in Settings) and 2
+  of 19 at 1440 (Analytics, Import), asked of the page with `elementFromPoint` at nine points inside
+  the button. The button's size and its gap from the screen edge are now two custom properties on
+  the shell, `--fab-size` and `--fab-offset` (56 and 22 px; 52 and 16 px up to 620 px wide), which
+  `.fab` reads, and `.main` ends with
+  `padding-bottom: calc(var(--fab-size) + 2 * var(--fab-offset))`, set after every `.main` padding
+  shorthand in `components/Layout.module.css` because a later shorthand would reset it. Content now
+  ends 22 px above the button, 16 px on a phone, on all 19 pages. The 404 page's `min-height` takes
+  the same room off, so it still does not scroll. `tests/floating-button-room.spec.ts` (`@smoke`,
+  1440 x 900 and 390 x 844) scrolls Analytics, Import, Accounts and Settings to their end; on the
+  old stylesheet it fails with Analytics ending at 875.5 px against a button top of 822.
+- **The two quick entries are inert while shut, and closing one hands focus back.** `CommandBar` and
+  `GuidedOrbit` stay mounted so they can fade, and kept `role="dialog"` with `aria-modal="true"`
+  while shut (opacity 0, `pointer-events: none`). Chromium's accessibility tree listed both dialogs
+  on every page (read over CDP, `Accessibility.getFullAXTree`), and a screen reader that honours
+  `aria-modal` can keep its cursor inside a dialog nobody sees. Shut, each overlay is now `inert`
+  and its dialog has no `aria-modal`; the tree lists neither, and each one only while it is open.
+  Neither gave focus back on close: after Ctrl+K and Escape, focus stayed in the bar's hidden input,
+  `isEditableTarget` read that as typing, and the right arrow no longer stepped the period nor did
+  `?` open the shortcuts guide (in the browser the period stayed 2026-11 and the guide stayed shut;
+  with the fix it steps to 2026-12 and the guide opens). `utils/returnFocus.ts` gives focus back to
+  the element that had it before opening, when focus is still inside the shut dialog or on the page,
+  and takes it out of the dialog when there is nothing to go back to. The command bar's delayed
+  input focus (60 ms) no longer fires once the bar has shut.
+  `components/__tests__/quickEntryShutIsInert.test.tsx` has 13 cases over both; each guard was taken
+  out and seen failing.
+- **The unused tag components are deleted.** `TagFilter`, `TagInput` and `TagChips` under
+  `frontend/src/components/Tags/`, with their stylesheets, had no importer anywhere in the
+  repository (`shared/tagSchema.ts` has an unrelated `TagInput` type). They held the last rules on a
+  `.dark-mode` class, which nothing sets: the themes key on `data-theme` on `<html>`, so those rules
+  never matched. `src/__tests__/darkModeClass.test.ts` fails on any stylesheet that styles
+  `.dark-mode`, with the file and line.
+- **Every dialog has a visible edge.** Create Profile (`components/ProfileModal.module.css`) had no
+  border and left its edge to a black `box-shadow`. In Orbit Dark it is painted in the sidebar's
+  navy (`--sidebar-bg`, #070b16) over a page the 50% black backdrop dims to #05070e, and the two
+  measured 1.02:1 in the browser: its fields floated with nothing around them. Each modal declares
+  its own surface in its own stylesheet, and 14 of the 25 that paint one had no border:
+  `BulkActionBar`, `LoginModal`, `ProfileModal`, `RecurringSection`, `AccountsPage`, `BillsPage`,
+  `BudgetsPage`, `CategoriesPage`, `DashboardPage`, `GoalsPage`, `HousingPage`, `RetirementPage`,
+  `TransactionsPage` and `loans/LoanForm`. The card-coloured ones take
+  `border: 1px solid var(--border)`, like `ConfirmDialog` and the rest. `LoginModal` and
+  `ProfileModal` stay navy in both themes, and `--border` is a near-white #dde4f5 in Dawn Light, so
+  their edge comes from the sidebar's text colour instead:
+  `color-mix(in oklab, var(--sidebar-text) 22%, transparent)`, 1.51:1 against the dark backdrop,
+  where the standard `--border` measures 1.58:1. `src/__tests__/dialogEdges.test.ts` reads every CSS
+  module and fails on a `.modal`, `.dialog` or `.sheet` that paints a background without a visible
+  border.
+- **Every floating surface draws its own edge (UI-28).** Menus, dropdowns, popovers, tooltips and
+  toasts open over grounds painted like themselves, and most drew their edge in `--border`, the
+  hairline between cards. Measured in the browser on 19 Nov: the filter dropdowns, the bill
+  calendar's day popover and the section rail's labels had an edge of 1.27:1 on the card in Dawn
+  Light and 1.32:1 in Orbit Dark; the heatmap's tooltip 1.27:1 in Dawn and 1.45:1 over the graphite
+  deck; toasts 1.67 to 1.90:1 in Dawn; Chart.js tooltips drew none, and in Orbit their 80% black
+  sat 1.22:1 on the card. Two theme tokens now
+  carry the surface and the edge, set where each theme sets its grounds: `--surface-floating` and
+  `--border-floating`, at the card menu's values (#ffffff and #a1a9bd in Dawn, #222b47 and #5b698c
+  in Orbit, an edge of 2.35:1 and 3.07:1 on the card). `.instrument-deck` re-grounds Orbit in
+  graphite and sets its own pair, #202329 and #5e656d: the card menu's mix gives 2.49:1 there, 66%
+  of its `--text-secondary` gives 3.12:1. The pair paints `OverflowMenu .menu`,
+  `FilterBar .dropdownContent`, `BillCalendar .popover`, `InfoTip .panel`, `Spotlight .tooltip`,
+  `Profile .profileDropdownMenu.visible`, `Toast .toast`, `SectionRail .rail` and `.tip`, the
+  inline style of `D3HeatmapChart`'s tooltip, and the two unused dropdowns in
+  `Dashboard/PeriodNavigator.module.css` and `BudgetsPage.module.css`. InfoTip, the rail and the
+  toasts keep their tint of `--primary` or of the toast's kind, mixed into the new edge, and the
+  rail and its labels keep their translucency. Every edge now measures at least 2:1 in Dawn and 3:1
+  in Orbit and in the deck. Chart tooltips take the pair from `components/chartFloatingTooltip.ts`,
+  which `Chart` and `ChartWrapper` install as Chart.js defaults: scriptable colours read off the
+  chart's canvas each time it draws, so a theme switch needs no rebuild and a chart in the deck gets
+  the deck's pair. Their text takes `--text-primary`, since Chart.js's white would vanish on Dawn's
+  white, and `ChartWrapper` no longer sets a translucent blue tooltip of its own. Nothing else
+  changed: no layout, spacing, radius, shadow or behaviour. The tour step's edge in Dawn went from
+  3.72:1 to 2.02:1 against the page its backdrop dims; its white surface stands 4.74:1 on the same.
+  `styles/themes/README.md` lists the pair in the token contract.
+- **Tests:** `src/__tests__/floatingEdges.test.ts` lists every floating surface and fails when one
+  stops painting `var(--surface-floating)` or drawing a visible border with `var(--border-floating)`.
+  It also fails on any rule positioned absolute or fixed with a z-index and a background that is on
+  neither that list nor its list of exceptions (the sidebar, three buttons, the status-bar strip),
+  and on a theme in `THEMES`, or a block that re-grounds one, that sets no opaque pair or one whose
+  edge is under 2:1 (light) or 3:1 (dark) against `--bg`, `--bg-secondary`, `--surface`,
+  `--card-bg`, `--stat-bg` or `--table-header-bg`. `src/components/__tests__/chartFloatingTooltip.test.tsx`
+  checks that the Chart.js defaults read the tokens off the canvas and fall back to Chart.js's own
+  colours, that `Chart` and `ChartWrapper` install them, and that `ChartWrapper`'s defaults leave
+  the surface and the edge to them.
+- **Compare's what-if chart no longer sets off a resize loop.** `loans/LoanBalanceChart.tsx` took
+  its width inside its `ResizeObserver` callback. A new width gives the chart a new height (its
+  payoff labels wrap into more rows when it is narrow), so the box it watched resized in the same
+  frame, and Chromium reported "ResizeObserver loop completed with undelivered notifications" on
+  every opening of Compare: 12 of 12 in a headless run at 390, 600, 820 and 1440 px, and as an
+  unhandled error in the e2e log of `loans.spec.ts`. It now measures its box once on mount, before
+  the first paint, and takes each later width a frame after the observer reports it, as
+  `LoanPayoffChart` does: 0 of 12. `loans/__tests__/loanBalanceChartResize.test.tsx` fails when a
+  width is set inside the callback, or when the chart first paints at its made-up 640 px.
+- **An (i) explanation opens beside its icon, wherever the icon sits.** `components/InfoTip.tsx`
+  places its `position: fixed` panel from the icon's box in window coordinates, and rendered it next
+  to the icon. An ancestor with a `backdrop-filter`, a `transform` or a `filter` becomes the
+  containing block of its fixed descendants, and Dashboard's metric cards blur what is behind them
+  (`.metric-card` in `features/DashboardPage.module.css`, which also hides its overflow), so each
+  card's tip opened as far below its icon as the card sat from the top of the window, and the card
+  clipped it. Measured on 19 Nov in a headless run with the page at the top: all four (Net Worth,
+  Income, Expenses, Balance) opened 431 px below their icon at 1440x900, two of them also past the
+  right edge, and 427 px below at 390x844, off the bottom of the window every time. The panel now
+  renders at the end of `body` through Solid's `Portal`, where no ancestor can move or clip it. A
+  `display: contents` wrapper around it carries the theme scopes its icon sits in (`THEME_SCOPES` in
+  `core/theme.ts`, today `instrument-deck`), so a tip in the Analytics or Portfolio deck still paints
+  the deck's surface, #202329, and mixes its edge from the deck's #5e656d. Its z-index goes from 1000 to 10001: outside every dialog's
+  stacking context now, it has to clear the highest dialog overlay (10000) to show over a dialog it
+  was opened in. Hover, focus, the `aria-describedby` link, Escape and outside-click are unchanged;
+  outside-click already tested the panel by reference, not by where it sits in the page. Pinning
+  did change: a pinned panel outlived its page, which "A pinned (i) explanation closes with its
+  page", below, fixes. After the change a script opened every tip on Dashboard (4), Budgets (1) and Analytics (17)
+  at both sizes: all 22 inside the window and beside their icon, as Budgets' and Analytics' already
+  were.
+- **Tests:** `frontend/tests/info-tip-placement.spec.ts` (@smoke) opens Net Worth's tip from the
+  keyboard at 1440x900 and on a 390x844 phone, and fails when any part of the panel leaves the
+  window, when it is more than 12 px above or below its icon, or when the icon's centre is not over
+  it; with the portal taken out it measured 251 and 372 px. `src/components/__tests__/InfoTip.test.tsx`
+  checks that the panel renders outside the element that holds its icon, wears the deck's scope in
+  the deck and none outside one, and stands above every overlay rule in the CSS modules.
+  `src/__tests__/floatingEdges.test.ts` fails on a block in `styles/themes/` that re-grounds a theme
+  under a class `THEME_SCOPES` does not list.
+- **An (i) explanation sets its own type.** `InfoTip`'s `.panel` now declares
+  `font-family: var(--font-inter)` and `font-style: normal` beside the `font-weight: 400` it had, so
+  its words read as body text wherever it renders. Analytics' and Budgets' titles each hold a tip:
+  measured on 19 Nov in Dawn and Orbit, the panel sat inside the title before this round and read in
+  the title's Fraunces; it now reads in Inter at 400. The portal above already takes the panel out
+  of the title, and this keeps its type from depending on where it renders.
+- **Tests:** `src/components/__tests__/InfoTip.test.tsx` gives the heading and the page the title's
+  serif, bold and italic, and fails unless the panel's computed type is `var(--font-inter)`, 400
+  and normal.
+- **A pinned (i) explanation closes with its page.** Since the panel moved to the end of the page, a
+  tip pinned open with a click or a tap stayed open when its page was left without a press: Back on
+  a phone, Alt+Left, a link or a hash change. Every visited page stays mounted and is hidden with
+  `display: none`, so the tip was never disposed, and its hidden icon measures nothing: on 19 Nov
+  Net Worth's tip, pinned on Dashboard, sat at top 6, left 8 over Loans, above the toasts, until the
+  next press anywhere. `components/InfoTip.tsx` now watches its icon with a `ResizeObserver` while
+  the panel is open and closes the moment the icon is no longer drawn (`checkVisibility()`, or a
+  walk for `display: none` where that is missing); `place()` closes it too rather than place it from
+  a hidden icon, and never places it from an empty box.
+- **Tests:** `src/components/__tests__/InfoTip.test.tsx` pins a tip, hides the element around it and
+  fails unless the panel is gone, once when the browser reports the icon's box and once when the
+  page scrolls. `frontend/tests/info-tip-placement.spec.ts` (@smoke) pins Net Worth's tip with a
+  click at 1440x900 and goes to Loans by hash, and taps it on a 390x844 phone and goes Back; each
+  fails while a panel is left, as each did before the change.
+- **The heatmap's tooltip paints the deck's colours.** `components/D3HeatmapChart.tsx` appends its
+  tooltip at the end of the page, outside the chart, and the tooltip took its `--surface-floating`
+  and `--border-floating` from there: over Analytics' graphite deck in Orbit Dark it painted Orbit's
+  navy pair, #222b47 and #5b698c, instead of the deck's #202329 and #5e656d. It now sits in a
+  `display: contents` wrapper that carries the theme scopes its chart sits in (`THEME_SCOPES`), as
+  InfoTip's panel does, and the wrapper goes with the chart.
+- **Tests:** `src/components/__tests__/heatmapTooltipScope.test.tsx` mounts the chart inside
+  `.instrument-deck` and fails unless the tooltip renders outside the chart, inside a scope of the
+  deck's class that draws no box; outside a deck it takes none, and nothing is left behind when the
+  chart goes.
+- **A heatmap that goes while d3 is loading leaves no tooltip behind.** The chart loads d3 the first
+  time it draws, and a render still waiting for it came back after the chart had gone: it found no
+  tooltip and put up a new one at the end of the page, which nothing removed. That was so before the
+  wrapper above (the old check was the tooltip's parent). The full unit suite caught it on 26 Nov:
+  "nothing is left behind" failed once with eight workers, when d3 arrived between two cases, and
+  passed three times run alone, where d3 arrives only after the last case. A render now stops after
+  the wait once the chart has gone.
+- **Tests:** `heatmapTooltipScope.test.tsx` now disposes the chart, waits for every dynamic import
+  to settle (`vi.dynamicImportSettled()`), and fails on any tooltip or wrapper left on the page. It
+  failed every time before the change; with either half of the guard taken out it fails again.
+- **Text on a floating surface reads 4.5:1 in every theme.** Measured in the browser on 19 Nov,
+  the card menu's Delete was 4.35:1 on the floating surface in Dawn Light, 3.71:1 in Orbit Dark and
+  4.18:1 in the deck, and the bill calendar popover's overdue amount 3.48:1 on its overdue row in
+  Orbit. A toast's title and action took its kind's colour: 2.99:1 for a warning in Dawn, 3.70:1
+  for a success title, 4.35:1 for an error, and 3.71:1 for an error in Orbit, with the action's
+  hover tint taking each lower (2.60:1 for a warning in Dawn). The active profile in the profile
+  switcher was 4.11:1 on its tint in Dawn, and the popover's paid check 3.61:1. Each now takes the
+  hue's text token: `--danger-text` for Delete and the overdue amount, `--success-text` for the paid
+  check, `--primary-hover`, the azure the app already sets text in, for the active profile, and a
+  toast's new `--toast-ink` (`--primary-hover`, `--success-text`, `--warning-text` or
+  `--danger-text`) for its title and action. `--toast-accent` keeps the icon, the edge, the
+  outline and the hover tint: the icon is a mark, and keeps the status colour as a met circle
+  check's mark does. `--warning-text` is new: #a3590c in Dawn (5.26:1 on the surface, 5.0:1 on
+  `--bg`) and Orbit's own `--warning` in Orbit. Of 75 text pairs measured in the three, 24 were
+  under 4.5:1 before and none are after; the lowest is 4.56:1, a success toast's action under the
+  pointer in Dawn. The surfaces and their edges did not change.
+- **Tests:** `src/__tests__/floatingEdges.test.ts` reads the text colour of every rule inside each
+  floating surface (`TEXT_ON_FLOATING`, a scope per surface's stylesheet) with what it is painted
+  on: its own background, a band such as the popover's header, or a hover's tint under the text of
+  the rule it repaints. It resolves each block that re-grounds a theme, and a toast's kinds, and
+  fails on a pair under 4.5:1, on a floating stylesheet with no scope and on a scope that finds no
+  text. A toast's icon is listed as a mark, not text. It failed in Dawn, Orbit and the deck before
+  the change, and fails again when any one part of it is taken back, when the overdue row's tint or
+  the action's hover tint is made stronger, and when a new rule in the card menu's stylesheet is set
+  in `--warning`. `src/__tests__/successTextContrast.test.ts` reads the success toast's button
+  through `--toast-ink` now, and still fails unless the icon and the edge keep `--success`.
+- **The passkey offer is painted like every other floating surface.** The card that offers a
+  passkey after a sign-in (`components/PasskeyNudge.tsx`, fixed in the bottom-right corner) was
+  styled inline, where `floatingEdges.test.ts` could not read it: it painted `--surface` with a
+  `--border` edge, 1.21:1 against the page in Dawn Light and 1.51:1 in Orbit Dark. It now lives in
+  `components/PasskeyNudge.module.css` on the floating pair, an edge of 2.24:1 on the page in Dawn
+  and 3.52:1 in Orbit. Its place, size, text and buttons did not change.
+- **Tests:** `src/__tests__/floatingEdges.test.ts` finds a floating surface by its shadow or its
+  edge as well as its z-index, so the section rail's labels, which have neither a z-index nor a
+  shadow, are found rather than only listed. Nine rules it now finds are named as not floating (the
+  dots of the timeline, the orbit and the not-found page, the toggle's knob, the period orbit's
+  buttons and centre, a benchmark's marker and a loan card's pull). It also reads every style
+  written in script, JSX style objects, style strings and cssText, and fails on one that positions
+  and paints a box unless `INLINE` names it: the heatmap's tooltip and a plan card's badge. With
+  discovery as it was, the rail's labels taken off the list, a shadowed popover with no z-index and
+  the passkey offer styled inline again all passed; each fails now.
+- **The loan form takes focus when it opens, and gives it back.** Its name field had `autofocus`,
+  which the browser applies only while a page loads, never to a dialog put on the page later: Add a
+  loan and Edit left focus on the button that opened them, behind the dialog. The form now focuses
+  its name itself, or the first rate field when "Edit rates" opens it at its rate periods, and when
+  it shuts, by Escape, Cancel, the close button or a save, focus goes back to the button that
+  opened it (`utils/returnFocus.ts`): the add button, or the card menu's button for Edit. Eight
+  other fields in forms opened later still rely on `autofocus`: Bills.tsx:825 (Add bill) and :1017
+  (its Add Category), Goals.tsx:420 (add money), :657 (New Goal) and :845 (its Add Category),
+  Settings.tsx:1928 (renaming the household), ProfileModal.tsx:80 (Create profile) and
+  TwofaChallenge.tsx:89 (the sign-in code). Opened on 19 Nov, Add bill and New Goal left focus on
+  their buttons; Tags.tsx already focuses its field itself.
+- **Tests:** `src/features/loans/__tests__/loanFormFocus.test.tsx` opens the form for Add and Edit
+  from a button and fails unless the name has focus, and unless that button has it again after
+  Escape or Cancel; opened at its rate periods, the first rate field must have it, and focus moved
+  elsewhere before the form shuts stays there. `frontend/tests/loan-form-focus.spec.ts` (@smoke)
+  does the same in the browser with the add button and the card menu's Edit; both failed before the
+  change, with focus left on the button.
+- **The floating add button sits under whatever opens over the page.** At z-index 1400 it was
+  over every dialog's backdrop (1000) and the phone drawer's (99): with the loan form open, a press
+  on it opened the Guided Orbit over the form. Measured with `document.elementFromPoint` at the
+  button's centre on 19 Nov, a press reached the button through 14 of the 24 things opened by script
+  (Add a loan and Edit, Add bill and the bill calendar's day, New Goal, Budgets, Transactions,
+  Housing, Portfolio and Retirement, Create profile, the keyboard shortcuts, the phone drawer, and
+  Add a loan on a phone). At 90 (`components/Layout.module.css`) it is over the page's own floating
+  pieces, the section rail and the passkey offer at 60 and the period bar at 20, and under the
+  lowest backdrop, the drawer's and the filter dropdowns' at 99: each of those 14 now reaches the
+  dialog, the drawer or the popover's backdrop. The card menu and the profile menu draw no backdrop
+  and do not reach the button's corner, so a press there still reaches it; a toast does not reach
+  it either.
+- **Tests:** `frontend/tests/floating-button-room.spec.ts` (@smoke) opens Add a loan and fails
+  unless a press at the button's centre reaches the dialog's backdrop, shuts the form and leaves the
+  Guided Orbit shut, and on a 390 x 844 phone opens the drawer and fails while the button is what
+  a press there reaches. With the button back at 1400 both fail, and the press alone fails too.
+- **Escape shuts Transactions' entry form, and focus goes back to the button that opened it.**
+  Reproduced on 19 Nov: with the form open from Add transaction, one Escape and then a second left
+  it open, with focus on the add button behind the form (where opening leaves it), in its amount or
+  in its description. The form had no Escape at all; Cancel, the close button and a press outside
+  were the only ways out. Escape now shuts it as Cancel does, from a field or from the add button,
+  and however the form shuts, focus goes back to the button that opened it
+  (`utils/returnFocus.ts`). Something open over the form takes the first Escape for itself: a
+  dialog, a menu, the keyboard shortcuts, or an (i) panel in the form. Some of those shut on Escape
+  without saying so, so the form looks at what is over it as Escape comes in, before any listener
+  has had it, and shuts only when nothing was there and nothing spent the key on its way out
+  (heard on `window`, which hears it last), and only while Transactions is the page shown. The
+  keyboard shortcuts list (`components/KeyboardShortcutsModal.tsx`) now says `aria-modal="true"`,
+  as the other dialogs over a backdrop do: without it, "?" over the form and then Escape shut both,
+  and the half-filled form was cleared. The loan chart's Escape (`LoansOverview.tsx`) looks for a
+  dialog over the page the same way, so it should leave Escape to the list now too; that is read
+  from the code, not tested. The form takes focus when it opens since "Every dialog takes focus",
+  below.
+- **Tests:** `src/features/__tests__/transactionFormEscape.test.tsx` opens the form from the add
+  button and fails unless Escape shuts it from the button and from the amount, and unless focus is
+  back on the button after Escape and after Cancel. It fails if Escape shuts the form while
+  something over it has the key (a dialog that shuts on Escape without saying so, the real
+  shortcuts list, an open (i) panel), once a later listener has spent it, or while another page is
+  shown, and if a dialog left in the page while shut holds Escape back. Each of its eleven guards,
+  taken out, fails at least one case. `frontend/tests/transaction-form-escape.spec.ts` (@smoke)
+  does the same in the browser: Escape from the add button and from the amount, and an (i) panel
+  and the shortcuts list each taking the first Escape. All four failed before the change; with the
+  list not marked modal, the shortcuts case failed with the form shut by the first Escape.
+- **Every dialog takes focus when it opens and gives it back when it shuts**
+  (`utils/dialogFocus.ts`). A dialog put on the page after it loaded left focus on the button that
+  opened it, behind the dialog: `autofocus` works only while a page loads, so the eight fields
+  that had it (Add bill and its Add Category, New Goal and its Add Category, Add money, the
+  household rename, Create Profile, the 2FA code) never had the cursor, and Tab walked the page
+  under the dialog. One helper does both halves now. Opening puts focus on the first field a
+  person can type in or choose from (not hidden, disabled or undrawn), or on the dialog itself when
+  it has none, which then gets `tabindex="-1"` and no ring round the whole panel
+  (`styles/index.css`). Shutting gives focus back through `returnFocus`. `ref={dialogFocus}` is
+  for a dialog put on the page when it opens; `dialogFocusWhile(open, () => el)` for one that
+  stays on the page, shown by a class: Transactions' entry form, Auto Categorize, Reconciliation,
+  the Guided Orbit, and the subscription scan and catalog. A dialog fading in from
+  `visibility: hidden` (Auto Categorize) cannot hold focus until its first frame is drawn, so the
+  helper tries again for up to ten frames, while the dialog is open and nobody else has moved
+  focus. `first` names another start (the loan form's rates; the token reveal's "I've saved it",
+  its only way out, which focused itself before). `returnTo` names where focus goes when the
+  opener has gone by the time the dialog shuts: Add money and Delete account take their buttons'
+  place and make them again, and Create Profile is an item in the profile menu, so focus goes to
+  the profile button. 41 dialogs use it. The ones with no field now have a role and a name, so
+  focus on them reads something: Dashboard Views, the receipt viewer, the changelog, Take a Tour
+  and the bill calendar's day popover; the token reveal is named by its heading, and Take a Tour's
+  close button is named Close. Left as they are, each with its own focus: the command bar (its
+  input, after its 60 ms open), the setup wizard (its panel and each step's heading), Tags' rename
+  (a field that focuses itself), the menus (the card, profile and filter menus), and the phone
+  drawer, the spotlight tour and the (i) panels, which are not dialogs. The transaction form's
+  `txOpener`, the Guided Orbit's own opener and the loan form's focus code are gone into the
+  helper. Not changed here: the subscription scan and catalog stay in the tab order while shut
+  (`opacity: 0` and `pointer-events: none`, nothing that takes them out of it), and most dialogs
+  still have no Escape, so the spec below shuts those with Cancel or Close.
+- **Tests:** `src/utils/__tests__/dialogFocus.test.tsx` (14 cases) covers both shapes: the first
+  field, a skipped hidden, disabled or undrawn one, the dialog itself when it has no field, a field
+  that focused itself, `first`, `returnTo`, focus moved away before the dialog shut, two rounds of
+  a class-shown form, one shut again before focus could move, and a dialog fading in (focus taken
+  on a later frame, left where someone moved it, ten frames at most). Each of its twelve guards,
+  taken out, fails at least one case. `frontend/tests/dialog-focus.spec.ts` (@smoke, 8 cases)
+  opens 36 dialogs on nine pages the way a person does, checks focus is in each, shuts it with
+  Escape, Cancel or Close, and checks focus is back on what opened it. With the helper taken out
+  all eight fail at their first dialog, focus not going in; with only its giving back taken out,
+  all eight fail with focus not coming back. Five more open where the
+  browser cannot reach them from the fixture, so a unit test opens each: the sign-in dialog
+  (`loginModal.backGesture.test.tsx`), the 2FA step (`TwofaChallenge.test.tsx`), the token
+  reveal (`apiAccess.test.tsx`), the bank import preview (`importPreviewIsNotAWrite.test.tsx`)
+  and the receipt viewer (`transactionFormEscape.test.tsx`). The scan and the catalog each have
+  one that fails if they take focus while shut (`SubscriptionScan.test.tsx`,
+  `SubscriptionCatalogModal.test.tsx`). `transaction-form-escape.spec.ts` now expects focus in
+  the form once it opens, and types "?" from its close button rather than from the add button
+  behind it.
+- **A toast's icon and focus rings are drawn in its ink.** Dawn's warning toast drew both in
+  `--warning`, 2.99:1 on the toast's surface, under the 3:1 a mark needs (WCAG 1.4.11). Every kind
+  now draws them in its ink, the text token its title and action already use, so the five kinds
+  read alike: 5.26:1 for Dawn's warning, the lowest of the five kinds in Dawn, Orbit and the
+  instrument deck, up to 7.92:1. The edge, the action's outline and its hover tint keep the accent.
+- **Tests:** `src/__tests__/floatingEdges.test.ts` no longer exempts the toast's icon (`MARKS` is
+  gone): it is measured as every other colour on a floating surface is, and a new case measures
+  every focus ring on one at 3:1 in each theme and kind. With the icon and the rings back on the
+  accent, the colour case fails in all three themes (the icon at 2.99, 3.70 and 4.35:1 in Dawn,
+  3.71:1 in Orbit and 4.18:1 in the instrument deck) and the ring case at 2.99:1 for Dawn's
+  warning. `successTextContrast.test.ts` (D1) reads the rules: the icon and the rings on the ink,
+  the edge on the accent.
+- **The passkey offer stands above the floating add button.** After a sign-in the offer sat in the
+  button's corner, and the button (z 90) stood over its Add passkey and Not now (z 60). Measured on
+  26 Nov, the button's whole box was inside the offer's: at 1440 x 900 the offer ran 1084 to 1424
+  across and 742 to 884 down, the button 1362 to 1418 and 822 to 878; at 390 x 844 the offer ran
+  34 to 374 and 686 to 828, the button 322 to 374 and 776 to 828. The offer now reads the two
+  values the shell sets for the button (`--fab-offset`, `--fab-size`): its right edge on the
+  button's and its bottom 12 px above the button's top, clear of the halo drawn round it (8 px when
+  hovered). After: 1078 to 1418 and 668 to 810 on the desktop, 34 to 374 and 622 to 764 on the
+  phone; the button has not moved.
+- **Tests:** `frontend/tests/floating-button-room.spec.ts` (@smoke, two cases) signs in with the
+  offer's flag set and an empty passkey list, saves both boxes and a capture, and fails unless the
+  offer ends 8 px or more above the button with its right edge on the button's, and the button is
+  its size at its gaps from the edges (56 px at 22 on the desktop, 52 at 16 on the phone). Both
+  failed before the change, with the offer's bottom at 884 and 828.
+- **Specs: an `isVisible({ timeout })` read as an assertion is an assertion now.** Playwright
+  ignores `isVisible`'s `timeout` (deprecated: it returns at once, Playwright 1.64.1's types say),
+  so these checks never waited. `housing-crud.spec.ts` asserts the add button with `toBeVisible`,
+  and a call in `transactions-crud.spec.ts` whose answer nothing read is gone (the two
+  `retirement-crud.spec.ts` empty-state checks are deleted, below). Left as conditions, which they
+  are, and listed: the setup wizard's leave confirmation in 13 specs and `form-errors-helpers.ts`
+  (Skip always asks today, and the confirmation is up in the same click, so each check is true
+  whenever it runs), and in `transactions-crud.spec.ts` four receipt cases and a type-selector
+  case that never open what they check for, so their bodies never run.
+- **Escape shuts every dialog, and only the one on top** (`utils/dialogFocus.ts`). 18 of the 32
+  files using the dialog helper had no Escape. 24 dialogs in 17 files shut on Escape now (16 of
+  those 18, and Goals, where only Add money had it): Add bill and its Add Category, New Goal and its
+  Add Category, Add account, Add housing, Add holding, the retirement goal, the Budgets and
+  Categories dialogs, Dashboard Views, Take a Tour, the changelog, the bill calendar's day popover,
+  the bulk Change Category, Change Type and Tags, Recurring's rule, the subscription scan and
+  catalog, and the confirm dialog. The helper takes `onEscape`, the same function the dialog's
+  Cancel or Close runs, so Escape does what Cancel does and nothing more: the confirm dialog cancels
+  and never confirms. The helper keeps the open dialogs in the order they opened, and only the one
+  on top hears Escape: in Add Category over Add bill the first Escape shuts Add Category and leaves
+  Add bill as it was, the second shuts Add bill. A dialog that hears Escape itself is on that list
+  without `onEscape`, so one under it hears nothing (the icon gallery over Add Category). Escape is
+  read as it comes in (which dialog is on top, and is an (i) panel, a menu or a modal the helper
+  does not know, the command bar, over it?) and acted on as it goes out (did something spend it?),
+  the way Transactions' entry form reads it; Escape while an input method is composing is the input
+  method's. Not given Escape: the API token reveal, which says why (shutting it before the secret is
+  saved loses it, so "I've saved it" stays the only way out), and the 2FA code step, which is a step
+  of sign-in, not a dialog; the sign-in dialog around it already shuts on Escape. The dialogs that
+  had their own Escape keep it.
+- **Tests:** `src/utils/__tests__/dialogFocus.test.tsx` has 11 new cases (25 in all): Escape runs
+  `onEscape` and spends the key, for both shapes; Add Category over Add bill shuts first; a dialog
+  on top that hears Escape itself keeps the one below open; one that shut itself on the way is not
+  shut again; Escape spent inside, an open (i) panel, an open modal the helper does not know (with
+  focus in it, and with focus dropped to the page) and a composing input method each keep the dialog
+  open; a modal left on the page while shut (`pointer-events: none`, or hidden) does not; and a
+  dialog shut or gone hears nothing. Each of its nine guards, taken out, fails at least one case;
+  the three that need `onEscape` failed before it existed. `ConfirmDialog.test.tsx`: Escape resolves
+  the confirm false and never runs its work; it fails with the confirm dialog as it was.
+  `frontend/tests/dialog-focus.spec.ts` (@smoke, 8 cases) opens again each of the 24 dialogs it
+  shuts with Cancel or Close and shuts it with Escape, so all 37 of its round trips end with an
+  Escape and focus back on what opened the dialog; Bills adds the nested case (Escape shuts Add
+  Category with Add bill still open and focus on its Add Category button, then Add bill with focus
+  on Add bill), Categories shuts Add Category with Escape, and Loans checks the loan count is the
+  same after the confirm's Escape. With the helper's Escape listener taken out, all eight fail, each
+  at its first dialog wired here.
+- **A shut subscription scan or catalog is out of the tab order.** Both stay on the page while
+  shut, faded to nothing (`opacity: 0`, `pointer-events: none`), and Tab walked into them:
+  measured on 26 Nov with nothing open, Tab stopped 126 times in the shut catalog and once in the
+  shut scan (its Close) on Bills, and once in the scan on Import. Each is `inert` while shut now,
+  as the Guided Orbit and the command bar are, so neither Tab nor a screen reader finds it. A probe
+  of every page (21 page views, 104 dialog elements, nothing open) found no other shut dialog Tab
+  could reach before or after: Transactions' entry form and Reconciliation are `display: none`
+  while shut, Auto Categorize is `visibility: hidden`, and the Guided Orbit and the command bar
+  were already inert. Only the overlay around each dialog changed; what the scan shows is as it
+  was.
+- **Tests:** `SubscriptionScan.test.tsx` and `SubscriptionCatalogModal.test.tsx` each fail unless
+  the overlay is inert while shut and not while open; both failed before the change.
+  `frontend/tests/dialog-focus.spec.ts` has a ninth case (@smoke): Tab through Bills, its
+  Subscriptions tab and Import, from the top until focus comes round again, never stops inside a
+  dialog. Before the change, and again with the two `inert` lines taken out, it failed on Bills
+  with 127 stops in the shut dialogs (126 in the catalog, the scan's Close).
+- **After "I've saved it", focus goes to the token's name field.** The reveal gave focus back to
+  what opened it, Create token, which is disabled while the token is made and again once the name
+  is cleared, so focus dropped to the page and Tab started over from the top. It goes to the name
+  field now, where the next token starts (`returnTo`, which `utils/dialogFocus.ts` now also uses
+  when the opener is still there but cannot take focus).
+- **Tests:** `src/features/__tests__/apiAccess.test.tsx` creates a token from a focused Create
+  token, acknowledges it and fails unless focus is on the name field; before the change focus was
+  on `<body>`.
+- **Specs: five cases that never ran say so.** In `transactions-crud.spec.ts` four receipt cases
+  look for the receipt viewer, which no transaction in the e2e fixture can open (none has a
+  receipt), and the type-selector case looks inside the entry form without opening it. Their
+  bodies never ran, and round 7's full run counted all five as passed. Each is `test.fixme` now
+  with its reason as an annotation, so the report lists them as skipped.
+- **CHANGELOG: the dialog line is two sentences.** "Dialogs open with the cursor inside, keep Tab
+  inside them, close with Escape, and put you back on the button that opened them. The Quick add
+  button no longer sits on top of an open dialog." It replaces a line that listed dialogs by name
+  and said Escape closed only Add transaction. The passkey offer's place above the add button stays
+  here only.
+- **Escape has one path: the dialog helper's.** The 14 dialogs and forms that still heard Escape
+  themselves hear it through `onEscape` now: the loan form, the keyboard shortcuts list, Auto
+  Categorize, Reconcile, the import preview and the sign-in dialog (each listened on the whole
+  document), Create Profile, the icon gallery, the period picker, the Guided Orbit, Transactions'
+  entry form, and three forms that open in place (Add money, a profile's rename, Delete account's
+  confirmation). With the shortcuts list ("?") open over the loan form, one Escape shut both,
+  because the form heard Escape at the document whatever was over it. It shuts only the list now,
+  and the next Escape the form. The receipt viewer, which had no Escape, shuts on it too. The
+  command bar, the setup wizard and the menus keep their own.
+- A form that opens in place (`inPlace`) is not over the page: it takes Escape only while focus is
+  in it. The 2FA step is in place with no `onEscape`, so Escape goes on to the sign-in dialog
+  around it. A modal the helper does not know holds Escape only while it has a box, so one left on
+  the page while shut holds nothing. Transactions' own two-step listener and its page check are
+  gone: the helper reads Escape the same way, and a dialog on a page not shown is not drawn, so it
+  is never on top.
+- **Tests:** `src/utils/__tests__/dialogFocus.test.tsx` has two new cases and one changed (27 in
+  all): a form open in place takes Escape only with focus in it; a step in place with no
+  `onEscape` passes Escape to the dialog around it; a modal with no box holds nothing. All three
+  failed before the change. `transactionFormEscape.test.tsx`: the receipt viewer shuts on Escape
+  (it failed before), and the case for another page now hides the page as the shell does (it fails
+  with the helper's drawn check taken out). `IconPicker.test.tsx`: Escape closes the gallery and
+  not the dialog under it (it fails with the gallery's `onEscape` taken out).
+  `loginModal.backGesture.test.tsx` and `importPreviewIsNotAWrite.test.tsx` send Escape as a key
+  press does, bubbling up to the window. `frontend/tests/dialog-focus.spec.ts` has a new @smoke
+  case: "?" over Add a loan and over Add transaction, then Escape shuts only the list and puts
+  focus back on the button it was opened from, and the next Escape shuts the dialog. On the code
+  before the change it fails at the loan form, where the first Escape shut both.
+- **Tab stays inside the dialog on top** (`utils/dialogFocus.ts`). Measured on 26 Nov before the
+  change, Tab walked out of all 34 dialogs that open over a page (27 of them onto Quick add), and
+  Shift+Tab from each one's first stop walked out of all 34 too. The helper now steps in at the
+  edges only: Tab on the last stop goes to the first, Shift+Tab on the first goes to the last, and
+  from outside the dialog (the page behind it, or the dialog itself) Tab goes in at the edge it is
+  heading for. Between stops the browser moves focus as it always does. A stop is a control Tab
+  can reach that is not disabled, inert or hidden, and a group of radios is one stop (the checked
+  one, or the first). A dialog with nothing to stop on keeps focus on itself. Only the dialog on
+  top keeps Tab (Add Category over Add bill), never a form open in place, and never a dialog on a
+  page not shown. Tab is left alone with Ctrl, Alt or Meta held, while an input method is
+  composing, once something has spent it, and while focus is in a layer opened over the dialog:
+  an (i) panel, a menu, the command bar or a running tour's card (`data-tour-card` in
+  `Spotlight.tsx`). The command bar keeps its own keys and keeps Tab in itself from its own
+  keydown, with the helper's `keepTabIn`. Known gap: a cross-origin frame (the sign-in captcha)
+  sends no keydown out, so Tab from inside one is the browser's.
+- **Tests:** `src/utils/__tests__/dialogFocus.test.tsx` has 21 new cases (48 in all): the wrap at
+  both edges, nothing done between stops, a dialog with no stop, Tab from the page behind and from
+  the dialog itself, from inside past either edge, disabled, out-of-order, undrawn, hidden and
+  inert controls passed over, one stop per radio group, the top dialog only, no Tab kept in a form
+  open in place or a dialog on a page not shown, modifiers and composing, a Tab spent inside or
+  with the dialog shut on its way, and each of the four layers. Each of the 28 guards and branches,
+  taken out, fails at least one case. `spotlightDialogTab.test.tsx` renders the real tour over a
+  dialog: Tab from End Tour stays the browser's, and it fails with `data-tour-card` taken out.
+  `frontend/tests/dialog-tab-trap.spec.ts` (@smoke) opens each of the 34 dialogs, presses Tab
+  once per stop and three times more, then Shift+Tab once from the first stop, and checks focus
+  stays inside each time; each dialog is a soft check, so a run names every dialog that leaks.
+  On the code before the change all 34 failed both ways (a wrangler drop in the full run cut off
+  Categories and Budgets, which failed its six alone). Its seventh case Tabs to the (i) in Add
+  transaction: the panel opens on focus, Escape shuts it with the form still open, Enter pins it
+  and Enter shuts it, and Tab goes on inside the form.
+- **The holding merge question has three answers: Merge, Add separately and Cancel.** Adding a
+  buy of a ticker the profile already holds asked one question with two buttons, and Cancel meant
+  "add it as a holding of its own", so Escape or a click outside saved a second holding. Cancel,
+  Escape and a click outside now save nothing and leave the form as it was typed (the form's
+  `NOT_SENT`), Add separately adds the holding of its own, and Merge merges as before. The
+  question ends "Add separately keeps it as a holding of its own." in place of "Choose Cancel to
+  add it as a separate holding." `core/confirmStore.ts` has `showChoice`, which asks with a third
+  button (`alternativeText`) between Cancel and Confirm and answers 'confirm', 'alternative' or
+  'cancel'; `showConfirm` answers true or false as before.
+- **Tests:** `holdingForm.test.tsx` asks the question in the real dialog. Escape saves nothing
+  and keeps the shares, price and date as typed; before the change it saved a second holding
+  (shares `[10, 2]` where `[10]` was expected). A click outside and Cancel do the same. The
+  buttons read Cancel, Add separately, Merge, and Add separately adds the holding. With the Cancel
+  line taken out of `holdingForm.ts`, Escape and Cancel merge (`[12]`) and both cases fail.
+  `pagesFollowWrites.test.tsx`, which answers deletes with yes, answers the merge with Merge.
+  `confirmStore.test.ts` checks the three answers and that a plain confirm has no third button,
+  and `ConfirmDialog.test.tsx` the third button's place and that Escape answers 'cancel'.
+- **Escape during a tour ends the tour and nothing under it.** Measured on 26 Nov: with the
+  Transactions tour started from Take a Tour and the shortcuts list opened with "?", one Escape
+  ended the tour and shut the list. Take a Tour is a dialog, so the dialogs' Escape was listening
+  before the tour's, shut the list first, and the tour's listener does not ask whether Escape was
+  spent. The tour is drawn over the page: its overlay is z-index 10000, the dialogs 1000 to 9999
+  (the command bar and the Guided Orbit 2000), and only the icon gallery and Take a Tour match
+  it (Take a Tour shuts as the tour starts). So the tour is the one on top.
+  `Spotlight.tsx` takes Escape first now, as it comes in at the window, ends the tour and keeps
+  the key from the rest, so a dialog, a menu or the command bar under the tour stays open for the
+  next Escape. Its other keys are as they were.
+- **Tests:** `spotlightDialogEscape.test.tsx` renders the real tour over a dialog whose Escape
+  listens first: one Escape ends the tour and leaves the dialog open, the next shuts the dialog;
+  and a layer that shuts on any Escape the page hears (as the command bar does) stays open. With
+  the tour's new listener taken out both fail, and without its `stopPropagation` the second does.
+  `frontend/tests/dialog-focus.spec.ts` has a new @smoke case doing the measured steps; on the
+  tour as it was it fails where the list should still be open.
+- **Specs: two cases that checked nothing are gone, and one checks a real change.**
+  `retirement-crud.spec.ts` loses both empty-state cases: Retirement renders nothing with the test
+  id `empty-state`, so they passed whatever the page showed. In `transactions-crud.spec.ts`,
+  "should highlight expense type when selected" read the `active` class without opening the entry
+  form, and asserted only when it found it, which it never did (the class is the CSS module's
+  hashed name, never a bare `active`). It now opens the form, picks Income, checks Expense is not
+  highlighted, clicks Expense and checks it is. With the highlight taken out of `Transactions.tsx`
+  it fails after the click, and with Expense always highlighted it fails before it.
+- **CHANGELOG: the dialog line says Tab stays inside.** Its first sentence gains "keep Tab inside
+  them" (the entry above quotes the whole line), and it is still two sentences. "Escape shuts every
+  dialog, and only the one on top" and its tests entry ran past 100 columns and are rewrapped; their
+  words are unchanged.
+- **No extra-payment label stands on the loan's line.** A label above its mark and to the left of it
+  was placed at the mark's height, where the line has not yet come down to the mark, so the line ran
+  through it. The review's sweep (`LoanPayoffChart` in jsdom: the boat with one extra payment at
+  each month, three amounts and five widths from 308 to 900 px, and a mortgage with three extras
+  close together) found 185 such labels, every one left of its mark; the boat's payment 46 was
+  crossed at every width. An above place now rises to stay 3 px over the line where it runs highest
+  across the label, as an under place stays 3 px under where it runs lowest, and stays inside the
+  chart; one with no room there moves on to the places under the line. The same sweep now finds no
+  crossing. A label is still left off only when no place fits: none in the boat's sweep, and in the
+  mortgage's 360 clusters 84 where 62 were before. Of the 24 newly left off, 17 sit in clusters
+  around today (payment 42), whose raised places run into the Today pill or the glow while the
+  places under are taken by their neighbours, and 6 near the end; 2 came back. The sweep also counts
+  101 labels across today's dashed line, 100 before; that line is not part of this change.
+- **Tests:** `src/features/loans/__tests__/loanPayoffChart.test.tsx` draws the boat with an extra
+  payment at 46 at 308, 426, 494, 640 and 900 px, and with one at each month at 308, 494 and 900 px,
+  and fails on any label the line runs through and on any of those payments left unlabelled. All six
+  cases failed before the change.
+- **A figure in the loan chart's readout never breaks inside.** At 320 px the chart's box holds 242
+  px, and the readout's two equal halves gave each figure 113: €175,923.83, 118 px wide, broke after
+  the 8 (measured on 19 Nov on the demo's Investment Property Loan), and the e2e suite's loan of
+  1,250,000 broke at 360 px too. A figure no longer wraps (`white-space: nowrap` in place of
+  `overflow-wrap: anywhere` in `features/loans/Loans.module.css`), and below 286 px of box, what two
+  seven-figure amounts and the 16 px between them need (€1,182,363.57 is 135 px at 18 px), the
+  readout has one figure to a row. Windows of 320, 340 and 360 px now show one to a row, 390 px
+  keeps its two equal halves, and nothing wraps or leaves the box at any of them.
+- **Tests:** `frontend/tests/loan-chart.spec.ts` sweeps the open chart from 1440 down to 360 and 320
+  px, fails on a figure on two lines or anything past the box, and counts one figure to a row at 320
+  px and two at 390 px; it failed at 360 px before the change.
+- **The heatmap's day detail keeps its edge where the dialog check can see it.** A click on a day
+  in Analytics' heatmap opens a dialog whose box was styled inline in `features/Analytics.tsx`, so
+  `dialogEdges.test.ts`, which reads the CSS modules, never saw it. Its backdrop and box now live in
+  `features/AnalyticsPage.module.css` as `.day-backdrop` and `.dialog`, with the same values,
+  `border: 1px solid var(--border)` included; the day's rows and its Close button keep their inline
+  styles. Measured on 19 Nov at 1440x900 on the latest day with spending, before and after the move
+  (not one pixel changed): in Dawn Light the white box stands 2.81:1 on the page the 30% backdrop
+  dims beside it, and its edge, #dde4f5, 2.21:1. In Orbit Dark, Analytics sits in the deck, whose
+  `--card-bg` and `--border` are #11141a and #21262d: the box measures 1.04:1 against the dimmed
+  page beside it and its edge 1.25:1.
+- **Tests:** `src/__tests__/dialogEdges.test.ts` covers the day detail: its `.dialog` must paint a
+  background with a visible border, and `Analytics.tsx` must use it.
+  `src/__tests__/floatingEdges.test.ts` lists it in `NOT_FLOATING` as a dialog, which that test
+  leaves to `dialogEdges.test.ts`.
+- **Every dialog's edge is measured, in every theme.** "Every dialog has a visible edge", above,
+  gave each dialog an edge but no number for it, and a dialog opens over a backdrop that dims the
+  page, so its edge has to stand against the dimmed page, not the page at rest. Measured on 19 Nov
+  at 1440x900, 2 px outside each dialog's edge (the median of nine points along it), on the 19
+  dialogs a script could open: in Orbit Dark the `--border` edge, #26324f, stood 1.54 to 1.59:1
+  beside the dialog, and the subscription scan's and catalog's tinted edge 2.06 and 2.09:1; in the
+  deck, Analytics' day detail and Portfolio's Add Holding stood 1.24 and 1.34:1. The card-coloured
+  box itself stands 1.08 to 1.2:1 on the dimmed page in both, so nothing marked where a dialog
+  ended. A new token, `--border-dialog`, carries the edge and is set where each theme sets its
+  grounds, at the floating edge where that clears the numbers: #5b698c in Orbit and #5e656d in the
+  deck. After the change the edge stands 3.59 to 3.69:1 beside the dialog in Orbit (4.13 and 4.2:1
+  tinted) and 3.36 and 3.45:1 in the deck, and 3.07 and 3.12:1 on the dialog's own surface. At full
+  size it reads as a 1px line, not a frame, on the largest of them too (Add a loan, Add
+  Transaction). Dawn Light could not take its floating edge: its 40% navy backdrop dims a white card
+  to a grey that #a1a9bd matches at 1.07:1. A 2:1 edge against that grey is either light or
+  near-black, and a near-black line round a white box is a frame, so Dawn's `--border-dialog` is
+  #e0e6f6, the first step past `--border` (#dde4f5, 1.98:1) that clears 2:1 against every ground
+  under every dialog backdrop in use: 2.02:1 at worst, and 1.25:1 on the white surface, a hairline.
+  In the browser the old edge already stood 2.08:1 or more, and the change is small: the weakest is
+  now 2.18:1 (Add a loan, Add Retirement Goal). In Dawn the white box, 2.72 to 5.74:1 on the dimmed
+  page, is what separates a dialog from the page, not the line. Analytics' day detail opened over
+  its own 30% black, which left the page light enough that no edge short of white cleared 2:1 beside
+  it (#e0e6f6 measures 1.68:1 against a white card under it). Its `.day-backdrop` now takes
+  `--modal-overlay`, as the feature pages' dialogs do, so the page behind it dims more: to Dawn's
+  40% navy and to the deck's 72% near-black. Beside its edge in Dawn: 2.08:1 before, 2.46:1 after.
+  Sign-in and Create Profile are painted in the sidebar's navy in both themes and keep their own
+  edge where it passes. In Dawn their 22% mix of `--sidebar-text` drew #2a3144, 2.5:1 beside Create
+  Profile in the browser (2.97:1 at worst against the grounds) and 1.48:1 on the navy, so
+  `--border-dialog-sidebar` keeps that colour there. In Orbit it drew #282f40, 1.46:1 beside the
+  dialog, and the token takes the floating edge instead: #5b698c, 3.57:1 beside and 3.6:1 on the
+  navy. They need a token of their own because `--border-dialog` would draw a near-white line on
+  navy in Dawn. The guided entry sheet (`GuidedOrbit .sheet`), the subscription scan and the catalog
+  keep their tint of `--primary`, now mixed into `--border-dialog`. 26 border declarations changed,
+  one per stylesheet, and the day backdrop; no surface, radius, shadow, spacing or layout did. Not
+  opened by script, and covered by the stylesheet test only: the changelog (Settings' View Changelog
+  was not reached), the guided entry sheet, sign-in, API access's token reveal (cloud only), the
+  import preview (cloud connected sources), Add Recurring and Dashboard Views.
+- **Tests:** `src/__tests__/dialogEdges.test.ts` fails when a dialog surface it covers draws its
+  edge with anything but `var(--border-dialog)`, or, for sign-in and Create Profile,
+  `var(--border-dialog-sidebar)`. It reads every backdrop in the stylesheets that hold a dialog,
+  resolves `var(--modal-overlay)` per theme, and fails when Dawn, Orbit or the deck sets no
+  `--border-dialog` of its own, or one under 2:1 (light) or 3:1 (dark) against any of its six
+  grounds dimmed by any of those backdrops, or under 1.2:1 or 2:1 on its `--card-bg` and
+  `--surface`; and when a theme's `--border-dialog-sidebar` fails the same numbers beside the navy
+  dialogs or on `--sidebar-bg`. Taken out one at a time, each of these fails one test: the token in
+  `AccountsPage`'s modal, the deck's token, Dawn's value (put back to #a1a9bd), the day backdrop
+  (put back to 30%), Create Profile's token (put back to its own mix) and Orbit's
+  `--border-dialog-sidebar`.
+- **The unused `PeriodNavigator` and Budgets' unused dropdown rules are deleted.**
+  `components/Dashboard/PeriodNavigator.tsx`, a month and year picker with arrows either side, and
+  its stylesheet lost their last importer when `PeriodBar` took their place on Dashboard in #316
+  (`784034d6`). Nothing in `frontend/src`, the e2e specs, the tours or the scripts referred to them,
+  and the component set no `data-tour` or `data-test-id`. `BudgetsPage.module.css` kept
+  `.dropdownWrapper`, `.dropdown`, `.dropdownItem` and its hover, which `Budgets.tsx`, the
+  stylesheet's only importer, never uses. The floating pair the entry above gave both dropdowns goes
+  with them, and so do their two rows in `src/__tests__/floatingEdges.test.ts`;
+  `cssModuleReferences.test.ts` and `cssModuleNaming.test.ts` pass without them.
+- **The rest of Budgets' unused month and year control is deleted.** Budgets picked its month and
+  year in a control of its own until `PeriodBar` took its place in #316 (`784034d6`), and
+  `BudgetsPage.module.css` kept its rules: `.month-selector`, `.month-display`, `.monthBtn` and
+  `.yearBtn` with their hover and minimum widths, `.selected` and `.overlay`, two `.budget-summary`
+  rules for the same selector and display, and the phone-width `flex-wrap` for the selector, 67
+  lines in all (`.month-display` was not used as a class even before #316). `Budgets.tsx`, the
+  stylesheet's only importer, looks none of them up, and its two computed lookups return only
+  `status-*` and `chartStatus*` names. `month-selector` is still the `data-test-id` that `PeriodBar`
+  puts on Budgets' period bar for the e2e specs, an attribute and not a class, and `.monthBtn` in
+  `PeriodOrbit.module.css` is that component's own. `cssModuleReferences.test.ts`,
+  `cssModuleNaming.test.ts` and `core/__tests__/cssModuleHygiene.test.ts` pass without them.
+- **The unused `components/BulkActions/` tree is deleted.** Its `BulkActionBar`, `BulkCategoryModal`
+  and `BulkTypeModal`, with their stylesheets, had no importer anywhere in the repository;
+  Transactions uses `components/BulkActionBar.tsx`. The 2026-07-23 integrity audit
+  (`docs/audits/2026-07-23-code-and-data-integrity-audit.md`) listed the tree as superseded, to
+  remove once nothing referenced it.
 - **Saving the badge record no longer makes Dashboard, Progress and About this space read their
   settings again.** The badge store (`frontend/src/core/achievementsStore.ts`) keeps the unlocks
   and dismissed advice cards in the settings under `achievements` (`achievements:<profile>` in
@@ -3419,7 +5031,8 @@ true, or is too small for one.
   test that reads the figure back now has the stored account change when the figure is set, as it
   does, rather than before Save.
 - **A file setup hands to the Import page keeps the balance typed in setup.** "Open in Import"
-  finishes setup, and finishing forgot setup's "Balance today" figures (`forgetTypedBalances`)
+  finished setup then (it leaves setup waiting now, see Setup wizard), and finishing forgot setup's
+  "Balance today" figures (`forgetTypedBalances`)
   before the handed file was imported, so that import added up on top of the typed balance, the
   double count M2 removed. The figures now go with the file (`HandedImportFile.typed`), and the
   Import page works the file's import back from them, once, before it lists the balances. Setup

@@ -134,14 +134,19 @@ export const bills = [
     expect(await listTransactions(api, expect)).toEqual([]);
     expect(await listTransactions(other, expect)).toEqual([]);
 
-    // A bill on another profile's category is refused at the category.
+    // A bill on another profile's category is refused at the category, and so is one sent with
+    // both profiles selected, as a household's subscription scan sends it: a household reads
+    // both profiles' categories, and a bill still goes to the active one.
     const theirs = await addCategory(other, expect, 'Their utilities');
-    const refused = await api.post('/api/bills', billForm({ category_id: theirs }));
-    expect(refused.status).toBe(400);
-    expect(refused.body.fields).toEqual({
-      category_id: 'Choose a category from the list, or leave it blank.',
-    });
+    for (const sender of [api, api.household]) {
+      const refused = await sender.post('/api/bills', billForm({ category_id: theirs }));
+      expect(refused.status).toBe(400);
+      expect(refused.body.fields).toEqual({
+        category_id: 'Choose a category from the list, or leave it blank.',
+      });
+    }
     expect(await billsList(api, expect)).toHaveLength(1);
+    expect(await billsList(other, expect)).toEqual([]);
 
     // On another profile's account and category both, a new bill and an edit are refused at the
     // same field in both runtimes: the account, checked first. Local-first checked the category
@@ -207,6 +212,17 @@ export const bills = [
       expectMoney(expect, await balanceOf(api, expect, everyday), 959.75, 'Everyday');
     }
   ),
+
+  // A bill has no currency: its amount is in the base currency, and the expense its payment
+  // records says so. Local-first wrote in the browser's currency, not the one Settings stored.
+  scenario("a paid bill's expense is in the base currency", async (api, expect) => {
+    expectOk(expect, await api.put('/api/settings', { currency: 'GBP' }), 'PUT the base currency');
+    const water = await bill(api, expect);
+    expectOk(expect, await api.post(`/api/bills/${water}/mark-paid`, {}), 'POST mark-paid');
+    const rows = await listTransactions(api, expect);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ description: 'Water', currency: 'GBP' });
+  }),
 
   scenario("the bill list and calendar carry each bill's category", async (api, expect) => {
     const utilities = await api.post('/api/categories', {

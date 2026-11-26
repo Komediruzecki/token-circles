@@ -8,6 +8,7 @@
  */
 import { render } from 'solid-js/web'
 import { afterEach, describe, expect, it } from 'vitest'
+import { dialogFocus } from '../../utils/dialogFocus'
 import { getCategorySvg, iconSvgByKey, PICKABLE_ICON_NAMES } from '../CategoryIcon'
 import IconPicker from '../IconPicker'
 
@@ -149,20 +150,37 @@ describe('dismissing it', () => {
     expect(closed()).toBe(1)
   })
 
-  it('closes on Escape without letting the category modal see the key', () => {
-    const { closed } = mount()
-    let reachedDocument = 0
-    // The category modal behind this one listens at the document too. If Escape reached it, the
-    // half-filled form would be thrown away along with the gallery.
-    const spy = () => {
-      reachedDocument += 1
+  it('closes on Escape, and the category form it opened over stays open', () => {
+    // The category form is a dialog too, under the gallery. Escape is for the one on top: if the
+    // form shut as well, what was typed in it would be thrown away along with the gallery.
+    let formShut = 0
+    const formHost = document.createElement('div')
+    document.body.appendChild(formHost)
+    const disposeForm = render(
+      () => (
+        <div
+          role="dialog"
+          aria-modal="true"
+          ref={(el) => {
+            dialogFocus(el, {
+              onEscape: () => {
+                formShut += 1
+              },
+            })
+          }}
+        />
+      ),
+      formHost
+    )
+    try {
+      const { closed } = mount()
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+      expect(closed()).toBe(1)
+      expect(formShut).toBe(0)
+    } finally {
+      disposeForm()
+      formHost.remove()
     }
-    document.addEventListener('keydown', spy)
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
-    document.removeEventListener('keydown', spy)
-
-    expect(closed()).toBe(1)
-    expect(reachedDocument).toBe(0)
   })
 
   it('ignores other keys', () => {

@@ -3,7 +3,9 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: calc(100vh - 120px);
+  /* The screen less what `main` keeps clear around a page, the floating button's room included
+     (components/Layout.module.css), so this page never scrolls. */
+  min-height: calc(100vh - 120px - var(--fab-size, 56px) - var(--fab-offset, 22px));
   text-align: center;
   padding: 2rem;
   position: relative;

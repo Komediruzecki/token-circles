@@ -250,6 +250,7 @@
 .title {
   margin: 0;
   font-family: var(--font-display, inherit);
+  word-spacing: var(--font-display-word-spacing);
   font-size: 24px;
   font-weight: 600;
   line-height: 1.2;
@@ -347,6 +348,8 @@
   gap: 8px;
   min-height: 44px;
   padding: 0 2px;
+  /* Its text on the paragraph's edge: the padding is for the focus ring, not an indent. */
+  margin-left: -2px;
   border: 0;
   background: transparent;
   /* Primary drawn toward the text colour: --primary itself is 4.1:1 on the light sky's middle and
@@ -454,6 +457,19 @@
   outline-offset: 2px;
 }
 
+/* A file dragged over the step: the whole step takes it. */
+.dropping {
+  outline: 2px dashed color-mix(in oklab, var(--primary) 60%, transparent);
+  outline-offset: 6px;
+  border-radius: 16px;
+}
+
+/* A card per file, close together: four of them and Add another file fit a phone's step. */
+.fileList {
+  display: grid;
+  gap: 10px;
+}
+
 .fileCard {
   display: grid;
   gap: 12px;
@@ -475,6 +491,12 @@
   padding-top: 2px;
 }
 
+/* Remove keeps its 44 px target but not its height in the row: a file with only a name (a bank
+   we don't recognise) left a 24 px band under it before the card's next line. */
+.fileTop .iconBtn {
+  margin: -10px -6px -12px 0;
+}
+
 .fileName {
   font-size: 15px;
   font-weight: 600;
@@ -486,6 +508,14 @@
   margin-top: 2px;
   font-size: 14px;
   color: var(--text-secondary);
+}
+
+/* "Goes into" and its account on one row: a card per file stays short. */
+.target {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
 }
 
 /* The accounts a YNAB Register file starts below zero, each with what it is made as. */

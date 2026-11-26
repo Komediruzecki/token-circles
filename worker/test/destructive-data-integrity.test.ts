@@ -574,7 +574,8 @@ describe('account deletion and the rows its routes save', () => {
       kind: 'google_sheet',
       label: 'Bank ledger',
       config: {
-        url: 'https://docs.google.com/spreadsheets/d/e/2PACX-account-delete/pub?output=csv',
+        // A sheet's shared link: a link from Publish to web is refused (importSourceSchema).
+        url: 'https://docs.google.com/spreadsheets/d/example-account-delete/edit',
       },
       schedule: 'manual',
     });

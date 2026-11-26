@@ -124,6 +124,10 @@ export const importSources = [
       expect(await refused({ config: { url: 'https://example.com/not-a-sheet' } })).toEqual({
         'config.url': M.url,
       });
+      const published = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vContractOnly/pubhtml';
+      expect(await refused({ config: { url: published } })).toEqual({
+        'config.url': M.published,
+      });
       expect(await refused({ default_account_id: theirs })).toEqual({
         default_account_id: M.account,
       });

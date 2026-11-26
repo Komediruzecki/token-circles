@@ -43,6 +43,7 @@
 .label {
   margin: 0;
   font-family: var(--font-display, inherit);
+  word-spacing: var(--font-display-word-spacing);
   font-size: 17px;
   font-weight: 600;
   letter-spacing: -0.01em;

@@ -20,7 +20,9 @@ import { plainMessage } from '../core/apiError'
 import { handFocusTo } from '../core/domFocus'
 import { parseEntry } from '../core/entry/parseEntry'
 import { quickEntrySave } from '../core/quickEntryLists'
+import { keepTabIn } from '../utils/dialogFocus'
 import { localToday } from '../utils/period'
+import { returnFocus } from '../utils/returnFocus'
 import styles from './CommandBar.module.css'
 import type { QuickEntryList } from '../core/quickEntryLists'
 import type { Account, Category } from '../types/models'
@@ -137,14 +139,22 @@ export function CommandBar(props: CommandBarProps) {
   }
 
   // Initialise on each open: the last-used account, a cleared draft, a focused input. The lists
-  // themselves are App's, and are read again on open when anything changed.
+  // themselves are App's, and are read again on open when anything changed. Shut, focus goes back
+  // to what had it before: the shut bar is inert, and focus left inside it would be lost.
+  let overlayRef: HTMLDivElement | undefined
+  let opener: Element | null = null
   createEffect(() => {
     if (props.isOpen()) {
+      opener = document.activeElement
       setAccountPick(null)
       resetDraft()
-      setTimeout(() => inputRef?.focus(), 60)
+      // Not if it shut again in the meantime: the input would take focus inside a shut bar.
+      setTimeout(() => {
+        if (props.isOpen()) inputRef?.focus()
+      }, 60)
     } else {
       setPendingSubmit(null)
+      returnFocus(opener, overlayRef)
     }
   })
 
@@ -264,13 +274,28 @@ export function CommandBar(props: CommandBarProps) {
 
   return (
     <div
+      ref={overlayRef}
       class={styles.overlay}
       classList={{ [styles.open]: props.isOpen() }}
+      // Mounted while shut so it can fade, and inert then: out of the accessibility tree and the
+      // tab order, so no screen reader finds a modal dialog nobody can see.
+      inert={!props.isOpen()}
       onClick={(e) => {
         if (e.target === e.currentTarget) props.onClose()
       }}
     >
-      <div class={styles.bar} role="dialog" aria-modal="true" aria-label="Quick entry command bar">
+      <div
+        class={styles.bar}
+        role="dialog"
+        aria-modal={props.isOpen() ? 'true' : undefined}
+        aria-label="Quick entry command bar"
+        onKeyDown={(e) => {
+          // Tab stays in the bar, as it does in the dialogs; the bar keeps its own keys.
+          if (e.key === 'Tab' && !e.ctrlKey && !e.altKey && !e.metaKey) {
+            keepTabIn(e, e.currentTarget)
+          }
+        }}
+      >
         <div class={styles.inputRow}>
           <span class={styles.caret}>›</span>
           <input

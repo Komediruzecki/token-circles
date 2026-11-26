@@ -6,6 +6,11 @@
   background: color-mix(in oklab, var(--card-bg) 74%, transparent);
 }
 
+/* Inside the after-import card, which is the card. */
+.plain {
+  padding: 0;
+}
+
 .title {
   margin: 0 0 4px;
   font-size: 14px;
@@ -19,22 +24,28 @@
   list-style: none;
 }
 
+/* The account and its figure on a line, the way to set it under them in every row: inline where
+   the name was short enough, it left the rows ragged (at 820 px one account had it beside the
+   figure, the two around it under theirs). */
 .row {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, auto) auto 1fr;
   align-items: center;
-  gap: 4px 12px;
+  column-gap: 12px;
   min-height: 44px;
+  padding-top: 8px;
   border-top: 1px solid var(--border);
 }
 
 .row:first-child {
+  padding-top: 0;
   border-top: none;
 }
 
 .name {
   color: var(--text);
   font-size: 14px;
+  overflow-wrap: anywhere;
 }
 
 .figure {
@@ -45,6 +56,8 @@
 }
 
 .set {
+  grid-column: 1 / -1;
+  justify-self: start;
   min-height: 44px;
   padding: 0;
   border: none;
@@ -64,11 +77,11 @@
 }
 
 .form {
+  grid-column: 1 / -1;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  flex-basis: 100%;
   padding-bottom: 12px;
 }
 

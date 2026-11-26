@@ -11,7 +11,7 @@ import { render } from 'solid-js/web'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../../../core/api'
 import { ApiError } from '../../../core/apiError'
-import { setPage } from '../../../core/appStore'
+import { bumpProfileVersion, setCurrentProfile, setPage } from '../../../core/appStore'
 import { confirmRequests, resolveConfirm } from '../../../core/confirmStore'
 import { __resetDataVersionsForTest, invalidateForRequest } from '../../../core/dataVersions'
 
@@ -118,6 +118,8 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  boxes?.mockRestore()
+  boxes = undefined
   dispose?.()
   dispose = undefined
   host?.remove()
@@ -448,9 +450,11 @@ describe('the tour', () => {
 })
 
 describe('deleting a loan', () => {
-  /** Press the card's Delete and confirm it. */
+  /** Pick Delete in the card's menu and confirm it. */
   async function deleteFromCard(root: HTMLElement, name: string) {
-    root.querySelector<HTMLButtonElement>(`[aria-label="Delete ${name}"]`)!.click()
+    root.querySelector<HTMLButtonElement>(`[aria-label="More actions for ${name}"]`)!.click()
+    // The menu is portalled to <body>.
+    document.querySelector<HTMLButtonElement>('[data-test-id="loans-item-delete"]')!.click()
     await vi.waitFor(() => {
       expect(confirmRequests()).toHaveLength(1)
     })
@@ -702,5 +706,503 @@ describe('the loan page', () => {
     await settle()
     expect(el(root, 'loans-extra-edit-form')).toBeNull()
     expect(vi.mocked(apiPut)).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * A boat bought on credit two years ago: 24,000 at 6 % over 48 months, paid on the 10th from March
+ * 2024. On 2025-12-15 the December payment is made, the 22nd. Figures from the closed form:
+ * installment 563.64, owed after 22 payments 13,710.01, so 10,289.99 repaid, last payment in
+ * February 2028.
+ */
+const BOAT = {
+  id: 2,
+  name: 'Test boat',
+  principal: 24000,
+  interest_rate: 6,
+  term_months: 48,
+  start_date: '2024-03-10',
+  profile_id: 1,
+  rate_periods: [],
+  prepayments: [],
+}
+
+const cardOf = (root: HTMLElement, name: string) =>
+  [...root.querySelectorAll<HTMLElement>('[data-test-id="loans-item"]')].find((card) =>
+    card.querySelector('[data-test-id="loans-item-name"]')?.textContent?.includes(name)
+  )!
+const toggleOf = (root: HTMLElement, name: string) =>
+  cardOf(root, name).querySelector<HTMLButtonElement>('[data-test-id="loans-item-name"]')!
+const charts = (root: HTMLElement) => root.querySelectorAll('[data-test-id="loans-item-chart"]')
+
+async function openChart(root: HTMLElement, name: string) {
+  toggleOf(root, name).click()
+  await settle()
+}
+
+/** Every element has a box, as one a browser draws: jsdom gives none any. Undone after each test. */
+let boxes: { mockRestore: () => void } | undefined
+const drawn = () => {
+  boxes = vi
+    .spyOn(Element.prototype, 'getClientRects')
+    .mockImplementation(() => [{ width: 10, height: 10 }] as unknown as DOMRectList)
+}
+
+const escape = (target: EventTarget = document.body) =>
+  target.dispatchEvent(
+    new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+  )
+
+describe('the chart under a card', () => {
+  beforeEach(() => {
+    listed = [structuredClone(LOAN), structuredClone(BOAT)]
+  })
+
+  it('opens straight under its card, today marked, with what is paid and what is left', async () => {
+    const root = await mount('#loans')
+    const toggle = toggleOf(root, 'Test boat')
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    expect(charts(root)).toHaveLength(0)
+
+    await openChart(root, 'Test boat')
+
+    const panel = el(root, 'loans-item-chart')!
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    expect(toggle.getAttribute('aria-controls')).toBe(panel.id)
+    // Next to its card in the grid, so it takes the whole row under the card's row.
+    expect(cardOf(root, 'Test boat').nextElementSibling).toBe(panel)
+    expect(text(root, 'loans-chart-sentence')).toBe(
+      '22 of 48 payments made. The last is due in February 2028.'
+    )
+    // The principal repaid, the number the card's "% repaid" measures, not the money paid with
+    // interest. Each figure's key is its mark on the line; months left has none.
+    const terms = [...el(root, 'loans-chart-readout')!.querySelectorAll('dt')]
+    expect(terms.map((dt) => dt.textContent?.trim())).toEqual([
+      'Repaid so far',
+      'Still owed',
+      'Months left',
+      'Last payment',
+    ])
+    expect(terms.map((dt) => dt.querySelector('svg') !== null)).toEqual([true, true, false, true])
+    expect(text(root, 'loans-chart-repaid')).toBe('€10,289.99')
+    expect(text(root, 'loans-chart-owed')).toBe('€13,710.01')
+    expect(text(root, 'loans-chart-left')).toBe('26')
+    expect(text(root, 'loans-chart-payoff')).toBe('Feb 2028')
+    expect(el(panel, 'loans-payoff-today')).not.toBeNull()
+    expect(el(panel, 'loans-payoff-end')?.hasAttribute('data-paid')).toBe(false)
+    expect(window.location.hash).toBe('#loans')
+  })
+
+  it('closes on a second click, and shows one card’s chart at a time', async () => {
+    const root = await mount('#loans')
+    await openChart(root, 'Mortgage')
+    expect(text(root, 'loans-chart-sentence')).toBe(
+      'The first payment is due in January 2026 and the last in December 2035.'
+    )
+
+    await openChart(root, 'Test boat')
+    expect(charts(root)).toHaveLength(1)
+    expect(toggleOf(root, 'Mortgage').getAttribute('aria-expanded')).toBe('false')
+    expect(cardOf(root, 'Test boat').nextElementSibling).toBe(el(root, 'loans-item-chart'))
+
+    await openChart(root, 'Test boat')
+    expect(charts(root)).toHaveLength(0)
+    expect(toggleOf(root, 'Test boat').getAttribute('aria-expanded')).toBe('false')
+  })
+
+  // A chart open higher up closes as the next one opens, and every card under it moves up by the
+  // chart's height: the page scrolls by as much, so the card clicked stays under the pointer.
+  it('keeps the card clicked where it was when a chart above it closes', async () => {
+    const scrollBy = vi.fn()
+    vi.stubGlobal('scrollBy', scrollBy)
+    // A card sits 300 px lower for each chart above it on the page.
+    const rects = vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: Element
+    ) {
+      const above =
+        this.tagName === 'ARTICLE'
+          ? [...document.querySelectorAll('[data-test-id="loans-item-chart"]')].filter(
+              (chart) => chart.compareDocumentPosition(this) & Node.DOCUMENT_POSITION_FOLLOWING
+            ).length
+          : 0
+      const top = this.tagName === 'ARTICLE' ? 100 + 300 * above : 0
+      return { top, bottom: top + 200, left: 0, right: 320, width: 320, height: 200 } as DOMRect
+    })
+    try {
+      const root = await mount('#loans')
+      await openChart(root, 'Mortgage')
+      scrollBy.mockClear()
+      await openChart(root, 'Test boat')
+      expect(charts(root)).toHaveLength(1)
+      expect(scrollBy).toHaveBeenCalledWith({ top: -300, behavior: 'auto' })
+
+      // Nothing above it changes when its own chart closes: no scroll.
+      scrollBy.mockClear()
+      await openChart(root, 'Test boat')
+      expect(scrollBy).not.toHaveBeenCalled()
+    } finally {
+      rects.mockRestore()
+    }
+  })
+
+  it('closes on Escape and on its own Close, with focus back on the card', async () => {
+    const root = await mount('#loans')
+    await openChart(root, 'Test boat')
+    el(root, 'loans-chart-close')!.focus()
+    escape(document.activeElement!)
+    await settle()
+    expect(charts(root)).toHaveLength(0)
+    expect(document.activeElement).toBe(toggleOf(root, 'Test boat'))
+
+    await openChart(root, 'Test boat')
+    await click(root, 'loans-chart-close')
+    expect(charts(root)).toHaveLength(0)
+    expect(document.activeElement).toBe(toggleOf(root, 'Test boat'))
+  })
+
+  it('leaves Escape alone from elsewhere on the page', async () => {
+    const root = await mount('#loans')
+    await openChart(root, 'Test boat')
+    el(root, 'add-loan-btn')!.focus()
+    escape(document.activeElement!)
+    await settle()
+    expect(charts(root)).toHaveLength(1)
+  })
+
+  // Pages stay in the document while another is shown: an Escape there is not this page's.
+  it('leaves Escape alone while another page is shown', async () => {
+    const root = await mount('#loans')
+    await openChart(root, 'Test boat')
+    setPage('dashboard')
+    await settle()
+    const key = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+    document.body.dispatchEvent(key)
+    await settle()
+    expect(key.defaultPrevented).toBe(false)
+    setPage('loans')
+    await settle()
+    expect(charts(root)).toHaveLength(1)
+  })
+
+  it('brings the open card into view when Escape takes focus back to it', async () => {
+    const root = await mount('#loans')
+    await openChart(root, 'Mortgage')
+    // Focus on another card, the open one scrolled out of sight above it.
+    toggleOf(root, 'Test boat').focus()
+    scrolled = []
+    escape(document.activeElement!)
+    await settle()
+    expect(charts(root)).toHaveLength(0)
+    expect(document.activeElement).toBe(toggleOf(root, 'Mortgage'))
+    expect(scrolled).toEqual([
+      { chip: 'loans-item-name', options: { block: 'nearest', behavior: 'smooth' } },
+    ])
+  })
+
+  // Switched away and back from another page: Loans reads its list once, on its return, and finds
+  // the loan there again. Its chart comes back shut.
+  it('closes on a profile switch, and stays closed on switching back', async () => {
+    const root = await mount('#loans')
+    await openChart(root, 'Test boat')
+    setPage('dashboard')
+    try {
+      setCurrentProfile({ id: 2, name: 'Them', created_at: '2025-01-01' })
+      bumpProfileVersion()
+      await settle()
+      setCurrentProfile({ id: 1, name: 'Me', created_at: '2025-01-01' })
+      bumpProfileVersion()
+      await settle()
+      setPage('loans')
+      await settle()
+      expect(cardOf(root, 'Test boat')).toBeDefined()
+      expect(charts(root)).toHaveLength(0)
+      expect(toggleOf(root, 'Test boat').getAttribute('aria-expanded')).toBe('false')
+    } finally {
+      setCurrentProfile(null)
+    }
+  })
+
+  // Deleted here or in another tab, the loan takes its open chart with it: should the same loan
+  // come back into the list (another profile's view of the household, say), it comes back shut.
+  it('forgets the open chart once a list read no longer has its loan', async () => {
+    const root = await mount('#loans')
+    await openChart(root, 'Test boat')
+    const boat = listed.find((loan) => loan.name === 'Test boat')!
+    listed = listed.filter((loan) => loan !== boat)
+    invalidateForRequest('/api/loans/2', 'DELETE', true)
+    await settle()
+    expect(cardOf(root, 'Test boat')).toBeUndefined()
+
+    listed = [...listed, boat]
+    invalidateForRequest('/api/loans', 'POST', true)
+    await settle()
+    expect(cardOf(root, 'Test boat')).toBeDefined()
+    expect(charts(root)).toHaveLength(0)
+  })
+
+  // With focus nowhere, as a click on a menu's or a dialog's padding leaves it in Safari.
+  it('leaves Escape to the card menu when the menu is open', async () => {
+    drawn()
+    const root = await mount('#loans')
+    await openChart(root, 'Test boat')
+    el(cardOf(root, 'Test boat'), 'loans-item-menu')!.click()
+    await settle()
+    expect(document.querySelector('[data-test-id="loans-menu"]')).not.toBeNull()
+    ;(document.activeElement as HTMLElement).blur()
+
+    escape()
+    await settle()
+    expect(document.querySelector('[data-test-id="loans-menu"]')).toBeNull()
+    expect(charts(root)).toHaveLength(1)
+  })
+
+  // Some dialogs stay in the page while shut (Transactions' entry form, the subscription scan),
+  // still saying aria-modal, and so does any dialog on a page that is not shown. Neither has a box:
+  // jsdom gives no element one, so this dialog is as a browser draws a shut one.
+  it('takes Escape back from a dialog that is in the page but not shown', async () => {
+    const shut = document.createElement('div')
+    shut.setAttribute('role', 'dialog')
+    shut.setAttribute('aria-modal', 'true')
+    try {
+      document.body.appendChild(shut)
+      const root = await mount('#loans')
+      await openChart(root, 'Test boat')
+      escape(toggleOf(root, 'Test boat'))
+      await settle()
+      expect(charts(root)).toHaveLength(0)
+    } finally {
+      shut.remove()
+    }
+  })
+
+  it('leaves Escape to a dialog open over the page', async () => {
+    drawn()
+    const root = await mount('#loans')
+    await openChart(root, 'Test boat')
+    el(cardOf(root, 'Test boat'), 'loans-item-menu')!.click()
+    document.querySelector<HTMLButtonElement>('[data-test-id="loans-item-edit"]')!.click()
+    await settle()
+    expect(document.querySelector('[aria-modal="true"]')).not.toBeNull()
+    ;(document.activeElement as HTMLElement).blur()
+
+    escape()
+    await settle()
+    expect(document.querySelector('[aria-modal="true"]')).toBeNull()
+    expect(charts(root)).toHaveLength(1)
+  })
+
+  it('keeps the same chart on screen when the list is read again', async () => {
+    const root = await mount('#loans')
+    await openChart(root, 'Test boat')
+    const panel = el(root, 'loans-item-chart')
+    // Another write reads the list again: every loan comes back as a new object.
+    invalidateForRequest('/api/loans/1', 'PUT', true)
+    await settle()
+    expect(el(root, 'loans-item-chart')).toBe(panel)
+    expect(toggleOf(root, 'Test boat').getAttribute('aria-expanded')).toBe('true')
+  })
+
+  it('goes when its loan is deleted', async () => {
+    const root = await mount('#loans')
+    await openChart(root, 'Test boat')
+    el(cardOf(root, 'Test boat'), 'loans-item-menu')!.click()
+    document.querySelector<HTMLButtonElement>('[data-test-id="loans-item-delete"]')!.click()
+    await vi.waitFor(() => {
+      expect(confirmRequests()).toHaveLength(1)
+    })
+    resolveConfirm(confirmRequests()[0]!.id, true)
+    await settle()
+    expect(cardOf(root, 'Test boat')).toBeUndefined()
+    expect(charts(root)).toHaveLength(0)
+  })
+
+  // The card's Owed is worked out on the day the list was read; so is the chart, and the two
+  // agree after a list read on the day a payment falls due.
+  it('reads today as the card does when the list is read again on a later day', async () => {
+    const root = await mount('#loans')
+    await openChart(root, 'Test boat')
+    const owed = () => el(cardOf(root, 'Test boat'), 'loans-item-remaining')?.textContent
+    expect(text(root, 'loans-chart-owed')).toBe(owed())
+
+    vi.setSystemTime(new Date('2026-01-10T12:00:00Z'))
+    invalidateForRequest('/api/loans/1', 'PUT', true)
+    await settle()
+    expect(owed()).not.toBe('€13,710.01')
+    expect(text(root, 'loans-chart-owed')).toBe(owed())
+    expect(text(root, 'loans-chart-left')).toBe('25')
+  })
+
+  it('says plainly when a loan has no payments to show, with no figures', async () => {
+    listed = [{ ...structuredClone(BOAT), term_months: 0 }]
+    const root = await mount('#loans')
+    await openChart(root, 'Test boat')
+    expect(text(root, 'loans-chart-sentence')).toBe('This loan has no payments to show.')
+    expect(el(root, 'loans-chart-readout')).toBeNull()
+    expect(el(root, 'loans-payoff-chart')).toBeNull()
+  })
+
+  it('marks extra payments made and planned, and counts the ones made', async () => {
+    listed = [
+      {
+        ...structuredClone(BOAT),
+        prepayments: [
+          { id: 1, month: 6, amount: 2000 },
+          { id: 2, month: 30, amount: 1500 },
+        ],
+      },
+    ]
+    const root = await mount('#loans')
+    await openChart(root, 'Test boat')
+    expect(text(root, 'loans-chart-sentence')).toBe(
+      '22 of 41 payments made, and €2,000 paid extra. The last is due in July 2027.'
+    )
+    const marks = [...root.querySelectorAll('[data-test-id="loans-payoff-extra"]')]
+    expect(marks.map((mark) => mark.getAttribute('data-made'))).toEqual(['true', 'false'])
+    expect(marks.map((mark) => mark.querySelector('title')?.textContent)).toEqual([
+      'Extra payment of €2,000.00 with payment 6, Aug 2024',
+      'Planned extra payment of €1,500.00 with payment 30, Aug 2026',
+    ])
+  })
+
+  it('has no today on a loan paid off, and marks its end as reached', async () => {
+    listed = [{ ...structuredClone(LOAN), start_date: '2010-01-01' }]
+    const root = await mount('#loans')
+    await openChart(root, 'Mortgage')
+    expect(text(root, 'loans-chart-sentence')).toBe(
+      'All 120 payments made. Paid off in December 2019.'
+    )
+    expect(text(root, 'loans-chart-left')).toBe('0')
+    expect(el(root, 'loans-payoff-today')).toBeNull()
+    expect(el(root, 'loans-payoff-end')?.hasAttribute('data-paid')).toBe(true)
+  })
+
+  it('counts payments instead of months when the start date cannot be read', async () => {
+    listed = [{ ...structuredClone(BOAT), start_date: '' }]
+    const root = await mount('#loans')
+    await openChart(root, 'Test boat')
+    expect(text(root, 'loans-chart-sentence')).toBe(
+      '48 payments as planned. The start date cannot be read, so the chart counts payments instead of months.'
+    )
+    expect(el(root, 'loans-payoff-today')).toBeNull()
+  })
+
+  it('reads a loan the list gives without its details, and offers Try again when that fails', async () => {
+    const quiet = vi.spyOn(console, 'error').mockImplementation(() => {})
+    // As the Worker lists them: no rate periods or extra payments on the row.
+    const row: Record<string, unknown> = structuredClone(BOAT)
+    delete row.rate_periods
+    delete row.prepayments
+    listed = [row]
+    vi.mocked(apiGet).mockClear()
+    vi.mocked(apiGet)
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockImplementationOnce(async () => structuredClone(BOAT))
+
+    const root = await mount('#loans')
+    await openChart(root, 'Test boat')
+    expect(vi.mocked(apiGet)).toHaveBeenCalledWith('/api/loans/2')
+    expect(el(root, 'loans-chart-error')).not.toBeNull()
+    expect(el(root, 'loans-chart-readout')).toBeNull()
+
+    el(root, 'loans-chart-error')!.querySelector('button')!.click()
+    await settle()
+    expect(el(root, 'loans-chart-error')).toBeNull()
+    expect(text(root, 'loans-chart-owed')).toBe('€13,710.01')
+    quiet.mockRestore()
+  })
+})
+
+describe('the card menu', () => {
+  beforeEach(() => {
+    listed = [structuredClone(BOAT)]
+  })
+
+  const labels = () =>
+    [...document.querySelectorAll('[data-test-id="loans-menu"] [role="menuitem"]')].map(
+      (item) => item.textContent
+    )
+
+  async function openMenu(root: HTMLElement, name: string) {
+    el(cardOf(root, name), 'loans-item-menu')!.click()
+    await settle()
+  }
+
+  it('offers an extra payment, every payment, Edit and Delete, and keeps What if on the card', async () => {
+    const root = await mount('#loans')
+    await openMenu(root, 'Test boat')
+    expect(labels()).toEqual(['Add an extra payment', 'See every payment', 'Edit', 'Delete'])
+    expect(el(cardOf(root, 'Test boat'), 'loans-item-what-if')).not.toBeNull()
+  })
+
+  it('has no extra payment for a loan paid off, and only the payments for one it cannot change', async () => {
+    listed = [
+      { ...structuredClone(BOAT), start_date: '2010-01-01' },
+      { ...structuredClone(LOAN), id: 3, name: 'Shared van', profile_id: 99 },
+    ]
+    const root = await mount('#loans')
+    await openMenu(root, 'Test boat')
+    expect(labels()).toEqual(['See every payment', 'Edit', 'Delete'])
+    escape(document.activeElement!)
+    await settle()
+
+    await openMenu(root, 'Shared van')
+    expect(labels()).toEqual(['See every payment'])
+  })
+
+  it('opens Extra payments with the amount ready to type', async () => {
+    const root = await mount('#loans')
+    await openMenu(root, 'Test boat')
+    document.querySelector<HTMLButtonElement>('[data-test-id="loans-item-add-extra"]')!.click()
+    await settle()
+    expect(window.location.hash).toBe('#loans/2/extras')
+    expect(document.activeElement).toBe(el(root, 'loans-extra-amount'))
+  })
+
+  it('focuses nothing later when another tab was picked while the loan loaded', async () => {
+    const row: Record<string, unknown> = structuredClone(BOAT)
+    delete row.rate_periods
+    delete row.prepayments
+    listed = [row]
+    let release!: () => void
+    const held = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    vi.mocked(apiGet).mockImplementationOnce(async () => {
+      await held
+      return structuredClone(BOAT)
+    })
+    const root = await mount('#loans')
+    await openMenu(root, 'Test boat')
+    document.querySelector<HTMLButtonElement>('[data-test-id="loans-item-add-extra"]')!.click()
+    await settle()
+    await click(root, 'loans-tab-schedule')
+    release()
+    await settle()
+
+    await click(root, 'loans-tab-extras')
+    expect(el(root, 'loans-extra-amount')).not.toBeNull()
+    expect(document.activeElement).not.toBe(el(root, 'loans-extra-amount'))
+  })
+
+  // Any write reads the list again and hands every card a new row: an open menu keeps its items,
+  // and focus stays on the one it was on.
+  it('keeps the open menu and its focus when the list is read again', async () => {
+    const root = await mount('#loans')
+    await openMenu(root, 'Test boat')
+    const item = document.querySelector<HTMLElement>('[data-test-id="loans-item-schedule"]')!
+    item.focus()
+    invalidateForRequest('/api/loans/2', 'PUT', true)
+    await settle()
+    expect(document.querySelector('[data-test-id="loans-menu"]')).not.toBeNull()
+    expect(item.isConnected).toBe(true)
+    expect(document.activeElement).toBe(item)
+  })
+
+  it('opens every payment on the schedule', async () => {
+    const root = await mount('#loans')
+    await openMenu(root, 'Test boat')
+    document.querySelector<HTMLButtonElement>('[data-test-id="loans-item-schedule"]')!.click()
+    await settle()
+    expect(window.location.hash).toBe('#loans/2/schedule')
   })
 })

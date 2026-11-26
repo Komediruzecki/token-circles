@@ -21,6 +21,8 @@ describe('the words', () => {
   it('say how to put each field right', () => {
     expect(M).toEqual({
       url: 'Paste the link to a Google Sheet. It starts with https://docs.google.com/spreadsheets/d/.',
+      published:
+        'A "Publish to web" link can\'t be read. In Google Sheets, choose Share, set General access to "Anyone with the link", and paste that link instead.',
       label: 'Give the source a name as text, or leave it blank.',
       labelLength: 'Keep the name to 200 characters or fewer.',
       kind: 'Choose google_sheet, google_drive_folder or bank_aggregator.',
@@ -49,6 +51,30 @@ describe('a Google Sheet link', () => {
     for (const raw of [undefined, null, '', '   ', 12, 'abc', 'https://example.com/not-a-sheet']) {
       expect(readSheetUrl(raw)).toEqual({ error: M.url })
     }
+  })
+
+  // A link from Publish to web (/d/e/2PACX-...) names no sheet either runtime can fetch: its id
+  // was read as "e". It is refused in words that say which link to paste, wherever it is typed.
+  it('refuses a link from Publish to web in its own words', () => {
+    for (const raw of [
+      'https://docs.google.com/spreadsheets/d/e/2PACX-1vExampleOnly/pubhtml',
+      'https://docs.google.com/spreadsheets/d/e/2PACX-1vExampleOnly/pub?output=csv',
+      ' https://docs.google.com/spreadsheets/d/e/2PACX-1vExampleOnly/pubhtml?gid=0&single=true ',
+    ]) {
+      expect(readSheetUrl(raw)).toEqual({ error: M.published })
+      expect(fieldsOf(checkSheetFetch({ url: raw }))).toEqual({ url: M.published })
+      expect(fieldsOf(checkImportSourceCreate({ config: { url: raw } }))).toEqual({
+        'config.url': M.published,
+      })
+    }
+    // A sheet's own link is still read, whatever its id holds.
+    expect(readSheetUrl('https://docs.google.com/spreadsheets/d/e2PACX-like-id/edit')).toEqual({
+      value: {
+        url: 'https://docs.google.com/spreadsheets/d/e2PACX-like-id/edit',
+        id: 'e2PACX-like-id',
+        gid: null,
+      },
+    })
   })
 
   it('is fetched with the tab asked for, or none', () => {

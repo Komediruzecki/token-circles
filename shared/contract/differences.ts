@@ -46,6 +46,8 @@ export const DIFFERENCES: Readonly<Record<string, string>> = {
     "GET /api/reports/tax-summary and GET /api/reports/pl-summary leave uncategorised transactions out on the Worker and count them under 'Unknown' in local-first, and the tax summary lists each category's transactions on the Worker but none in local-first; nothing in the app calls either. Slice 2 (transactions), whose data they read.",
   'monthly-pdf-month':
     'GET /api/reports/monthly-pdf takes the month as YYYY-MM on the Worker, which refuses year=2025&month=3 with 400, and as a month number beside the year in local-first, which reads month=2025-03 as month 2025 of this year and still answers a PDF; nothing in the app calls it, as Settings makes its PDFs in the browser in both modes. Slice 4 (settings).',
+  'sheet-unread-status':
+    'POST /api/import/googlesheet answers a sheet it cannot read with 501 on the Worker, whose XLSX-export fallback is not built, and with 422 in local-first, once every way in from a browser has failed. Both give the same words as error and name no field, and the Import page marks either at the link. Not settled by a slice: round 6 of the 19 Nov review made the words one and left the statuses as they were.',
   'custom-report':
     "POST /api/reports/custom saves the report's settings and answers them with a new id on the Worker, where GET /api/reports/custom/:id reads them back, but saves nothing and answers the report itself (totals and sums per category over the dates and category given) in local-first; nothing in the app calls it. Slice 4 (settings).",
 };

@@ -11,7 +11,14 @@
 
 import { createMemo, createSignal } from 'solid-js'
 import { createStore, reconcile } from 'solid-js/store'
-import { readSheetUrl } from '../../../../shared/importSourceSchema'
+import { classifyCategory } from '../../../../shared/categoryClassifier'
+import {
+  accountValues,
+  categoryValues,
+  freshImportTypes,
+  syncTypes,
+} from '../../../../shared/importCategoryTypes'
+import { readSheetUrl, SHEET_EMPTY } from '../../../../shared/importSourceSchema'
 import { IMPORT_UPLOAD_MESSAGES } from '../../../../shared/importUpload'
 import { getLocalCurrency, toast } from '../../core/api'
 import { ApiError, apiErrorFrom } from '../../core/apiError'
@@ -31,7 +38,6 @@ import {
 } from '../../core/bankImport'
 import { loadBankImportMemory, rememberBankImportChoice } from '../../core/bankImport/memory'
 import { savedFormerNames } from '../../core/bankImport/rulesCheck'
-import { classifyCategory } from '../../core/categoryClassifier'
 import { autoDetectMapping, resolveHeaderMapping } from '../../core/importMapping'
 import {
   isTransferToVoid as isTransferToVoidPure,
@@ -42,9 +48,6 @@ import type { BankId, CategoryRuleSet, StatementMeta, TransferRuleSet } from '..
 import type { CategoryRuleDraft } from '../../core/bankImport/rulesCheck'
 import type { PreviewFilter, VoidTransferContext } from './previewFilter'
 
-/** Said when a sheet's link was read but the sheet has no header row to map. */
-export const SHEET_EMPTY =
-  'That sheet has no header row to read. Check the link points at the tab with your transactions.'
 /** Said when the sheet could not be read for a reason the answer did not name. */
 export const SHEET_UNREAD =
   "Couldn't read that sheet. Check it is shared so anyone with the link can view it, and try again."
@@ -112,6 +115,8 @@ export type ImportTab = 'google-sheets' | 'file-upload' | 'paste-csv' | 'bank-im
 
 export interface ImportLogEntry {
   id: number
+  /** The id the import's transactions carry (Recent Imports' delete undoes them by it). */
+  import_id?: string | null
   source: string
   imported: number
   duplicates_skipped: number
@@ -132,6 +137,13 @@ export interface BankFileRow {
   targetAccount: string
 }
 
+/** The rows one statement gave a processed batch: from `start`, `count` of them. */
+export interface BankFileRange {
+  file: File
+  start: number
+  count: number
+}
+
 export interface ImportSummary {
   imported: number
   /** Rows rejected as invalid (bad date/amount). */
@@ -145,6 +157,25 @@ export interface ImportSummary {
   createdAccounts: string[]
   createdCategories: string[]
   source: string
+  /**
+   * The result in a line, as the Import page heads its after-import card with it: "Imported 12
+   * transactions", or "No new transactions. ..." when every row was here before.
+   */
+  text: string
+  /**
+   * The bank statements in it (Bank Imports, and setup's statement step): each one's bank, its
+   * currency (the base currency when it names none) and the account it went into. Setup places
+   * its next statements by them (components/onboarding/statementTargets.ts).
+   */
+  statements: Array<{ bankId: BankId; currency: string; account: string; accountId: number | null }>
+  /** The id the import's transactions and its Recent Imports entry carry. */
+  importId: string
+  /**
+   * For a Google Sheet, the rows its first Sync would bring in once this import is in: rows this
+   * import did not send (unticked, outside the date range, a copy Import only new left out) that
+   * the import's dedupe would not skip. Counted by a dry run over every row (round 4).
+   */
+  leftOut: number
 }
 
 /**
@@ -336,6 +367,12 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     { id: number; name: string; bank_name?: string | null; currency?: string | null }[]
   >([])
   const [bankWarnings, setBankWarnings] = createSignal<string[]>([])
+  /**
+   * The rows each statement gave the batch last processed, in its order: the statement's file,
+   * its first row in `currentRows()` and how many. Setup's statement step counts and dates each
+   * file of several from it (FirstImport.tsx).
+   */
+  const [bankFileRows, setBankFileRows] = createSignal<BankFileRange[]>([])
 
   // Editable categorization + transfer rules (persisted per profile). Keywords are
   // edited as comma-separated strings for a friendlier input, split on save.
@@ -444,6 +481,17 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     resultMessageTimer = setTimeout(() => setResultMessage(null), 6000)
   }
 
+  /**
+   * Another import method, from its tab. An error is drawn under the form of the tab that raised
+   * it (StepMessage.tsx), so it goes with that tab: kept, a bank file's "Choose a target account"
+   * would sit under the Google Sheets link.
+   */
+  const chooseImportTab = (tab: ImportTab) => {
+    if (tab === activeImportTab()) return
+    setError(null)
+    setActiveImportTab(tab)
+  }
+
   const currentHeaders = () => {
     if (uploadResult()) return uploadResult()!.headers
     if (sheetResult()) return sheetResult()!.headers
@@ -461,17 +509,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
   const duplicateSet = createMemo(() => new Set(duplicateIndices()))
 
   // Detect unique categories
-  const detectCategories = () => {
-    const categories = new Set<string>()
-    currentRows().forEach((row) => {
-      const catIdx = columnMapping()['category']
-      if (catIdx !== undefined && row[catIdx]) {
-        const catName = row[catIdx].trim()
-        if (catName) categories.add(catName)
-      }
-    })
-    return Array.from(categories)
-  }
+  const detectCategories = () => categoryValues(currentRows(), columnMapping())
 
   /**
    * Every distinct Means-of-Payment value, and the Category value of every row the sheet calls a
@@ -487,20 +525,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
    * reading of "transfer to Groceries" that makes Groceries a category, and a first-time import
    * has no way to have marked it yet.
    */
-  const detectAccountValues = () => {
-    const names = new Set<string>()
-    const mopIdx = columnMapping()['means_of_payment']
-    const catIdx = columnMapping()['category']
-    const typeIdx = columnMapping()['type']
-    currentRows().forEach((row) => {
-      if (mopIdx !== undefined && row[mopIdx]?.trim()) names.add(row[mopIdx].trim())
-      const isTransfer = typeIdx !== undefined && row[typeIdx]?.trim().toLowerCase() === 'transfer'
-      if (isTransfer && catIdx !== undefined && row[catIdx]?.trim()) {
-        names.add(row[catIdx].trim())
-      }
-    })
-    return Array.from(names)
-  }
+  const detectAccountValues = () => accountValues(currentRows(), columnMapping())
 
   /**
    * Every value the mapping step should show a row for: the category column's values, then the
@@ -583,6 +608,10 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     }
   }
 
+  /** The types a fresh import gives the rows' values (shared/importCategoryTypes.ts). */
+  const classifyAfresh = (): Record<string, 'income' | 'expense' | 'account'> =>
+    freshImportTypes(currentRows(), columnMapping())
+
   // Step navigation
   const goToMapping = () => {
     const headers = currentHeaders()
@@ -594,18 +623,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     setColumnMapping(mapping)
 
     // Initialize category types when category column is auto-detected
-    if (mapping['category'] !== undefined) {
-      const types: Record<string, 'income' | 'expense' | 'account'> = {}
-      detectCategories().forEach((cat) => {
-        types[cat] = classifyCategory(cat)
-      })
-      // Account-by-construction values last, so they win over any keyword guess: a
-      // Means-of-Payment value is the account the money moved from whatever it is called.
-      detectAccountValues().forEach((name) => {
-        types[name] = 'account'
-      })
-      setCategoryTypes(types)
-    }
+    if (mapping['category'] !== undefined) setCategoryTypes(classifyAfresh())
   }
 
   // Apply a saved source's column mapping (persisted BY HEADER NAME) to the freshly fetched
@@ -624,26 +642,12 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
         : autoDetectMapping(headers)
     setColumnMapping(resolved)
     /*
-     * Both branches have to pick up the account-by-construction values, and a saved source is the
-     * branch that matters most: this is the Google Sheets auto-sync path, and a mapping saved
-     * before those values were classified at all has no entry for any of them. Restoring it
-     * verbatim would keep every transfer unresolvable for exactly the people who had already set
-     * the source up.
-     *
-     * A saved decision still wins where there is one — `??` fills gaps, it does not overwrite.
+     * A saved decision wins for every value it names; every other value is typed exactly as a
+     * fresh import types it. The same rule as the daily cron's (shared/importCategoryTypes.ts),
+     * so a row comes in the same whichever syncs it.
      */
-    const withAccountValues = (base: Record<string, 'income' | 'expense' | 'account'>) => {
-      const merged = { ...base }
-      for (const name of detectAccountValues()) merged[name] = merged[name] ?? 'account'
-      return merged
-    }
-    if (savedCategoryTypes && Object.keys(savedCategoryTypes).length > 0) {
-      setCategoryTypes(withAccountValues({ ...savedCategoryTypes }))
-    } else if (resolved['category'] !== undefined) {
-      const types: Record<string, 'income' | 'expense' | 'account'> = {}
-      for (const cat of detectCategories()) types[cat] = classifyCategory(cat)
-      setCategoryTypes(withAccountValues(types))
-    }
+    const types = syncTypes(currentRows(), resolved, savedCategoryTypes)
+    if (types) setCategoryTypes(types)
   }
 
   const goToPreview = async () => {
@@ -771,6 +775,9 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     setSheetResult(null)
     setSelectedSheet('')
     setSheetUrl('')
+    // The tabs of the sheet just read go with its link: kept, they offered "Sheet1" under an empty
+    // link after an import, and choosing it said the link was missing (maff, 19 Nov).
+    setSheetNames([])
     setColumnMapping({})
     setCategoryTypes({})
     setNewCategories([])
@@ -802,6 +809,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     // Clear Bank Imports state so a fresh import doesn't inherit stale files/warnings
     // and the preview's rules editor is gated correctly by bankFiles().length.
     setBankFiles([])
+    setBankFileRows([])
     setBankWarnings([])
     setShowBankRules(false)
   }
@@ -888,7 +896,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
   /**
    * Reads `file` as File Upload reads a chosen one, for a file that comes from elsewhere (the setup
    * wizard hands over one it could not import): on to the mapping step when it reads, and in the
-   * page's error banner when it does not.
+   * flow's error, under the drop area (StepMessage.tsx), when it does not.
    */
   const readFile = (file: File) => {
     clearUpload()
@@ -1010,7 +1018,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
         .filter((name): name is string => name !== null)
       if (failed.length > 0) {
         setError(
-          `Could not read ${failed.join(', ')} — try dropping the file${failed.length === 1 ? '' : 's'} again`
+          `Could not read ${failed.join(', ')}. Try dropping the file${failed.length === 1 ? '' : 's'} again.`
         )
       }
       if (analyzed.length > 0) {
@@ -1134,11 +1142,22 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     setLoading(true)
     setError(null)
     setBankWarnings([])
+    setBankFileRows([])
     try {
       const outcome = await runBankTransform()
       if (!outcome) return
       const { result, recognized, filename } = outcome
       setBankWarnings(result.warnings)
+      // processFiles answers one entry per file it was given, in their order, rows and all.
+      let start = 0
+      setBankFileRows(
+        recognized.map((row, index) => {
+          const count = result.perFile[index]?.count ?? 0
+          const range = { file: row.file, start, count }
+          start += count
+          return range
+        })
+      )
       // Remember each account choice so the next matching statement auto-routes.
       recognized.forEach((r) => {
         rememberBankImportChoice(r.bankId!, r.meta, r.file.name, r.targetAccount)
@@ -1296,7 +1315,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
       const { result, filename } = outcome
       setBankWarnings(result.warnings)
       if (result.rows.length === 0) {
-        setError('No transactions after recalculation — check your rules')
+        setError('No transactions after recalculation. Check your rules.')
         return
       }
       setUploadResult(bankUploadResult(result, filename))
@@ -1368,7 +1387,9 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
       })
       if (!response.ok) {
         const refused = await apiErrorFrom(response)
-        // A sheet either runtime could not read is about its link: the words say how to share it.
+        // A sheet the runtime could not read (422 in local-first, 501 on the Worker) names no
+        // field, and its `error` is marked at the link: how to share the sheet or upload it
+        // instead (SHEET_UNREADABLE), or, from the Worker, that the sheet is empty (SHEET_EMPTY).
         const unread =
           Object.keys(refused.fields).length === 0 &&
           (response.status === 422 || response.status === 501)
@@ -1393,8 +1414,9 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
       setRows(data.rows || [])
 
       if (navigate) {
-        // If returning with specific sheet and we have headers, go to mapping
-        if (selectedSheet() && hasHeaders) {
+        // On to Map columns with the tab's headers. Neither runtime names the tab (the link's gid
+        // picks it), and this waited on the "Sheet1" they used to make up.
+        if (hasHeaders) {
           goToMapping()
         } else {
           setActiveStep('upload')
@@ -1408,12 +1430,6 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     } finally {
       setLoading(false)
     }
-  }
-
-  const handleSheetTabClick = (sheetName: string) => {
-    setSelectedSheet(sheetName)
-    // Fetch the sheet data
-    void fetchGoogleSheet()
   }
 
   // Column mapping changes
@@ -1545,6 +1561,38 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     setCurrentPage(1)
   }
 
+  /**
+   * The rows a Sync would bring in now: it sends every row of the sheet, and the import skips a
+   * row only for a transaction there before it, one for one (round 4). Asked of the import's own
+   * dry run, so the count is the dedupe Sync goes through on either runtime: a copy of another
+   * row that an import left out comes in with the first Sync, and the count said it would not.
+   * 0 when the dry run cannot say: the card then says only what Sync does.
+   */
+  const rowsASyncBringsIn = async (
+    rows: string[][],
+    mapping: Record<string, number>,
+    types: Record<string, string>
+  ): Promise<number> => {
+    try {
+      const res = await apiFetch('/api/import/execute?dry_run=1', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...profileHeaders() },
+        body: JSON.stringify({
+          rows,
+          mapping,
+          categoryTypes: types,
+          defaultCurrency: getLocalCurrency(),
+          dry_run: true,
+        }),
+      })
+      if (!res.ok) return 0
+      const data = await res.json()
+      return typeof data?.imported === 'number' ? data.imported : 0
+    } catch {
+      return 0
+    }
+  }
+
   // Import execution
   const handleImport = async (mode: 'all' | 'new' | 'selected') => {
     setLoading(true)
@@ -1558,10 +1606,11 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
       const mapping = columnMapping()
       const types = categoryTypes()
 
-      // Get rows to import
-      let rowsToImport = currentRows()
+      // Get rows to import, by index into the source's rows
+      const allRows = currentRows()
+      let sent = allRows.map((_, i) => i)
       if (mode === 'selected') {
-        rowsToImport = rowsToImport.filter((_, i) => selectedRows().has(i))
+        sent = sent.filter((i) => selectedRows().has(i))
       }
 
       // "Import only new" skips the within-batch duplicate rows detected on preview.
@@ -1570,19 +1619,20 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
       const dupCount = duplicateIndices().length
       if (mode === 'new' && dupCount > 0) {
         const dupSet = duplicateSet()
-        rowsToImport = rowsToImport.filter((_, i) => !dupSet.has(i))
+        sent = sent.filter((i) => !dupSet.has(i))
       }
 
       // Date-range filter: drop rows whose date falls outside the selected window.
       let dateSkipped = 0
       const dateIdx = mapping.date
       if (dateIdx !== undefined && (importStartDate() || importEndDate())) {
-        rowsToImport = rowsToImport.filter((row) => {
-          const out = isDateOutOfRange(row[dateIdx])
+        sent = sent.filter((i) => {
+          const out = isDateOutOfRange(allRows[i][dateIdx])
           if (out) dateSkipped++
           return !out
         })
       }
+      const rowsToImport = sent.map((i) => allRows[i])
 
       // Reuse a stable id across retries so the worker can de-dupe a re-run of the same import.
       let iid = importId()
@@ -1614,6 +1664,13 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
 
       if (!response.ok) throw new Error(data.error || 'Import failed')
 
+      // What the first Sync of this sheet brings in, once this import is in: only a sheet's card
+      // says it, and only rows this import did not send can be in it.
+      const leftOut =
+        activeImportTab() === 'google-sheets' && sent.length < allRows.length
+          ? await rowsASyncBringsIn(allRows, mapping, types)
+          : 0
+
       // Compose the outcome text ourselves (rather than trusting data.message)
       // so re-imports are honest in BOTH storage modes: rows the dedup pass
       // skipped as already-imported are named, and an all-duplicates run says
@@ -1623,15 +1680,19 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
       const invalidSkipped: number = data.skipped ?? 0
       let text: string
       if (importedCount === 0 && alreadyExisted > 0) {
-        text = `No new transactions — all ${alreadyExisted} row${alreadyExisted === 1 ? ' was' : 's were'} already imported before (duplicates are detected and skipped automatically).`
+        text =
+          alreadyExisted === 1
+            ? 'No new transactions. Its one row was imported before, so it was skipped.'
+            : `No new transactions. All ${alreadyExisted} rows were imported before, so they were skipped.`
       } else {
         const parts: string[] = []
         if (alreadyExisted > 0) parts.push(`${alreadyExisted} already imported, skipped`)
         if (invalidSkipped > 0) parts.push(`${invalidSkipped} invalid`)
         if (dateSkipped > 0) parts.push(`${dateSkipped} outside date range`)
-        text = `Imported ${importedCount} transactions${parts.length > 0 ? ` (${parts.join(', ')})` : ''}`
+        text = `Imported ${importedCount} transaction${importedCount === 1 ? '' : 's'}${parts.length > 0 ? ` (${parts.join(', ')})` : ''}`
       }
-      announceResult(text)
+      // The page heads its after-import card with it (onImported, below). Announced in the flow's
+      // banner as well, it sat on the next step's form for the rest of its six seconds.
 
       // Record the session in the import log (best-effort; the import itself succeeded)
       const source =
@@ -1699,6 +1760,19 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
         }
       }
 
+      // The accounts the statements went into, by id as well (setup holds an account by it): the
+      // ones this import made are read back first.
+      const statementRows =
+        activeImportTab() === 'bank-imports'
+          ? bankFiles().filter(
+              (row) => row.bankId !== null && !namesItsAccounts(row) && row.targetAccount
+            )
+          : []
+      if (statementRows.length > 0 && (data.created_accounts ?? []).length > 0) {
+        await loadBankAccounts()
+      }
+      const idOf = (name: string) => bankAccounts().find((a) => a.name === name)?.id ?? null
+
       opts.onImported?.({
         imported: importedCount,
         skipped: invalidSkipped,
@@ -1706,14 +1780,20 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
         createdAccounts: data.created_accounts ?? [],
         createdCategories: data.created_categories ?? [],
         source,
+        text,
+        importId: iid,
+        leftOut,
+        statements: statementRows.map((row) => ({
+          bankId: row.bankId as BankId,
+          currency: (row.meta.currency || getLocalCurrency()).toUpperCase(),
+          account: row.targetAccount,
+          accountId: idOf(row.targetAccount),
+        })),
       })
 
-      // Reset after delay
-      if (opts.autoResetAfterImport !== false) {
-        setTimeout(() => {
-          resetForm()
-        }, 3000)
-      }
+      // Start over at once: the page's card says what came in. Three seconds later, as it was, left
+      // the preview under that card with Import selected and Import all live, for the same rows.
+      if (opts.autoResetAfterImport !== false) resetForm()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Import failed')
     } finally {
@@ -1735,6 +1815,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     // signals
     activeImportTab,
     setActiveImportTab,
+    chooseImportTab,
     activeStep,
     setActiveStep,
     setBudgetsFromSpending,
@@ -1752,6 +1833,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     pasteDelimiter,
     setPasteDelimiter,
     bankFiles,
+    bankFileRows,
     bankFilesMissingAccount,
     bankAccounts,
     bankWarnings,
@@ -1846,7 +1928,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     resetBankRules,
     recalculateBankPreview,
     fetchGoogleSheet,
-    handleSheetTabClick,
+
     handleColumnMappingChange,
     handleCategoryTypeToggle,
     toggleRow,

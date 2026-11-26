@@ -81,6 +81,11 @@ afterEach(() => {
 })
 
 describe('verifying', () => {
+  it('has the cursor in the code field as the step shows, after the password page', async () => {
+    await mount()
+    expect(document.activeElement).toBe(codeInput())
+  })
+
   it('posts the code to /api/auth/2fa/verify and reloads on success', async () => {
     await mount()
     await enterAndSubmit('123456')

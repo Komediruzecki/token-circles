@@ -141,3 +141,20 @@ describe('an import preview', () => {
     })
   })
 })
+
+describe('the preview dialog', () => {
+  it('takes focus when it opens, and gives it back to Fetch and preview on Escape', async () => {
+    await mountSources()
+    const fetchButton = button('Fetch and preview Main')!
+    fetchButton.focus()
+    fetchButton.click()
+    const dialog = () => document.querySelector('[role="dialog"]')
+    await waitFor(() => dialog() !== null, 'the preview to open')
+    await waitFor(() => dialog()?.contains(document.activeElement) === true, 'focus in the preview')
+
+    // As a key press sends it: up to the window, where the dialog hears it (dialogFocus).
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    await waitFor(() => dialog() === null, 'the preview to shut')
+    expect(document.activeElement).toBe(button('Fetch and preview Main'))
+  })
+})

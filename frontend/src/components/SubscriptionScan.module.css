@@ -28,6 +28,14 @@
   opacity: 0.85;
 }
 
+/* The rows, the tracked ones and the notice: one block, spaced as the panel spaces its parts. In
+   the modal it is the part that scrolls (below); in the setup wizard the wizard's middle scrolls. */
+.scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
 .list {
   display: flex;
   flex-direction: column;
@@ -203,11 +211,22 @@
 
 .footer {
   display: flex;
+  flex-direction: column;
+  padding-top: 4px;
+}
+
+/* The total and the buttons, one line, wrapping on a narrow screen. */
+.footer-row {
+  display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
   flex-wrap: wrap;
-  padding-top: 4px;
+}
+
+/* A failed add, its own line above the buttons. */
+.footer-notice {
+  margin: 0 0 10px;
 }
 
 .total {
@@ -295,19 +314,23 @@
   pointer-events: auto;
 }
 
+/* At most 720 px tall: on a 1440 px screen it ran from the top to the bottom, its add at the end of
+   a long list. The header and the actions stay put and the list scrolls between them (.body). */
 .modal {
   width: 100%;
   max-width: min(640px, calc(100vw - 2rem));
-  max-height: calc(100vh - 2rem);
-  max-height: calc(100dvh - 2rem);
+  max-height: min(720px, calc(100vh - 2rem));
+  max-height: min(720px, calc(100dvh - 2rem));
   box-sizing: border-box;
   margin: auto;
   display: flex;
   flex-direction: column;
-  background: color-mix(in oklab, var(--card-bg) 84%, transparent);
+  /* 96%, not 84: over the overlay's near-black, a light theme's card read grey, the page's text
+     showed through its header and Rescan's border all but vanished. */
+  background: color-mix(in oklab, var(--card-bg) 96%, transparent);
   backdrop-filter: blur(18px) saturate(140%);
   -webkit-backdrop-filter: blur(18px) saturate(140%);
-  border: 1px solid color-mix(in oklab, var(--primary) 20%, var(--border));
+  border: 1px solid color-mix(in oklab, var(--primary) 20%, var(--border-dialog));
   border-radius: 18px;
   box-shadow: 0 34px 80px -34px rgba(0, 0, 0, 0.75);
   overflow: hidden;
@@ -332,6 +355,7 @@
   font-size: 20px;
   font-weight: 700;
   font-family: var(--font-display, inherit);
+  word-spacing: var(--font-display-word-spacing);
   color: var(--text);
 }
 
@@ -355,8 +379,44 @@
 }
 
 .body {
-  padding: 4px 22px 20px;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.modal .panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: 0;
+}
+
+/* The scrollbar at the modal's edge, the rows 22 px in from it. */
+.modal .scroll {
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px 22px 12px;
+}
+
+.modal .footer {
+  flex: none;
+  padding: 12px 22px 18px;
+  border-top: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
+}
+
+.modal .state {
+  padding-inline: 22px;
+}
+
+/* A phone keeps the whole screen: the cap is for tall desktop screens. */
+@media (max-width: 620px) {
+  .modal {
+    max-height: calc(100vh - 2rem);
+    max-height: calc(100dvh - 2rem);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -425,4 +485,27 @@
     font-size: 16px;
     border-color: color-mix(in oklab, var(--text-secondary) 55%, var(--border));
   }
+}
+
+/* "Import a statement" when there is nothing to scan: the one action the empty panel has. */
+.importLink {
+  display: inline-block;
+  margin-top: 12px;
+  padding: 8px 18px;
+  border-radius: 10px;
+  background: var(--primary);
+  color: var(--on-primary);
+  font-size: 13.5px;
+  font-weight: 600;
+  text-decoration: none;
+  box-shadow: var(--glow-primary);
+}
+
+.importLink:hover {
+  background: var(--primary-hover);
+}
+
+.importLink:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }

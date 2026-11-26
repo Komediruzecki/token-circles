@@ -14,18 +14,23 @@
 import { createRoot } from 'solid-js'
 import { render } from 'solid-js/web'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { IMPORT_SOURCE_MESSAGES as M } from '../../../../../shared/importSourceSchema'
+import {
+  IMPORT_SOURCE_MESSAGES as M,
+  SHARE_SHEET_BY_LINK,
+  SHEET_EMPTY,
+  SHEET_UNREADABLE,
+} from '../../../../../shared/importSourceSchema'
 import { setPage } from '../../../core/appStore'
 import { __resetDataVersionsForTest } from '../../../core/dataVersions'
 import { getDB } from '../../../core/storage/idb'
 import { removeToast, toasts } from '../../../core/toastStore'
-import { SHEET_EMPTY } from '../importFlow'
 import type { apiFetch as ApiFetch } from '../../../core/apiFetch'
 import type { ImportFlow } from '../importFlow'
 
-/** What reached the router, and an answer to give instead of the router's, once. */
+/** What reached the router, what it answered, and an answer to give instead of its own, once. */
 const net = vi.hoisted(() => ({
   sent: [] as string[],
+  answers: [] as Array<{ path: string; status: number; body: unknown }>,
   answerOnce: null as null | { path: string; response: () => Response },
 }))
 
@@ -41,7 +46,15 @@ vi.mock('../../../core/apiFetch', async (importOriginal) => {
         net.answerOnce = null
         return response()
       }
-      return real.apiFetch(url, init)
+      const answer = await real.apiFetch(url, init)
+      if (method !== 'GET') {
+        const body: unknown = await answer
+          .clone()
+          .json()
+          .catch(() => null)
+        net.answers.push({ path: url, status: answer.status, body })
+      }
+      return answer
     },
   }
 })
@@ -50,6 +63,8 @@ vi.mock('../../../core/apiFetch', async (importOriginal) => {
 const LEDGER = 'https://docs.google.com/spreadsheets/d/ledger-sheet/edit#gid=0'
 const PRIVATE = 'https://docs.google.com/spreadsheets/d/private-sheet/edit'
 const EMPTY = 'https://docs.google.com/spreadsheets/d/empty-sheet/edit'
+/** A link from Publish to web: its id comes after /d/e/, and neither runtime can fetch it. */
+const PUBLISHED = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vExampleOnly/pubhtml'
 const CSV = 'Date,Amount,Description\n2026-08-01,-5.00,Coffee\n2026-08-02,-12.40,Lunch\n'
 const GVIZ = `/*O_o*/
 google.visualization.Query.setResponse(${JSON.stringify({
@@ -66,9 +81,28 @@ google.visualization.Query.setResponse(${JSON.stringify({
   },
 })});`
 
+/** A sheet with categories and an account column, read the same either way in. */
+const TYPED = 'https://docs.google.com/spreadsheets/d/typed-sheet/edit'
+const TYPED_ROWS = [
+  ['Date', 'Amount', 'Description', 'Category', 'Means of Payment'],
+  ['2026-08-01', '12.00', 'Example shop', 'Groceries', 'Example Card'],
+  ['2026-08-02', '2500.00', 'Example pay', 'Salary', 'Example Card'],
+]
+const TYPED_CSV = `${TYPED_ROWS.map((row) => row.join(',')).join('\n')}\n`
+const TYPED_GVIZ = `/*O_o*/
+google.visualization.Query.setResponse(${JSON.stringify({
+  table: {
+    cols: TYPED_ROWS[0].map((label, i) => ({ id: String.fromCharCode(65 + i), label })),
+    rows: TYPED_ROWS.slice(1).map((row) => ({ c: row.map((v) => ({ v })) })),
+  },
+})});`
+
 /** Google, as local-first's sheet reader meets it: every way in to the ledger works. */
 async function google(input: RequestInfo | URL): Promise<Response> {
   const url = String(input instanceof Request ? input.url : input)
+  if (url.includes('/d/typed-sheet/')) {
+    return new Response(url.includes('/gviz/') ? TYPED_GVIZ : TYPED_CSV, { status: 200 })
+  }
   if (url.includes('/d/ledger-sheet/')) {
     return new Response(url.includes('/gviz/') ? GVIZ : CSV, { status: 200 })
   }
@@ -102,6 +136,7 @@ beforeEach(async () => {
   await db.add('profiles', { id: 1, name: 'Household', created_at: '2026-01-01T00:00:00.000Z' })
   for (const toast of toasts()) removeToast(toast.id)
   net.sent.length = 0
+  net.answers.length = 0
   net.answerOnce = null
   vi.stubGlobal('fetch', vi.fn(google))
   Element.prototype.scrollIntoView = () => {}
@@ -133,6 +168,13 @@ const describedBy = (el: HTMLElement): string =>
     .join(' | ')
 
 const byTestId = (id: string) => host.querySelector<HTMLElement>(`[data-test-id="${id}"]`)
+
+/** What local-first asked Google, or the proxy in front of it, for. */
+const googleAsked = () =>
+  vi
+    .mocked(globalThis.fetch)
+    .mock.calls.map(([input]) => String(input instanceof Request ? input.url : input))
+    .filter((url) => url.includes('docs.google.com') || url.includes('corsproxy'))
 const inputOf = (id: string) => byTestId(id) as HTMLInputElement
 const buttonOf = (id: string) => byTestId(id) as HTMLButtonElement
 
@@ -198,6 +240,28 @@ describe('Connected Sources: Add a sheet', () => {
     expect(failureToasts()).toEqual([])
   })
 
+  it('marks a link from Publish to web in its own words, and sends nothing', async () => {
+    await openAdd()
+    type(urlInput(), PUBLISHED)
+    submit(save())
+    await vi.waitFor(() => {
+      expect(urlInput().getAttribute('aria-invalid')).toBe('true')
+    })
+    expect(describedBy(urlInput())).toContain(M.published)
+    expect(describedBy(urlInput())).not.toContain(M.url)
+    expect(net.sent).toEqual([])
+    expect(googleAsked()).toEqual([])
+    expect(await storedSources()).toEqual([])
+  })
+
+  it('asks for a sheet shared by its link, not a published one', async () => {
+    await openAdd()
+    expect(urlInput().placeholder).not.toMatch(/publish/i)
+    const form = byTestId('source-add-form')?.textContent ?? ''
+    expect(form).toContain('Share the sheet so anyone with the link can view it.')
+    expect(form).not.toMatch(/publish/i)
+  })
+
   it('marks a name too long to keep, and sends nothing', async () => {
     await openAdd()
     type(urlInput(), LEDGER)
@@ -213,15 +277,25 @@ describe('Connected Sources: Add a sheet', () => {
     expect(failureToasts()).toEqual([])
   })
 
-  it('marks a sheet that cannot be read at its link, in the words that say how to share it', async () => {
+  it('marks a sheet it cannot read at its link, saying how to share it or upload it instead', async () => {
     await openAdd()
     type(urlInput(), PRIVATE)
     submit(save())
     await vi.waitFor(() => {
       expect(urlInput().getAttribute('aria-invalid')).toBe('true')
     })
-    expect(describedBy(urlInput())).toContain('Could not access the Google Sheet from the browser.')
+    expect(describedBy(urlInput())).toContain(SHEET_UNREADABLE)
     expect(net.sent).toEqual(['POST /api/import/googlesheet'])
+    const [answer] = net.answers
+    expect(answer).toMatchObject({
+      path: '/api/import/googlesheet',
+      status: 422,
+      body: { error: SHEET_UNREADABLE },
+    })
+    // The advice is the link's own, to share it by its link, not to publish it: the field refuses
+    // the link Publish to web gives (M.published).
+    expect(SHEET_UNREADABLE).toContain(SHARE_SHEET_BY_LINK)
+    expect(SHEET_UNREADABLE).not.toMatch(/publish/i)
     expect(await storedSources()).toEqual([])
     expect(failureToasts()).toEqual([])
     expect(byTestId('source-add-form')).not.toBeNull()
@@ -274,7 +348,8 @@ describe('Connected Sources: Add a sheet', () => {
       expect.objectContaining({
         kind: 'google_sheet',
         label: 'Bank ledger',
-        config: { url: LEDGER, sheetName: 'Sheet1' },
+        // No tab name: the link's gid is the tab, and neither runtime makes one up (finding 11).
+        config: { url: LEDGER },
         mapping: expect.objectContaining({
           date: 'Date',
           amount: 'Amount',
@@ -290,14 +365,32 @@ describe('Connected Sources: Add a sheet', () => {
     })
   })
 
-  it('names a sheet saved without a name after its tab, and opens empty the next time', async () => {
+  // Review of 19 Nov, round 4: the daily sync types a sheet's rows as Sync does only where the
+  // sheet was saved with types. One saved with none keeps its amounts' signs overnight, as every
+  // earlier release synced it, so Add a sheet saves the types a fresh import gives its values.
+  it("saves the types a fresh import gives the sheet's categories and accounts", async () => {
+    await openAdd()
+    type(urlInput(), TYPED)
+    submit(save())
+    await vi.waitFor(() => {
+      expect(byTestId('source-add-form')).toBeNull()
+    })
+    expect(await storedSources()).toEqual([
+      expect.objectContaining({
+        category_types: { Groceries: 'expense', Salary: 'income', 'Example Card': 'account' },
+      }),
+    ])
+  })
+
+  it('names a sheet saved without a name a Google Sheet, and opens empty the next time', async () => {
     await openAdd()
     type(urlInput(), LEDGER)
     submit(save())
     await vi.waitFor(() => {
       expect(byTestId('source-add-form')).toBeNull()
     })
-    expect(await storedSources()).toEqual([expect.objectContaining({ label: 'Sheet1' })])
+    // Its tab's name is not known, so it is named for what it is (it was "Sheet1", made up).
+    expect(await storedSources()).toEqual([expect.objectContaining({ label: 'Google Sheet' })])
     Array.from(host.querySelectorAll('button'))
       .find((b) => b.textContent?.includes('Add a sheet'))!
       .click()
@@ -355,15 +448,66 @@ describe("the Import page's Google Sheets link", () => {
     expect(failureToasts()).toEqual([])
   })
 
-  it('marks a sheet that cannot be read at its link, not in the banner', async () => {
+  it('marks a link from Publish to web in its own words, fetches nothing, and leaves the banner empty', async () => {
+    const flow = await openSheets()
+    type(urlInput(), PUBLISHED)
+    submit(fetchButton())
+    await vi.waitFor(() => {
+      expect(urlInput().getAttribute('aria-invalid')).toBe('true')
+    })
+    expect(describedBy(urlInput())).toContain(M.published)
+    expect(describedBy(urlInput())).not.toContain(M.url)
+    expect(document.activeElement).toBe(urlInput())
+    expect(net.sent).toEqual([])
+    expect(googleAsked()).toEqual([])
+    expect(flow.error()).toBeNull()
+    expect(failureToasts()).toEqual([])
+  })
+
+  it('asks for a sheet shared by its link, not a published one', async () => {
+    await openSheets()
+    const help = byTestId('import-sheet-help')?.textContent ?? ''
+    expect(help).toContain('Share the sheet so anyone with the link can view it.')
+    expect(help).not.toMatch(/publish/i)
+  })
+
+  it('marks a sheet it cannot read at its link, saying how to share it, not in the banner', async () => {
     const flow = await openSheets()
     type(urlInput(), PRIVATE)
     submit(fetchButton())
     await vi.waitFor(() => {
       expect(urlInput().getAttribute('aria-invalid')).toBe('true')
     })
-    expect(describedBy(urlInput())).toContain('Could not access the Google Sheet from the browser.')
+    expect(describedBy(urlInput())).toContain(SHEET_UNREADABLE)
     expect(net.sent).toEqual(['POST /api/import/googlesheet'])
+    expect(flow.error()).toBeNull()
+    expect(flow.activeStep()).toBe('upload')
+    expect(failureToasts()).toEqual([])
+  })
+
+  it("marks the Worker's answer for a sheet it cannot read, or an empty one, at the link", async () => {
+    const flow = await openSheets()
+    // As the Worker answers them (fetchGoogleSheetRows in worker/src/routes/imports.ts): 501, its
+    // words as `error`, its own reason beside them, and no field named.
+    for (const [words, reason] of [
+      [SHEET_UNREADABLE, 'HTTP 404'],
+      [SHEET_EMPTY, 'No rows found'],
+    ]) {
+      net.answerOnce = {
+        path: '/api/import/googlesheet',
+        response: () =>
+          new Response(JSON.stringify({ error: words, reason }), {
+            status: 501,
+            headers: { 'content-type': 'application/json' },
+          }),
+      }
+      type(urlInput(), PRIVATE)
+      submit(fetchButton())
+      await vi.waitFor(() => {
+        expect(describedBy(urlInput())).toContain(words)
+      })
+      expect(describedBy(urlInput())).not.toContain(reason)
+    }
     expect(flow.error()).toBeNull()
     expect(flow.activeStep()).toBe('upload')
     expect(failureToasts()).toEqual([])

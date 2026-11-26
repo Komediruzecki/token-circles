@@ -36,7 +36,7 @@ const LABEL_ROW = 18
 const AXIS_ROW = 28
 
 /** 1, 2, 2.5 or 5 times a power of ten: the smallest such step at least `raw`. */
-function niceStep(raw: number): number {
+export function niceStep(raw: number): number {
   if (!Number.isFinite(raw) || raw <= 0) return 1
   const power = 10 ** Math.floor(Math.log10(raw))
   for (const s of [1, 2, 2.5, 5, 10]) if (s * power >= raw) return s * power
@@ -51,14 +51,23 @@ export default function LoanBalanceChart(props: Props) {
   let wrap!: HTMLDivElement
 
   onMount(() => {
+    // Measured before the first paint, so the chart never shows at a made-up width.
+    const measured = Math.round(wrap.clientWidth)
+    if (measured > 0) setWidth(measured)
     if (typeof ResizeObserver === 'undefined') return
+    let frame = 0
     const observer = new ResizeObserver(([entry]) => {
       const w = Math.round(entry.contentRect.width)
-      if (w > 0) setWidth(w)
+      cancelAnimationFrame(frame)
+      // A frame later: a new width gives the chart a new height (its payoff labels wrap into more
+      // rows when narrow), and a size changed inside this callback is a resize loop the browser
+      // reports as an error.
+      if (w > 0) frame = requestAnimationFrame(() => setWidth(w))
     })
     observer.observe(wrap)
     onCleanup(() => {
       observer.disconnect()
+      cancelAnimationFrame(frame)
     })
   })
 

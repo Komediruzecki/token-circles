@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import * as XLSX from 'xlsx'
 import {
+  accountNamesBank,
   resolveTargetAccount,
   statementSignature,
 } from '../../../../../shared/bankImport/accountResolver'
@@ -403,6 +404,123 @@ describe('account resolver', () => {
       resolveTargetAccount('erste', { iban: 'HR1234567890123456789' }, 'f.csv', accounts, {}, ids)
     ).toBe('Erste Current')
     expect(resolveTargetAccount('erste', {}, 'f.csv', accounts, {}, {})).toBe('Erste Current') // bank_name match
+  })
+
+  // An ING statement went into the first account whose name had "ing" in it: Main Checking,
+  // Savings, Spending.
+  it('takes a short bank id only as a word of its own', () => {
+    const plain = [{ name: 'Main Checking' }, { name: 'Savings' }, { name: 'Spending money' }]
+    expect(resolveTargetAccount('ing', {}, 'f.csv', plain, {}, {})).toBeNull()
+    expect(
+      resolveTargetAccount('ing', {}, 'f.csv', [...plain, { name: 'ING Current' }], {}, {})
+    ).toBe('ING Current')
+    expect(
+      resolveTargetAccount(
+        'ing',
+        {},
+        'f.csv',
+        [{ name: 'Everyday', bank_name: 'ING-DiBa' }],
+        {},
+        {}
+      )
+    ).toBe('Everyday')
+  })
+
+  // Review of 19 Nov: a longer id still matched inside a word ("Erstes Konto" named Erste,
+  // "Otherwise" Wise), and a digit after a short one hid it ("ING2"). maff's rule: a bank's id,
+  // of any length, counts only where no letter touches it; digits, spaces and punctuation are
+  // edges. Round 4 refines it, in the three cases after this one: a compound ending in Sparkasse,
+  // a letter of another script, and a digit beside a digit of the id.
+  it('takes a bank id of any length only where no Latin letter touches it', () => {
+    const names = (bankId: Parameters<typeof accountNamesBank>[1], ...list: string[]) =>
+      list.filter((name) => accountNamesBank({ name }, bankId))
+    expect(names('erste', 'Erstes Konto', 'Mein erstes Girokonto', 'Erste Bank')).toEqual([
+      'Erste Bank',
+    ])
+    expect(names('wise', 'Otherwise', 'Clockwise fund', 'Wisely', 'Wise')).toEqual(['Wise'])
+    expect(names('revolut', 'Revolution', 'Revolut EUR')).toEqual(['Revolut EUR'])
+    expect(names('ing', 'ING2', 'ING_savings', 'éing', 'Shopping')).toEqual(['ING2', 'ING_savings'])
+    expect(names('pbz', 'pbz2', '2pbz', 'PBZ/EUR', 'PBZ€')).toEqual([
+      'pbz2',
+      '2pbz',
+      'PBZ/EUR',
+      'PBZ€',
+    ])
+    expect(names('sparkasse', 'Sparkasse Giro', 'Sparkassenbuch')).toEqual(['Sparkasse Giro'])
+  })
+
+  // Round 4: whole words dropped every German compound, and "Stadtsparkasse Giro" or
+  // "Kreissparkasse Köln" no longer named Sparkasse. A bank commonly at the tail of a compound is
+  // named by a word that ends in it: letters before it, none after.
+  it('takes a compound that ends in a bank commonly at the tail of one, with nothing after it', () => {
+    const names = (bankId: Parameters<typeof accountNamesBank>[1], ...list: string[]) =>
+      list.filter((name) => accountNamesBank({ name }, bankId))
+    expect(
+      names(
+        'sparkasse',
+        'Stadtsparkasse Giro',
+        'Kreissparkasse Köln',
+        'Sparkasse-Köln',
+        'Kreissparkasse2',
+        'Sparkassen Giro',
+        'Sparkassenbuch'
+      )
+    ).toEqual(['Stadtsparkasse Giro', 'Kreissparkasse Köln', 'Sparkasse-Köln', 'Kreissparkasse2'])
+    expect(accountNamesBank({ name: 'Giro', bank_name: 'Kreissparkasse Köln' }, 'sparkasse')).toBe(
+      true
+    )
+    // Every other bank stays a whole word.
+    expect(names('erste', 'Erstes Konto', 'Prvaerste')).toEqual([])
+    expect(names('wise', 'Otherwise', 'Clockwise')).toEqual([])
+    expect(names('ing', 'Booking', 'Banking')).toEqual([])
+  })
+
+  // Round 4: a letter of another script beside the id is an edge, as it is no part of a word in
+  // the id's script; only Latin letters join one.
+  it('counts a letter of another script as an edge, and a Latin one as part of the word', () => {
+    const names = (bankId: Parameters<typeof accountNamesBank>[1], ...list: string[]) =>
+      list.filter((name) => accountNamesBank({ name }, bankId))
+    expect(names('revolut', 'Revolut口座', '口座Revolut', 'Revolutкарта', 'Revolutión')).toEqual([
+      'Revolut口座',
+      '口座Revolut',
+      'Revolutкарта',
+    ])
+    expect(names('ing', 'ING銀行', '銀行ING', 'éING', 'İNG')).toEqual(['ING銀行', '銀行ING'])
+    expect(names('pbz', 'čPBZ', 'PBZtekući')).toEqual([])
+  })
+
+  // Round 4: a digit beside the id joins the word only on a side where the id's own character is a
+  // digit, so "N267" is another word than N26, and "ING2" is still ING.
+  it('joins a digit to the id only where the id has a digit on that side', () => {
+    const names = (bankId: Parameters<typeof accountNamesBank>[1], ...list: string[]) =>
+      list.filter((name) => accountNamesBank({ name }, bankId))
+    expect(names('n26', 'N267 account', 'N26 account', '7N26', 'N26-2', 'N26EUR')).toEqual([
+      'N26 account',
+      '7N26',
+      'N26-2',
+    ])
+    expect(names('ing', 'ING2', '2ING')).toEqual(['ING2', '2ING'])
+    expect(names('erste', 'Erste2')).toEqual(['Erste2'])
+  })
+
+  it('keeps the names that named their bank before', () => {
+    const named: Array<[string, Parameters<typeof accountNamesBank>[1]]> = [
+      ['Štednja ING', 'ing'],
+      ['ing-diba', 'ing'],
+      ['N26 (EUR)', 'n26'],
+      ['Moj PBZ tekući', 'pbz'],
+      ['pbz', 'pbz'],
+    ]
+    for (const [name, bankId] of named) expect(accountNamesBank({ name }, bankId)).toBe(true)
+    expect(accountNamesBank({ name: 'Shopping' }, 'ing')).toBe(false)
+    expect(accountNamesBank({ name: 'Booking' }, 'ing')).toBe(false)
+  })
+
+  it('says whether an account names a bank, by the same rule', () => {
+    expect(accountNamesBank({ name: 'Erste' }, 'erste')).toBe(true)
+    expect(accountNamesBank({ name: 'Main Checking' }, 'ing')).toBe(false)
+    expect(accountNamesBank({ name: 'Joint', bank_name: 'Revolut Ltd' }, 'revolut')).toBe(true)
+    expect(accountNamesBank({ name: 'Joint', bank_name: null }, 'revolut')).toBe(false)
   })
 })
 

@@ -6,6 +6,8 @@
   flex-direction: column;
   gap: 8px;
   margin-bottom: 24px;
+  /* The header lays its buttons out by its own width, which the sidebar takes from at 820 px. */
+  container: bills-header / inline-size;
 }
 .bills-page .page-header h1 {
   font-size: 24px;
@@ -16,6 +18,14 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
+}
+/* The title and the line under it, one block: the buttons sit beside it or after it. */
+.bills-page .header-title {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
 }
 .bills-page .page-subtitle {
   color: var(--text-secondary);
@@ -173,6 +183,28 @@
   gap: 8px;
   align-items: center;
 }
+/* Too narrow for the title and the buttons side by side, the buttons go under the title and its
+   line and fill their width, two to a row where they fit (Scan transactions and Browse catalog on
+   a 390 px phone) and one where they don't, each on one line. Beside the title at 820 px they took
+   two lines each, and at 390 the third ran past the screen's edge. */
+@container bills-header (max-width: 640px) {
+  .bills-page .header-top {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .bills-page .header-actions {
+    flex-wrap: wrap;
+  }
+  .bills-page .header-actions > button {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+}
+@media (pointer: coarse) {
+  .bills-page .header-actions > button {
+    min-height: 44px;
+  }
+}
 .bills-page .btn-sm {
   padding: 4px 10px;
   font-size: 12px;
@@ -192,6 +224,7 @@
 }
 .bills-page .modal {
   background: var(--card-bg);
+  border: 1px solid var(--border-dialog);
   border-radius: var(--radius);
   box-shadow: var(--shadow-lg);
   width: 100%;
@@ -373,17 +406,6 @@
     padding: 16px;
   }
 
-  .bills-page .header-top {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 12px;
-  }
-
-  .bills-page .header-top .btn-primary {
-    width: 100%;
-    justify-content: center;
-  }
-
   .bills-page .bill-main {
     flex-wrap: wrap;
     gap: 8px;
@@ -457,7 +479,11 @@
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
+/* Each tab keeps its width and its label one line, so the strip scrolls where they do not fit: at
+   390 px the tabs shrank instead, and "Regular Bills" took two lines. */
 .tabBtn {
+  flex: 0 0 auto;
+  white-space: nowrap;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -603,5 +629,6 @@
 .billsSection h3,
 .subscriptionSummary h3 {
   font-family: var(--font-display, inherit);
+  word-spacing: var(--font-display-word-spacing);
   letter-spacing: -0.01em;
 }

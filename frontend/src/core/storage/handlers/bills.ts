@@ -11,7 +11,7 @@ import {
 } from '../../../../../shared/billSchedule'
 import { BILL_MESSAGES, checkBillCreate, checkBillEdit } from '../../../../../shared/billSchema'
 import { isoDate, localToday } from '../../../utils/period'
-import { getLocalCurrency } from '../../api'
+import { ensureBaseCurrency } from '../baseCurrency'
 import { getDB } from '../idb'
 import {
   adapter,
@@ -317,7 +317,13 @@ export async function billsPayOrMarkPaid(params: Record<string, string>): Promis
   const result = await adapter.payBill(
     idParam(params),
     pid,
-    { date: isoDate(now), currency: getLocalCurrency(), createdAt: now.toISOString() },
+    // The base currency the balances are kept in, as the Worker reads its profile's: the browser's
+    // own stands in until Settings stores one. It was always the browser's, stored base or not.
+    {
+      date: isoDate(now),
+      currency: await ensureBaseCurrency(undefined, false),
+      createdAt: now.toISOString(),
+    },
     (bill) => isPaidUp(timing(bill), isoDate(now))
   )
   if (result === 'missing') return notFound('Bill')

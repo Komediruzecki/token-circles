@@ -25,6 +25,7 @@ import { namesItsAccounts } from './importFlow'
 import { createPasteForm } from './pasteForm'
 import { downloadSampleTemplate } from './sampleTemplate'
 import { createSheetLinkForm } from './sheetLinkForm'
+import { StepMessage } from './StepMessage'
 import { createUploadForm } from './uploadForm'
 import type { BankId } from '../../core/bankImport'
 import type { ImportFlow, ImportTab } from './importFlow'
@@ -134,7 +135,9 @@ export function ImportDataEntry(props: {
             <button
               class={`${styles.tab} ${flow.activeImportTab() === tab.id ? styles.active : ''}`}
               data-test-id={`import-tab-${tab.id}`}
-              onClick={() => flow.setActiveImportTab(tab.id)}
+              onClick={() => {
+                flow.chooseImportTab(tab.id)
+              }}
             >
               {tab.label}
             </button>
@@ -145,8 +148,68 @@ export function ImportDataEntry(props: {
       {/* Google Sheets Tab */}
       {flow.activeImportTab() === 'google-sheets' && (
         <>
+          <form {...sheetForm.attrs} data-test-id="import-sheet-form">
+            <FormNotice form={sheetForm} />
+            <div class={styles.sheetsUrlRow}>
+              <Field
+                form={sheetForm}
+                name="url"
+                label="Google Sheets link"
+                class={styles.sheetsUrlField}
+                labelClass={styles.visuallyHidden}
+              >
+                {(control) => (
+                  <input
+                    {...control}
+                    type="text"
+                    inputmode="url"
+                    class={styles.sheetsUrlInput}
+                    placeholder="Paste Google Sheets URL"
+                    required
+                    data-test-id="import-sheet-url"
+                    value={sheetForm.values.url}
+                    onInput={(e) => {
+                      sheetForm.set('url', e.currentTarget.value)
+                      flow.setSheetUrl(e.currentTarget.value)
+                    }}
+                  />
+                )}
+              </Field>
+              <SubmitButton
+                class={`${styles.btn} ${styles.btnPrimary} ${styles.sheetsFetch}`}
+                busy={sheetForm.submitting()}
+                busyLabel="Fetching…"
+                data-test-id="import-sheet-fetch"
+              >
+                Fetch
+              </SubmitButton>
+            </div>
+            {/*
+              Both runtimes read one tab, the one the link opens on (its #gid), and answer only its
+              name: a list of tabs to choose from here only ever held that one, and choosing it read
+              the same tab again. So the line says how to pick a tab instead. In the form, under
+              the field it explains: after it, the page's 24 px gap put it 40 px below the field.
+              It no longer offers "or publish it": neither runtime can fetch a published link.
+            */}
+            <p class={`${styles.sheetsInfo} ${styles.sheetsHelp}`} data-test-id="import-sheet-help">
+              Share the sheet so anyone with the link can view it. It reads the tab your link opens
+              on: for another tab, open that tab and copy its link.
+            </p>
+          </form>
+          <StepMessage flow={flow} />
+
+          {flow.sheetResult() && (
+            <button
+              class={`${styles.btn} ${styles.btnPrimary}`}
+              data-test-id="import-continue-mapping"
+              onClick={flow.goToMapping}
+              style={{ 'margin-top': '16px' }}
+            >
+              Continue to mapping
+            </button>
+          )}
           <Show when={!props.compact}>
-            <div class={styles.settingsCard} style={{ 'margin-bottom': '16px' }}>
+            <div class={styles.settingsCard}>
               <h3 class={styles.settingsCardTitle}>Expected columns</h3>
               {/*
                 This table is the import's contract, so it has to tell the truth. Only Amount
@@ -155,8 +218,14 @@ export function ImportDataEntry(props: {
                 once silently dropped 291 rows). Everything else is optional with the default
                 shown beside the sample, so "optional" never reads as "mysterious".
               */}
-              <div class={styles.tableWrapper} style={{ 'margin-bottom': 0 }}>
-                <table class={styles.previewTable} data-test-id="import-expected-columns">
+              <div
+                class={`${styles.tableWrapper} ${styles.expectedWrap}`}
+                style={{ 'margin-bottom': 0 }}
+              >
+                <table
+                  class={`${styles.previewTable} ${styles.expectedColumns}`}
+                  data-test-id="import-expected-columns"
+                >
                   <thead>
                     <tr>
                       <th>Column</th>
@@ -228,85 +297,23 @@ export function ImportDataEntry(props: {
                   </tbody>
                 </table>
               </div>
+              {/* The template's button sat on File Upload only, so "the downloadable template
+                  below" pointed at nothing from this tab. */}
               <p class={styles.sheetsInfo} style={{ 'margin-top': '12px', 'margin-bottom': 0 }}>
-                Column names are auto-detected. Use the downloadable template below for guaranteed
-                matching.
+                Column names are detected for you. The sample template has every column above, named
+                the way the importer expects.
               </p>
+              <button
+                type="button"
+                class={`${styles.btn} ${styles.btnOutline} ${styles.btnSm}`}
+                style={{ 'margin-top': '10px' }}
+                data-test-id="import-sheet-template"
+                onClick={downloadSampleTemplate}
+              >
+                Download sample template
+              </button>
             </div>
           </Show>
-
-          <form {...sheetForm.attrs} data-test-id="import-sheet-form">
-            <FormNotice form={sheetForm} />
-            <div class={styles.sheetsUrlRow}>
-              <Field
-                form={sheetForm}
-                name="url"
-                label="Google Sheets link"
-                class={styles.sheetsUrlField}
-                labelClass={styles.visuallyHidden}
-              >
-                {(control) => (
-                  <input
-                    {...control}
-                    type="text"
-                    inputmode="url"
-                    class={styles.sheetsUrlInput}
-                    placeholder="Paste Google Sheets URL"
-                    required
-                    data-test-id="import-sheet-url"
-                    value={sheetForm.values.url}
-                    onInput={(e) => {
-                      sheetForm.set('url', e.currentTarget.value)
-                      flow.setSheetUrl(e.currentTarget.value)
-                    }}
-                  />
-                )}
-              </Field>
-              <SubmitButton
-                class={`${styles.btn} ${styles.btnPrimary}`}
-                busy={sheetForm.submitting()}
-                busyLabel="Fetching…"
-                data-test-id="import-sheet-fetch"
-              >
-                Fetch
-              </SubmitButton>
-            </div>
-          </form>
-          <p class={styles.sheetsInfo}>
-            Google Sheets URL format: https://docs.google.com/spreadsheets/d/... (the sheet must be
-            shared or published so it can be read)
-          </p>
-
-          {flow.sheetNames().length > 0 && !flow.sheetResult() && (
-            <div class={styles.sheetsUrlRow}>
-              <label class={styles.sheetsInfo}>Available sheets:</label>
-              <div class={styles.sheetTabs}>
-                <For each={flow.sheetNames()}>
-                  {(name) => (
-                    <button
-                      class={`${styles.sheetTab} ${flow.selectedSheet() === name ? styles.active : ''}`}
-                      onClick={() => {
-                        flow.handleSheetTabClick(name)
-                      }}
-                    >
-                      {name}
-                    </button>
-                  )}
-                </For>
-              </div>
-            </div>
-          )}
-
-          {flow.sheetResult() && (
-            <button
-              class={`${styles.btn} ${styles.btnPrimary}`}
-              data-test-id="import-continue-mapping"
-              onClick={flow.goToMapping}
-              style={{ 'margin-top': '16px' }}
-            >
-              Continue to mapping
-            </button>
-          )}
         </>
       )}
 
@@ -376,26 +383,7 @@ export function ImportDataEntry(props: {
               )}
             </Field>
           </form>
-
-          {flow.uploadResult() && flow.uploadResult()!.sheetNames.length > 1 && (
-            <div class={styles.sheetsUrlRow}>
-              <label class={styles.sheetsInfo}>Available sheets:</label>
-              <div class={styles.sheetTabs}>
-                <For each={flow.uploadResult()!.sheetNames}>
-                  {(name) => (
-                    <button
-                      class={`${styles.sheetTab} ${flow.selectedSheet() === name ? styles.active : ''}`}
-                      onClick={() => {
-                        flow.chooseUploadedSheet(name)
-                      }}
-                    >
-                      {name}
-                    </button>
-                  )}
-                </For>
-              </div>
-            </div>
-          )}
+          <StepMessage flow={flow} />
 
           {flow.uploadResult() && (
             <button
@@ -420,7 +408,7 @@ export function ImportDataEntry(props: {
       {flow.activeImportTab() === 'paste-csv' && (
         <>
           <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 12px;">
-            Paste tabular data straight from Excel, Google Sheets, or any spreadsheet app — it's
+            Paste tabular data straight from Excel, Google Sheets, or any spreadsheet app. It's
             parsed right in your browser.
           </p>
           <form {...pasteForm.attrs} data-test-id="import-paste-form">
@@ -485,6 +473,7 @@ export function ImportDataEntry(props: {
               )}
             </Field>
           </form>
+          <StepMessage flow={flow} />
           {flow.uploadResult() && flow.activeImportTab() === 'paste-csv' && (
             <button
               class={`${styles.btn} ${styles.btnPrimary}`}
@@ -563,7 +552,7 @@ export function ImportDataEntry(props: {
                 color: 'var(--text-secondary)',
               }}
             >
-              You have no accounts yet — pick "New account…" in a statement's account dropdown to
+              You have no accounts yet. Pick "New account…" in a statement's account dropdown to
               create one right here.
             </p>
           )}
@@ -685,6 +674,7 @@ export function ImportDataEntry(props: {
               Process &amp; continue
             </button>
           </Show>
+          <StepMessage flow={flow} />
 
           <Show when={flow.bankWarnings().length > 0}>
             <ul

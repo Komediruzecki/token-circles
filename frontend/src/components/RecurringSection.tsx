@@ -16,6 +16,7 @@ import { showConfirm } from '../core/confirmStore'
 import { entityVersion } from '../core/dataVersions'
 import { refetchOnActive } from '../core/pageVisibility'
 import { createRecurringForm, ruleName } from '../features/recurringForm'
+import { dialogFocus } from '../utils/dialogFocus'
 import { Field, FormNotice, SubmitButton } from './form'
 import styles from './RecurringSection.module.css'
 import type { Category, RecurringTransaction } from '../types/models'
@@ -290,6 +291,13 @@ export default function RecurringSection(props: RecurringSectionProps) {
           }}
         >
           <div
+            ref={(el) => {
+              dialogFocus(el, {
+                onEscape: () => {
+                  ruleForm.close()
+                },
+              })
+            }}
             class={styles.modal}
             data-test-id="recurring-modal"
             onClick={(e) => {

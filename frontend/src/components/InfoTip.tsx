@@ -11,10 +11,24 @@
  * absolutely inside the field would have been simpler, but these sit in a narrow form
  * column and would be clipped by the first `overflow` ancestor.
  *
+ * It renders at the end of the page (a portal), not beside its icon. An ancestor with a
+ * backdrop-filter, a transform or a filter makes "fixed" mean fixed to that ancestor: on
+ * Dashboard's metric cards, which blur what is behind them, the panel opened about 430 px
+ * below its icon, off the bottom of the window, and was clipped by the card. At the end of
+ * the page no ancestor can move or clip it. It carries the theme scope its icon sits in
+ * (THEME_SCOPES), so a tip in the Analytics deck still paints the deck's colours.
+ *
+ * Out there it also outlives its page unless it is told. Every visited page stays mounted and is
+ * hidden with display: none, so a tip pinned open and then left without a press (Back, a link, a
+ * hash change) kept its panel on the next page, placed from its hidden icon's empty box at the
+ * top left of the window. The panel closes as soon as its icon is no longer drawn.
+ *
  * Nothing here occupies layout: the point of the rewrite is that an explanation no
  * longer pushes the control it explains out of line with its neighbour.
  */
-import { createSignal, createUniqueId, onCleanup, Show } from 'solid-js'
+import { createEffect, createSignal, createUniqueId, onCleanup, Show } from 'solid-js'
+import { Portal } from 'solid-js/web'
+import { THEME_SCOPES } from '../core/theme'
 import styles from './InfoTip.module.css'
 
 interface InfoTipProps {
@@ -36,6 +50,8 @@ export default function InfoTip(props: InfoTipProps) {
   const panelId = createUniqueId()
   const [open, setOpen] = createSignal(false)
   const [pos, setPos] = createSignal({ top: 0, left: 0 })
+  // The theme scopes the icon sits in, worn by the panel at the end of the page.
+  const [scope, setScope] = createSignal('')
   // A click pins the panel; hovering away then leaves it alone. Without this, reading a
   // tip on a touch-and-mouse laptop means keeping the pointer perfectly still.
   let pinned = false
@@ -45,8 +61,25 @@ export default function InfoTip(props: InfoTipProps) {
   let trigger!: HTMLButtonElement
   let panel: HTMLDivElement | undefined
 
+  // Whether the icon is drawn at all: still in the page, and not inside a hidden one.
+  // checkVisibility() answers that in a browser; the walk is for environments without it.
+  const rendered = () => {
+    if (!trigger.isConnected) return false
+    if (typeof trigger.checkVisibility === 'function') return trigger.checkVisibility()
+    for (let el: Element | null = trigger; el; el = el.parentElement) {
+      if (window.getComputedStyle(el).display === 'none') return false
+    }
+    return true
+  }
+
   const place = () => {
+    if (!rendered()) {
+      hide()
+      return
+    }
     const box = trigger.getBoundingClientRect()
+    // Never from an empty box: that is the top left of the window, not the icon.
+    if (box.width === 0 && box.height === 0) return
     const margin = 8
     const width = panel?.offsetWidth ?? 280
     const height = panel?.offsetHeight ?? 0
@@ -64,6 +97,7 @@ export default function InfoTip(props: InfoTipProps) {
   }
 
   const show = () => {
+    setScope(THEME_SCOPES.filter((name) => trigger.closest(`.${name}`)).join(' '))
     setOpen(true)
     // Place once from the fallback size so the panel never paints at the origin, then
     // again next frame once it exists and can be measured for real.
@@ -92,6 +126,22 @@ export default function InfoTip(props: InfoTipProps) {
       // the eventual blur does.
     }
   }
+
+  // The icon's box going to nothing is the page around it being hidden: close with it. Watched
+  // only while the panel is open.
+  let watcher: ResizeObserver | undefined
+  createEffect(() => {
+    if (!open()) {
+      watcher?.disconnect()
+      watcher = undefined
+    } else if (!watcher && typeof ResizeObserver !== 'undefined') {
+      watcher = new ResizeObserver(() => {
+        if (open() && !rendered()) hide()
+      })
+      watcher.observe(trigger)
+    }
+  })
+  onCleanup(() => watcher?.disconnect())
 
   // Reposition rather than close: a tip read while the page scrolls should follow its
   // icon, not vanish. Capture phase so scrolling containers count, not just the window.
@@ -160,16 +210,21 @@ export default function InfoTip(props: InfoTipProps) {
         </svg>
       </button>
       <Show when={open()}>
-        <div
-          ref={panel}
-          id={panelId}
-          role="tooltip"
-          class={styles.panel}
-          data-test-id={props.testId ? `${props.testId}-panel` : undefined}
-          style={{ top: `${pos().top}px`, left: `${pos().left}px` }}
-        >
-          {props.text}
-        </div>
+        <Portal>
+          {/* Carries the scope's tokens only: `display: contents` draws no box of its own. */}
+          <div class={scope() || undefined} style={{ display: 'contents' }}>
+            <div
+              ref={panel}
+              id={panelId}
+              role="tooltip"
+              class={styles.panel}
+              data-test-id={props.testId ? `${props.testId}-panel` : undefined}
+              style={{ top: `${pos().top}px`, left: `${pos().left}px` }}
+            >
+              {props.text}
+            </div>
+          </div>
+        </Portal>
       </Show>
     </>
   )

@@ -58,6 +58,7 @@
   border-radius: 14px;
   overflow: hidden;
   background: var(--surface);
+  container-type: inline-size;
 }
 
 .row {
@@ -68,6 +69,22 @@
 }
 .row + .row {
   border-top: 1px solid var(--border);
+}
+.row {
+  flex-wrap: wrap;
+}
+/* A Sync or Fetch & preview that failed, under the row's controls until the next try. */
+.rowError {
+  flex-basis: 100%;
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  font-size: 13.5px;
+  line-height: 1.45;
+  font-weight: 500;
+  color: var(--danger);
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
 }
 
 .glyph {
@@ -351,8 +368,33 @@
   .row {
     flex-wrap: wrap;
   }
+  /* The capsule takes a line of its own; Remove stays on the first, beside the name, where it
+     dropped alone under the capsule before. */
   .capsule {
+    order: 1;
     width: 100%;
+  }
+  .rowError {
+    order: 2;
+  }
+  .rowDelete {
+    width: 40px;
+    height: 40px;
+  }
+  .capsule .btn {
+    flex: 1;
+    justify-content: center;
+  }
+}
+/* A list too narrow for the name beside the capsule (Import beside the sidebar on a tablet) lays
+   its rows out as a phone does: at 820 px "Google Sheet" broke onto two lines in a 113 px column. */
+@container (max-width: 600px) {
+  .capsule {
+    order: 1;
+    width: 100%;
+  }
+  .rowError {
+    order: 2;
   }
   .capsule .btn {
     flex: 1;

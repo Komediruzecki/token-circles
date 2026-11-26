@@ -10,6 +10,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Keep a Google Sheet after importing it.** The card after an import says when the sheet is already in Connected sources, where Sync reads it again, and otherwise offers Save sheet, with a name if you like.
 - **Getting started: three next steps from your own data.** When you finish or skip the setup wizard, its last step and a Getting started card on Dashboard list up to three next steps, each with its reason in your own counts and months and a link to the page where it's done: import the rest of your year, review the subscriptions the scan spotted, sort the entries without a category, set a budget for your biggest category without one (a catch-all like Other doesn't count), see what put last month in the red, or compare paying a loan off faster. A step goes once it's done. Hide the card and it stays hidden, signed in on every device.
 - **Getting started can suggest a one-month cushion** when the money you can reach covers less than a month of what you need.
 - **Categories say what they hold.** Each expense category has a kind, like groceries or eating out, and a "Needed every month" tick, both guessed from its name until you pick. The default categories have Groceries and Eating out instead of Food, and resetting your categories turns Food into Groceries, entries and all.
@@ -22,11 +23,16 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Progress has a tour**: what the page holds, Your next step and the seven circles, one stop each.
 - **Prints on Progress.** Every twelve tracked months in a row make a print: your year drawn as a seal, one petal a month, with no amounts on it. Tap a petal to see its month, or share a print as an image.
 - **Three short articles answer the why behind a step.** Getting started, Your next step, the circles and Worth a look on Progress link to them on about.tokencircles.com, in a new tab: Getting a year out of your bank under the import step (the day-2 mail links it too), Why one month lies under a month in the red and the months on file, and Your first cushion under the cushion step and its check.
+- **A loan's payments on a chart, right under its card.** Click a loan card to see what you owe from the first payment to the last, with today, your extra payments and the month of the last payment marked on the line.
+- **Add an extra payment from a loan's card.** Its three-dot menu opens the loan's Extra payments with the amount box ready to type in.
 
 ### Changed
 
 - **The setup wizard follows your account.** Signed in, a new account meets the setup wizard once, on whichever device it signs in first, and a wizard left part way reopens at the step you reached. Finish or skip it on one device and no other device shows it. An account that already has data, or that finished or skipped the wizard before, does not see it again.
-- **A shorter setup wizard that fits a phone.** It opens on your space's name, then asks for your main account and one bank statement. Choose the statement and setup reads it straight away: it names the bank and the account it goes into (one you already have, if you have one), says how many entries are new, and imports them in one tap. A Register file from YNAB's Export Plan download goes in the same way, each row into the account it names. A file it can't read opens on the Import page with setup finished, or you can go on without it. Back, the step count and Close sit at the top, the buttons stay in one row at the bottom, and badges you earn while setting up wait until you're done.
+- **A shorter setup wizard that fits a phone.** It asks for your space's name, your main account and your bank statements, and a statement it can't read opens on the Import page, where Back to setup carries on at the subscription check once something is imported, or goes back to the statements if nothing is yet.
+- **Setup takes several statements at once.** Choose or drop them and it imports them in one tap, each into an account named for its bank, your main account for the first bank, or a new account like "N26 EUR", with a transaction two statements share brought in once.
+- **A statement in another currency waits for the Import page.** Setup says why on its card: your balances are kept in one currency, and importing it would count its amounts in that one.
+- **Auto sync types a sheet's rows as Sync does.** For a sheet you save from now on, a category it gains later comes in overnight as it does when you press Sync, not as income or spending by the sign of its amount.
 - **Tours you finish follow your account.** Signed in, the tour menu marks the tours you finished as Done on every device, and Reset All Tours starts them over everywhere.
 - **The streak says months in a row.** The badge rail on Dashboard and the record on Progress read "4 months in a row" where they said "4 months tracked": the number counts tracked months without a gap, up to this month or last. With no streak running, both say "Start a streak".
 - **Sign-up mails do one job each.** Signing up with a password sends Confirm, which holds the link that opens your account and nothing else. The welcome comes once your address is confirmed, or straight away for a Google sign-up, and says where to start: a year of statements from your bank.
@@ -37,9 +43,21 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Each advice card on Progress says which circle it counts toward**, and that line opens the circle.
 - **A statement from a bank the app knows opens on what it brings in.** Import shows the bank, how many entries and from when to when, the new categories and how many are already here, with one button to import them. Check the columns is still there for a closer look.
 - **After an import, Import lists each account it changed with its balance today**, and a field to set it to what your bank shows.
+- **Import says what went wrong next to what you used.** A failed step shows under its form or button, a failed Sync at its sheet's row in Connected sources, and a failed import from a preview inside the preview, not in a banner that on a phone could be a screen away.
+- **A loan's Edit and Delete are in its card's three-dot menu.** So is See every payment, the month-by-month table the loan's name used to open, while What if stays on the card.
+- **The welcome mail's Find your subscriptions opens the scan.** It opened the list of bills. With nothing imported yet, the scan says so and offers an import.
 
 ### Fixed
 
+- **Choose a workbook's other sheets on Map columns.** A file with several sheets opened on its first one, and the choice of sheet sat on the step the page had already left.
+- **Google Sheets imports no longer make up a tab called "Sheet1".** The Sheets tab stops offering it under the emptied link, a sheet saved without a name is called Google Sheet, and with your data kept in this browser a saved sheet is read at the tab its link opens rather than one called Sheet1.
+- **A "Publish to web" link says which link to paste.** The Google Sheets tab and Add a sheet no longer suggest publishing a sheet, a link the app can't read, and a published link now says to share the sheet as "Anyone with the link" and paste that link instead.
+- **A sheet the app can't read says what to do about it.** At its link, the Google Sheets tab and Add a sheet say how to share the sheet so it can be read, or to download it as CSV and use File Upload, in the same words whether your data is in your account or kept in this browser.
+- **A statement no longer lands in an account whose name only contains its bank's.** Main Checking no longer takes an ING statement, Erstes Konto an Erste one or Otherwise a Wise one, while ING2 or "Moj PBZ tekući" still name their bank.
+- **Shortcuts work again after you close quick entry.** Escape left the keyboard inside the hidden box, so the arrow keys stopped stepping the period and ? stopped opening the shortcuts guide until you clicked the page.
+- **Screen readers no longer find two closed dialogs on every page.** Quick entry and Add transaction stayed announced as open dialogs while shut.
+- **The Bills calendar loads in its own place.** Opening it for the first time no longer swaps the whole page, tabs and all, for a loading screen.
+- **The subscription scan keeps to your own profile.** With your data kept in this browser and several profiles selected, it proposed another profile's subscriptions as bills for yours, and it could pick another profile's category, so the add was refused.
 - **A category called Groceries shows a shopping cart, and one named for a meal shows a knife and fork** (Eating out, Restaurant, Dining, Breakfast, Lunch, Dinner, Meals), and an import that creates one gives it the same icon. Before, they showed a coffee mug, and Eating out a plain tick. An icon you picked stays, and so does the mug an earlier import gave a category while you were signed in. Coffee and Cafe keep the mug.
 - **The subscription scan keeps up with a long history.** With a few thousand entries, Scan transactions on Bills and the setup wizard's subscriptions step held the page for over a second. They now find the same subscriptions in a small part of that time.
 - **The plan name on a subscription the scan finds is easier to read.** In the light theme, "Standard" beside Netflix was blue on a pale blue tint at 4.0:1. It's a darker blue now, on Bills and in setup.
@@ -49,6 +67,9 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Starting balances stay with their file.** Cancel an import or remove a file in setup, and the next file's accounts could open on the starting balances of the one you set aside, like a YNAB register's, instead of their own.
 - **All time no longer lands on 1970.** Budgets, the bill calendar, Dashboard's cash flow and spending heatmap, and the PDF reports in Settings showed January 1970 with nothing in it. They show this month now, and the period picker's custom range no longer starts on 1 January 1970.
 - **This year's annual PDF report runs from January to this month**, and the Year picker says how far. A report is always made for the year the picker shows.
+- **The three-dot menu on a subscription works from the keyboard.** It opens on its first item with a ring around it, the arrows move through the rest, and Escape or Tab takes you back to the button.
+- **The (i) on Dashboard's Net Worth, Income, Expenses and Balance cards opens its explanation right under the icon.** It opened about 430 px lower, where the card cut it off, so on a laptop or a phone you saw nothing.
+- **Dialogs open with the cursor inside, keep Tab inside them, close with Escape, and put you back on the button that opened them.** The Quick add button no longer sits on top of an open dialog.
 
 ## [5.17.6] — 2026-11-01
 

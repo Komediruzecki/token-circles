@@ -23,10 +23,10 @@ import {
   toHoldingPrecision,
 } from '../../../shared/holdingSchema'
 import { fieldErrorsOf } from '../../../shared/refusal'
-import { createForm } from '../components/form'
+import { createForm, NOT_SENT } from '../components/form'
 import { apiPost, apiPut, formatCurrency, showToast } from '../core/api'
 import { activeProfileId } from '../core/apiProfileScope'
-import { showConfirm } from '../core/confirmStore'
+import { showChoice } from '../core/confirmStore'
 import { parseDecimalInput } from '../core/decimalInput'
 import type { HoldingInput } from '../../../shared/holdingSchema'
 import type { Form } from '../components/form'
@@ -127,14 +127,20 @@ export function createHoldingForm(options: HoldingFormOptions): HoldingForm {
   const [editing, setEditing] = createSignal<HeldHolding | null>(null)
   const [isOpen, setOpen] = createSignal(false)
 
-  /** Offer to merge `buy` into `held`; true when it was merged. */
+  /**
+   * Offer to merge `buy` into `held`: true when it was merged, false to add it as a holding of its
+   * own. Cancel, Escape and a click outside save nothing and leave the form as it was typed
+   * (NOT_SENT).
+   */
   const merge = async (held: HeldHolding, buy: HoldingInput): Promise<boolean> => {
     const merged = mergedHolding(held, buy)
     const was = toHoldingPrecision(held.shares)
-    const accepted = await showConfirm(
-      `You already hold ${was} share${was === 1 ? '' : 's'} of ${buy.ticker} at an average of ${formatCurrency(held.purchase_price)}. Merge this buy in? New position: ${merged.shares} shares at an average of ${formatCurrency(merged.purchase_price)}. Choose Cancel to add it as a separate holding.`
+    const choice = await showChoice(
+      `You already hold ${was} share${was === 1 ? '' : 's'} of ${buy.ticker} at an average of ${formatCurrency(held.purchase_price)}. Merge this buy in? New position: ${merged.shares} shares at an average of ${formatCurrency(merged.purchase_price)}. Add separately keeps it as a holding of its own.`,
+      { confirmText: 'Merge', alternativeText: 'Add separately', cancelText: 'Cancel' }
     )
-    if (!accepted) return false
+    if (choice === 'cancel') throw NOT_SENT
+    if (choice === 'alternative') return false
     await apiPut(`/api/portfolio/holdings/${held.id}`, merged)
     showToast(
       `Merged the buy into "${buy.ticker}": ${merged.shares} shares at an average of ${formatCurrency(merged.purchase_price)}.`,

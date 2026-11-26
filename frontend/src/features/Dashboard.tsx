@@ -39,6 +39,7 @@ import { usePeriod } from '../core/periodStore'
 import { adoptBrowserGoal } from '../core/savingsGoal'
 import { spotlightActive, spotlightStep, tourSteps } from '../core/spotlightStore'
 import { theme } from '../core/theme'
+import { dialogFocus } from '../utils/dialogFocus'
 import { localToday, monthPeriod, periodsEqual, toRange, toYYYYMM } from '../utils/period'
 import { daysToDue, dueDateLabel, dueInWords, nextDue } from './billDue'
 import {
@@ -912,7 +913,13 @@ export default function Dashboard() {
           <Show when={showSettingsModal()}>
             <div class={styles.modalOverlay} onClick={() => setShowSettingsModal(false)}>
               <div
+                ref={(el) => {
+                  dialogFocus(el, { onEscape: () => setShowSettingsModal(false) })
+                }}
                 class={`${styles.modal} ${styles.modalMd}`}
+                role="dialog"
+                aria-modal="true"
+                aria-label="Dashboard Views"
                 onClick={(e) => {
                   e.stopPropagation()
                 }}

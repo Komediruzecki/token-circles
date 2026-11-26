@@ -24,6 +24,15 @@
  * would later open setup over the demo.
  *
  * It can always be relaunched from Settings → About or the tour-selection modal.
+ *
+ * A file setup cannot read goes to the Import page, and setup waits there (pauseOnboarding): closed
+ * with nothing decided, at the step it reached, while the person matches the file's columns. The
+ * Import page offers Back to setup (resumeOnboarding), which opens it again at the subscriptions in
+ * what was imported, or at the statement when nothing was. Nothing else in the tab opens it over the
+ * columns: maybeOfferOnboarding runs at the app's start and at a sign-in only. Finished or left in the
+ * meantime, on this device or another, it stays closed. Never taken, the way back is the one any
+ * setup left part way has: the next start, here or on another device, opens it at the step reached,
+ * which an import on the way made the subscriptions.
  */
 import { createRoot, createSignal } from 'solid-js'
 import { furthestStep, onboardingFinished, UNREADABLE } from '../../../shared/accountState'
@@ -32,6 +41,7 @@ import {
   accountState,
   isServerAccount,
   readAccountState,
+  rereadAccountState,
   setAccountStateOwner,
   writeAccountState,
 } from './accountState'
@@ -42,14 +52,20 @@ import {
   accountOnboardingOwner,
   BROWSER_WIDE_ONBOARDING_KEY,
   clearLocalSetupPending,
+  clearLocalSetupWaiting,
   LOCAL_ONBOARDING_OWNER,
   localSetupPending,
   localSetupStep,
+  localSetupWaitingOver,
   markLocalSetupPending,
+  noteLocalSetupWaiting,
+  onboardingDecisionStamp,
   onboardingFlagKey,
+  stampOnboardingDecision,
 } from './onboardingFlag'
 import { forgetTypedBalances } from './setupTypedBalances'
 import type { OnboardingDecision, OnboardingStep } from '../../../shared/accountStateKeys'
+import type { BankId } from './bankImport'
 
 // The step names are stored on the account and counted by the first-week measurement, so they
 // live with the record's other names in shared/.
@@ -111,7 +127,12 @@ export function onboardingOwnerFor(
  * decides there, as on a new device.
  */
 export function setOnboardingOwner(next: string | null): void {
-  if (next !== owner) furthestSent = null
+  if (next !== owner) {
+    furthestSent = null
+    // Setup waits for the owner that left it: another sign-in finds nothing waiting.
+    waiting[1](null)
+    soFar[1](null)
+  }
   owner = next
   setAccountStateOwner(next)
   if (next !== LOCAL_ONBOARDING_OWNER) return
@@ -158,6 +179,17 @@ function setOnboardingStatus(
   } catch {
     // Non-fatal: the wizard may auto-open again next visit.
   }
+  stampOnboardingDecision(of)
+}
+
+/**
+ * The decision `of` holds, with the stamp it was kept under: any decision kept since changes it,
+ * the same one made again included (round 4). By the status alone, another tab's skip over a skip
+ * the demo had left read as no decision, and Back to setup opened setup again. The status stays
+ * in it for a tab still on a build that writes no stamp.
+ */
+function decisionMark(of: string): string {
+  return `${getOnboardingStatus(of) ?? 'none'}@${onboardingDecisionStamp(of) ?? 'none'}`
 }
 
 /**
@@ -257,6 +289,126 @@ const store = createRoot(() => {
   return { onboardingOpen, setOnboardingOpen, onboardingStep, setOnboardingStep }
 })
 
+/** A statement setup imported: its bank, its currency, and the account it went into. */
+export interface SetupStatement {
+  bankId: BankId
+  currency: string
+  account: string
+  /**
+   * That account's id, when known: setup holds an account by it, so one renamed while setup runs
+   * keeps the bank it took (round 4).
+   */
+  accountId?: number | null
+}
+
+/** An import that counts as setup's: the wizard's own, or the Import page's while setup waits. */
+export interface SetupImport {
+  imported: number
+  createdAccounts: readonly string[]
+  /** The bank statements in it, for where the next ones go (statementTargets.ts). */
+  statements: readonly SetupStatement[]
+  /** The accounts its transactions went into, when known. */
+  into?: readonly string[]
+}
+
+/**
+ * What this run of setup has done so far, kept here because the wizard closes, and opens anew,
+ * while setup waits on the Import page (review of 19 Nov, finding 12): its own copy began at
+ * nothing again, so the statement step, the step after it and Done's count left out what came in.
+ *
+ * - `main`: the account its account step made, by its id, and its name as made.
+ * - `imported`, `createdAccounts`: what its imports brought in and made, the wizard's and the
+ *   Import page's while setup waited.
+ * - `statements`: each bank statement imported, in order.
+ * - `into`: the accounts the transactions went into; null once an import's are not known.
+ */
+export interface SetupSoFar {
+  main: { id: number | null; name: string } | null
+  imported: number
+  createdAccounts: readonly string[]
+  statements: readonly SetupStatement[]
+  into: readonly string[] | null
+}
+
+const NOTHING_YET: SetupSoFar = {
+  main: null,
+  imported: 0,
+  createdAccounts: [],
+  statements: [],
+  into: [],
+}
+
+const soFar = createRoot(() => createSignal<(SetupSoFar & { owner: string }) | null>(null))
+
+/** What the current owner's setup has done so far; nothing for no setup under way. */
+export function setupSoFar(): SetupSoFar {
+  const kept = soFar[0]()
+  return kept !== null && kept.owner === owner ? kept : NOTHING_YET
+}
+
+function keepSoFar(change: (now: SetupSoFar) => SetupSoFar): void {
+  if (owner === null) return
+  soFar[1]({ ...change(setupSoFar()), owner })
+}
+
+/** The account setup's account step made, where the statements of the first bank go. */
+export function noteSetupAccount(account: { id: number | null; name: string }): void {
+  keepSoFar((now) => ({ ...now, main: { id: account.id, name: account.name } }))
+}
+
+/** Count an import as setup's. */
+export function noteSetupImport(done: SetupImport): void {
+  if (done.imported <= 0 && done.statements.length === 0) return
+  keepSoFar((now) => ({
+    ...now,
+    imported: now.imported + Math.max(0, done.imported),
+    createdAccounts: [...new Set([...now.createdAccounts, ...done.createdAccounts])],
+    statements: [...now.statements, ...done.statements],
+    into:
+      now.into === null || done.into === undefined
+        ? null
+        : [...new Set([...now.into, ...done.into])],
+  }))
+}
+
+/**
+ * Setup waiting on the Import page (pauseOnboarding), or null.
+ *
+ * - `id`: which wait it is. A new one each time setup is left for the page; an import on the page
+ *   replaces the object and keeps the id, so the way back tells "still this wait" by the id. By
+ *   the object, an import that ended while the account was read again read as another tap having
+ *   taken the wait, and the way back said setup was finished (review of 19 Nov, P4).
+ * - `owner`: whose setup it is.
+ * - `rerun`: setup had been finished or left before this run of it (Settings, the tour menu). Such
+ *   a record never changes again, so the way back has nothing to ask the account.
+ * - `here`: what the Import page brought in, which its strip counts: setup's own were in before
+ *   the file it handed over. All of it is setup's (setupSoFar).
+ */
+interface SetupWait {
+  id: number
+  owner: string
+  rerun: boolean
+  /**
+   * The decision this browser held as setup began to wait, with its stamp (`decisionMark`):
+   * local-first tells a new one by it.
+   */
+  decidedBefore: string
+  here: number
+}
+
+const waiting = createRoot(() => createSignal<SetupWait | null>(null))
+let waits = 0
+
+/** Whether setup is waiting on the Import page for the person to come back. */
+export function setupWaiting(): boolean {
+  return waiting[0]() !== null
+}
+
+/** The transactions the Import page brought in while setup waited, or 0. */
+export function importedWhileSetupWaits(): number {
+  return waiting[0]()?.here ?? 0
+}
+
 export const onboardingOpen = store.onboardingOpen
 export const onboardingStep = store.onboardingStep
 
@@ -268,6 +420,9 @@ function showStep(step: OnboardingStep): void {
 
 export function startOnboarding(step: OnboardingStep = 'space') {
   const at = openingStep(step)
+  // Open again, by Back to setup or from Settings: it waits on the Import page no more.
+  waiting[1](null)
+  clearLocalSetupWaiting()
   // The step first: the wizard seeds the step it opens on, not the one it last showed.
   store.setOnboardingStep(at)
   store.setOnboardingOpen(true)
@@ -298,6 +453,8 @@ export function prevOnboardingStep() {
 function decide(outcome: OnboardingDecision): void {
   const of = owner
   store.setOnboardingOpen(false)
+  waiting[1](null)
+  soFar[1](null)
   // Left or finished: a local-only switch's setup never opens again by itself.
   clearLocalSetupPending()
   // Its "Balance today" figures say nothing about an import after it (review M2).
@@ -329,7 +486,12 @@ function decide(outcome: OnboardingDecision): void {
  */
 export function countProfileMadeAsDecided(of: string | null = owner): void {
   if (of !== LOCAL_ONBOARDING_OWNER || getOnboardingStatus(of) !== null) return
+  // Setup waiting on the Import page is setup under way: a profile made meanwhile, from the
+  // profile menu, decides nothing, and Back to setup opens it at the step it reached.
+  if (waiting[0]()?.owner === of) return
   setOnboardingStatus('skipped', of)
+  // The decision ends any setup the marker kept the step of, as leaving it would.
+  clearLocalSetupPending()
   // The mirror goes to the settings of the workspace open now, which is this one only when it is
   // local-first's; the switch calls this from the account.
   if (owner === of) persistRemoteStatus('skipped')
@@ -339,6 +501,92 @@ export function countProfileMadeAsDecided(of: string | null = owner): void {
 /** Finish the wizard. */
 export function completeOnboarding() {
   decide('completed')
+}
+
+/**
+ * Leave setup waiting on the Import page, for a file it cannot read (OnboardingWizard, Open in
+ * Import): closed, with nothing decided, at the step it reached. With anything setup brought in
+ * before it handed the file over (setupSoFar), the step reached is the subscriptions. The balances
+ * typed in setup stay too, for the statements still to come (setupTypedBalances.ts).
+ */
+export function pauseOnboarding(): void {
+  const of = owner
+  store.setOnboardingOpen(false)
+  if (of === null) return
+  const rerun = isServerAccount(of)
+    ? !firstSetupOfTheAccount()
+    : getOnboardingStatus(of) !== null && !localSetupPending()
+  const decidedBefore = decisionMark(of)
+  waiting[1]({ id: ++waits, owner: of, rerun, decidedBefore, here: 0 })
+  // The next start reads it beside the marker: decided since, it opens nothing.
+  if (of === LOCAL_ONBOARDING_OWNER && localSetupPending()) noteLocalSetupWaiting(decidedBefore)
+  if (setupSoFar().imported > 0) recordStep('subscriptions')
+}
+
+/**
+ * The Import page imported `done` while setup waited: it counts as setup's own (setupSoFar), the
+ * way back opens setup at the subscriptions in it, and so does the next start if the person never
+ * takes it. A bare count is an import whose accounts are not known.
+ */
+export function noteImportWhileSetupWaits(done: SetupImport | number): void {
+  const wait = waiting[0]()
+  const counted: SetupImport =
+    typeof done === 'number' ? { imported: done, createdAccounts: [], statements: [] } : done
+  if (wait === null || wait.owner !== owner || counted.imported <= 0) return
+  waiting[1]({ ...wait, here: wait.here + counted.imported })
+  noteSetupImport(counted)
+  recordStep('subscriptions')
+}
+
+/**
+ * Whether setup was finished or left since it began to wait, on this device or another: the
+ * account's record is read again for it. Null when that cannot be told.
+ */
+async function decidedSince(wait: SetupWait): Promise<boolean | null> {
+  const of = wait.owner
+  // Local-first, a decision made since it began to wait (another tab), by its stamp. One held
+  // before it stands beside a setup the local-only switch asked for, over a demo decided earlier
+  // (review M7): by presence alone, the way back said that setup was finished.
+  if (!isServerAccount(of)) return decisionMark(of) !== wait.decidedBefore
+  // A decision this browser keeps (another tab), sent to the account or not yet.
+  if (getOnboardingStatus(of) !== null) return true
+  const state = await rereadAccountState()
+  if (state === null || owner !== of) return null
+  return state.onboarding === UNREADABLE || onboardingFinished(state.onboarding)
+}
+
+/**
+ * Back to setup, from the Import page: open setup again at the subscriptions in what was imported
+ * on the way, or at the statement when nothing was. Resolves `opened`; `finished` when setup was
+ * finished or left meanwhile, here or on another device, so it stays closed and waits no more;
+ * `unknown` when the account could not be read, so it keeps waiting to be tried again; or `ended`
+ * when the account signed out, or another signed in, while it was read: that ends the wait and
+ * says nothing about setup (round 4).
+ */
+export async function resumeOnboarding(): Promise<'opened' | 'finished' | 'unknown' | 'ended'> {
+  const wait = waiting[0]()
+  if (wait === null || wait.owner !== owner) {
+    waiting[1](null)
+    return onboardingOpen() ? 'opened' : 'finished'
+  }
+  if (!wait.rerun) {
+    const decided = await decidedSince(wait)
+    // Signed out, or another account signed in, while the account was read: the wait went with
+    // the owner, and setup was not decided for it.
+    if (owner !== wait.owner) return 'ended'
+    // Taken already, by another tap while the account was read. An import that landed meanwhile
+    // keeps the wait's id.
+    if (waiting[0]()?.id !== wait.id) return onboardingOpen() ? 'opened' : 'finished'
+    if (decided === null) return 'unknown'
+    if (decided) {
+      waiting[1](null)
+      clearLocalSetupWaiting()
+      return 'finished'
+    }
+  }
+  // As it is now: an import may have landed while the account was read.
+  startOnboarding(setupSoFar().imported > 0 ? 'subscriptions' : 'import')
+  return 'opened'
 }
 
 /** Leave the wizard early. */
@@ -379,6 +627,11 @@ export async function whereToOfferOnboarding(): Promise<OnboardingStep | null> {
     clearLocalSetupPending()
     return whereToOfferOnTheAccount(asking)
   }
+  if (localSetupPending() && localSetupDecidedWhileWaiting()) {
+    // Setup was left waiting on the Import page and decided since: the marker it kept is stale,
+    // and setup stays closed (review of 19 Nov, P3).
+    clearLocalSetupPending()
+  }
   if (localSetupPending()) {
     const own = await holdsOwnProfile()
     if (owner !== asking || own === null) return null
@@ -391,6 +644,15 @@ export async function whereToOfferOnboarding(): Promise<OnboardingStep | null> {
     clearLocalSetupPending()
   }
   return (await shouldOfferLocally(asking)) ? 'space' : null
+}
+
+/** Whether local setup began to wait on the Import page and a decision was made since. */
+function localSetupDecidedWhileWaiting(): boolean {
+  const over = localSetupWaitingOver()
+  if (over === null) return false
+  // A note from before the stamp holds the decision alone.
+  if (!over.includes('@')) return (getOnboardingStatus(LOCAL_ONBOARDING_OWNER) ?? 'none') !== over
+  return decisionMark(LOCAL_ONBOARDING_OWNER) !== over
 }
 
 /**

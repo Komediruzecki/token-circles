@@ -23,6 +23,7 @@
  */
 
 import { articleUrl, DEFAULT_ABOUT_ORIGIN } from '../../shared/articles.ts';
+import { SUBSCRIPTION_SCAN_HASH } from '../../shared/billsRoute.ts';
 import { BANK_IMPORT_HASH } from '../../shared/importRoute.ts';
 import { monthsTrackedOfAYear, YEAR_ON_FILE_MONTHS } from '../../shared/trackedMonths.ts';
 import {
@@ -701,8 +702,8 @@ const WELCOME_STEPS = [
   {
     title: 'Find your subscriptions',
     text: `${BRAND} spots the subscriptions in your statements, from streaming to cloud storage, with each one's price and how often it charges. Tick the ones you want tracked as bills.`,
-    label: 'Open Bills',
-    hash: '#bills',
+    label: 'Scan for subscriptions',
+    hash: SUBSCRIPTION_SCAN_HASH,
   },
   {
     title: 'Watch your year fill in',

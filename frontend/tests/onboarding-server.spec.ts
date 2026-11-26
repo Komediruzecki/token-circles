@@ -553,6 +553,74 @@ test.describe('the setup wizard on the account @smoke', () => {
     }
   })
 
+  // maff, 19 Nov: a file setup hands to Import leaves setup waiting there, undecided on the
+  // account, so it can go on after the import. Left on another device meanwhile, it stays closed.
+  test('a file setup cannot read leaves it waiting on Import, and a skip elsewhere keeps it closed', async ({
+    page,
+    browser,
+  }) => {
+    const ctx = page.context()
+    const { email } = await signUpAndIn(ctx)
+    try {
+      await bootSignedIn(ctx)
+      await page.goto(`${E2E_BASE}/#dashboard`, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+      await expect(page.getByTestId('onboarding-step-space')).toBeVisible({ timeout: 30_000 })
+      await page.getByTestId('onboarding-next').click()
+      await expect(page.getByTestId('onboarding-step-about')).toBeVisible({ timeout: 30_000 })
+      await page.getByTestId('onboarding-next').click()
+      await expect(page.getByTestId('onboarding-step-account')).toBeVisible({ timeout: 30_000 })
+      await page.getByTestId('onboarding-account-name').fill('Example Checking')
+      await page.getByTestId('onboarding-account-balance').fill('800')
+      const reached = recordWrite(page, (sent) => sent.step === 'import')
+      await page.getByTestId('onboarding-account-create').click()
+      await expect(page.getByTestId('onboarding-step-import')).toBeVisible({ timeout: 30_000 })
+      await reached
+
+      await page.getByTestId('onboarding-import-input').setInputFiles({
+        name: 'export.csv',
+        mimeType: 'text/csv',
+        buffer: Buffer.from('When,What,How much\n2026-06-01,Groceries,-10.00\n'),
+      })
+      await expect(page.getByTestId('onboarding-import-problem')).toBeVisible({ timeout: 30_000 })
+      await page.getByTestId('onboarding-import-open').click()
+      await expect(page.getByTestId('import-map-date')).toBeVisible({ timeout: 30_000 })
+      await expect(page.getByTestId('import-setup')).toContainText(
+        'Setup is waiting for this statement'
+      )
+      expect(await recordOf(ctx)).toMatchObject({ step: 'import', finished_at: null })
+
+      // Another device: the account's setup opens at the statement there, and is left.
+      const elsewhere = await browser.newContext({ storageState: { cookies: [], origins: [] } })
+      try {
+        await signIn(elsewhere, email)
+        await bootSignedIn(elsewhere)
+        const other = await elsewhere.newPage()
+        await other.goto(`${E2E_BASE}/#dashboard`, {
+          waitUntil: 'domcontentloaded',
+          timeout: 30_000,
+        })
+        await expect(other.getByTestId('onboarding-step-import')).toBeVisible({ timeout: 30_000 })
+        const skipped = recordWrite(other, (sent) => sent.outcome === 'skipped')
+        await other.getByTestId('onboarding-skip').click()
+        await other.getByTestId('confirm-accept').click()
+        await skipped
+      } finally {
+        await elsewhere.close()
+      }
+
+      // Back here, the way back finds setup left, and keeps it closed.
+      await page.getByTestId('import-setup-back').click()
+      await expect(
+        page.getByText('Setup is already finished, here or on another device.')
+      ).toBeVisible({ timeout: 15_000 })
+      await expect(page.getByTestId('import-setup')).toHaveCount(0)
+      await expect(page.getByTestId('onboarding-wizard')).toHaveCount(0)
+      expect(await recordOf(ctx)).toMatchObject({ step: 'import', outcome: 'skipped' })
+    } finally {
+      await deleteAccount(ctx, email)
+    }
+  })
+
   // Keeping the data in this browser leaves the account's data on the Worker, out of sight until
   // Settings switches back, so "Run setup again" over an account with data does not offer it.
   test('run again over an account that holds data, setup leaves out keeping it in this browser', async ({

@@ -31,9 +31,11 @@ import {
   onCleanup,
   Show,
 } from 'solid-js'
-import { checkBillCreate } from '../../../shared/billSchema'
+import { BILL_MESSAGES, BILL_NAME_MAX, checkBillCreate } from '../../../shared/billSchema'
+import { BANK_IMPORT_HASH } from '../../../shared/importRoute'
 import { apiGet, apiPost, getLocalCurrency, listRows, showToast } from '../core/api'
 import { ApiError } from '../core/apiError'
+import { activeProfileId } from '../core/apiProfileScope'
 import { parseDecimalInput } from '../core/decimalInput'
 import { monthlyEquivalent } from '../core/subscriptionMath'
 import { matchBrand } from '../features/subscriptionBrands'
@@ -43,6 +45,7 @@ import {
   worthTracking,
 } from '../features/subscriptionDetection'
 import { dayText } from '../utils/dayText'
+import { dialogFocusWhile } from '../utils/dialogFocus'
 import { createForm, FormNotice, SubmitButton } from './form'
 import { OrbitSpinner } from './OrbitSpinner'
 import { refusedMessages } from './refusedSubscriptions'
@@ -66,6 +69,24 @@ interface CategoryRow extends KindedCategory {
   id: number
   name: string
   type: string
+  /** Both runtimes answer it; a row without one is taken as the current profile's. */
+  profile_id?: number | null
+}
+
+interface ChargeRow extends DetectableTransaction {
+  /** Both runtimes answer it; a row without one is taken as the current profile's. */
+  profile_id?: number | null
+}
+
+/**
+ * The rows of the profile the scan adds to, the active one. With the data kept in this browser, a
+ * household's lists answer every chosen profile's rows; the Worker answers the scan this profile's.
+ */
+function ofActiveProfile<Row extends { profile_id?: number | null }>(rows: readonly Row[]): Row[] {
+  const profile = activeProfileId()
+  return rows.filter(
+    (r) => r.profile_id === null || r.profile_id === undefined || r.profile_id === profile
+  )
 }
 
 export interface SubscriptionScanPanelProps {
@@ -75,6 +96,12 @@ export interface SubscriptionScanPanelProps {
   onAdded?: (count: number) => void
   /** Extra hint under the empty state (e.g. "Import transactions first"). */
   emptyHint?: string
+  /**
+   * With no transactions at all there is nothing to scan, and the panel says so. Given this, it
+   * also offers "Import a statement" (the Import page's bank tab), and calls it as the link is
+   * followed so the host can close. The setup wizard leaves it out: its own import came first.
+   */
+  onImport?: () => void
   /**
    * Hand the host the panel's selection state and its add action.
    *
@@ -89,6 +116,10 @@ export interface SubscriptionScanPanelProps {
     submitting: () => boolean
     /** Adds the selection; resolves with how many were actually created. */
     addSelected: () => Promise<number>
+    /** How many the scan found, once it has run: null before then and while it runs. */
+    found: () => number | null
+    /** How many rows on show have a price and period to change: none while it scans. */
+    adjustable: () => number
   }) => void
   /** Hide the panel's own Add button (the host renders the action itself). */
   hideAddButton?: boolean
@@ -113,9 +144,40 @@ function amountOf(text: string | undefined): number | string | null {
   return parseDecimalInput(raw) ?? raw
 }
 
+/** The details of a bill a row has a control for: its price and its billing period. */
+const SHOWN = new Set(['amount', 'frequency'])
+
+/**
+ * What the scan says when the runtime refuses a detail it has no control for. The runtime's words
+ * ask for that control ("Choose a category from the list, or leave it blank."), which a row does
+ * not have, so the scan says what failed and what to do next: Bills has every detail. A refused
+ * price is marked at its row, and a refused period keeps the runtime's words.
+ */
+function insteadOf(fields: FieldErrors): RefusedSubscription['instead'] {
+  if (fields.category_id) {
+    return (it) =>
+      `The scan chose a category this profile doesn't have. Add ${it} from Bills and pick one there.`
+  }
+  if (fields.name === BILL_MESSAGES.nameLength) {
+    return (it) =>
+      `A name longer than ${BILL_NAME_MAX} characters can't be kept. Add ${it} from Bills with a shorter one.`
+  }
+  if (fields.due_date) {
+    return (it) =>
+      `The scan couldn't tell when the next payment is due. Add ${it} from Bills and pick the date.`
+  }
+  if (Object.keys(fields).some((field) => !SHOWN.has(field))) {
+    return (it) =>
+      `A detail the scan doesn't show was refused. Add ${it} from Bills, where every detail can be changed.`
+  }
+  return undefined
+}
+
 export function SubscriptionScanPanel(props: SubscriptionScanPanelProps) {
   const [scanning, setScanning] = createSignal(false)
   const [scanned, setScanned] = createSignal(false)
+  /** The last scan read no transactions at all, as opposed to none that recur. */
+  const [nothingToScan, setNothingToScan] = createSignal(false)
   const [detected, setDetected] = createSignal<DetectedSubscription[]>([])
   const [rows, setRows] = createSignal<Record<string, RowState>>({})
   const [categories, setCategories] = createSignal<CategoryRow[]>([])
@@ -131,10 +193,12 @@ export function SubscriptionScanPanel(props: SubscriptionScanPanelProps) {
       ])
       // listRows, not Array.isArray: the server-mode /api/transactions response
       // is a { rows, total } envelope — a bare-array assumption scans nothing.
-      const txns = listRows<DetectableTransaction>(txnsRes)
+      // Only this profile's charges: what the scan finds becomes this profile's bill.
+      const txns = ofActiveProfile(listRows<ChargeRow>(txnsRes))
       const bills = listRows<BillRow>(billsRes)
       const cats = listRows<CategoryRow>(catsRes)
       setCategories(cats)
+      setNothingToScan(txns.length === 0)
       const found = detectSubscriptions(recentForScan(txns, Date.now()), bills, {
         categories: cats,
       })
@@ -154,6 +218,7 @@ export function SubscriptionScanPanel(props: SubscriptionScanPanelProps) {
       setAdded(new Set<string>())
     } catch (err) {
       console.error('Subscription scan failed:', err)
+      setNothingToScan(false)
       setDetected([])
       setRows({})
       form.reset({})
@@ -203,11 +268,35 @@ export function SubscriptionScanPanel(props: SubscriptionScanPanelProps) {
     }
   }
 
-  const resolveCategoryId = (d: DetectedSubscription): number | undefined => {
-    const cats = categories().filter((c) => c.type === 'expense')
-    const hints = [...d.categoryHints, matchBrand(d.name).defaultCategory]
-    for (const hint of hints) {
-      const hit = cats.find((c) => c.name.toLowerCase() === hint.toLowerCase())
+  /**
+   * The categories a row's bill can be filed under: those of the profile it goes to, the one the
+   * add writes to. With the data kept in this browser, a household's scan reads every chosen
+   * profile's categories, and both runtimes refuse a bill on another profile's.
+   */
+  const ownCategories = () => ofActiveProfile(categories())
+
+  const named = (cats: readonly CategoryRow[], name: string) =>
+    cats.find((c) => c.name.toLowerCase() === name.toLowerCase())
+
+  /**
+   * The category a row's bill is filed under, always one of its own profile's. A named find takes
+   * the first of its hints that profile has. A regular payment keeps the category its charges are
+   * filed under, or where that is another profile's, its own of the same name and type, or none.
+   */
+  const categoryOf = (d: DetectedSubscription): number | undefined => {
+    const own = ownCategories()
+    if (d.matchedVia === 'recurring') {
+      if (d.categoryId === undefined || own.some((c) => c.id === d.categoryId)) return d.categoryId
+      const theirs = categories().find((c) => c.id === d.categoryId)
+      if (!theirs) return undefined
+      return named(
+        own.filter((c) => c.type === theirs.type),
+        theirs.name
+      )?.id
+    }
+    const expense = own.filter((c) => c.type === 'expense')
+    for (const hint of [...d.categoryHints, matchBrand(d.name).defaultCategory]) {
+      const hit = named(expense, hint)
       if (hit) return hit.id
     }
     return undefined
@@ -218,7 +307,7 @@ export function SubscriptionScanPanel(props: SubscriptionScanPanelProps) {
     name: d.name,
     amount: amountOf(price),
     dueDate: d.suggestedDueDate,
-    category_id: d.matchedVia === 'recurring' ? d.categoryId : resolveCategoryId(d),
+    category_id: categoryOf(d),
     frequency: row(d.key).frequency,
     type: d.billType,
   })
@@ -268,7 +357,7 @@ export function SubscriptionScanPanel(props: SubscriptionScanPanelProps) {
       const elsewhere: RefusedSubscription[] = []
       for (const { key, name, error, fields } of refused) {
         if (fields.amount) marks[key] = fields.amount
-        else elsewhere.push({ name, error })
+        else elsewhere.push({ name, error, instead: insteadOf(fields) })
       }
       refusedMessages(elsewhere).forEach((message, index) => {
         marks[`refused:${String(index)}`] = message
@@ -286,7 +375,13 @@ export function SubscriptionScanPanel(props: SubscriptionScanPanelProps) {
     return lastAdded
   }
 
-  props.expose?.({ chosenCount: () => chosen().length, submitting: form.submitting, addSelected })
+  props.expose?.({
+    chosenCount: () => chosen().length,
+    submitting: form.submitting,
+    addSelected,
+    found: () => (scanned() && !scanning() ? detected().length : null),
+    adjustable: () => (scanning() ? 0 : selectable().length),
+  })
 
   const confidenceLabel: Record<DetectedSubscription['confidence'], string> = {
     high: 'High confidence',
@@ -442,58 +537,88 @@ export function SubscriptionScanPanel(props: SubscriptionScanPanelProps) {
           when={detected().length > 0}
           fallback={
             <Show when={scanned()}>
-              <div class={styles.state} data-test-id="sub-scan-empty">
-                <p>No known subscriptions found in your recent transactions.</p>
-                <Show when={props.emptyHint}>
-                  <p class={styles.hint}>{props.emptyHint}</p>
-                </Show>
-              </div>
+              <Show
+                when={!nothingToScan()}
+                fallback={
+                  <div class={styles.state} data-test-id="sub-scan-nothing">
+                    <p>No transactions to scan yet.</p>
+                    <p class={styles.hint}>
+                      Import a statement and the scan finds the subscriptions in it.
+                    </p>
+                    <Show when={props.onImport}>
+                      <a
+                        class={styles.importLink}
+                        href={BANK_IMPORT_HASH}
+                        onClick={() => props.onImport?.()}
+                        data-test-id="sub-scan-import"
+                      >
+                        Import a statement
+                      </a>
+                    </Show>
+                  </div>
+                }
+              >
+                <div class={styles.state} data-test-id="sub-scan-empty">
+                  <p>No known subscriptions found in your recent transactions.</p>
+                  <Show when={props.emptyHint}>
+                    <p class={styles.hint}>{props.emptyHint}</p>
+                  </Show>
+                </div>
+              </Show>
             </Show>
           }
         >
-          <div class={styles.list}>
-            <For each={selectable()}>{detectedRow}</For>
-          </div>
-          <Show when={tracked().length > 0}>
-            <p class={styles.trackedLabel}>Already tracked</p>
+          {/* The rows, between the header and the actions: in the modal only they scroll, so the
+              add stays in view however many the scan found. */}
+          <div class={styles.scroll} data-test-id="sub-scan-scroll">
             <div class={styles.list}>
-              <For each={tracked()}>{detectedRow}</For>
+              <For each={selectable()}>{detectedRow}</For>
             </div>
-          </Show>
-          <FormNotice form={form} testId="sub-scan-notice" />
-          <div class={styles.footer}>
-            <span class={styles.total}>
-              <Show when={chosen().length > 0} fallback="Nothing selected">
-                {chosen().length} selected · <b>{money(monthlyTotal())}</b>/mo
-              </Show>
-            </span>
-            <span class={styles.footerActions}>
-              <Show when={!props.hideRescan}>
-                <button
-                  class={styles.rescan}
-                  type="button"
-                  disabled={scanning()}
-                  aria-disabled={form.submitting() ? 'true' : undefined}
-                  onClick={() => {
-                    // A rescan resets the rows under an add still on its way.
-                    if (!form.submitting()) void scan()
-                  }}
-                >
-                  Rescan
-                </button>
-              </Show>
-              <Show when={!props.hideAddButton}>
-                <SubmitButton
-                  class={styles.add}
-                  data-test-id="sub-scan-add-btn"
-                  busy={form.submitting()}
-                  busyLabel="Adding…"
-                  unchanged={chosen().length === 0}
-                >
-                  {`Add ${chosen().length || ''}`.trim()}
-                </SubmitButton>
-              </Show>
-            </span>
+            <Show when={tracked().length > 0}>
+              <p class={styles.trackedLabel}>Already tracked</p>
+              <div class={styles.list}>
+                <For each={tracked()}>{detectedRow}</For>
+              </div>
+            </Show>
+          </div>
+          <div class={styles.footer} data-test-id="sub-scan-footer">
+            {/* A failed add, directly above the buttons: at the end of the rows it was out of
+                view under a long list, while the Add it answered stays pinned (review of 19 Nov). */}
+            <FormNotice form={form} testId="sub-scan-notice" class={styles.footerNotice} />
+            <div class={styles.footerRow}>
+              <span class={styles.total}>
+                <Show when={chosen().length > 0} fallback="Nothing selected">
+                  {chosen().length} selected · <b>{money(monthlyTotal())}</b>/mo
+                </Show>
+              </span>
+              <span class={styles.footerActions}>
+                <Show when={!props.hideRescan}>
+                  <button
+                    class={styles.rescan}
+                    type="button"
+                    disabled={scanning()}
+                    aria-disabled={form.submitting() ? 'true' : undefined}
+                    onClick={() => {
+                      // A rescan resets the rows under an add still on its way.
+                      if (!form.submitting()) void scan()
+                    }}
+                  >
+                    Rescan
+                  </button>
+                </Show>
+                <Show when={!props.hideAddButton}>
+                  <SubmitButton
+                    class={styles.add}
+                    data-test-id="sub-scan-add-btn"
+                    busy={form.submitting()}
+                    busyLabel="Adding…"
+                    unchanged={chosen().length === 0}
+                  >
+                    {`Add ${chosen().length || ''}`.trim()}
+                  </SubmitButton>
+                </Show>
+              </span>
+            </div>
           </div>
         </Show>
       </Show>
@@ -508,15 +633,31 @@ export interface SubscriptionScanModalProps {
 }
 
 export function SubscriptionScanModal(props: SubscriptionScanModalProps) {
+  // The line under the title asks to adjust a price or period, so it shows over rows that have
+  // them: not over the empty state, the spinner or rows that are all tracked already.
+  const [panel, setPanel] = createSignal<{ adjustable: () => number }>()
+
+  // Stays on the page while shut, faded out: focus goes in each time it opens and back each time
+  // it shuts.
+  let modalRef: HTMLDivElement | undefined
+  dialogFocusWhile(props.isOpen, () => modalRef, {
+    onEscape: () => {
+      props.onClose()
+    },
+  })
   return (
     <div
       class={styles.overlay}
       classList={{ [styles.open]: props.isOpen() }}
+      // Faded out while shut but still on the page: inert then, out of the tab order and the
+      // accessibility tree, as the Guided Orbit is.
+      inert={!props.isOpen()}
       onClick={(e) => {
         if (e.target === e.currentTarget) props.onClose()
       }}
     >
       <div
+        ref={modalRef}
         class={styles.modal}
         role="dialog"
         aria-modal="true"
@@ -526,7 +667,9 @@ export function SubscriptionScanModal(props: SubscriptionScanModalProps) {
         <div class={styles.head}>
           <div>
             <h2 class={styles.title}>Detected subscriptions</h2>
-            <p class={styles.sub}>Recurring charges we recognized · adjust price or period</p>
+            <Show when={(panel()?.adjustable() ?? 0) > 0}>
+              <p class={styles.sub}>Recurring charges we recognized · adjust price or period</p>
+            </Show>
           </div>
           <button class={styles.close} onClick={props.onClose} aria-label="Close" type="button">
             <svg
@@ -544,8 +687,10 @@ export function SubscriptionScanModal(props: SubscriptionScanModalProps) {
         <div class={styles.body}>
           <SubscriptionScanPanel
             active={props.isOpen}
+            expose={setPanel}
             onAdded={props.onAdded}
             emptyHint="Import transactions or add them manually, then rescan."
+            onImport={props.onClose}
           />
         </div>
       </div>

@@ -25,6 +25,7 @@ import { useAppState } from '../core/appStore'
 import { entityVersion } from '../core/dataVersions'
 import { gatedSource } from '../core/pageVisibility'
 import { usePeriod } from '../core/periodStore'
+import { dialogFocus } from '../utils/dialogFocus'
 import { toYYYYMM } from '../utils/period'
 import styles from './BillCalendar.module.css'
 import { matchBrand } from './subscriptionBrands'
@@ -102,9 +103,13 @@ const BillCalendar: Component = () => {
     }
   )
 
-  // `.latest` keeps the previous month's grid during a refetch and never re-triggers the
-  // page-level <Suspense>, so stepping the focus month updates in place (no flash).
-  const cal = () => calendarData.latest
+  // `.latest` keeps the previous month's grid during a refetch, so stepping the focus month
+  // updates in place (no flash). Before the first month is in, `.latest` reads the resource as
+  // `calendarData()` does, which hands the wait to the page-level <Suspense>: the whole page,
+  // tab strip and all, went to its loading state. So it is read only once there is an answer,
+  // and until then the calendar's own loading state stands in its place.
+  const answered = () => calendarData.state !== 'unresolved' && calendarData.state !== 'pending'
+  const cal = () => (answered() ? calendarData.latest : undefined)
   const loading = () => calendarData.loading && !cal()
 
   const daysArray = createMemo(() => {
@@ -238,12 +243,14 @@ const BillCalendar: Component = () => {
 
       {/* Loading state */}
       <Show when={loading()}>
-        <div class={styles.loadingState}>Loading calendar...</div>
+        <div data-test-id="bill-calendar-loading" class={styles.loadingState}>
+          Loading calendar...
+        </div>
       </Show>
 
       {/* Calendar grid */}
       <Show when={cal()}>
-        <div class={styles.calendarGrid}>
+        <div data-test-id="bill-calendar-grid" class={styles.calendarGrid}>
           {/* Day headers */}
           <For each={WEEKDAYS}>{(day) => <div class={styles.dayHeader}>{day}</div>}</For>
 
@@ -330,15 +337,24 @@ const BillCalendar: Component = () => {
       {/* Day detail popover */}
       <Show when={selectedDay() !== null && selectedBills().length > 0}>
         <div class={styles.popoverBackdrop} onClick={closePopover} />
-        <div class={styles.popover} style={popoverStyle()}>
+        <div
+          ref={(el) => {
+            dialogFocus(el, { onEscape: closePopover })
+          }}
+          class={styles.popover}
+          style={popoverStyle()}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="bill-cal-popover-title"
+        >
           <div class={styles.popoverHeader}>
-            <h3 class={styles.popoverTitle}>
+            <h3 class={styles.popoverTitle} id="bill-cal-popover-title">
               {cal() &&
                 formatDate(
                   `${cal()!.year}-${String(cal()!.month).padStart(2, '0')}-${String(selectedDay()).padStart(2, '0')}`
                 )}
             </h3>
-            <button class={styles.popoverClose} onClick={closePopover}>
+            <button class={styles.popoverClose} onClick={closePopover} aria-label="Close">
               <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path d="M6 18L18 6M6 6l12 12" />
               </svg>

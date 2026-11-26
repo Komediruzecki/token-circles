@@ -309,7 +309,7 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
         'loans-list',
         'loans',
         'Your loans',
-        'Each card shows how much is repaid, what is still owed and when the loan is done. Open one for its month-by-month schedule and extra payments.',
+        'Each card shows how much is repaid, what is still owed and when the loan is done. Open one for a chart of its payments with today marked on it; its three-dot menu adds an extra payment or lists every payment.',
         'top'
       ),
       step(

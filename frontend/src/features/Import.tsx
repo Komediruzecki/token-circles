@@ -46,24 +46,33 @@ import { useAppState } from '../core/appStore'
 import { storedAccounts } from '../core/balanceToday'
 import { showConfirm } from '../core/confirmStore'
 import { entityVersion } from '../core/dataVersions'
+import { mappingToHeaderNames } from '../core/importMapping'
+import { noteImportWhileSetupWaits, setupWaiting } from '../core/onboardingStore'
 import { refetchOnActive, usePageActive } from '../core/pageVisibility'
 import { addToast } from '../core/toastStore'
 import styles from './Import.module.css'
 import { BankImportSummary } from './import/BankImportSummary'
 import { summarises } from './import/bankSummary'
 import { ConnectedSources } from './import/ConnectedSources'
-import { balancesById, ImportBalances, touchedSince } from './import/ImportBalances'
+import { ImportAfter } from './import/ImportAfter'
+import { balancesById, touchedSince } from './import/ImportBalances'
 import { ImportDataEntry } from './import/ImportDataEntry'
 import { createImportFlow } from './import/importFlow'
 import { handedImportFile, takeHandedImportFile } from './import/importHandoff'
 import { ImportMappingStep } from './import/ImportMappingStep'
 import { ImportPreviewStep } from './import/ImportPreviewStep'
+import { SetupStrip } from './import/SetupStrip'
 import type { StoredAccount } from '../core/balanceToday'
 import type { TypedBalance } from '../core/setupTypedBalances'
+import type { AfterImport } from './import/ImportAfter'
+import type { ImportSummary } from './import/importFlow'
+import type { SheetToKeep } from './import/keepSheet'
 
 export default function Import() {
-  // After a successful import, offer a subscription scan over the fresh data.
-  const [scanOfferCount, setScanOfferCount] = createSignal<number | null>(null)
+  // The last import, for the card at the top of the page (ImportAfter.tsx): its result, the
+  // balances it changed and the subscription scan. Replaced when another import lands, gone on
+  // dismiss, with its import deleted, and on a profile change.
+  const [after, setAfter] = createSignal<AfterImport | null>(null)
   const [showScan, setShowScan] = createSignal(false)
 
   // The accounts an import touched, each with its balance today (review M2): read what they held
@@ -82,36 +91,74 @@ export default function Import() {
   const [preparing, setPreparing] = createSignal(false)
   const [summaryImported, setSummaryImported] = createSignal(false)
 
+  /**
+   * Before any import on the page, this one's or a Sync's: the balances are read. The card stays
+   * until an import lands (round 4): taken down here, a failed import, a Sync of another sheet
+   * say, left no card at all, and an unsaved Save sheet offer went with it.
+   */
+  const beforeAnImport = async () => {
+    heldBefore = null
+    heldBefore = await balancesById()
+  }
+
+  /**
+   * An import landed, from the page's own steps or from Connected sources (Sync, Fetch & preview):
+   * it takes the card, so the card never describes an older one (review of 19 Nov). `typed` are
+   * the balances setup typed for a statement it handed over, worked back once it is in.
+   */
+  const landed = (
+    summary: ImportSummary,
+    sheet: SheetToKeep | null,
+    typed: readonly TypedBalance[]
+  ) => {
+    // While setup waits for this statement, its next step is the subscription scan: the page
+    // leaves the offer to it, and the way back opens setup there.
+    const waiting = setupWaiting()
+    // Setup's own, as the wizard's are: what it counts and where its next statements go.
+    if (waiting) {
+      noteImportWhileSetupWaits({
+        imported: summary.imported,
+        createdAccounts: summary.createdAccounts,
+        statements: summary.statements,
+      })
+    }
+    setTouched([])
+    setAfter({
+      text: summary.text,
+      imported: summary.imported,
+      scan: !waiting && summary.imported > 0,
+      sheet,
+      importId: summary.importId,
+      leftOut: summary.leftOut,
+    })
+    const before = heldBefore
+    heldBefore = null
+    const workedBack =
+      summary.imported > 0 && typed.length > 0
+        ? workBackTypedBalances(typed).catch((err: unknown) => {
+            console.error('Could not set the balance today after the statement:', err)
+            addToast("Couldn't set your account's balance today. Accounts can set it.", 'warning')
+          })
+        : Promise.resolve()
+    if (summary.imported > 0 && before !== null) {
+      workedBack
+        .then(() => storedAccounts())
+        .then((after) => setTouched(touchedSince(before, after)))
+        .catch((err: unknown) => {
+          console.error('Reading the balances after the import:', err)
+        })
+    }
+  }
+
   const flow = createImportFlow({
-    beforeImport: async () => {
-      setTouched([])
-      heldBefore = null
-      heldBefore = await balancesById()
-    },
+    beforeImport: beforeAnImport,
     onImported: (summary) => {
       setSummaryImported(true)
-      if (summary.imported > 0) setScanOfferCount(summary.imported)
-      const before = heldBefore
-      heldBefore = null
       // A file setup handed over is worked back from the balances typed there (review M2), once,
-      // before the balances below are read.
+      // before the balances are read.
       const typed = handedTyped
       handedTyped = []
-      const workedBack =
-        summary.imported > 0 && typed.length > 0
-          ? workBackTypedBalances(typed).catch((err: unknown) => {
-              console.error('Could not set the balance today after the statement:', err)
-              addToast("Couldn't set your account's balance today. Accounts can set it.", 'warning')
-            })
-          : Promise.resolve()
-      if (summary.imported > 0 && before !== null) {
-        workedBack
-          .then(() => storedAccounts())
-          .then((after) => setTouched(touchedSince(before, after)))
-          .catch((err: unknown) => {
-            console.error('Reading the balances after the import:', err)
-          })
-      }
+      landed(summary, sheetToKeep(), typed)
     },
   })
 
@@ -120,6 +167,20 @@ export default function Import() {
       if (step !== 'preview') setSummary(false)
     })
   )
+
+  // A Google Sheet the import read, as the card offers to keep it (keepSheet.ts): the link, its
+  // tab, and the columns and category types as this import matched them. Read as the import ends,
+  // before the flow starts over and forgets them.
+  const sheetToKeep = (): SheetToKeep | null => {
+    const url = flow.sheetUrl().trim()
+    if (flow.activeImportTab() !== 'google-sheets' || !url) return null
+    return {
+      url,
+      sheetName: flow.selectedSheet(),
+      mapping: mappingToHeaderNames(flow.columnMapping(), flow.currentHeaders()),
+      categoryTypes: { ...flow.categoryTypes() },
+    }
+  }
   const processBank = async () => {
     setSummary(false)
     setSummaryImported(false)
@@ -209,13 +270,30 @@ export default function Import() {
   // every profile notice, reloaded only when the profile really changed: a quick-add bumps
   // profileVersion too (App.tsx), and reloading then would throw away unsaved rule edits.
   // currentProfile is followed as well, because creating a profile makes it the active one
-  // without bumping profileVersion.
+  // without bumping profileVersion. The card goes with the profile it was about, and stays
+  // through a quick-add (review of 19 Nov: it took an unsaved Save sheet offer with it), with its
+  // balances read again, as the entry may have moved one.
+  let cardProfile = state.currentProfile?.id
   createEffect(
     on(
       [() => state.profileVersion, () => state.currentProfile?.id],
-      () => {
+      ([, profileId]) => {
         flow.reloadBankRulesIfProfileChanged()
-        setTouched([])
+        if (profileId !== cardProfile) {
+          cardProfile = profileId
+          setTouched([])
+          setAfter(null)
+          return
+        }
+        const shown = untrack(touched)
+        if (shown.length === 0) return
+        storedAccounts()
+          .then((all) => {
+            setTouched(shown.map((account) => all.find((one) => one.id === account.id) ?? account))
+          })
+          .catch((err: unknown) => {
+            console.error('Reading the balances again:', err)
+          })
       },
       { defer: true }
     )
@@ -230,58 +308,26 @@ export default function Import() {
         <p>Import transactions from CSV, Excel, or Google Sheets</p>
       </div>
 
-      {/* Error message */}
-      <Show when={flow.error()}>
-        <div class={`${styles.resultMessage} ${styles.error}`} data-test-id="import-error">
-          {flow.error()}
-        </div>
-      </Show>
+      {/* Setup waiting for the statement it handed over, and the way back to it */}
+      <SetupStrip />
 
-      {/* Success message */}
-      <Show when={flow.resultMessage()}>
-        <div class={`${styles.resultMessage} ${styles.success}`} data-test-id="import-result">
-          {flow.resultMessage()!.text}
-        </div>
-      </Show>
-
-      {/* Post-import: each account it touched, with its balance today and the way to set it */}
-      <Show when={touched().length > 0 ? touched() : null} keyed>
-        {(accounts) => <ImportBalances accounts={accounts} />}
-      </Show>
-
-      {/* Post-import: offer to detect subscriptions in the imported data */}
-      <Show when={scanOfferCount() !== null}>
-        <div class={styles.settingsCard} data-test-id="import-scan-offer">
-          <div
-            style={{
-              display: 'flex',
-              'align-items': 'center',
-              'justify-content': 'space-between',
-              gap: '12px',
-              'flex-wrap': 'wrap',
+      {/*
+        The last import: its result, the balances it changed and the subscription scan, one row
+        each. The flow's errors and notices are on the step they are about (StepMessage.tsx), not
+        up here, a screen away from the form on a phone.
+      */}
+      <Show when={after()} keyed>
+        {(last) => (
+          <ImportAfter
+            after={last}
+            touched={touched()}
+            onScan={() => setShowScan(true)}
+            onDismiss={() => {
+              setAfter(null)
+              setTouched([])
             }}
-          >
-            <p style={{ margin: 0, 'font-size': '13.5px', color: 'var(--text-secondary)' }}>
-              {scanOfferCount()} transactions imported — want to check them for known subscriptions
-              like Netflix or Spotify?
-            </p>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button
-                class={`${styles.btn} ${styles.btnPrimary} ${styles.btnSm}`}
-                data-test-id="import-scan-open"
-                onClick={() => setShowScan(true)}
-              >
-                Scan for subscriptions
-              </button>
-              <button
-                class={`${styles.btn} ${styles.btnGhost} ${styles.btnSm}`}
-                onClick={() => setScanOfferCount(null)}
-              >
-                Dismiss
-              </button>
-            </div>
-          </div>
-        </div>
+          />
+        )}
       </Show>
 
       {/* Loading overlay. dropProcessing has its own inline spinner in the
@@ -297,7 +343,12 @@ export default function Import() {
         <ImportDataEntry flow={flow} onProcessBank={processBank} />
       </Show>
       <Show when={flow.activeStep() === 'upload'}>
-        <ConnectedSources />
+        <ConnectedSources
+          beforeImport={beforeAnImport}
+          onImported={(summary) => {
+            landed(summary, null, [])
+          }}
+        />
       </Show>
       <Show when={flow.activeStep() === 'mapping' && !preparing()}>
         <ImportMappingStep flow={flow} />
@@ -362,12 +413,37 @@ export default function Import() {
                       padding: '10px 14px',
                     }}
                   >
-                    <summary style={{ cursor: 'pointer', 'font-size': '14px' }}>
-                      <strong>{log.source || 'Import'}</strong>
-                      <span style={{ color: 'var(--text-secondary)', 'margin-left': '8px' }}>
-                        {new Date(log.created_at).toLocaleString()} — {log.imported} imported
-                        {log.duplicates_skipped > 0 &&
-                          `, ${log.duplicates_skipped} duplicates skipped`}
+                    {/* The arrow is its own column, so a line that wraps on a phone goes on
+                        under the name, not under the arrow at the row's edge. */}
+                    <summary class={styles.logSummary}>
+                      <svg
+                        class={styles.logArrow}
+                        width="12"
+                        viewBox="0 0 12 12"
+                        fill="none"
+                        aria-hidden="true"
+                      >
+                        <path
+                          d="M4.5 2.5 8 6l-3.5 3.5"
+                          stroke="currentColor"
+                          stroke-width="1.6"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        />
+                      </svg>
+                      <span>
+                        <strong>{log.source || 'Import'}</strong>
+                        <span class={styles.logMeta}>
+                          <span style={{ 'white-space': 'nowrap' }}>
+                            {new Date(log.created_at).toLocaleString()}
+                          </span>{' '}
+                          {/* A count keeps its word on its line: "(6" and "imported)" broke apart. */}
+                          ({log.imported}
+                          {'\u00a0'}imported
+                          {log.duplicates_skipped > 0 &&
+                            `, ${log.duplicates_skipped}\u00a0duplicates skipped`}
+                          )
+                        </span>
                       </span>
                     </summary>
                     <div
@@ -418,11 +494,17 @@ export default function Import() {
                         }}
                         onClick={async () => {
                           const ok = await showConfirm(
-                            `Delete this import — "${log.source || 'Import'}" (${log.imported} transaction${log.imported === 1 ? '' : 's'})? This removes the transactions it created and recomputes balances.`,
+                            `Delete this import: "${log.source || 'Import'}" (${log.imported} transaction${log.imported === 1 ? '' : 's'})? This removes the transactions it created and recomputes balances.`,
                             { danger: true, confirmText: 'Delete import' }
                           )
                           if (!ok) return
                           const deleted = await flow.deleteImportLog(log.id)
+                          // The card about this import goes with it.
+                          const shown = after()
+                          if (deleted !== null && shown && log.import_id === shown.importId) {
+                            setAfter(null)
+                            setTouched([])
+                          }
                           if (deleted === null) addToast('Could not delete import', 'error')
                           else if (deleted === 0)
                             addToast(

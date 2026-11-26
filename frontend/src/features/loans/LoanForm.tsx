@@ -7,9 +7,10 @@
  * field it is about, a rate period's under the field of its row, and what belongs to no field in
  * the notice at the top.
  */
-import { createEffect, Index, on, onCleanup, onMount, Show } from 'solid-js'
+import { createEffect, Index, on, Show } from 'solid-js'
 import { Field, FormNotice, SubmitButton } from '../../components/form'
 import { apiGet } from '../../core/api'
+import { dialogFocus } from '../../utils/dialogFocus'
 import { createLoanForm } from './loanForm'
 import pageStyles from './LoanForm.module.css'
 import styles from './Loans.module.css'
@@ -30,6 +31,7 @@ export default function LoanForm(props: Props) {
     },
   })
   let ratesRef: HTMLDivElement | undefined
+  let nameRef: HTMLInputElement | undefined
 
   // Fill the form from the loan being edited, at once: it is typed into straight away. Its rate
   // periods come with a local-first row; in cloud mode they come from the loan's own read, which
@@ -65,18 +67,25 @@ export default function LoanForm(props: Props) {
     )
   )
 
-  onMount(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') props.onClose()
-    }
-    document.addEventListener('keydown', onKey)
-    onCleanup(() => {
-      document.removeEventListener('keydown', onKey)
+  // Focus goes to the name when the form opens, and back to what opened it when it shuts
+  // (dialogFocus). Opened at its rate periods, the first rate field takes it instead, where the
+  // effect above scrolled. Escape shuts it as Cancel does, unless a dialog is open over it.
+  const takeFocus = (dialog: HTMLElement) => {
+    dialogFocus(dialog, {
+      first: () =>
+        (props.focusRates
+          ? ratesRef?.querySelector<HTMLElement>('input, button:not(:disabled)')
+          : null) ?? nameRef,
+      preventScroll: props.focusRates === true,
+      onEscape: () => {
+        props.onClose()
+      },
     })
-  })
+  }
 
   return (
     <div
+      ref={takeFocus}
       data-test-id="loans-modal"
       class={pageStyles.modalOverlay}
       role="dialog"
@@ -128,7 +137,7 @@ export default function LoanForm(props: Props) {
                 placeholder="e.g., Auto Loan, Student Loan"
                 value={form.values.name}
                 onInput={(e) => form.set('name', e.currentTarget.value)}
-                autofocus
+                ref={nameRef}
                 required
               />
             )}

@@ -76,6 +76,7 @@ import {
 import { theme } from '../core/theme'
 import { setStickyPeriodBar, stickyPeriodBar } from '../core/uiPrefs'
 import { loadChartExportSettings, saveChartExportSettings } from '../utils/chartExportSettings'
+import { dialogFocus } from '../utils/dialogFocus'
 import { localToday, toYYYYMM } from '../utils/period'
 import { annualSpan, spanMonths } from '../utils/reportSpan'
 import ApiAccess from './ApiAccess'
@@ -1921,11 +1922,17 @@ export default function Settings() {
                             }
                           >
                             <form
+                              ref={(el) => {
+                                // Opens in place: Escape cancels it only from inside it.
+                                dialogFocus(el, {
+                                  inPlace: true,
+                                  onEscape: () => {
+                                    closeRename(profile.id)
+                                  },
+                                })
+                              }}
                               {...renameForm.attrs}
                               class={styles.householdRename}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Escape') closeRename(profile.id)
-                              }}
                             >
                               <FormNotice form={renameForm} />
                               <div class={styles.householdRenameRow}>
@@ -1942,7 +1949,6 @@ export default function Settings() {
                                       data-test-id="household-rename-input"
                                       value={renameForm.values.name}
                                       onInput={(e) => renameForm.set('name', e.currentTarget.value)}
-                                      autofocus
                                       required
                                     />
                                   )}

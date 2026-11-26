@@ -13,6 +13,9 @@
 
 .modal {
   background: var(--sidebar-bg);
+  /* Painted in the sidebar's navy in both themes, so the edge has a token of its own:
+     --border-dialog is near-white in Dawn Light. */
+  border: 1px solid var(--border-dialog-sidebar);
   color: var(--sidebar-text);
   padding: 24px;
   border-radius: 12px;

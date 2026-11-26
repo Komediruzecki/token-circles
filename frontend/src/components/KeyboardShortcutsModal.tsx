@@ -3,7 +3,8 @@
  * Opened by the "?" key (App.tsx) or from Settings → About. Mirrors the
  * ChangelogModal overlay pattern; closes on backdrop click, the X, or Esc.
  */
-import { For, onCleanup, onMount } from 'solid-js'
+import { For } from 'solid-js'
+import { dialogFocus } from '../utils/dialogFocus'
 import styles from './KeyboardShortcutsModal.module.css'
 
 interface Shortcut {
@@ -71,21 +72,21 @@ function Keys(props: { combos: string[][] }) {
 }
 
 export default function KeyboardShortcutsModal(props: { onClose: () => void }) {
-  onMount(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') props.onClose()
-    }
-    document.addEventListener('keydown', onKey)
-    onCleanup(() => {
-      document.removeEventListener('keydown', onKey)
-    })
-  })
-
   return (
     <div class={styles.overlay} onClick={props.onClose}>
+      {/* Modal, and says so: a page that shuts something of its own on Escape (Transactions'
+          entry form, the loan chart) leaves Escape to a dialog that is over it. */}
       <div
+        ref={(el) => {
+          dialogFocus(el, {
+            onEscape: () => {
+              props.onClose()
+            },
+          })
+        }}
         class={styles.modal}
         role="dialog"
+        aria-modal="true"
         aria-label="Keyboard shortcuts"
         data-test-id="shortcuts-modal"
         onClick={(e) => {

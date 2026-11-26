@@ -1,5 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
-import { acceptConfirm, confirmRequests, resolveConfirm, showConfirm } from '../confirmStore'
+import {
+  acceptConfirm,
+  chooseAlternative,
+  confirmRequests,
+  resolveConfirm,
+  showChoice,
+  showConfirm,
+} from '../confirmStore'
 
 /** A promise the test resolves by hand, to hold `onConfirm` open mid-flight. */
 function deferred() {
@@ -45,6 +52,30 @@ describe('confirmStore', () => {
     resolveConfirm(reqB.id, false)
     expect(await a).toBe(true)
     expect(await b).toBe(false)
+  })
+
+  it('asks with a third choice, and says which of the three was chosen', async () => {
+    const ask = () =>
+      showChoice('Merge?', { confirmText: 'Merge', alternativeText: 'Add separately' })
+    const merged = ask()
+    expect(confirmRequests().at(-1)!.alternativeText).toBe('Add separately')
+    await acceptConfirm(lastId())
+    const separate = ask()
+    chooseAlternative(lastId())
+    const cancelled = ask()
+    resolveConfirm(lastId(), false)
+    expect([await merged, await separate, await cancelled]).toEqual([
+      'confirm',
+      'alternative',
+      'cancel',
+    ])
+    expect(confirmRequests()).toHaveLength(0)
+  })
+
+  it('offers no third choice to a plain confirm', () => {
+    void showConfirm('Sure?')
+    expect(confirmRequests().at(-1)!.alternativeText).toBeNull()
+    resolveConfirm(lastId(), false)
   })
 })
 

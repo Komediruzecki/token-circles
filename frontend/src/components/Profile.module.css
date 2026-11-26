@@ -22,8 +22,8 @@
 .profileDropdownMenu.visible {
   max-height: 350px;
   overflow-y: auto;
-  border: 1px solid var(--border);
-  background: var(--card-bg);
+  border: 1px solid var(--border-floating);
+  background: var(--surface-floating);
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
@@ -60,7 +60,8 @@
 
 .profileDropdownItem.active {
   background: rgba(59, 130, 246, 0.1);
-  color: var(--primary);
+  /* The azure the app sets text in: --primary is 4.1:1 on this tint in Dawn. */
+  color: var(--primary-hover);
   font-weight: 500;
 }
 

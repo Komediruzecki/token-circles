@@ -8,6 +8,7 @@ import InfoTip from '../../components/InfoTip'
 import styles from '../Import.module.css'
 import { BankRulesEditor } from './BankRulesEditor'
 import { sourceRowNumber } from './importFlow'
+import { StepMessage } from './StepMessage'
 import type { ImportFlow } from './importFlow'
 
 /**
@@ -96,6 +97,9 @@ export function ImportPreviewStep(props: { flow: ImportFlow; embedded?: boolean 
             </div>
           </Show>
         </div>
+        <Show when={!props.embedded}>
+          <StepMessage flow={flow} />
+        </Show>
 
         <div class={styles.optionsRow}>
           <label class={styles.optionLabel}>
@@ -113,8 +117,8 @@ export function ImportPreviewStep(props: { flow: ImportFlow; embedded?: boolean 
             {duplicates()} potential duplicate row{duplicates() === 1 ? '' : 's'} (identical to an
             earlier row in this import).{' '}
             {flow.bankFiles().length > 0
-              ? `Deselected by default — check a row${props.embedded ? '' : ', or use "Import all",'} to include it.`
-              : 'Kept and imported by default so genuine same-day repeats (e.g. duplicate bank fees) are not dropped — deselect any row that is actually a duplicate.'}{' '}
+              ? `Deselected by default. Check a row${props.embedded ? '' : ', or use "Import all",'} to include it.`
+              : 'Kept and imported by default so genuine same-day repeats (e.g. duplicate bank fees) are not dropped. Deselect any row that is actually a duplicate.'}{' '}
             "Import only new" skips them all.
           </p>
         )}
@@ -157,7 +161,7 @@ export function ImportPreviewStep(props: { flow: ImportFlow; embedded?: boolean 
             Deliberately NOT wired into invalidRowSet: these rows stay selected. */}
         <Show when={warnings().length > 0}>
           <div class={styles.infoNote} data-test-id="import-warnings">
-            <strong>Imported with changes — check these rows</strong>
+            <strong>Imported with changes: check these rows</strong>
             <For each={warnings().slice(0, 8)}>
               {(warning) => (
                 <div>
@@ -189,7 +193,7 @@ export function ImportPreviewStep(props: { flow: ImportFlow; embedded?: boolean 
               when={flow.existingDuplicates()! < total()}
               fallback={
                 <span>
-                  Everything here was already imported — all {total()} rows match existing
+                  Everything here was already imported: all {total()} rows match existing
                   transactions, so importing again adds nothing (duplicates are skipped
                   automatically).
                 </span>
@@ -197,8 +201,7 @@ export function ImportPreviewStep(props: { flow: ImportFlow; embedded?: boolean 
             >
               <span>
                 {flow.existingDuplicates()} of {total()} rows already exist in your data (or repeat
-                in this file) and will be skipped automatically — importing never creates
-                duplicates.
+                in this file) and will be skipped automatically. Importing never creates duplicates.
               </span>
             </Show>
           </div>
@@ -217,7 +220,7 @@ export function ImportPreviewStep(props: { flow: ImportFlow; embedded?: boolean 
             </p>
             <p class={styles.dropzoneHint} style={{ 'margin-bottom': '8px' }}>
               These category values don't match an existing category. Uncheck any you don't want
-              created — rows with an unchecked category import without a category.
+              created. Rows with an unchecked category import without a category.
             </p>
             <div style={{ display: 'flex', 'flex-wrap': 'wrap', gap: '8px 16px' }}>
               <For each={flow.newCategories()}>
@@ -260,8 +263,8 @@ export function ImportPreviewStep(props: { flow: ImportFlow; embedded?: boolean 
             </p>
             <p class={styles.dropzoneHint} style={{ 'margin-bottom': '8px' }}>
               These values are treated as accounts (transfer destinations and account-typed
-              categories). They'll be created so both legs of a transfer resolve — a value NOT
-              listed here already matches an account you have.
+              categories). They'll be created so both legs of a transfer resolve. A value NOT listed
+              here already matches an account you have.
             </p>
             <div style={{ display: 'flex', 'flex-wrap': 'wrap', gap: '8px' }}>
               <For each={flow.newAccounts()}>
@@ -295,7 +298,7 @@ export function ImportPreviewStep(props: { flow: ImportFlow; embedded?: boolean 
             Date range <span style={{ 'font-weight': '400', opacity: '0.65' }}>(optional)</span>
           </p>
           <p class={styles.dropzoneHint} style={{ 'margin-bottom': '8px' }}>
-            Only import transactions within this period — rows outside it are skipped. Leave a side
+            Only import transactions within this period: rows outside it are skipped. Leave a side
             blank for no bound.
           </p>
           <div
@@ -388,8 +391,8 @@ export function ImportPreviewStep(props: { flow: ImportFlow; embedded?: boolean 
               {flow.transferVoidDestinations().count === 1 ? '' : 's'} point to a value that isn't
               an account ({flow.transferVoidDestinations().names.slice(0, 6).join(', ')}
               {flow.transferVoidDestinations().names.length > 6 ? '…' : ''}). A transfer needs a
-              real account on both sides — otherwise the money lands nowhere and balances drift.
-              Mark those as accounts, or set their type to Income/Expense.
+              real account on both sides. Otherwise the money lands nowhere and balances drift. Mark
+              those as accounts, or set their type to Income/Expense.
             </p>
           </div>
         </Show>
@@ -492,7 +495,7 @@ export function ImportPreviewStep(props: { flow: ImportFlow; embedded?: boolean 
                   const base = c
                     ? `Potential duplicate of row ${c.rowNo}${c.summary ? `: ${c.summary}` : ''}`
                     : 'Potential duplicate of an earlier row in this import'
-                  return `${base} — imported by default; deselect if it is actually a duplicate.`
+                  return `${base}. Imported by default; deselect if it is actually a duplicate.`
                 }
                 return (
                   <tr

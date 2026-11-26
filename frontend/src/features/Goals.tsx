@@ -44,6 +44,7 @@ import { CATEGORY_PALETTE } from '../core/brandPalette'
 import { entityVersion } from '../core/dataVersions'
 import { refetchOnActive } from '../core/pageVisibility'
 import { theme } from '../core/theme'
+import { dialogFocus } from '../utils/dialogFocus'
 import { localToday } from '../utils/period'
 import { createCategoryForm } from './categoryForm'
 import { createContributionForm, createGoalForm } from './goalForm'
@@ -293,8 +294,9 @@ export default function Goals() {
             <For each={goals()}>
               {(goal) => {
                 const progress = getProgress(goal)
+                let card: HTMLDivElement | undefined
                 return (
-                  <div data-test-id="goal-card" class={styles.goalCard}>
+                  <div ref={card} data-test-id="goal-card" class={styles.goalCard}>
                     <div class={styles.goalHeader}>
                       <div data-test-id="goal-icon" class={styles.goalIcon}>
                         <svg
@@ -389,6 +391,19 @@ export default function Goals() {
                     )}
                     {contributingGoalId() === goal.id && (
                       <form
+                        // Add Funds is taken off the card while this is open, and made again
+                        // when it shuts: focus goes to the new one. It opens in place, so Escape
+                        // cancels it only from inside it.
+                        ref={(el) => {
+                          dialogFocus(el, {
+                            returnTo: () =>
+                              card?.querySelector<HTMLElement>(
+                                '[data-test-id="goal-contribute-btn"]'
+                              ),
+                            inPlace: true,
+                            onEscape: cancelContribute,
+                          })
+                        }}
                         data-test-id="goal-contribute-form"
                         class={styles.contributeForm}
                         {...contributionForm.attrs}
@@ -414,10 +429,6 @@ export default function Goals() {
                                 onInput={(e) =>
                                   contributionForm.set('amount', e.currentTarget.value)
                                 }
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Escape') cancelContribute()
-                                }}
-                                autofocus
                               />
                             )}
                           </Field>
@@ -612,6 +623,9 @@ export default function Goals() {
       {/* Add/Edit Modal */}
       {showAddModal() && (
         <div
+          ref={(el) => {
+            dialogFocus(el, { onEscape: closeGoalModal })
+          }}
           data-test-id="goals-modal"
           class={styles.modalOverlay}
           role="dialog"
@@ -654,7 +668,6 @@ export default function Goals() {
                     placeholder="e.g., Emergency Fund, Vacation"
                     value={goalForm.values.name}
                     onInput={(e) => goalForm.set('name', e.currentTarget.value)}
-                    autofocus
                     required
                   />
                 )}
@@ -804,6 +817,9 @@ export default function Goals() {
       {/* Add Category Modal (from goal creation) */}
       {showCategoryModal() && (
         <div
+          ref={(el) => {
+            dialogFocus(el, { onEscape: () => setShowCategoryModal(false) })
+          }}
           class={styles.modalOverlay}
           role="dialog"
           aria-modal="true"
@@ -842,7 +858,6 @@ export default function Goals() {
                     placeholder="e.g., Vacation Fund"
                     value={categoryForm.values.name}
                     onInput={(e) => categoryForm.set('name', e.currentTarget.value)}
-                    autofocus
                     required
                   />
                 )}

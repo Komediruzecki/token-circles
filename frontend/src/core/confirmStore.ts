@@ -5,6 +5,10 @@
  * and resolves true/false. This is the single confirmation surface for the app;
  * destructive actions (delete/reset) pass `{ danger: true }` for a red confirm.
  *
+ * `showChoice(message, options)` asks the same way with a third button, `alternativeText`, between
+ * Cancel and Confirm, and resolves 'confirm', 'alternative' or 'cancel'. Escape and a click outside
+ * are Cancel, as they are for `showConfirm`.
+ *
  * Two modes:
  *
  * - Without `onConfirm`, the dialog closes the moment Confirm is clicked and the caller
@@ -36,6 +40,8 @@ export interface ConfirmOptions {
   confirmText?: string
   /** Cancel-button text (default "Cancel"). */
   cancelText?: string
+  /** A third choice, between Cancel and Confirm (`showChoice`). */
+  alternativeText?: string
   /** Style the confirm button as destructive (red). */
   danger?: boolean
   /** See the module docs: supplying this keeps the dialog open until the work settles. */
@@ -49,6 +55,8 @@ export interface ConfirmRequest {
   message: string | readonly string[]
   confirmText: string
   cancelText: string
+  /** The third button's text, or null for none. */
+  alternativeText: string | null
   danger: boolean
   /** null for the plain close-on-confirm mode. */
   work: ConfirmWork | null
@@ -60,8 +68,11 @@ export interface ConfirmRequest {
   progress: ConfirmProgress | null
   /** Set when `work` rejected — the dialog stays up and offers a retry. */
   error: string | null
-  resolve: (value: boolean) => void
+  resolve: (choice: ConfirmChoice) => void
 }
+
+/** What the person chose: Confirm, the third button, or Cancel (Escape and a click outside too). */
+export type ConfirmChoice = 'confirm' | 'alternative' | 'cancel'
 
 /**
  * How long the dialog holds before it offers a way out.
@@ -89,11 +100,37 @@ function patch(id: number, fields: Partial<ConfirmRequest>): void {
 
 /** Settle and remove, ignoring the busy guard — the work itself finishes this way, and it
  *  is still busy at that moment. Only `resolveConfirm` is guarded. */
-function finish(id: number, value: boolean): void {
+function finish(id: number, choice: ConfirmChoice): void {
   const req = confirmRequests().find((r) => r.id === id)
   if (!req) return
-  req.resolve(value)
+  req.resolve(choice)
   setConfirmRequests((prev) => prev.filter((r) => r.id !== id))
+}
+
+function ask(
+  message: string | readonly string[],
+  options: ConfirmOptions | undefined,
+  resolve: (choice: ConfirmChoice) => void
+): void {
+  const id = ++nextId
+  setConfirmRequests((prev) => [
+    ...prev,
+    {
+      id,
+      title: options?.title ?? null,
+      message,
+      confirmText: options?.confirmText ?? 'Confirm',
+      cancelText: options?.cancelText ?? 'Cancel',
+      alternativeText: options?.alternativeText ?? null,
+      danger: options?.danger ?? false,
+      work: options?.onConfirm ?? null,
+      busy: false,
+      stalled: false,
+      progress: null,
+      error: null,
+      resolve,
+    },
+  ])
 }
 
 export function showConfirm(
@@ -101,24 +138,19 @@ export function showConfirm(
   options?: ConfirmOptions
 ): Promise<boolean> {
   return new Promise((resolve) => {
-    const id = ++nextId
-    setConfirmRequests((prev) => [
-      ...prev,
-      {
-        id,
-        title: options?.title ?? null,
-        message,
-        confirmText: options?.confirmText ?? 'Confirm',
-        cancelText: options?.cancelText ?? 'Cancel',
-        danger: options?.danger ?? false,
-        work: options?.onConfirm ?? null,
-        busy: false,
-        stalled: false,
-        progress: null,
-        error: null,
-        resolve,
-      },
-    ])
+    ask(message, options, (choice) => {
+      resolve(choice === 'confirm')
+    })
+  })
+}
+
+/** Asks with three buttons: Confirm, `alternativeText` and Cancel. */
+export function showChoice(
+  message: string | readonly string[],
+  options: ConfirmOptions & { alternativeText: string }
+): Promise<ConfirmChoice> {
+  return new Promise((resolve) => {
+    ask(message, options, resolve)
   })
 }
 
@@ -131,7 +163,7 @@ export async function acceptConfirm(id: number): Promise<void> {
   const req = confirmRequests().find((r) => r.id === id)
   if (!req || req.busy) return
   if (!req.work) {
-    finish(id, true)
+    finish(id, 'confirm')
     return
   }
   patch(id, { busy: true, stalled: false, error: null })
@@ -142,7 +174,7 @@ export async function acceptConfirm(id: number): Promise<void> {
     await req.work((progress) => {
       patch(id, { progress })
     })
-    finish(id, true)
+    finish(id, 'confirm')
   } catch (err) {
     // An Error with an empty message would render as no banner at all and reset the button,
     // which reads as "nothing happened" — the exact failure this dialog exists to prevent.
@@ -164,5 +196,12 @@ export async function acceptConfirm(id: number): Promise<void> {
 export function resolveConfirm(id: number, value: boolean): void {
   const req = confirmRequests().find((r) => r.id === id)
   if (!req || (req.busy && !req.stalled)) return
-  finish(id, value)
+  finish(id, value ? 'confirm' : 'cancel')
+}
+
+/** The third button of a `showChoice`. */
+export function chooseAlternative(id: number): void {
+  const req = confirmRequests().find((r) => r.id === id)
+  if (!req || req.busy) return
+  finish(id, 'alternative')
 }

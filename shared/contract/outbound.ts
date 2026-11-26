@@ -19,6 +19,11 @@ export const SHEETS: Readonly<Record<string, string>> = {
 
 /** The answer to one outbound request a runtime makes, by its URL. */
 export async function outbound(url: string): Promise<Response> {
+  // Local-first's last way into a sheet the browser cannot read directly: the same CSV export,
+  // through corsproxy.io (importGoogleSheet in frontend/src/core/storage/handlers/importFlow.ts).
+  const proxied = /^https:\/\/corsproxy\.io\/\?(.+)$/.exec(url);
+  if (proxied) return outbound(decodeURIComponent(proxied[1]));
+
   // A Google Sheet's CSV export (worker/src/routes/imports.ts, fetchGoogleSheetRows, and the
   // strategies of local-first's importGoogleSheet). Its other endpoints answer 404 here.
   const sheet =

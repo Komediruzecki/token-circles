@@ -6,12 +6,14 @@
  * own rules (shared/accountState.ts, answerUserStateValue and applyUserStateWrite), because that
  * is the network.
  */
+import { render } from 'solid-js/web'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   answerUserStateValue,
   applyUserStateWrite,
   sqliteDateTime,
 } from '../../../../shared/accountState'
+import { SetupStrip } from '../../features/import/SetupStrip'
 import { __resetAccountStateForTest, accountState, readAccountState } from '../accountState'
 import {
   __resetGettingStartedForTest,
@@ -25,15 +27,20 @@ import {
   goToOnboardingStep,
   maybeOfferOnboarding,
   nextOnboardingStep,
+  noteImportWhileSetupWaits,
   onboardingMirrorSettled,
   onboardingOpen,
   onboardingStep,
+  pauseOnboarding,
   prevOnboardingStep,
+  resumeOnboarding,
   setOnboardingOwner,
+  setupWaiting,
   skipOnboarding,
   startOnboarding,
   whereToOfferOnboarding,
 } from '../onboardingStore'
+import { removeToast, toasts } from '../toastStore'
 import type { GettingStartedRecord, OnboardingRecord } from '../../../../shared/accountStateKeys'
 
 const json = (body: unknown, status = 200) =>
@@ -49,6 +56,8 @@ const worker = {
   failWrite: false,
   /** Runs as the settings are read: another sign-in finishing while they are on their way. */
   whileSettingsRead: null as (() => void) | null,
+  /** Runs as the account state is read: a sign-out while it is on its way, say. */
+  whileStateRead: null as (() => void) | null,
   sent: [] as string[],
 }
 
@@ -64,6 +73,7 @@ function workerStandIn() {
     worker.sent.push(`${method} ${path}${body ? ` ${body}` : ''}`)
     const id = worker.signedIn
     if (path === '/api/account/state' && method === 'GET') {
+      worker.whileStateRead?.()
       if (worker.failRead) return json({ error: 'Something went wrong on our side.' }, 500)
       return json({
         onboarding: answerUserStateValue('onboarding', stored(worker.records.get(id))),
@@ -151,6 +161,7 @@ beforeEach(async () => {
   worker.failRead = false
   worker.failWrite = false
   worker.whileSettingsRead = null
+  worker.whileStateRead = null
   worker.sent.length = 0
 })
 
@@ -700,5 +711,139 @@ describe('a record this build cannot read at all', () => {
     expect(worker.sent).toEqual(['GET /api/account/state'])
     expect(getOnboardingStatus('account-5')).toBe('skipped')
     expect(worker.records.get(5)).toEqual(unreadable)
+  })
+})
+
+// Open in Import, for a file setup cannot read: setup waits on the Import page, and Back to setup
+// there opens it again. Finished or left on another device in the meantime, it stays closed there.
+describe('setup waiting on the Import page', () => {
+  /** A new account's setup, at the statement, left for the Import page. */
+  async function waitAtTheStatement(): Promise<void> {
+    signIn(5)
+    await maybeOfferOnboarding()
+    nextOnboardingStep()
+    nextOnboardingStep()
+    expect(onboardingStep()).toBe('import')
+    pauseOnboarding()
+    await settled()
+  }
+
+  const reads = () => worker.sent.filter((r) => r === 'GET /api/account/state').length
+
+  it('closes with nothing decided on the account, and opens again at the statement', async () => {
+    await waitAtTheStatement()
+
+    expect(onboardingOpen()).toBe(false)
+    expect(setupWaiting()).toBe(true)
+    expect(worker.records.get(5)).toMatchObject({ step: 'import', finished_at: null })
+
+    await expect(resumeOnboarding()).resolves.toBe('opened')
+    expect(onboardingOpen()).toBe(true)
+    expect(onboardingStep()).toBe('import')
+  })
+
+  it('reads the account again on the way back, for a decision made on another device', async () => {
+    await waitAtTheStatement()
+    const before = reads()
+
+    await resumeOnboarding()
+
+    expect(reads()).toBe(before + 1)
+  })
+
+  it('stays closed once another device has finished or left it', async () => {
+    await waitAtTheStatement()
+    // The other device skips setup: the Worker keeps the decision on the record.
+    const write = applyUserStateWrite(
+      'onboarding',
+      { outcome: 'skipped' },
+      JSON.stringify(worker.records.get(5)),
+      sqliteDateTime(new Date())
+    )
+    if (!write.ok) throw new Error('the stand-in refused the skip')
+    worker.records.set(5, write.value)
+
+    await expect(resumeOnboarding()).resolves.toBe('finished')
+    expect(onboardingOpen()).toBe(false)
+    expect(setupWaiting()).toBe(false)
+  })
+
+  it('keeps waiting when the account cannot be read, so the way back can be tried again', async () => {
+    await waitAtTheStatement()
+    worker.failRead = true
+
+    await expect(resumeOnboarding()).resolves.toBe('unknown')
+    expect(onboardingOpen()).toBe(false)
+    expect(setupWaiting()).toBe(true)
+
+    worker.failRead = false
+    await expect(resumeOnboarding()).resolves.toBe('opened')
+  })
+
+  // Review of 19 Nov (P4): an import that ended while the account was read again made the way
+  // back answer that setup was finished, and setup stayed shut.
+  it('opens at the subscriptions when an import lands while the account is read again', async () => {
+    await waitAtTheStatement()
+
+    const going = resumeOnboarding()
+    noteImportWhileSetupWaits(3)
+
+    await expect(going).resolves.toBe('opened')
+    expect(onboardingOpen()).toBe(true)
+    expect(onboardingStep()).toBe('subscriptions')
+  })
+
+  // Round 4: a sign-out while the account was read again took the wait, and the way back answered
+  // that setup was finished, which the Import page's strip then said.
+  it('ends with a sign-out during the re-read, and nothing says setup is finished', async () => {
+    await waitAtTheStatement()
+    for (const toast of toasts()) removeToast(toast.id)
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const dispose = render(() => SetupStrip(), host)
+    try {
+      worker.whileStateRead = () => {
+        worker.whileStateRead = null
+        setOnboardingOwner(null)
+      }
+      const back = host.querySelector<HTMLButtonElement>('[data-test-id="import-setup-back"]')
+      expect(back).not.toBeNull()
+      back!.click()
+
+      await vi.waitFor(() => {
+        expect(host.querySelector('[data-test-id="import-setup"]')).toBeNull()
+      })
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      expect(setupWaiting()).toBe(false)
+      expect(onboardingOpen()).toBe(false)
+      expect(toasts().map((toast) => toast.message)).toEqual([])
+    } finally {
+      dispose()
+      host.remove()
+    }
+  })
+
+  it('answers a sign-out during the re-read as the wait ended, not as setup finished', async () => {
+    await waitAtTheStatement()
+    worker.whileStateRead = () => {
+      worker.whileStateRead = null
+      setOnboardingOwner(null)
+    }
+
+    await expect(resumeOnboarding()).resolves.toBe('ended')
+    expect(setupWaiting()).toBe(false)
+    expect(onboardingOpen()).toBe(false)
+  })
+
+  it('keeps the subscriptions as the step reached after an import, for any device to open at', async () => {
+    await waitAtTheStatement()
+    noteImportWhileSetupWaits(23)
+    await vi.waitFor(() => {
+      expect(worker.records.get(5)?.step).toBe('subscriptions')
+    })
+
+    // Never back on this device: the next sign-in, anywhere, opens setup there.
+    signIn(5)
+    await expect(whereToOfferOnboarding()).resolves.toBe('subscriptions')
   })
 })

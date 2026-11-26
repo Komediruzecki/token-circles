@@ -1,0 +1,574 @@
+/**
+ * Setup's statement step over a whole setup (review of 19 Nov, findings 2, 12 and 13): where each
+ * statement goes by default as files come and go, what setup counts as imported when the Import
+ * page imported while it waited, and what the step says when the files cannot be read. The wizard is mounted as App mounts it, under
+ * `onboardingOpen()`, so waiting on the Import page closes it and the way back opens a new one.
+ * Local-first on fake-indexeddb; made-up payees and amounts only.
+ */
+import { Show } from 'solid-js'
+import { render } from 'solid-js/web'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { setCurrentProfile, setProfiles } from '../../../core/appStore'
+import { __resetDataVersionsForTest } from '../../../core/dataVersions'
+import {
+  goToOnboardingStep,
+  noteImportWhileSetupWaits,
+  onboardingOpen,
+  onboardingStep,
+  pauseOnboarding,
+  prevOnboardingStep,
+  resumeOnboarding,
+  setOnboardingOwner,
+  setupSoFar,
+  skipOnboarding,
+  startOnboarding,
+} from '../../../core/onboardingStore'
+import { getDB } from '../../../core/storage/idb'
+import { removeToast, toasts } from '../../../core/toastStore'
+import { takeHandedImportFile } from '../../../features/import/importHandoff'
+import type * as ApiFetchModule from '../../../core/apiFetch'
+
+/** Set to answer the category list with a server error, as a failed read of it does. */
+const categoriesFail = vi.hoisted(() => ({ on: false }))
+
+vi.mock('../../../core/apiFetch', async (importOriginal) => {
+  const real = await importOriginal<typeof ApiFetchModule>()
+  return {
+    ...real,
+    apiFetch: (url: string, init?: RequestInit) =>
+      categoriesFail.on && url.startsWith('/api/categories')
+        ? Promise.resolve(new Response('{"error":"Test failure"}', { status: 500 }))
+        : real.apiFetch(url, init),
+  }
+})
+
+const REVOLUT_HEADER =
+  'Type,Product,Started Date,Completed Date,Description,Amount,Fee,Currency,State,Balance'
+const revolut = (rows: string[]) => `${[REVOLUT_HEADER, ...rows].join('\n')}\n`
+const REVOLUT_MAY = revolut([
+  'CARD_PAYMENT,Current,2026-05-03 10:00:00,2026-05-03 10:00:00,Example Cafe,-3.40,0,EUR,COMPLETED,496.60',
+  'CARD_PAYMENT,Current,2026-05-12 10:00:00,2026-05-12 10:00:00,Example Books,-18.00,0,EUR,COMPLETED,478.60',
+])
+const REVOLUT_JUNE = revolut([
+  'CARD_PAYMENT,Current,2026-06-02 10:00:00,2026-06-02 10:00:00,Example Bakery,-2.10,0,EUR,COMPLETED,476.50',
+])
+/** A Revolut export of a month with nothing in it: the header alone. */
+const REVOLUT_EMPTY = revolut([])
+const REVOLUT_USD = revolut([
+  'CARD_PAYMENT,Current,2026-05-04 10:00:00,2026-05-04 10:00:00,Example Diner,-7.00,0,USD,COMPLETED,93.00',
+])
+const N26 = `${[
+  '"Booking Date","Value Date","Partner Name","Partner Iban",Type,"Payment Reference","Account Name","Amount (EUR)","Original Amount","Original Currency","Exchange Rate"',
+  '2026-05-05,2026-05-05,Example Grocer,,Presentment,,Main Account,-4.20,,,',
+  '2026-05-09,2026-05-09,Example Gym,,Presentment,,Main Account,-29.00,,,',
+].join('\n')}\n`
+/** A table from no bank setup reads: it goes to the Import page. */
+const OTHER =
+  'When,What,How much\n2026-05-20,Example Market,-6.50\n2026-05-21,Example Kiosk,-1.20\n'
+
+let host: HTMLDivElement
+let dispose: (() => void) | undefined
+
+beforeAll(async () => {
+  await Promise.all([import('../OnboardingWizard'), import('../../../core/storage/localApiRouter')])
+}, 120_000)
+
+beforeEach(async () => {
+  localStorage.clear()
+  localStorage.setItem('finance_storage_mode', 'serverless')
+  localStorage.setItem('currentProfileId', '1')
+  localStorage.setItem('localCurrency', 'EUR')
+  __resetDataVersionsForTest()
+  setOnboardingOwner('local')
+  const db = await getDB()
+  for (const store of Array.from(db.objectStoreNames)) await db.clear(store)
+  await db.add('profiles', { id: 1, name: 'Personal', created_at: '2026-01-01T00:00:00.000Z' })
+  await db.put('settings', { key: 'currency', value: 'EUR' })
+  for (const toast of toasts()) removeToast(toast.id)
+  setProfiles([{ id: 1, name: 'Personal' }] as never)
+  setCurrentProfile({ id: 1, name: 'Personal' } as never)
+  takeHandedImportFile()
+  host = document.createElement('div')
+  document.body.appendChild(host)
+})
+
+afterEach(() => {
+  categoriesFail.on = false
+  dispose?.()
+  dispose = undefined
+  host.remove()
+  if (onboardingOpen()) skipOnboarding()
+  setOnboardingOwner(null)
+  setCurrentProfile(null)
+  takeHandedImportFile()
+  window.location.hash = ''
+})
+
+const settle = (ms = 50) => new Promise((resolve) => setTimeout(resolve, ms))
+const waitLong = { timeout: 15_000 }
+const all = (id: string) => [...host.querySelectorAll<HTMLElement>(`[data-test-id="${id}"]`)]
+const one = (id: string) => all(id)[0] ?? null
+
+/** The wizard as App mounts it: closed, it is gone; opened again, it is a new one. */
+async function mount(step: 'account' | 'import'): Promise<void> {
+  startOnboarding(step)
+  const { OnboardingWizard } = await import('../OnboardingWizard')
+  dispose = render(
+    () => (
+      <Show when={onboardingOpen()}>
+        <OnboardingWizard selectProfiles={() => {}} />
+      </Show>
+    ),
+    host
+  )
+  await settle()
+}
+
+function choose(files: Array<[string, string]>): void {
+  const made = files.map(([name, text]) => new File([text], name, { type: 'text/csv' }))
+  const input = one('onboarding-import-input') as HTMLInputElement
+  Object.defineProperty(input, 'files', { value: made, configurable: true })
+  input.dispatchEvent(new Event('change', { bubbles: true }))
+}
+
+/** Each file card as [file, the account its Goes into shows]. */
+const targets = () =>
+  all('onboarding-import-file').map((card) => {
+    const select = card.querySelector<HTMLSelectElement>(
+      '[data-test-id="onboarding-import-target"]'
+    )
+    const shown = select ? ([...select.options].find((o) => o.selected)?.textContent ?? null) : null
+    return [card.getAttribute('data-file'), shown]
+  })
+
+async function untilStates(states: string[]): Promise<void> {
+  await vi.waitFor(() => {
+    expect(all('onboarding-import-file').map((c) => c.getAttribute('data-state'))).toEqual(states)
+  }, waitLong)
+}
+
+/** Setup's account step, making the main account, then on to the statement. */
+async function makeMainAccount(name: string): Promise<void> {
+  await mount('account')
+  const field = one('onboarding-account-name') as HTMLInputElement
+  field.value = name
+  field.dispatchEvent(new Event('input', { bubbles: true }))
+  one('onboarding-account-create')!.click()
+  await vi.waitFor(() => {
+    expect(onboardingStep()).toBe('import')
+  }, waitLong)
+}
+
+async function importReady(): Promise<void> {
+  one('onboarding-import-selected')!.click()
+  await vi.waitFor(() => {
+    expect(onboardingStep()).toBe('subscriptions')
+  }, waitLong)
+}
+
+/** Each account's imported payees, by the account's name. */
+async function bookedByAccount(): Promise<Record<string, string[]>> {
+  const db = await getDB()
+  const names = new Map(
+    ((await db.getAll('accounts')) as Array<{ id: number; name: string }>).map((a) => [
+      a.id,
+      a.name,
+    ])
+  )
+  const booked: Record<string, string[]> = {}
+  for (const t of (await db.getAll('transactions')) as Array<{
+    description: string
+    account_id: number
+  }>) {
+    const name = names.get(t.account_id) ?? String(t.account_id)
+    booked[name] = [...(booked[name] ?? []), t.description]
+  }
+  for (const list of Object.values(booked)) list.sort()
+  return booked
+}
+
+/** Pick the account the `at`th file goes into, as the person does on its card. */
+function pickTarget(at: number, name: string): void {
+  const select = all('onboarding-import-target')[at] as HTMLSelectElement
+  select.value = name
+  select.dispatchEvent(new Event('change', { bubbles: true }))
+}
+
+describe('where a statement goes, over the whole setup', () => {
+  it('picked one after another: a second bank gets a new account, not the main one', async () => {
+    await makeMainAccount('Main checking')
+    choose([['revolut.csv', REVOLUT_MAY]])
+    await untilStates(['ready'])
+    expect(targets()).toEqual([['revolut.csv', 'Main checking']])
+    await importReady()
+
+    goToOnboardingStep('import')
+    await settle()
+    one('onboarding-import-another')!.click()
+    await settle()
+    choose([['n26.csv', N26]])
+    await untilStates(['ready'])
+
+    expect(targets()).toEqual([['n26.csv', 'New account: N26 EUR']])
+  })
+
+  it('a file removed: the one left takes the main account', async () => {
+    await makeMainAccount('Main checking')
+    choose([
+      ['revolut.csv', REVOLUT_MAY],
+      ['n26.csv', N26],
+    ])
+    await untilStates(['ready', 'ready'])
+    expect(targets()).toEqual([
+      ['revolut.csv', 'Main checking'],
+      ['n26.csv', 'New account: N26 EUR'],
+    ])
+
+    all('onboarding-import-remove')[0].click()
+    await untilStates(['ready'])
+
+    expect(targets()).toEqual([['n26.csv', 'Main checking']])
+  })
+
+  it('a pick by hand into the main account claims it: the other bank moves out at the pick, and nothing moves after', async () => {
+    await makeMainAccount('Main checking')
+    choose([
+      ['revolut-may.csv', REVOLUT_MAY],
+      ['n26.csv', N26],
+    ])
+    await untilStates(['ready', 'ready'])
+    expect(targets()).toEqual([
+      ['revolut-may.csv', 'Main checking'],
+      ['n26.csv', 'New account: N26 EUR'],
+    ])
+
+    // N26 into the main account by hand: Revolut leaves it at once, for an account of its own.
+    pickTarget(1, 'Main checking')
+    await vi.waitFor(() => {
+      expect(targets()[1]).toEqual(['n26.csv', 'Main checking'])
+    }, waitLong)
+    await untilStates(['ready', 'ready'])
+    await settle(300)
+    const picked = [
+      ['revolut-may.csv', 'New account: Revolut EUR'],
+      ['n26.csv', 'Main checking'],
+    ]
+    expect(targets()).toEqual(picked)
+
+    // A file added, then another removed: nothing else moves.
+    choose([['revolut-june.csv', REVOLUT_JUNE]])
+    await untilStates(['ready', 'ready', 'ready'])
+    expect(targets()).toEqual([...picked, ['revolut-june.csv', 'New account: Revolut EUR']])
+    all('onboarding-import-remove')[0].click()
+    await untilStates(['ready', 'ready'])
+    expect(targets()).toEqual([
+      ['n26.csv', 'Main checking'],
+      ['revolut-june.csv', 'New account: Revolut EUR'],
+    ])
+
+    // Imported, each bank is in an account of its own.
+    await importReady()
+    expect(await bookedByAccount()).toEqual({
+      'Main checking': ['Example Grocer', 'Example Gym'],
+      'Revolut EUR': ['Example Bakery'],
+    })
+  })
+
+  it('a main account renamed while setup runs keeps its bank: the next bank gets a new account', async () => {
+    await makeMainAccount('Main checking')
+    choose([['revolut.csv', REVOLUT_MAY]])
+    await untilStates(['ready'])
+    await importReady()
+
+    // Renamed meanwhile: on the Accounts page while setup waited on Import, say.
+    const db = await getDB()
+    const main = ((await db.getAll('accounts')) as Array<{ id: number; name: string }>).find(
+      (a) => a.name === 'Main checking'
+    )!
+    await db.put('accounts', { ...main, name: 'Everyday' })
+    goToOnboardingStep('import')
+    await settle()
+    one('onboarding-import-another')!.click()
+    await settle()
+    choose([['n26.csv', N26]])
+    await untilStates(['ready'])
+    expect(targets()).toEqual([['n26.csv', 'New account: N26 EUR']])
+
+    // Revolut's next statement still goes into it, under its new name.
+    choose([['revolut-june.csv', REVOLUT_JUNE]])
+    await untilStates(['ready', 'ready'])
+    expect(targets()).toEqual([
+      ['n26.csv', 'New account: N26 EUR'],
+      ['revolut-june.csv', 'Everyday'],
+    ])
+  })
+
+  it('a target picked by hand stays when another file comes, and the rest follow the rule', async () => {
+    await makeMainAccount('Main checking')
+    choose([
+      ['revolut-may.csv', REVOLUT_MAY],
+      ['n26.csv', N26],
+    ])
+    await untilStates(['ready', 'ready'])
+    const first = all('onboarding-import-target')[0] as HTMLSelectElement
+    first.value = 'Revolut EUR'
+    first.dispatchEvent(new Event('change', { bubbles: true }))
+    await vi.waitFor(() => {
+      expect(targets()[0]).toEqual(['revolut-may.csv', 'New account: Revolut EUR'])
+    }, waitLong)
+
+    choose([['revolut-june.csv', REVOLUT_JUNE]])
+    await untilStates(['ready', 'ready', 'ready'])
+
+    expect(targets()).toEqual([
+      ['revolut-may.csv', 'New account: Revolut EUR'],
+      ['n26.csv', 'Main checking'],
+      ['revolut-june.csv', 'New account: Revolut EUR'],
+    ])
+  })
+})
+
+/**
+ * A statement in a currency other than the base (round 3): balances are kept in one currency, and
+ * neither runtime makes an account in another (a 409), so setup leaves it out and says why.
+ */
+describe('a statement in another currency', () => {
+  const USD_LINE =
+    'This statement is in USD. Your balances are kept in EUR, so importing it would count its amounts as EUR.'
+
+  it('beside a EUR one: the EUR one imports, the USD one is set aside with its sentence, and nothing is made for it', async () => {
+    await makeMainAccount('Main checking')
+    choose([
+      ['revolut-eur.csv', REVOLUT_MAY],
+      ['revolut-usd.csv', REVOLUT_USD],
+    ])
+    await untilStates(['ready', 'other-currency'])
+    expect(targets()).toEqual([
+      ['revolut-eur.csv', 'Main checking'],
+      ['revolut-usd.csv', null],
+    ])
+    expect(all('onboarding-import-currency').map((line) => line.textContent)).toEqual([USD_LINE])
+
+    one('onboarding-import-selected')!.click()
+    await vi.waitFor(() => {
+      expect(one('onboarding-import-done')?.textContent).toBe(
+        'Imported 2 transactions into Main checking.'
+      )
+    }, waitLong)
+
+    const db = await getDB()
+    expect((await db.getAll('accounts')).map((a: { name: string }) => a.name)).toEqual([
+      'Main checking',
+    ])
+    expect(
+      (await db.getAll('transactions')).map((t: { description: string }) => t.description).sort()
+    ).toEqual(['Example Books', 'Example Cafe'])
+    // Set aside, it keeps its card and its way to Import, and no word of converting it.
+    expect(all('onboarding-import-currency').map((line) => line.textContent)).toEqual([USD_LINE])
+    expect(all('onboarding-import-open-file').map((b) => b.textContent)).toEqual([
+      'Open revolut-usd.csv in Import',
+    ])
+    expect(host.textContent).not.toMatch(/conver/i)
+    expect(setupSoFar().imported).toBe(2)
+  })
+
+  it('alone: setup hands it to Import or goes on without it, and the next step and Done agree', async () => {
+    await makeMainAccount('Main checking')
+    choose([['revolut-usd.csv', REVOLUT_USD]])
+    await untilStates(['other-currency'])
+    expect(one('onboarding-import-currency')?.textContent).toBe(USD_LINE)
+    expect(one('onboarding-import-target')).toBeNull()
+
+    // The way on with it: Import, on Bank Imports, while setup waits.
+    one('onboarding-import-open')!.click()
+    await vi.waitFor(() => {
+      expect(onboardingOpen()).toBe(false)
+    })
+    const handed = takeHandedImportFile()
+    expect([handed?.file.name, handed?.tab]).toEqual(['revolut-usd.csv', 'bank-imports'])
+
+    // Back with nothing imported: the statement step, and Skip goes on to Done, which counts no
+    // transaction, as setup counted none.
+    await expect(resumeOnboarding()).resolves.toBe('opened')
+    await vi.waitFor(() => {
+      expect(onboardingStep()).toBe('import')
+    })
+    await settle()
+    one('onboarding-import-skip')!.click()
+    await vi.waitFor(() => {
+      expect(onboardingStep()).toBe('done')
+    }, waitLong)
+    expect(setupSoFar().imported).toBe(0)
+    await vi.waitFor(() => {
+      expect(one('onboarding-done-summary')?.textContent).toBe('Personal has 1 account.')
+    }, waitLong)
+    const db = await getDB()
+    expect((await db.getAll('accounts')).map((a: { name: string }) => a.name)).toEqual([
+      'Main checking',
+    ])
+    expect(await db.count('transactions')).toBe(0)
+  })
+
+  it("added and removed, it moves no other file's target", async () => {
+    await makeMainAccount('Main checking')
+    choose([
+      ['revolut.csv', REVOLUT_MAY],
+      ['n26.csv', N26],
+    ])
+    await untilStates(['ready', 'ready'])
+    const before = targets()
+    expect(before).toEqual([
+      ['revolut.csv', 'Main checking'],
+      ['n26.csv', 'New account: N26 EUR'],
+    ])
+
+    choose([['revolut-usd.csv', REVOLUT_USD]])
+    await untilStates(['ready', 'ready', 'other-currency'])
+    expect(targets()).toEqual([...before, ['revolut-usd.csv', null]])
+
+    all('onboarding-import-remove')[2].click()
+    await untilStates(['ready', 'ready'])
+    expect(targets()).toEqual(before)
+  })
+})
+
+describe('what setup counts as imported', () => {
+  it("counts the Import page's import while it waited as its own, on the step and after it", async () => {
+    await mount('import')
+    choose([['export.csv', OTHER]])
+    await untilStates(['unreadable'])
+    one('onboarding-import-open')!.click()
+    await vi.waitFor(() => {
+      expect(onboardingOpen()).toBe(false)
+    })
+    expect(host.textContent).toBe('')
+
+    // The Import page imports the file while setup waits.
+    noteImportWhileSetupWaits({ imported: 2, createdAccounts: [], statements: [] })
+    await expect(resumeOnboarding()).resolves.toBe('opened')
+    await vi.waitFor(() => {
+      expect(onboardingStep()).toBe('subscriptions')
+    })
+
+    // Back to the statement: it shows what came in, and nothing to hand over again.
+    prevOnboardingStep()
+    await vi.waitFor(() => {
+      expect(one('onboarding-import-done')?.textContent).toBe('Imported 2 transactions.')
+    }, waitLong)
+    expect(host.textContent).not.toContain('Open export.csv in Import')
+    expect(one('onboarding-import-skip')).toBeNull()
+
+    one('onboarding-next')!.click()
+    await vi.waitFor(() => {
+      expect(onboardingStep()).toBe('subscriptions')
+    })
+    expect(setupSoFar().imported).toBe(2)
+  })
+
+  it('says what the whole setup brought in, after another statement', async () => {
+    await makeMainAccount('Main checking')
+    choose([['revolut.csv', REVOLUT_MAY]])
+    await untilStates(['ready'])
+    await importReady()
+    goToOnboardingStep('import')
+    await settle()
+    expect(one('onboarding-import-done')?.textContent).toBe(
+      'Imported 2 transactions into Main checking.'
+    )
+
+    one('onboarding-import-another')!.click()
+    await settle()
+    choose([['n26.csv', N26]])
+    await untilStates(['ready'])
+    await importReady()
+    goToOnboardingStep('import')
+    await settle()
+
+    expect(one('onboarding-import-done')?.textContent).toBe(
+      'Imported 4 transactions into Main checking and N26 EUR.'
+    )
+    expect(setupSoFar().statements.map((s) => [s.bankId, s.account])).toEqual([
+      ['revolut', 'Main checking'],
+      ['n26', 'N26 EUR'],
+    ])
+  })
+
+  it('pauses with what it brought in, and a new wizard knows the main account it made', async () => {
+    await makeMainAccount('Main checking')
+    choose([
+      ['revolut.csv', REVOLUT_MAY],
+      ['export.csv', OTHER],
+    ])
+    await untilStates(['ready', 'unreadable'])
+    one('onboarding-import-selected')!.click()
+    await vi.waitFor(() => {
+      expect(one('onboarding-import-done')).not.toBeNull()
+    }, waitLong)
+    all('onboarding-import-open-file')[0]?.click()
+    if (onboardingOpen()) one('onboarding-import-open')?.click()
+    await vi.waitFor(() => {
+      expect(onboardingOpen()).toBe(false)
+    })
+    expect(setupSoFar()).toMatchObject({ main: { name: 'Main checking' }, imported: 2 })
+
+    await expect(resumeOnboarding()).resolves.toBe('opened')
+    expect(onboardingStep()).toBe('subscriptions')
+    pauseOnboarding()
+  })
+})
+
+describe('a statement step that cannot read its files', () => {
+  it('an empty statement picked first leaves the main account to the next bank', async () => {
+    await makeMainAccount('Main checking')
+    choose([['empty.csv', REVOLUT_EMPTY]])
+    await untilStates(['unreadable'])
+
+    choose([['n26.csv', N26]])
+    await untilStates(['unreadable', 'ready'])
+
+    expect(targets()).toEqual([
+      ['empty.csv', null],
+      ['n26.csv', 'Main checking'],
+    ])
+  })
+
+  it('picked together, an empty statement does not take the main account', async () => {
+    await makeMainAccount('Main checking')
+    choose([
+      ['empty.csv', REVOLUT_EMPTY],
+      ['n26.csv', N26],
+    ])
+    await untilStates(['unreadable', 'ready'])
+
+    expect(targets()).toEqual([
+      ['empty.csv', null],
+      ['n26.csv', 'Main checking'],
+    ])
+  })
+
+  it('says why the files were not read, at the step, and Try again reads them', async () => {
+    const { BANK_CATEGORIES_UNREAD } = await import('../../../features/import/importFlow')
+    await makeMainAccount('Main checking')
+    categoriesFail.on = true
+    choose([['revolut.csv', REVOLUT_MAY]])
+    await vi.waitFor(() => {
+      expect(one('onboarding-import-file')?.getAttribute('data-state')).not.toBe('reading')
+    }, waitLong)
+    expect(all('onboarding-import-file').map((c) => c.getAttribute('data-state'))).toEqual([
+      'failed',
+    ])
+
+    const alert = host.querySelector('[role="alert"]')
+    expect(alert?.textContent).toContain(BANK_CATEGORIES_UNREAD)
+    expect(host.textContent).not.toContain("We couldn't read any transactions")
+    expect(one('onboarding-import-open')).toBeNull()
+    const retry = one('onboarding-import-retry')
+    expect(retry?.textContent).toContain('Try again')
+
+    categoriesFail.on = false
+    retry!.click()
+    await untilStates(['ready'])
+    expect(host.querySelector('[role="alert"]')).toBeNull()
+    expect(targets()).toEqual([['revolut.csv', 'Main checking']])
+  })
+})

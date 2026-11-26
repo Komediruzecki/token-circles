@@ -2,6 +2,7 @@ import { Show } from 'solid-js'
 import { countProfileMadeAsDecided } from '../core/onboardingStore'
 import { setSettingsTab } from '../core/settingsStore'
 import { createProfileCreateForm } from '../features/profileForm'
+import { dialogFocus } from '../utils/dialogFocus'
 import { Field, FormNotice, SubmitButton } from './form'
 import styles from './ProfileModal.module.css'
 import type { Profile } from '../types/models'
@@ -10,6 +11,8 @@ export interface ProfileModalProps {
   onClose: () => void
   /** Called with the new profile, so the caller can select it and show it by name. */
   onSuccess: (profile: Profile) => void
+  /** Where focus goes when it shuts, if what opened it has gone by then (an item in a menu). */
+  returnFocusTo?: () => HTMLElement | null | undefined
 }
 
 /**
@@ -42,14 +45,19 @@ export default function ProfileModal(props: ProfileModalProps) {
       }}
     >
       <div
+        ref={(el) => {
+          dialogFocus(el, {
+            returnTo: () => props.returnFocusTo?.(),
+            onEscape: () => {
+              props.onClose()
+            },
+          })
+        }}
         class={styles.modal}
         data-test-id="profile-modal"
         role="dialog"
         aria-modal="true"
         aria-labelledby="profile-modal-title"
-        onKeyDown={(e) => {
-          if (e.key === 'Escape') props.onClose()
-        }}
       >
         <h3 class={styles.title} id="profile-modal-title">
           Create Profile
@@ -77,7 +85,6 @@ export default function ProfileModal(props: ProfileModalProps) {
                 placeholder="Holiday house, Side business..."
                 value={form.values.name}
                 onInput={(e) => form.set('name', e.currentTarget.value)}
-                autofocus
                 required
               />
             )}

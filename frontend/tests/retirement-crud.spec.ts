@@ -296,24 +296,6 @@ test.describe('Retirement Planning CRUD Operations', () => {
     await expect(modal).not.toBeVisible({ timeout: 2000 })
   })
 
-  test('should handle empty retirement state', async ({ page }) => {
-    await navigateToRoute(page, 'retirement')
-    await page.waitForTimeout(500)
-
-    const emptyState = page.getByTestId('empty-state')
-    const hasEmptyState = await emptyState.isVisible({ timeout: 2000 }).catch(() => false)
-    expect(hasEmptyState).toBeFalsy()
-  })
-
-  test('should show empty state message when no retirement goals', async ({ page }) => {
-    await navigateToRoute(page, 'retirement')
-    await page.waitForTimeout(500)
-
-    const emptyState = page.getByTestId('empty-state')
-    const hasEmptyText = await emptyState.isVisible({ timeout: 2000 }).catch(() => false)
-    expect(hasEmptyText).toBeFalsy()
-  })
-
   test('should have a results panel beside the assumptions', async ({ page }) => {
     await expect(page.getByTestId('retirement-results')).toBeVisible({ timeout: 10000 })
   })

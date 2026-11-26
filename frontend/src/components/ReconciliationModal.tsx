@@ -2,8 +2,9 @@
  * Reconciliation Modal Component
  * Mark transactions as reconciled
  */
-import { createSignal, onCleanup, onMount, Show } from 'solid-js'
+import { createSignal, onMount, Show } from 'solid-js'
 import { api, toast } from '../core/api'
+import { dialogFocusWhile } from '../utils/dialogFocus'
 
 export interface ReconciliationModalProps {
   isOpen: () => boolean
@@ -75,12 +76,12 @@ export default function ReconciliationModal(props: ReconciliationModalProps) {
     loadSummary()
   })
 
-  const handleKeyDown = (e: KeyboardEvent) => {
-    if (e.key === 'Escape' && props.isOpen()) props.onClose()
-  }
-  document.addEventListener('keydown', handleKeyDown)
-  onCleanup(() => {
-    document.removeEventListener('keydown', handleKeyDown)
+  // Stays on the page while shut: focus goes in each time it opens and back each time it shuts.
+  let panelRef: HTMLDivElement | undefined
+  dialogFocusWhile(props.isOpen, () => panelRef, {
+    onEscape: () => {
+      props.onClose()
+    },
   })
 
   return (
@@ -98,6 +99,8 @@ export default function ReconciliationModal(props: ReconciliationModalProps) {
         onClick={props.onClose}
       >
         <div
+          ref={panelRef}
+          data-test-id="reconcile-modal"
           style={{
             background: 'var(--card-bg)',
             'border-radius': 'var(--radius)',

@@ -21,6 +21,7 @@ import { normalizedTransactionAmountSql } from '../transaction-amount';
 import { autoApplyTagRules } from '../tag-rules';
 import * as db from '../db';
 import { localToday } from '../local-date';
+import { configuredBaseCurrency } from '../base-currency';
 
 // Port of backend/routes/transactions.js + backend/repositories/transactionsRepo.js.
 // Table: transactions (snake_case columns), LEFT JOINed to categories. The backend's
@@ -151,10 +152,15 @@ export function unchangedSince(row: TxRow, id: number | string, pid: number) {
 const CONCURRENT_EDIT = 'This transaction was changed on another device. Reload and try again.';
 
 /** What a blank date or currency means in this request's body. */
-function transactionDefaults(c: Context<AppEnv>): TransactionDefaults {
-  // An undated transaction happened today, on the person's calendar. A body without a currency
-  // gets the column's default, which the route has always stored.
-  return { today: localToday(c), currency: 'USD' };
+async function transactionDefaults(c: Context<AppEnv>, pid: number): Promise<TransactionDefaults> {
+  // An undated transaction happened today, on the person's calendar. A body without a currency is
+  // in the profile's base currency, as local-first takes it (localTransactionDefaults): the
+  // column's DEFAULT 'USD' made a euro profile's payment a dollar one, which the subscription scan
+  // then priced in dollars beside a total in euros. Same source and default as a paid bill.
+  return {
+    today: localToday(c),
+    currency: (await configuredBaseCurrency(c.env.DB, pid)) ?? 'EUR',
+  };
 }
 
 /**
@@ -779,7 +785,7 @@ transactionsRoutes.post('/api/transactions', requireAuth, async (c) => {
   // write profile `pid` (see below).
   const pids = await getProfileIds(c);
   const body: unknown = await c.req.json();
-  const defaults = transactionDefaults(c);
+  const defaults = await transactionDefaults(c, pid);
   const checked = checkTransactionFields(body, defaults);
   // A body refused for its own fields gets the answer local-first gives it, a transfer's missing
   // accounts included, so a client can fix everything in one go. Accounts named rather than given
@@ -987,7 +993,7 @@ transactionsRoutes.put('/api/transactions/:id', requireAuth, async (c) => {
   );
   if (!oldTx) throw new HttpError(404, 'Not found');
 
-  const patch = accept(checkTransactionEdit(body, oldTx, transactionDefaults(c)));
+  const patch = accept(checkTransactionEdit(body, oldTx, await transactionDefaults(c, pid)));
   // Only the links the edit changes: an unchanged link on a legacy row must not block it.
   await refuseForeignLinks(c.env.DB, pid, patch);
 

@@ -45,6 +45,8 @@ interface SentRequest {
 
 const net = vi.hoisted(() => ({
   sent: [] as SentRequest[],
+  /** Requests the local router or the stand-in Worker is still answering. */
+  answering: new Set<Promise<unknown>>(),
   /** A category read made for one of these active profiles waits until its promise settles. */
   heldCategoryReads: new Map<number, Promise<void>>(),
   /** A category read made for one of these active profiles fails, as a dropped connection does. */
@@ -72,7 +74,13 @@ vi.mock('../core/apiFetch', async (importOriginal) => {
         if (held) await held
         if (net.failingCategoryReads.has(forProfile)) return json({ error: 'Unavailable' }, 503)
       }
-      return real.apiFetch(url, init)
+      const answer = real.apiFetch(url, init)
+      const answered = () => {
+        net.answering.delete(answer)
+      }
+      net.answering.add(answer)
+      answer.then(answered, answered)
+      return answer
     },
   }
 })
@@ -230,9 +238,16 @@ beforeEach(() => {
   document.body.appendChild(host)
 })
 
-afterEach(() => {
+afterEach(async () => {
   dispose?.()
   dispose = undefined
+  // A save the test did not wait for is still being answered. It lands before the next test
+  // clears the profiles under it: in local-first, a save that finds its profile gone files itself
+  // on a new one, and the next test's App opened on that profile.
+  for (let i = 0; i < 10 && net.answering.size > 0; i++) {
+    await Promise.allSettled([...net.answering])
+    await settle()
+  }
   host.remove()
   vi.unstubAllGlobals()
   localStorage.clear()

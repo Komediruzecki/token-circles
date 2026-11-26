@@ -3,6 +3,7 @@
  * Wrapper for Chart.js integration with SolidJS
  */
 import { createEffect, ErrorBoundary, onCleanup } from 'solid-js'
+import { paintTooltipsAsFloating } from './chartFloatingTooltip'
 import type * as ChartJS from 'chart.js/auto'
 
 export interface ChartProps {
@@ -43,6 +44,7 @@ export default function Chart(props: ChartProps) {
     import('chart.js/auto')
       .then(({ default: ChartJSCtor }) => {
         if (cancelled || canvasRef === null) return
+        paintTooltipsAsFloating(ChartJSCtor)
 
         const mergedOptions = {
           responsive: true,

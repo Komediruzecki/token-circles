@@ -8,6 +8,7 @@
  * not fetch that sheet", "Could not save the source") with the link still in the field and no word
  * at it.
  */
+import { freshImportTypes } from '../../../../shared/importCategoryTypes'
 import { checkImportSourceCreate } from '../../../../shared/importSourceSchema'
 import { fieldErrorsOf } from '../../../../shared/refusal'
 import { createForm } from '../../components/form'
@@ -64,13 +65,20 @@ export function createSheetSourceForm(options: {
       await flow.fetchGoogleSheet({ navigate: false, rethrow: true })
       const headers = flow.currentHeaders()
       const sheetName = flow.selectedSheet()
+      const mapping = autoDetectMapping(headers)
       try {
         const created = await createImportSource(
           sourceBody(
             { url: values.url.trim(), label: values.label.trim() || sheetName || 'Google Sheet' },
             {
-              config: { url: values.url.trim(), sheetName },
-              mapping: mappingToHeaderNames(autoDetectMapping(headers), headers),
+              config: sheetName
+                ? { url: values.url.trim(), sheetName }
+                : { url: values.url.trim() },
+              mapping: mappingToHeaderNames(mapping, headers),
+              // The types a fresh import gives its values, as the card's Save sheet keeps the
+              // import's: with saved types the daily sync types the rows as Sync does, where a
+              // sheet saved with none keeps its amounts' signs (worker/src/import-sync.ts).
+              category_types: freshImportTypes(flow.currentRows(), mapping),
             }
           )
         )

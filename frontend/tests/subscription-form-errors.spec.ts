@@ -167,8 +167,10 @@ for (const mode of MODES) {
       await elsewhere(page, mode, 'DELETE', `/api/categories/${String(category)}`, profileId)
       await price.press('Enter')
 
+      // The scan has no category control, so its notice says what failed and sends you to Bills
+      // (insteadOf in SubscriptionScan.tsx), not the Worker's "Choose a category from the list".
       await expect(scan.getByTestId('sub-scan-notice')).toHaveText(
-        `Couldn't add "NordVPN". Choose a category from the list, or leave it blank.`
+        `Couldn't add "NordVPN". The scan chose a category this profile doesn't have. Add it from Bills and pick one there.`
       )
       await expect(price).not.toHaveAttribute('aria-invalid', 'true')
       await expect(price).toBeFocused()

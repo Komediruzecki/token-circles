@@ -1,0 +1,193 @@
+/* The notices at the top of the Import page: setup waiting for a statement (SetupStrip.tsx). Each
+   is one compact block, so the import methods stay in view under them. */
+.notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  border: 1px solid color-mix(in oklab, var(--primary) 12%, var(--border));
+  border-radius: var(--radius);
+  background: color-mix(in oklab, var(--card-bg) 74%, transparent);
+}
+
+.setup {
+  border-color: color-mix(in oklab, var(--primary) 40%, var(--border));
+  background: color-mix(in oklab, var(--primary) 7%, var(--card-bg));
+}
+
+.text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--text);
+}
+
+.sub {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.action {
+  flex: none;
+  justify-content: center;
+  min-height: 40px;
+}
+
+@media (max-width: 620px) {
+  .action {
+    width: 100%;
+  }
+}
+
+/* After an import (ImportAfter.tsx): the result, then a row for each thing to do next. */
+.after {
+  margin-bottom: 16px;
+  border: 1px solid color-mix(in oklab, var(--success) 28%, var(--border));
+  border-radius: var(--radius);
+  background: color-mix(in oklab, var(--card-bg) 74%, transparent);
+}
+
+.afterHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 6px 6px 16px;
+}
+
+.afterIcon {
+  flex: none;
+  color: var(--success);
+}
+
+.afterIcon.nothingNew {
+  color: var(--text-secondary);
+}
+
+.afterTitle {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  padding: 8px 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--text);
+}
+
+.dismiss {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.dismiss:hover {
+  color: var(--text);
+  background: color-mix(in oklab, var(--text) 6%, transparent);
+}
+
+.dismiss:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+
+.afterRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
+}
+
+.rowLabel {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--text);
+}
+
+.rowBody {
+  flex-basis: 100%;
+  min-width: 0;
+}
+
+.rowBody[hidden] {
+  display: none;
+}
+
+/* The sheet's row: a name, if wanted, and Save sheet, on one line at every width. */
+.keep {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 0 1 360px;
+  min-width: 0;
+}
+
+.keepRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.keepField {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.keepInput {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+}
+
+.keepInput:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+.keepSave {
+  flex: none;
+  min-height: 40px;
+}
+
+@media (max-width: 620px) {
+  .keep {
+    flex-basis: 100%;
+  }
+
+  /* 16 px, or a phone's browser zooms the page on focus. */
+  .keepInput {
+    font-size: 16px;
+  }
+}

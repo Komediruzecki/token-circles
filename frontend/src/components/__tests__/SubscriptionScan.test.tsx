@@ -8,14 +8,15 @@
 /* eslint-disable security/detect-non-literal-fs-filename -- the one stylesheet named below */
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { createSignal } from 'solid-js'
 import { render } from 'solid-js/web'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { BILL_MESSAGES } from '../../../../shared/billSchema'
+import { BILL_MESSAGES, BILL_NAME_MAX } from '../../../../shared/billSchema'
 import { ApiError } from '../../core/apiError'
 import { orientationFacts } from '../../core/orientation'
 import { dayText } from '../../utils/dayText'
 import { localToday } from '../../utils/period'
-import { SubscriptionScanPanel } from '../SubscriptionScan'
+import { SubscriptionScanModal, SubscriptionScanPanel } from '../SubscriptionScan'
 
 const apiMocks = vi.hoisted(() => ({
   apiGet: vi.fn(),
@@ -105,6 +106,10 @@ function type(element: HTMLInputElement, value: string) {
 
 const errorToasts = () => apiMocks.showToast.mock.calls.filter(([, kind]) => kind === 'error')
 
+/** What the scan says when the runtime refuses the category it chose, for one or several. */
+const NO_CATEGORY = (it: 'it' | 'them') =>
+  `The scan chose a category this profile doesn't have. Add ${it} from Bills and pick one there.`
+
 describe('adding what the scan found', () => {
   it("marks a price the runtime refuses under its row, in the runtime's words, and keeps it selected", async () => {
     apiMocks.apiPost.mockImplementation(async (_url: string, body: { name: string }) => {
@@ -136,10 +141,70 @@ describe('adding what the scan found', () => {
 
     expect(await scan.addSelected()).toBe(1)
 
-    expect(notice()).toBe(`Couldn't add "Spotify". ${BILL_MESSAGES.category}`)
+    expect(notice()).toBe(`Couldn't add "Spotify". ${NO_CATEGORY('it')}`)
     expect(price('Spotify').getAttribute('aria-invalid')).toBeNull()
     expect(errorToasts()).toEqual([])
     expect(scan.chosenCount()).toBe(1)
+  })
+
+  // Round 4 of the review: a refusal of a detail the scan has no control for said the runtime's
+  // words, "Choose a category from the list, or leave it blank.", in a modal with no category.
+  it.each([
+    ['category_id', BILL_MESSAGES.category, NO_CATEGORY('it')],
+    [
+      'name',
+      BILL_MESSAGES.nameLength,
+      `A name longer than ${BILL_NAME_MAX} characters can't be kept. Add it from Bills with a shorter one.`,
+    ],
+    [
+      'due_date',
+      BILL_MESSAGES.dueDate,
+      "The scan couldn't tell when the next payment is due. Add it from Bills and pick the date.",
+    ],
+    [
+      'type',
+      BILL_MESSAGES.type,
+      "A detail the scan doesn't show was refused. Add it from Bills, where every detail can be changed.",
+    ],
+  ])(
+    'says what failed and what to do when its %s is refused, which the scan has no control for',
+    async (field, words, said) => {
+      apiMocks.apiPost.mockImplementation(async (_url: string, body: { name: string }) => {
+        if (body.name === 'Spotify') throw new ApiError(400, words, { [field]: words })
+        return { id: 1 }
+      })
+      const scan = await mountScan()
+
+      expect(await scan.addSelected()).toBe(1)
+
+      expect(notice()).toBe(`Couldn't add "Spotify". ${said}`)
+      expect(notice()).not.toContain(words)
+    }
+  )
+
+  it('says a refused billing period in the words of the runtime: the scan has a control for it', async () => {
+    apiMocks.apiPost.mockImplementation(async (_url: string, body: { name: string }) => {
+      if (body.name === 'Spotify') {
+        throw new ApiError(400, BILL_MESSAGES.frequency, { frequency: BILL_MESSAGES.frequency })
+      }
+      return { id: 1 }
+    })
+    const scan = await mountScan()
+
+    expect(await scan.addSelected()).toBe(1)
+
+    expect(notice()).toBe(`Couldn't add "Spotify". ${BILL_MESSAGES.frequency}`)
+  })
+
+  it('says it once for every subscription refused for the same detail', async () => {
+    apiMocks.apiPost.mockImplementation(async () => {
+      throw new ApiError(400, BILL_MESSAGES.category, { category_id: BILL_MESSAGES.category })
+    })
+    const scan = await mountScan()
+
+    expect(await scan.addSelected()).toBe(0)
+
+    expect(notice()).toBe(`Couldn't add "Netflix" or "Spotify". ${NO_CATEGORY('them')}`)
   })
 
   it('marks a price of zero and one with letters before sending anything, and focuses the first', async () => {
@@ -383,6 +448,90 @@ describe('regular payments it has no name for', () => {
   })
 })
 
+// Review of 19 Nov, round 5. With the data kept in this browser, a household's scan reads every
+// chosen profile's categories and charges, and both runtimes refuse a bill on another profile's
+// category. The scan filed a row under the first category of the name it looked for, another
+// profile's as often as its own, and the add was refused.
+describe('in a household', () => {
+  const OURS = 1
+  const THEIRS = 2
+
+  /** The bill the scan sent for `name`. */
+  const sent = (name: string) =>
+    apiMocks.apiPost.mock.calls
+      .map(([, body]) => body as { name: string; category_id?: number; type?: string })
+      .find((body) => body.name === name)
+
+  beforeEach(() => {
+    localStorage.setItem('currentProfileId', String(OURS))
+    localStorage.setItem('selectedProfileIds', JSON.stringify([OURS, THEIRS]))
+    apiMocks.apiPost.mockResolvedValue({ id: 1 })
+  })
+
+  afterEach(() => {
+    localStorage.removeItem('currentProfileId')
+    localStorage.removeItem('selectedProfileIds')
+  })
+
+  it("files a find under this profile's category, never another profile's", async () => {
+    // Netflix looks for Entertainment, Subscriptions, then Streaming; Spotify for Entertainment,
+    // Subscriptions, then Music. Only the other profile has Entertainment and Music.
+    const categories = [
+      { id: 21, name: 'Entertainment', type: 'expense', profile_id: THEIRS },
+      { id: 23, name: 'Music', type: 'expense', profile_id: THEIRS },
+      { id: 11, name: 'Streaming', type: 'expense', profile_id: OURS },
+    ]
+    apiMocks.apiGet.mockImplementation(async (url: string) =>
+      url === '/api/transactions'
+        ? [
+            ...[95, 65, 35, 5].map((days) => charge('NETFLIX.COM AMSTERDAM', 13.99, days)),
+            ...[95, 65, 35, 5].map((days) => charge('Spotify P0FF8B1C34', 10.99, days)),
+          ]
+        : url === '/api/categories'
+          ? categories
+          : []
+    )
+    const scan = await mountScan()
+
+    expect(await scan.addSelected()).toBe(2)
+
+    expect(sent('Netflix')?.category_id).toBe(11)
+    expect(sent('Spotify')?.category_id).toBeUndefined()
+  })
+
+  it("files a regular payment under this profile's category of the same name, or under none", async () => {
+    const LANDLORD = 'Hausverwaltung Muster GmbH'
+    const GYM = 'Kraftraum Beispielstadt'
+    const categories = [
+      { id: 22, name: 'Housing', type: 'expense', kind: 'housing', profile_id: THEIRS },
+      { id: 24, name: 'Sport', type: 'expense', profile_id: THEIRS },
+      { id: 12, name: 'Housing', type: 'expense', kind: 'housing', profile_id: OURS },
+    ]
+    const rows = [
+      ...[95, 65, 35, 5].map((days) => ({
+        ...charge('MIETE', 850, days),
+        beneficiary: LANDLORD,
+        category_id: 22,
+      })),
+      ...[95, 65, 35, 5].map((days) => ({
+        ...charge('MITGLIEDSBEITRAG', 29.9, days),
+        beneficiary: GYM,
+        category_id: 24,
+      })),
+    ]
+    apiMocks.apiGet.mockImplementation(async (url: string) =>
+      url === '/api/transactions' ? rows : url === '/api/categories' ? categories : []
+    )
+    const scan = await mountScan()
+
+    expect(await scan.addSelected()).toBe(2)
+
+    // Still a bill, for a home: the kind is read from the category the charges are filed under.
+    expect(sent(LANDLORD)).toMatchObject({ category_id: 12, type: 'bill' })
+    expect(sent(GYM)?.category_id).toBeUndefined()
+  })
+})
+
 describe('in the setup wizard', () => {
   const rescan = () =>
     [...host.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Rescan')
@@ -533,5 +682,197 @@ describe("a row's name", () => {
   it('names a Revolut transfer by its payee, without the "To "', async () => {
     await mountRows()
     expect(nameOf('Example Landlord')).toBe('Regular payment to Example Landlord')
+  })
+})
+
+// maff, 19 Nov: on a full-screen desktop the modal ran from the top of the screen to the bottom,
+// with the add at the end of a long list. Its height is capped; the header and the actions stay in
+// view while the list scrolls between them.
+describe('the scan in its modal', () => {
+  const css = () =>
+    readFileSync(resolve(__dirname, '../SubscriptionScan.module.css'), 'utf8').replace(
+      /\/\*[\s\S]*?\*\//g,
+      ''
+    )
+  /** The declarations of the first rule for exactly `selector`, outside any media query. */
+  const rule = (selector: string) => {
+    const flat = withoutMediaQueries(css())
+    const at = flat.indexOf(`\n${selector} {`)
+    return at < 0 ? '' : flat.slice(at, flat.indexOf('}', at))
+  }
+
+  it('scrolls the list between the header and the actions, which stay outside it', async () => {
+    host = document.createElement('div')
+    document.body.appendChild(host)
+    dispose = render(() => <SubscriptionScanModal isOpen={() => true} onClose={() => {}} />, host)
+    await vi.waitFor(() => {
+      expect(host.querySelectorAll('[data-test-id="sub-scan-row"]')).toHaveLength(2)
+    })
+    const modal = host.querySelector('[data-test-id="sub-scan-modal"]')!
+    const list = modal.querySelector('[data-test-id="sub-scan-scroll"]')!
+    const actions = modal.querySelector('[data-test-id="sub-scan-footer"]')!
+    expect(list).not.toBeNull()
+    expect(actions).not.toBeNull()
+    for (const row of modal.querySelectorAll('[data-test-id="sub-scan-row"]')) {
+      expect(list.contains(row)).toBe(true)
+    }
+    expect(list.contains(actions)).toBe(false)
+    expect(actions.contains(modal.querySelector('[data-test-id="sub-scan-add-btn"]'))).toBe(true)
+    expect(list.contains(modal.querySelector('h2'))).toBe(false)
+  })
+
+  // Review of 19 Nov: a failed Add said so at the end of the scrolling rows, out of view under a
+  // long list, while the Add it answered sat in the pinned footer.
+  it('says a failed add in the pinned footer, directly above the buttons', async () => {
+    apiMocks.apiPost.mockImplementation(async (_url: string, body: { name: string }) => {
+      if (body.name === 'Spotify') {
+        throw new ApiError(400, BILL_MESSAGES.category, { category_id: BILL_MESSAGES.category })
+      }
+      return { id: 1 }
+    })
+    host = document.createElement('div')
+    document.body.appendChild(host)
+    dispose = render(() => <SubscriptionScanModal isOpen={() => true} onClose={() => {}} />, host)
+    await vi.waitFor(() => {
+      expect(host.querySelectorAll('[data-test-id="sub-scan-row"]')).toHaveLength(2)
+    })
+    const modal = host.querySelector('[data-test-id="sub-scan-modal"]')!
+    const add = modal.querySelector<HTMLButtonElement>('[data-test-id="sub-scan-add-btn"]')!
+
+    add.click()
+    await vi.waitFor(() => {
+      expect(notice()).toBe(`Couldn't add "Spotify". ${NO_CATEGORY('it')}`)
+    })
+
+    const footer = modal.querySelector('[data-test-id="sub-scan-footer"]')!
+    const region = modal.querySelector('[data-test-id="sub-scan-notice"]')!
+    expect(footer.contains(region)).toBe(true)
+    expect(modal.querySelector('[data-test-id="sub-scan-scroll"]')!.contains(region)).toBe(false)
+    expect(region.compareDocumentPosition(add) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  // Review of 19 Nov, round 3: "adjust price or period" sat over "No known subscriptions found".
+  it('asks to adjust a price or period only over rows that have one', async () => {
+    const subtitle = () =>
+      [...host.querySelectorAll('[data-test-id="sub-scan-modal"] p')].find((line) =>
+        line.textContent?.includes('adjust price or period')
+      ) ?? null
+    const open = async (ready: string) => {
+      dispose?.()
+      host?.remove()
+      host = document.createElement('div')
+      document.body.appendChild(host)
+      dispose = render(() => <SubscriptionScanModal isOpen={() => true} onClose={() => {}} />, host)
+      await vi.waitFor(() => {
+        expect(host.querySelector(ready)).not.toBeNull()
+      })
+    }
+
+    await open('[data-test-id="sub-scan-row"]')
+    expect(subtitle()?.textContent).toBe('Recurring charges we recognized · adjust price or period')
+
+    // A rescan: the rows give way to the spinner, and the line goes with them until they are back.
+    const found = await apiMocks.apiGet('/api/transactions')
+    let finish: (rows: unknown) => void = () => {}
+    apiMocks.apiGet.mockImplementation((url: string) =>
+      url === '/api/transactions'
+        ? new Promise((done) => {
+            finish = done
+          })
+        : Promise.resolve([])
+    )
+    ;[...host.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Rescan')!.click()
+    await vi.waitFor(() => {
+      expect(host.querySelector('[data-test-id="sub-scan-row"]')).toBeNull()
+    })
+    expect(subtitle()).toBeNull()
+    finish(found)
+    await vi.waitFor(() => {
+      expect(subtitle()).not.toBeNull()
+    })
+
+    // A charge that does not recur: the empty state, with nothing to adjust.
+    apiMocks.apiGet.mockImplementation(async (url: string) =>
+      url === '/api/transactions' ? [charge('Corner bakery', 4.2, 3)] : []
+    )
+    await open('[data-test-id="sub-scan-empty"]')
+    expect(subtitle()).toBeNull()
+
+    // No transactions at all.
+    apiMocks.apiGet.mockImplementation(async () => [])
+    await open('[data-test-id="sub-scan-nothing"]')
+    expect(subtitle()).toBeNull()
+
+    // Everything it found is tracked already: those rows have no price or period to change.
+    apiMocks.apiGet.mockImplementation(async (url: string) => {
+      if (url === '/api/transactions') {
+        return [95, 65, 35, 5].map((days) => charge('NETFLIX.COM AMSTERDAM', 13.99, days))
+      }
+      return url === '/api/bills' ? [{ name: 'Netflix' }] : []
+    })
+    await open('[data-test-id="sub-scan-row"]')
+    expect(host.querySelector('[data-test-id="sub-scan-price"]')).toBeNull()
+    expect(subtitle()).toBeNull()
+  })
+
+  it('caps its height on a tall screen, and scrolls only the list', () => {
+    expect(rule('.modal')).toMatch(/max-height:\s*min\(720px,\s*calc\(100dvh - 2rem\)\)/)
+    expect(rule('.modal .scroll')).toMatch(/overflow-y:\s*auto/)
+    expect(rule('.body')).toMatch(/overflow:\s*hidden/)
+    // Embedded in the setup wizard the panel does not scroll on its own: the wizard's middle does.
+    expect(rule('.scroll')).not.toMatch(/overflow/)
+  })
+})
+
+describe('the scan dialog and focus', () => {
+  // It stays on the page while shut, faded out: it must not take focus until it opens.
+  it('takes focus only when it opens, and gives it back to the opener when it shuts', async () => {
+    const settle = () => new Promise((r) => setTimeout(r, 0))
+    const [open, setOpen] = createSignal(false)
+    host = document.createElement('div')
+    document.body.appendChild(host)
+    dispose = render(
+      () => (
+        <>
+          <button data-test-id="scan">Scan</button>
+          <SubscriptionScanModal isOpen={open} onClose={() => setOpen(false)} />
+        </>
+      ),
+      host
+    )
+    const opener = host.querySelector<HTMLButtonElement>('[data-test-id="scan"]')!
+    const dialog = host.querySelector('[role="dialog"]')!
+    opener.focus()
+    await settle()
+    expect(document.activeElement).toBe(opener)
+
+    setOpen(true)
+    await vi.waitFor(() => {
+      expect(dialog.contains(document.activeElement)).toBe(true)
+    })
+
+    setOpen(false)
+    await settle()
+    expect(document.activeElement).toBe(opener)
+  })
+
+  // Faded out to nothing while shut, but still on the page: without inert, Tab walked into its
+  // Close button from the Bills and Import pages.
+  it('is inert while shut, so Tab cannot reach it, and not while it is open', () => {
+    const [open, setOpen] = createSignal(false)
+    host = document.createElement('div')
+    document.body.appendChild(host)
+    dispose = render(
+      () => <SubscriptionScanModal isOpen={open} onClose={() => setOpen(false)} />,
+      host
+    )
+    // Solid sets inert as a property, which jsdom does not reflect to the attribute.
+    const overlay = host.querySelector('[role="dialog"]')!.parentElement!
+    const inert = () => overlay.inert || overlay.hasAttribute('inert')
+    expect(inert()).toBe(true)
+    setOpen(true)
+    expect(inert()).toBe(false)
+    setOpen(false)
+    expect(inert()).toBe(true)
   })
 })
