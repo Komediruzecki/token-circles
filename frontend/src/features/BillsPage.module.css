@@ -629,5 +629,6 @@
 .billsSection h3,
 .subscriptionSummary h3 {
   font-family: var(--font-display, inherit);
+  word-spacing: var(--font-display-word-spacing);
   letter-spacing: -0.01em;
 }

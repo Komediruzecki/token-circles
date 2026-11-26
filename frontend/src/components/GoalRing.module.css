@@ -12,6 +12,7 @@
 
 .coreValue {
   font-family: var(--font-display);
+  word-spacing: var(--font-display-word-spacing);
   font-size: 15px;
   font-weight: 600;
   fill: var(--text);

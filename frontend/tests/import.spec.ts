@@ -2,7 +2,7 @@
  * Import page e2e — regression coverage for the refactored import flow
  * (importFlow controller + shared step components on the page surface).
  */
-import { expect, test } from '@playwright/test'
+import { expect, test, type Locator } from '@playwright/test'
 import { gotoServerless } from './test-helpers'
 
 const PASTED_CSV = [
@@ -11,6 +11,29 @@ const PASTED_CSV = [
   '2026-07-02,Onboarding Test Groceries,-52.30,Groceries,expense',
   '2026-07-03,Onboarding Test Coffee,-3.20,Dining,expense',
 ].join('\n')
+
+/** The space after a heading's first word, in Fraunces, at least as wide as Inter's. */
+async function expectWordsApart(heading: Locator) {
+  const space = await heading.evaluate(async (element) => {
+    await document.fonts.ready
+    const style = window.getComputedStyle(element)
+    const text = element.firstChild!
+    const at = text.textContent!.indexOf(' ')
+    const range = document.createRange()
+    range.setStart(text, at)
+    range.setEnd(text, at + 1)
+    return {
+      // Set in Fraunces, so a fallback face with a wider space cannot pass for the fix.
+      fraunces: document.fonts.check(`${style.fontWeight} ${style.fontSize} Fraunces`),
+      text: range.toString(),
+      em: range.getBoundingClientRect().width / parseFloat(style.fontSize),
+    }
+  })
+  expect(space.fraunces).toBe(true)
+  expect(space.text).toBe(' ')
+  // Inter, the body face, leaves 0.27em between words.
+  expect(space.em).toBeGreaterThanOrEqual(0.25)
+}
 
 test.describe('import page', () => {
   // The day-2 mail and Getting started open the Bank Imports tab (review M4); the sidebar's
@@ -73,32 +96,25 @@ test.describe('import page', () => {
 
   // Review of 19 Nov, round 4: "Map columns" read almost as one word. Fraunces has a narrow space,
   // and the headings' -0.01em letter spacing takes from it: 2.9 px at 15 px, under a fifth of an em.
-  test('the words of the Map columns heading stand apart', async ({ page }) => {
+  // The wider space belongs to the face, so "Recent Imports", on the same page, has it too.
+  test('the words of each heading on the Import page stand apart', async ({ page }) => {
+    test.setTimeout(90000)
     await gotoServerless(page, 'import', 'import-header')
     await page.getByTestId('import-tab-paste-csv').click()
     await page.getByTestId('import-paste-textarea').fill(PASTED_CSV)
     await page.getByTestId('import-paste-parse').click()
     await page.getByTestId('import-continue-mapping').click()
-    const title = page.getByRole('heading', { name: 'Map columns' })
-    await expect(title).toBeVisible()
+    const mapColumns = page.getByRole('heading', { name: 'Map columns' })
+    await expect(mapColumns).toBeVisible()
+    await expectWordsApart(mapColumns)
 
-    const space = await title.evaluate(async (heading) => {
-      await document.fonts.ready
-      const style = window.getComputedStyle(heading)
-      const range = document.createRange()
-      range.setStart(heading.firstChild!, 3)
-      range.setEnd(heading.firstChild!, 4)
-      return {
-        // Set in Fraunces, so a fallback face with a wider space cannot pass for the fix.
-        fraunces: document.fonts.check(`${style.fontWeight} ${style.fontSize} Fraunces`),
-        text: range.toString(),
-        em: range.getBoundingClientRect().width / parseFloat(style.fontSize),
-      }
-    })
-    expect(space.fraunces).toBe(true)
-    expect(space.text).toBe(' ')
-    // Inter, the body face, leaves 0.27em between words.
-    expect(space.em).toBeGreaterThanOrEqual(0.25)
+    // Recent Imports shows once there is an import to list.
+    await page.getByTestId('import-continue-preview').click()
+    await page.getByTestId('import-execute-all').click()
+    await expect(page.getByTestId('import-result')).toContainText('Imported 3', { timeout: 15000 })
+    const recentImports = page.getByRole('heading', { name: 'Recent Imports' })
+    await expect(recentImports).toBeVisible({ timeout: 15000 })
+    await expectWordsApart(recentImports)
   })
 
   test('re-importing the same rows says nothing is new and logs the skips', async ({ page }) => {

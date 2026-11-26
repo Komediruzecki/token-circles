@@ -350,10 +350,6 @@
   font-weight: 600;
   color: var(--text);
   margin: 0 0 4px 0;
-  /* Fraunces' space, after the -0.01em letter spacing every h2 gets, is 0.19em: 2.9 px between
-     "Map" and "columns" at 15 px, and they read almost as one word. Inter leaves 0.27em between
-     words; this brings the space to 4 px, 0.27em. */
-  word-spacing: 0.08em;
 }
 
 .mappingSubtitle {

@@ -1195,6 +1195,7 @@
 .budget-allocations h2,
 .categories-section h2 {
   font-family: var(--font-display, inherit);
+  word-spacing: var(--font-display-word-spacing);
   letter-spacing: -0.01em;
 }
 

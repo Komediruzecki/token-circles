@@ -40,8 +40,10 @@
   align-items: center;
   gap: 9px;
   margin: 0;
-  /* A label, not a heading to look at: on Progress it is an h2, which the app sets in the display face. */
+  /* A label, not a heading to look at: on Progress it is an h2, which the app sets in the display
+     face with that face's wider word space. It keeps Inter and Inter's own space. */
   font-family: inherit;
+  word-spacing: normal;
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.16em;
@@ -78,6 +80,7 @@
 .title {
   margin: 10px 0 0;
   font-family: var(--font-display, inherit);
+  word-spacing: var(--font-display-word-spacing);
   font-size: 21px;
   font-weight: 600;
   line-height: 1.22;

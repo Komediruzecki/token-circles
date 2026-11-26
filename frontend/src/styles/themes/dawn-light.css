@@ -136,6 +136,10 @@
   /* Fonts (shared across themes; declared on :root so always present) */
   --font-inter: 'Inter', system-ui, -apple-system, sans-serif;
   --font-display: 'Fraunces', Georgia, 'Times New Roman', serif;
+  /* Fraunces has a narrow space: 0.19em once a heading's -0.01em tracking takes its share, where
+     Inter leaves 0.27em between words. Every rule that sets the display face adds this, which
+     brings its space to Inter's. */
+  --font-display-word-spacing: 0.08em;
   --font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
 
   /* Misc */

@@ -3127,19 +3127,36 @@ check')` first, as the cushion and debt cases do.
     the page's loading state, which takes the strip off the page. Before the change it failed at
     Calendar at 390 px, not whole in the strip. Taken out one at a time, the effect fails there too,
     and `nowrap` with `flex: 0 0 auto` at "Regular Bills" (two lines).
-- **Map columns says what an empty Account setup cell means, and its heading's words stand
-  apart.** Round 4 of the 19 Nov review, `ImportMappingStep.tsx` and `Import.module.css`.
-  - A value typed as an expense or income had "—" under Account setup. It says "Not an account"
-    now (`.categoryTableNone`). Test: `mappingSource.test.tsx` "says in words that a category has
-    no account to set up", which failed on the dash before.
-  - "Map columns" read almost as one word. It is the space, not `.mappingTitle`, which sets no
-    letter spacing: every `h1` and `h2` is set in Fraunces 600 with -0.01em letter spacing
-    (`styles/index.css`), and in Chromium the space between the two words was 2.86 px at 15 px
-    (0.19em). From the ink of "p" to the ink of "c" that is 0.18em, where Inter leaves 0.27em.
-    `.mappingTitle` adds `word-spacing: 0.08em`, for 4.06 px (0.27em), measured in both themes at
-    1440, 820 and 390 px. The other headings in the display face have the same narrow space; only
-    this one changes here. Test: `import.spec.ts` "the words of the Map columns heading stand
-    apart": the space is at least 0.25em, in Fraunces. Without the rule it fails at 0.19em.
+- **Map columns says what an empty Account setup cell means.** Round 4 of the 19 Nov review,
+  `ImportMappingStep.tsx`. A value typed as an expense or income had "—" under Account setup. It
+  says "Not an account" now (`.categoryTableNone`). Test: `mappingSource.test.tsx` "says in words
+  that a category has no account to set up", which failed on the dash before.
+- **Words in the display face stand apart, on every page.** "Map columns" read almost as one word
+  (round 4 of the 19 Nov review). It is the space, not `.mappingTitle`, which sets no letter
+  spacing: every `h1` and `h2` is set in Fraunces 600 with -0.01em letter spacing
+  (`styles/index.css`), and in Chromium the space between the two words was 2.86 px at 15 px
+  (0.19em). From the ink of "p" to the ink of "c" that is 0.18em, where Inter leaves 0.27em. Round
+  4 widened that heading alone, which left "Recent Imports", on the same page, at 0.205em. The space
+  belongs to the face now: `--font-display-word-spacing: 0.08em` sits beside `--font-display`
+  (`themes/dawn-light.css`), and every rule that sets the face sets `word-spacing` to it: `h1, h2`
+  and the 20 other rules that use the face (titles, card headings, the orbit and ring values, the
+  boot screen's name). `.mappingTitle`'s own rule is gone. Progress's "Your next step" is an h2 that
+  `.eyebrow` sets in Inter, and it takes `word-spacing: normal` back. Measured on 22 screens (every
+  route, a page that does not exist and the sign-in screen) at 1440, 820 and 390 px in both themes,
+  before and after: 690 `h1` and `h2`, and not one gained or lost a line. The two that take two
+  lines, "Compound Interest Projector" and "Emergency Fund Tracker" at 390, took two before. The
+  192 other elements in the face on those screens (values, card titles), measured with the space
+  and again without it, take the same lines and overflow their boxes no more. A value with a no-break space in it (an
+  amount shown with a currency code, "CHF 1,234.00") is 0.08em wider, 2.24 px in a 28 px
+  `.metric-value`; the demo data has none. The PWA install screenshots in `public/screenshots/`
+  show headings in the face and would change if re-shot; they were not, and no test compares them.
+  - **Tests:** `import.spec.ts` "the words of each heading on the Import page stand apart": Map
+    columns, then Recent Imports after an import, each at least 0.25em and in Fraunces. On round
+    4's stylesheets it failed at Recent Imports (0.205em); with the `h1, h2` rule's line taken out
+    it fails at Map columns (0.19em). `src/__tests__/displayWordSpacing.test.ts` reads the
+    stylesheets: every rule that sets the face sets the word spacing, the token is 0.08em and
+    declared once, and an `h1` or `h2` that a class sets in another face gives the space back. All
+    three fail on round 4's stylesheets.
 - **Recent Imports' line wraps under its name.** At 390 px an entry's line went on under the
   summary's own marker, so "(12 imported)" started at the row's edge, at 42 px against the name's
   56.3. The marker is an SVG arrow in a column of its own now (`.logSummary` in
