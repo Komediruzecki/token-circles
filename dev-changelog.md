@@ -3056,6 +3056,14 @@ check')` first, as the cushion and debt cases do.
     'EUR' to be 'GBP'), and it failed the same way on local-first before its change. A paid bill
     and a recurring rule on local-first still take the browser's currency (`bills.ts`,
     `recurring.ts`).
+  - **A quick entry test waits for what it did not wait for.** The read of the stored base
+    currency moved the handling of a save in `quickEntryOffersActiveProfile.test.tsx` ("files an
+    entry under the active profile", which waits only for the request to be sent) into the next
+    test's seed, which clears the profiles. The local router found the save's profile gone, made a
+    "Personal Profile" (id 4) and made it current, and the next test's App opened on it: "the
+    command bar matches only the active profile's categories" failed three runs in three, at
+    `expected 4 to be 1`. The file's `apiFetch` stand-in keeps the requests still being answered,
+    and each test ends when they are; without that wait it fails again.
 - **The scan's modal asks to adjust a price or period only over rows that have one.** Round 3 of
   the 19 Nov review: "Recurring charges we recognized · adjust price or period" sat over "No known
   subscriptions found". `SubscriptionScanModal` (Bills and Import) reads `adjustable` from the
