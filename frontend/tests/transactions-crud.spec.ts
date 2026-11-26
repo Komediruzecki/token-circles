@@ -260,11 +260,14 @@ test.describe('Transactions CRUD Operations', () => {
   })
 
   test('should highlight expense type when selected', async ({ page }) => {
-    const expenseBtn = page.locator('[data-test-id="tx-type-expense"]')
-    const isSelected = await expenseBtn.evaluate((el) => el.classList.contains('active'))
-    if (isSelected) {
-      await expect(expenseBtn).toHaveClass(/active/)
-    }
+    await page.getByTestId('add-transaction-btn').click()
+    const expenseBtn = page.getByTestId('tx-type-expense')
+    await expect(expenseBtn).toBeVisible()
+    // Expense is the type a new entry starts on: Income first, so the click is what selects it.
+    await page.getByTestId('tx-type-income').click()
+    await expect(expenseBtn).not.toHaveClass(/(^|\s)_?active(_|\s|$)/)
+    await expenseBtn.click()
+    await expect(expenseBtn).toHaveClass(/(^|\s)_?active(_|\s|$)/)
   })
 
   test('should highlight income type when selected', async ({ page }) => {

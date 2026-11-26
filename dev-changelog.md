@@ -2968,8 +2968,8 @@ check')` first, as the cushion and debt cases do.
 - **Specs: an `isVisible({ timeout })` read as an assertion is an assertion now.** Playwright
   ignores `isVisible`'s `timeout` (deprecated: it returns at once, Playwright 1.64.1's types say),
   so these checks never waited. `housing-crud.spec.ts` asserts the add button with `toBeVisible`,
-  `retirement-crud.spec.ts` its two empty-state checks with `toBeHidden`, and a call in
-  `transactions-crud.spec.ts` whose answer nothing read is gone. Left as conditions, which they
+  and a call in `transactions-crud.spec.ts` whose answer nothing read is gone (the two
+  `retirement-crud.spec.ts` empty-state checks are deleted, below). Left as conditions, which they
   are, and listed: the setup wizard's leave confirmation in 13 specs and `form-errors-helpers.ts`
   (Skip always asks today, and the confirmation is up in the same click, so each check is true
   whenever it runs), and in `transactions-crud.spec.ts` four receipt cases and a type-selector
@@ -3032,16 +3032,11 @@ check')` first, as the cushion and debt cases do.
 - **Tests:** `src/features/__tests__/apiAccess.test.tsx` creates a token from a focused Create
   token, acknowledges it and fails unless focus is on the name field; before the change focus was
   on `<body>`.
-- **Specs: five cases that never ran say so, and two that check little say what they check.** In
-  `transactions-crud.spec.ts` four receipt cases look for the receipt viewer, which no transaction
-  in the e2e fixture can open (none has a receipt), and the type-selector case looks inside the
-  entry form without opening it. Their bodies never ran, and round 7's full run counted all five as
-  passed. Each is `test.fixme` now with its reason as an annotation, so the report lists them as
-  skipped: 5 skipped and 99 passed over this spec and `retirement-crud.spec.ts`. The two
-  `retirement-crud.spec.ts` cases titled for the empty state both check that nothing with the
-  test id `empty-state` is shown, and Retirement renders nothing with that test id, so they pass
-  whatever the page shows; they are named for that now, the second as the same check again
-  (Playwright refuses two tests with one title).
+- **Specs: five cases that never ran say so.** In `transactions-crud.spec.ts` four receipt cases
+  look for the receipt viewer, which no transaction in the e2e fixture can open (none has a
+  receipt), and the type-selector case looks inside the entry form without opening it. Their
+  bodies never ran, and round 7's full run counted all five as passed. Each is `test.fixme` now
+  with its reason as an annotation, so the report lists them as skipped.
 - **CHANGELOG: the dialog line is two sentences.** "Dialogs open with the cursor inside, close with
   Escape, and put you back on the button that opened them. The Quick add button no longer sits on
   top of an open dialog." It replaces a line that listed dialogs by name and said Escape closed
@@ -3136,6 +3131,14 @@ check')` first, as the cushion and debt cases do.
   the tour's new listener taken out both fail, and without its `stopPropagation` the second does.
   `frontend/tests/dialog-focus.spec.ts` has a new @smoke case doing the measured steps; on the
   tour as it was it fails where the list should still be open.
+- **Specs: two cases that checked nothing are gone, and one checks a real change.**
+  `retirement-crud.spec.ts` loses both empty-state cases: Retirement renders nothing with the test
+  id `empty-state`, so they passed whatever the page showed. In `transactions-crud.spec.ts`,
+  "should highlight expense type when selected" read the `active` class without opening the entry
+  form, and asserted only when it found it, which it never did (the class is the CSS module's
+  hashed name, never a bare `active`). It now opens the form, picks Income, checks Expense is not
+  highlighted, clicks Expense and checks it is. With the highlight taken out of `Transactions.tsx`
+  it fails after the click, and with Expense always highlighted it fails before it.
 - **No extra-payment label stands on the loan's line.** A label above its mark and to the left of it
   was placed at the mark's height, where the line has not yet come down to the mark, so the line ran
   through it. The review's sweep (`LoanPayoffChart` in jsdom: the boat with one extra payment at

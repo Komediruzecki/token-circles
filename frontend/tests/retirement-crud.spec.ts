@@ -296,22 +296,6 @@ test.describe('Retirement Planning CRUD Operations', () => {
     await expect(modal).not.toBeVisible({ timeout: 2000 })
   })
 
-  // Named for what they check. Retirement renders nothing with this test id (its empty message
-  // has none), so both pass whatever the page shows, and the second is the first again.
-  test('shows nothing with the test id empty-state', async ({ page }) => {
-    await navigateToRoute(page, 'retirement')
-    await page.waitForTimeout(500)
-
-    await expect(page.getByTestId('empty-state')).toBeHidden()
-  })
-
-  test('shows nothing with the test id empty-state, the same check again', async ({ page }) => {
-    await navigateToRoute(page, 'retirement')
-    await page.waitForTimeout(500)
-
-    await expect(page.getByTestId('empty-state')).toBeHidden()
-  })
-
   test('should have a results panel beside the assumptions', async ({ page }) => {
     await expect(page.getByTestId('retirement-results')).toBeVisible({ timeout: 10000 })
   })
