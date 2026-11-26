@@ -160,11 +160,8 @@ const TEXT_ON_FLOATING: ReadonlyArray<readonly [file: string, inside: RegExp]> =
 /** Text needs 4.5:1 on whatever it is painted on (WCAG 1.4.3). */
 const MIN_TEXT = 4.5
 
-/**
- * Rules whose colour paints a mark, not text. A status mark keeps the status colour and the words
- * beside it take the text token, as a met circle check's do (successTextContrast.test.ts).
- */
-const MARKS = new Set(['components/Toast.module.css .icon'])
+/** A focus ring is a mark, not text: 3:1 on what it is drawn over (WCAG 1.4.11). */
+const MIN_RING = 3
 
 function cssFiles(dir: string, found: string[] = []): string[] {
   for (const entry of readdirSync(dir)) {
@@ -513,7 +510,7 @@ describe('text on a floating surface reads 4.5:1 on it, in every theme', () => {
       const scope = all.filter((r) => r.file === file && inside.test(r.selector))
       for (const [kind, local] of kindsOf(scope)) {
         const props = new Map([...theme, ...local])
-        for (const pair of textPairs(scope).filter((p) => !MARKS.has(`${file} ${p.where}`))) {
+        for (const pair of textPairs(scope)) {
           measure(`${file} ${pair.where}${kind ? ` (${kind})` : ''}`, pair, props)
         }
       }
@@ -531,4 +528,37 @@ describe('text on a floating surface reads 4.5:1 on it, in every theme', () => {
     measure("a chart's tooltip", { where: '', ink: `var(${chart!})` }, theme)
     expect(weak).toEqual([])
   })
+
+  it.each(cases)('%s: every focus ring on a floating surface reads 3:1 on it', (selector, id) => {
+    const theme = tokensOf(selector, id)
+    const weak: string[] = []
+    let rings = 0
+    for (const [file, inside] of TEXT_ON_FLOATING) {
+      const scope = all.filter((r) => r.file === file && inside.test(r.selector))
+      for (const [kind, local] of kindsOf(scope)) {
+        const props = new Map([...theme, ...local])
+        const surface = paint('var(--surface-floating)', props)!
+        for (const rule of scope) {
+          const colour = ringColour(rule)
+          if (colour === undefined) continue
+          rings += 1
+          const ink = paint(colour, props)
+          const where = `${file} ${rule.selector}${kind ? ` (${kind})` : ''}`
+          if (ink === undefined) weak.push(`${where}: cannot read ${colour}`)
+          else if (ratio(ink, surface) < MIN_RING) {
+            weak.push(`${where}: ${colour} at ${ratio(ink, surface).toFixed(2)}:1`)
+          }
+        }
+      }
+    }
+    expect(rings, 'no focus ring found to measure').toBeGreaterThan(0)
+    expect(weak).toEqual([])
+  })
 })
+
+/** The colour a rule draws its focus ring in, or undefined when it draws none. */
+function ringColour(rule: Rule): string | undefined {
+  const outline = rule.decls.get('outline-color') ?? rule.decls.get('outline')
+  if (outline === undefined) return undefined
+  return /var\(--[\w-]+\)|#[\da-f]{3,8}\b|(?:rgb|hsl)a?\([^)]*\)/i.exec(outline)?.[0]
+}

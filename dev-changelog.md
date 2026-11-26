@@ -2939,6 +2939,18 @@ check')` first, as the cushion and debt cases do.
   `SubscriptionCatalogModal.test.tsx`). `transaction-form-escape.spec.ts` now expects focus in
   the form once it opens, and types "?" from its close button rather than from the add button
   behind it.
+- **A toast's icon and focus rings are drawn in its ink.** Dawn's warning toast drew both in
+  `--warning`, 2.99:1 on the toast's surface, under the 3:1 a mark needs (WCAG 1.4.11). Every kind
+  now draws them in its ink, the text token its title and action already use, so the five kinds
+  read alike: 5.26:1 for Dawn's warning, the lowest of the five kinds in Dawn, Orbit and the
+  instrument deck, up to 7.92:1. The edge, the action's outline and its hover tint keep the accent.
+- **Tests:** `src/__tests__/floatingEdges.test.ts` no longer exempts the toast's icon (`MARKS` is
+  gone): it is measured as every other colour on a floating surface is, and a new case measures
+  every focus ring on one at 3:1 in each theme and kind. With the icon and the rings back on the
+  accent, the colour case fails in all three themes (the icon at 2.99, 3.70 and 4.35:1 in Dawn,
+  3.71:1 in Orbit and 4.18:1 in the instrument deck) and the ring case at 2.99:1 for Dawn's
+  warning. `successTextContrast.test.ts` (D1) reads the rules: the icon and the rings on the ink,
+  the edge on the accent.
 - **No extra-payment label stands on the loan's line.** A label above its mark and to the left of it
   was placed at the mark's height, where the line has not yet come down to the mark, so the line ran
   through it. The review's sweep (`LoanPayoffChart` in jsdom: the boat with one extra payment at

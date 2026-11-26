@@ -91,13 +91,18 @@ describe("a met circle check's word", () => {
 })
 
 describe("a success toast's button", () => {
-  it('is set in --success-text, and the icon and border keep --success', () => {
-    // Each kind sets an ink for the title and the button, and an accent for the icon and the edge.
+  it('is set in --success-text with the icon and the focus ring, and the border keeps --success', () => {
+    // Each kind sets an ink for its text and its marks, and an accent for the edge and the tints.
+    // Dawn's --warning is 2.99:1 on the toast, under the 3:1 a mark needs: the icon and the ring
+    // take the ink, which reads 4.5:1 in every kind and theme.
     const rule = (selector: string) => ruleIn(TOAST_CSS, selector)
     expect(rule('.toast.success')).toMatch(/--toast-ink:\s*var\(--success-text\)/)
     expect(rule('.actionBtn')).toMatch(/(?:^|;)\s*color:\s*var\(--toast-ink\)/)
     expect(rule('.toast.success')).toMatch(/--toast-accent:\s*var\(--success\)/)
-    expect(rule('.icon')).toMatch(/color:\s*var\(--toast-accent\)/)
+    expect(rule('.icon')).toMatch(/color:\s*var\(--toast-ink\)/)
+    expect(rule('.actionBtn:focus-visible,\n.closeBtn:focus-visible')).toMatch(
+      /outline:[^;]*var\(--toast-ink\)/
+    )
     expect(rule('.toast')).toMatch(/border:[^;]*var\(--toast-accent\)/)
   })
 })

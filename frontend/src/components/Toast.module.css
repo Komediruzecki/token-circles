@@ -39,10 +39,11 @@
   animation: toastIn 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-/* Each kind has an accent, for the icon, the edge, the action's outline and its hover tint, and an
-   ink, for the title and the action's label. The ink is the hue's text token: it reads 4.5:1 on the
-   floating surface and on the hover tint in every theme. The accents do not: Dawn's --warning is
-   2.99:1 on the surface, --success 3.70:1 and --danger 4.35:1, and Orbit's --danger 3.71:1. */
+/* Each kind has an accent, for the edge, the action's outline and its hover tint, and an ink, for
+   the icon, the title, the action's label and the focus rings. The ink is the hue's text token: it
+   reads 4.5:1 on the floating surface and on the hover tint in every theme, past the 3:1 a mark
+   needs. The accents do not: Dawn's --warning is 2.99:1 on the surface, --success 3.70:1 and
+   --danger 4.35:1, and Orbit's --danger 3.71:1. */
 .toast.info {
   --toast-accent: var(--primary);
   --toast-ink: var(--primary-hover);
@@ -70,7 +71,7 @@
   place-items: center;
   width: 1.1rem;
   height: 1.1rem;
-  color: var(--toast-accent);
+  color: var(--toast-ink);
 }
 
 .icon svg {
@@ -141,7 +142,7 @@
 
 .actionBtn:focus-visible,
 .closeBtn:focus-visible {
-  outline: 2px solid var(--toast-accent);
+  outline: 2px solid var(--toast-ink);
   outline-offset: 2px;
 }
 
