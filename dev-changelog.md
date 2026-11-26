@@ -2659,6 +2659,14 @@ check')` first, as the cushion and debt cases do.
   after a write to another entity, none shared across scopes, a failed read forgotten, and no
   tracking of the counters it reads.
 
+- **Release case s02b 2.17 no longer pins local-first recurring rows and subscriptions as carrying
+  no category.** Its `test.fail(m.kind === 'local', ...)` said local-first `recurringList` and
+  `billsList` return the stored rows with no `category_name`/`category_color`. #606 (5b4a4d91, 8 Oct)
+  joined both to the category in `core/storage/handlers/recurring.ts` and `handlers/bills.ts`, so the
+  local run has reported "Expected to fail, but passed" since. The pin and its README row are gone.
+  With the two joins taken out again, the local case fails at its first colour check (the slate
+  fallback instead of the category's blue), so the case guards them.
+
 ### Found in the first-week test run (3 Nov)
 
 What the 3 Nov test run and the functionality review after it found in the first week's changes,

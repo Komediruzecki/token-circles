@@ -303,16 +303,6 @@ for (const [pass, test] of both) {
       const housingDot = () => dotAbove(shownPage(page).getByText(sub, { exact: true }))
 
       // Each shows the category as it is now.
-      // Not a 5.16 regression: v5.15.1 has the same handlers. In local-first nothing joins a
-      // recurring row or a subscription to its category: recurringList returns the stored rows
-      // and billsList (core/storage/handlers/bills.ts:48) the stored bill, and no create path
-      // writes `category_name`/`category_color` onto either. So these views never show a
-      // category's colour, before a rename or after it.
-      // Marked here, not at the top: a failure before this point is retried, not taken for the bug.
-      test.fail(
-        m.kind === 'local',
-        'local-first: recurring rows and subscriptions carry no category colour (since 5.15.1)'
-      )
       await expect.poll(() => backgroundOf(cardDot)).toBe(rgb(before))
       await goPage(page, 'transactions', 'transactions-header')
       await recurringSection(page).getByRole('heading', { name: 'Recurring Transactions' }).click()
