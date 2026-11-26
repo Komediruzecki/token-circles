@@ -3054,8 +3054,20 @@ check')` first, as the cushion and debt cases do.
     none is stored, as a new account does. The app's forms name a currency, so they are not
     affected. With either runtime's default hard-coded to 'EUR' the scenario fails there (expected
     'EUR' to be 'GBP'), and it failed the same way on local-first before its change. A paid bill
-    and a recurring rule on local-first still take the browser's currency (`bills.ts`,
-    `recurring.ts`).
+    and a recurring rule on local-first took the browser's currency until round 5 (the next
+    point).
+  - **Round 5: a paid bill and a recurring rule take the stored base currency too.** Local-first's
+    mark-paid (`billsPayOrMarkPaid`, `core/storage/handlers/bills.ts`), a rule's run and the next
+    30 days' payments (`recurringPopulate` and `recurringUpcoming`, `recurring.ts`) wrote or
+    counted in the browser's currency (`getLocalCurrency()`), whatever base currency was stored,
+    where the Worker reads the profile's. All three take `ensureBaseCurrency(undefined, false)` now,
+    as a transaction does. Tests, one per site, each setting the base to GBP first: contract
+    scenarios "a paid bill's expense is in the base currency", "a rule adds its transaction in the
+    base currency" and "upcoming recurring payments are counted in the base currency". Each failed
+    on local-first before its change (expected 'EUR' to be 'GBP') and passed on the Worker; all
+    three pass on both now. `localHandlers.recurring.test.ts` clears the stored settings between
+    its tests: its base-currency test set the browser's to GBP over the 'EUR' an earlier test's
+    account had stored, and passed only while the browser's was read.
   - **A quick entry test waits for what it did not wait for.** The read of the stored base
     currency moved the handling of a save in `quickEntryOffersActiveProfile.test.tsx` ("files an
     entry under the active profile", which waits only for the request to be sent) into the next

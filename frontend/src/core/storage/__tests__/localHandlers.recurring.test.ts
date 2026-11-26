@@ -26,6 +26,9 @@ describe('localHandlers - recurring balance integrity', () => {
     await db.clear('accounts')
     await db.clear('transactions')
     await db.clear('recurring')
+    // The base currency is stored with the first account and read from there: without this, the
+    // first test's account left 'EUR' stored for every test after it.
+    await db.clear('settings')
     await db.add('profiles', { id: 1, name: 'Test', created_at: '2026-01-01' })
   })
 

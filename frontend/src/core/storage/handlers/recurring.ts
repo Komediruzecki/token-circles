@@ -16,7 +16,7 @@ import {
 import { upcomingRecurring } from '../../../../../shared/recurringUpcoming'
 import { transactionInvariantError } from '../../../../../shared/transactionInvariant'
 import { localToday } from '../../../utils/period'
-import { getLocalCurrency } from '../../api'
+import { ensureBaseCurrency } from '../baseCurrency'
 import { getDB } from '../idb'
 import {
   adapter,
@@ -144,12 +144,14 @@ export async function recurringDelete(params: Record<string, string>): Promise<R
   return ok()
 }
 
-/** What the active rules add in the next 30 days, as the Worker answers it. */
+/**
+ * What the active rules add in the next 30 days, as the Worker answers it: counted in the base
+ * currency Settings stored, or the browser's until one is (it was always the browser's).
+ */
 export async function recurringUpcoming(): Promise<Response> {
   const rules = await activeRules()
-  return json(
-    upcomingRecurring(rules as unknown as UpcomingRule[], localToday(), getLocalCurrency())
-  )
+  const base = await ensureBaseCurrency(undefined, false)
+  return json(upcomingRecurring(rules as unknown as UpcomingRule[], localToday(), base))
 }
 
 /**
@@ -201,8 +203,9 @@ export async function recurringPopulate(params: Record<string, string>): Promise
   // form has no currency picker), so the generated transaction inherits that base currency
   // and carries amount_local = amount. This keeps the row identical to the worker's populate
   // for the same rule (was hard-coded 'EUR' here vs the schema-default 'USD' on the worker,
-  // audit M-02) and keeps balances/reports in one currency via computeBalanceDeltas.
-  const baseCurrency = getLocalCurrency()
+  // audit M-02) and keeps balances/reports in one currency via computeBalanceDeltas. It is the base
+  // currency Settings stored, or the browser's until one is: it was always the browser's.
+  const baseCurrency = await ensureBaseCurrency(undefined, false)
 
   // Claim the period before writing anything: next_date moves past it, and every frequency must
   // move it forward, or the guard above never engages and each call debits the account again.

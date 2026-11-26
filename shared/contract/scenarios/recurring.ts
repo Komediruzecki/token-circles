@@ -225,6 +225,32 @@ export const recurring = [
     }
   ),
 
+  // A rule has no currency: its amount is in the base currency, and so is the transaction it
+  // adds. Local-first wrote in the browser's currency, not the one Settings stored.
+  scenario('a rule adds its transaction in the base currency', async (api, expect) => {
+    expectOk(expect, await api.put('/api/settings', { currency: 'GBP' }), 'PUT the base currency');
+    const monthly = await rule(api, expect, { next_date: isoDay(new Date()) });
+    await populate(api, expect, monthly);
+    const rows = await listTransactions(api, expect);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ description: 'Rent', currency: 'GBP' });
+  }),
+
+  // What the next 30 days hold is counted in the base currency, and says which.
+  scenario('upcoming recurring payments are counted in the base currency', async (api, expect) => {
+    expectOk(expect, await api.put('/api/settings', { currency: 'GBP' }), 'PUT the base currency');
+    await rule(api, expect, {
+      description: 'Beans',
+      amount: 20,
+      frequency: 'weekly',
+      next_date: isoDay(new Date()),
+    });
+    const reply = await api.get('/api/recurring/upcoming');
+    expectOk(expect, reply, 'GET /api/recurring/upcoming');
+    expect(reply.body.transactions).toHaveLength(5);
+    expect(reply.body.currency).toBe('GBP');
+  }),
+
   scenario('the recurring list comes soonest first', async (api, expect) => {
     const may = await rule(api, expect, { description: 'May', next_date: '2026-05-01' });
     const march = await rule(api, expect, { description: 'March', next_date: '2026-03-01' });

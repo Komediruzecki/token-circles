@@ -213,6 +213,17 @@ export const bills = [
     }
   ),
 
+  // A bill has no currency: its amount is in the base currency, and the expense its payment
+  // records says so. Local-first wrote in the browser's currency, not the one Settings stored.
+  scenario("a paid bill's expense is in the base currency", async (api, expect) => {
+    expectOk(expect, await api.put('/api/settings', { currency: 'GBP' }), 'PUT the base currency');
+    const water = await bill(api, expect);
+    expectOk(expect, await api.post(`/api/bills/${water}/mark-paid`, {}), 'POST mark-paid');
+    const rows = await listTransactions(api, expect);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ description: 'Water', currency: 'GBP' });
+  }),
+
   scenario("the bill list and calendar carry each bill's category", async (api, expect) => {
     const utilities = await api.post('/api/categories', {
       name: 'Utilities',
