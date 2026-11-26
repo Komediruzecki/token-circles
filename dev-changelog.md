@@ -2636,6 +2636,29 @@ check')` first, as the cushion and debt cases do.
   year and the other ranges in `period.test.ts`, and the custom range and Last 30 days in
   `periodOrbitRange.test.tsx`, are controls that pass either way.
 
+- **Dashboard asks for the holdings once, not twice.** Two readers on Dashboard need
+  `GET /api/portfolio/holdings`: the deck's portfolio list (`components/Dashboard/OverviewDeck.tsx`)
+  and, since #620, the circles (`core/guidance.ts` `loadInputs`, for invested money). Each follows
+  the `portfolio` counter and asked for itself, so every portfolio write, resume, reconnect, profile
+  switch and next show of Dashboard sent the request twice. Release cases s02 2.5 (cloud: "showing
+  dashboard after the write refetches /api/portfolio/holdings once", received 2) and s02b 2.15
+  (cloud: "showing dashboard: no endpoint fetched twice", `/api/portfolio/holdings x2` after a
+  reconnect) failed on it on main 343da5a8; local-first passed, as it counts nothing.
+  `dataVersions.ts` has a new `sharedRead(endpoint, scope, tags, read)`: a reader asking the same
+  endpoint for the same scope while none of `tags`' counters has moved gets the answer already asked
+  for, and the next write, resume or reconnect asks again; a failed read is forgotten, and one answer
+  is kept per endpoint. `core/portfolioHoldings.ts` `householdHoldings()` reads the holdings through
+  it, scoped by storage mode, `profileReadScope()` and the profile version, and both readers use it.
+  The circles now read the household's list, as the deck does, and pick the active profile's rows by
+  `profile_id` (`holdingsOf` already did). Guards:
+  `features/__tests__/dashboardHoldingsReadOnce.test.tsx` mounts Dashboard with the real circles
+  (dashboardFollowsWrites.test.tsx leaves them out) and counts one read on mount, after a write,
+  after a resume, on the next show, after a profile switch, and a third after a second write; all
+  six fail without the change (2, 4, 4, 2, 4 and 6 reads). `core/__tests__/dataVersions.test.ts`
+  covers `sharedRead` itself: one read for two readers, a new one after a write or a resume, none
+  after a write to another entity, none shared across scopes, a failed read forgotten, and no
+  tracking of the counters it reads.
+
 ### Found in the first-week test run (3 Nov)
 
 What the 3 Nov test run and the functionality review after it found in the first week's changes,

@@ -12,6 +12,7 @@ import {
   invalidateAllEntities,
   invalidateEntity,
   invalidateForRequest,
+  sharedRead,
   tagsForPath,
 } from '../dataVersions'
 
@@ -317,5 +318,74 @@ describe('asOneWrite', () => {
 
     expect(entityVersion('transactions')).toBe(1)
     expect(entityVersion('tags')).toBe(1)
+  })
+})
+
+describe('sharedRead', () => {
+  /** A read that counts how often it was asked, answering a new object each time. */
+  function counter(fail = false) {
+    let asked = 0
+    return {
+      read: () => {
+        asked += 1
+        return fail ? Promise.reject(new Error('offline')) : Promise.resolve({ asked })
+      },
+      asked: () => asked,
+    }
+  }
+
+  it('asks once for two readers between the same two writes, and both get that answer', async () => {
+    const c = counter()
+    const first = sharedRead('/api/x', 'p1', ['portfolio'], c.read)
+    const second = sharedRead('/api/x', 'p1', ['portfolio'], c.read)
+    expect(c.asked()).toBe(1)
+    expect(await second).toBe(await first)
+  })
+
+  it('asks again after a write to what it reads, and after a resume', () => {
+    const c = counter()
+    void sharedRead('/api/x', 'p1', ['portfolio'], c.read)
+    invalidateForRequest('/api/portfolio/holdings', 'POST', true)
+    void sharedRead('/api/x', 'p1', ['portfolio'], c.read)
+    invalidateAllEntities()
+    void sharedRead('/api/x', 'p1', ['portfolio'], c.read)
+    expect(c.asked()).toBe(3)
+  })
+
+  it('keeps an answer through a write to something it does not read', () => {
+    const c = counter()
+    void sharedRead('/api/x', 'p1', ['portfolio'], c.read)
+    invalidateEntity('categories')
+    void sharedRead('/api/x', 'p1', ['portfolio'], c.read)
+    expect(c.asked()).toBe(1)
+  })
+
+  it('never hands one scope the answer asked for another', () => {
+    const c = counter()
+    void sharedRead('/api/x', 'p1', ['portfolio'], c.read)
+    void sharedRead('/api/x', 'p2', ['portfolio'], c.read)
+    expect(c.asked()).toBe(2)
+  })
+
+  it('forgets a read that failed, so the next reader asks again', async () => {
+    const failing = counter(true)
+    await expect(sharedRead('/api/x', 'p1', ['portfolio'], failing.read)).rejects.toThrow()
+    const c = counter()
+    await sharedRead('/api/x', 'p1', ['portfolio'], c.read)
+    expect(c.asked()).toBe(1)
+  })
+
+  it('does not make the caller follow the counters it reads', () => {
+    let runs = 0
+    const c = counter()
+    createRoot((dispose) => {
+      createComputed(() => {
+        runs += 1
+        void sharedRead('/api/x', 'p1', ['portfolio'], c.read)
+      })
+      invalidateEntity('portfolio')
+      dispose()
+    })
+    expect(runs).toBe(1)
   })
 })
