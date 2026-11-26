@@ -3120,6 +3120,22 @@ check')` first, as the cushion and debt cases do.
   `pagesFollowWrites.test.tsx`, which answers deletes with yes, answers the merge with Merge.
   `confirmStore.test.ts` checks the three answers and that a plain confirm has no third button,
   and `ConfirmDialog.test.tsx` the third button's place and that Escape answers 'cancel'.
+- **Escape during a tour ends the tour and nothing under it.** Measured on 26 Nov: with the
+  Transactions tour started from Take a Tour and the shortcuts list opened with "?", one Escape
+  ended the tour and shut the list. Take a Tour is a dialog, so the dialogs' Escape was listening
+  before the tour's, shut the list first, and the tour's listener does not ask whether Escape was
+  spent. The tour is drawn over the page: its overlay is z-index 10000, the dialogs 1000 to 9999
+  (the command bar and the Guided Orbit 2000), and only the icon gallery and Take a Tour match
+  it (Take a Tour shuts as the tour starts). So the tour is the one on top.
+  `Spotlight.tsx` takes Escape first now, as it comes in at the window, ends the tour and keeps
+  the key from the rest, so a dialog, a menu or the command bar under the tour stays open for the
+  next Escape. Its other keys are as they were.
+- **Tests:** `spotlightDialogEscape.test.tsx` renders the real tour over a dialog whose Escape
+  listens first: one Escape ends the tour and leaves the dialog open, the next shuts the dialog;
+  and a layer that shuts on any Escape the page hears (as the command bar does) stays open. With
+  the tour's new listener taken out both fail, and without its `stopPropagation` the second does.
+  `frontend/tests/dialog-focus.spec.ts` has a new @smoke case doing the measured steps; on the
+  tour as it was it fails where the list should still be open.
 - **No extra-payment label stands on the loan's line.** A label above its mark and to the left of it
   was placed at the mark's height, where the line has not yet come down to the mark, so the line ran
   through it. The review's sweep (`LoanPayoffChart` in jsdom: the boat with one extra payment at

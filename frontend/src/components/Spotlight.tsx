@@ -295,9 +295,20 @@ export default function Spotlight() {
       else if (action === 'prev') prevSpotlightStep()
       else endSpotlight()
     }
+    // Escape ends the tour and nothing else. The tour is drawn over the page (z-index 10000, the
+    // dialogs 1000 to 9999), so a dialog, a menu or the command bar open under it stays open for
+    // the next Escape. Taken first, as it comes in, and kept from the rest.
+    const onEscape = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      e.preventDefault()
+      e.stopPropagation()
+      endSpotlight()
+    }
     window.addEventListener('keydown', onKey)
+    window.addEventListener('keydown', onEscape, true)
     onCleanup(() => {
       window.removeEventListener('keydown', onKey)
+      window.removeEventListener('keydown', onEscape, true)
     })
   })
 

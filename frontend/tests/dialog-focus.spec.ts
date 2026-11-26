@@ -449,6 +449,36 @@ test.describe('every dialog takes focus and gives it back @smoke', () => {
   })
 })
 
+test.describe('Escape during a tour @smoke', () => {
+  test('ends the tour and leaves the dialog under it open for the next Escape', async ({
+    page,
+  }) => {
+    await login(page)
+    await navigateToRoute(page, 'transactions')
+    // Take a Tour is a dialog: from it on, the dialogs' Escape is listening before the tour's.
+    await page.getByTestId('whats-new-btn').click()
+    const picker = page.getByRole('dialog', { name: 'Take a Tour' })
+    await picker.getByRole('button', { name: /^Transactions/ }).click()
+    const card = page.locator('[data-tour-card]')
+    await expect(card).toBeVisible()
+    await expect(picker).toBeHidden()
+
+    // The shortcuts list opens under the tour, which is drawn over everything.
+    await page.evaluate(() => {
+      if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
+    })
+    await page.keyboard.type('?')
+    const list = page.getByTestId('shortcuts-modal')
+    await expect(list).toBeVisible()
+
+    await page.keyboard.press('Escape')
+    await expect(card).toBeHidden()
+    await expect(list).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(list).toBeHidden()
+  })
+})
+
 /**
  * Every control Tab stops on, from the top of the page until it comes round again, and the dialog
  * each is in. `walk` names the round, so a second walk on the same page counts afresh.
