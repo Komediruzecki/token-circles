@@ -62,6 +62,8 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Setup after the demo makes a space of your own.** Keeping your data in this browser after running the demo opened Example Low Income's dashboard, and running setup again in the demo renamed that example. Setup now makes your space a new profile and lets you remove the three example profiles or keep them. Where the browser already has a profile of yours beside the examples, the switch opens on yours.
 - **New accounts and profiles start with the default categories.** They started empty, so a quick add like "coffee 4.50" was saved without a category.
 - **Starting balances stay with their file.** Cancel an import or remove a file in setup, and the next file's accounts could open on the starting balances of the one you set aside, like a YNAB register's, instead of their own.
+- **All time no longer lands on 1970.** Budgets, the bill calendar, Dashboard's cash flow and spending heatmap, and the PDF reports in Settings showed January 1970 with nothing in it. They show this month now, and the period picker's custom range no longer starts on 1 January 1970.
+- **This year's annual PDF report runs from January to this month**, and the Year picker says how far. A report is always made for the year the picker shows.
 
 ## [5.17.6] — 2026-11-01
 

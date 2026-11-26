@@ -50,14 +50,16 @@ export default function PeriodOrbit(props: Props) {
     period().mode === 'range' && period().preset === 'custom'
   )
 
-  // Range-calendar view + selection.
+  // Range-calendar view + selection. The selection opens on the range in focus, except All time:
+  // its 1970-01-01 start stands in for "everything" and is no day anyone picked.
   const [viewYear, setViewYear] = createSignal(period().year)
   const [viewMonth, setViewMonth] = createSignal(period().month ?? now.getMonth())
+  const ownRange = period().mode === 'range' && period().preset !== 'all'
   const [rangeStart, setRangeStart] = createSignal<string | null>(
-    period().mode === 'range' ? (period().from ?? null) : null
+    ownRange ? (period().from ?? null) : null
   )
   const [rangeEnd, setRangeEnd] = createSignal<string | null>(
-    period().mode === 'range' ? (period().to ?? null) : null
+    ownRange ? (period().to ?? null) : null
   )
 
   const activePill = () => {

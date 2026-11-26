@@ -77,6 +77,7 @@ import { theme } from '../core/theme'
 import { setStickyPeriodBar, stickyPeriodBar } from '../core/uiPrefs'
 import { loadChartExportSettings, saveChartExportSettings } from '../utils/chartExportSettings'
 import { localToday, toYYYYMM } from '../utils/period'
+import { annualSpan, spanMonths } from '../utils/reportSpan'
 import ApiAccess from './ApiAccess'
 import { createBaseCurrencyForm } from './baseCurrencyForm'
 import { createNotificationsForm, notificationValues } from './notificationsForm'
@@ -104,6 +105,17 @@ function Reports() {
   const [reportType, setReportType] = createSignal<'monthly' | 'tax' | 'pl' | 'annual'>('monthly')
   const [reportLoading, setReportLoading] = createSignal<string | null>(null)
   const [availableYears, setAvailableYears] = createSignal<number[]>([new Date().getFullYear()])
+  // The year the picker shows is the year a report is made for. A seeded year it does not offer
+  // (one without transactions) left the select on its first option while the report used the
+  // seed, so such a year gives way to this one, which is always offered.
+  const year = () =>
+    availableYears().includes(reportYear()) ? reportYear() : new Date().getFullYear()
+  /** This year's annual report runs to the current month; the picker says how far. */
+  const soFar = () => {
+    const full = reportType() === 'annual' || (reportType() === 'monthly' && reportMonth() === 0)
+    const span = annualSpan(year())
+    return full && span.soFar ? `${year()} so far: ${spanMonths(span)}.` : null
+  }
 
   // The years come from the transactions table, so any transaction write can add or remove one.
   refetchOnActive(
@@ -159,7 +171,7 @@ function Reports() {
   }
 
   const handleGenerate = async () => {
-    const y = reportYear()
+    const y = year()
     const dark = reportIsDark()
     const pdf = await import('../core/storage/clientPdfReports')
 
@@ -206,12 +218,17 @@ function Reports() {
         <label class={styles.formLabel}>Year</label>
         <select
           class={styles.formControl}
-          value={reportYear()}
+          value={year()}
           onchange={(e) => setReportYear(Number(e.currentTarget.value))}
           style="max-width: 250px;"
         >
           <For each={availableYears()}>{(y) => <option value={y}>{y}</option>}</For>
         </select>
+        {soFar() && (
+          <small class={styles.rowHint} data-test-id="report-so-far">
+            {soFar()}
+          </small>
+        )}
       </div>
       {reportType() === 'monthly' && (
         <div class={styles.formGroup}>

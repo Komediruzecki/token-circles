@@ -241,11 +241,15 @@ export function toRange(p: Period, now: Date = new Date()): { from: string; to: 
   return { from: isoDate(startOfMonth(p.year, month)), to: isoDate(endOfMonth(p.year, month)) }
 }
 
-/** `YYYY-MM` for the focus month (month mode) or the range's start month. */
+/**
+ * `YYYY-MM` for the focus month: the month itself, or the month a year or a range starts in. All
+ * time is the exception. Its 1970-01-01 start stands in for "everything" and is no month anyone
+ * means, so it resolves to the month it reaches, this month.
+ */
 export function toYYYYMM(p: Period, now: Date = new Date()): string {
   if (p.mode === 'month') return `${p.year}-${pad2((p.month ?? now.getMonth()) + 1)}`
-  const { from } = toRange(p, now)
-  return from.slice(0, 7)
+  const { from, to } = toRange(p, now)
+  return (p.preset === 'all' ? to : from).slice(0, 7)
 }
 
 function formatRange(from: string, to: string): string {
