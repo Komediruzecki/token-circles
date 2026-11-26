@@ -214,8 +214,8 @@
   max-width: calc(100vw - 20px);
   /* Solid surface — must fully hide the calendar grid behind it (see the glass
      note further down for why this popover is not translucent). */
-  background: var(--surface);
-  border: 1px solid var(--border);
+  background: var(--surface-floating);
+  border: 1px solid var(--border-floating);
   border-radius: var(--radius);
   box-shadow: var(--shadow-lg);
   overflow: hidden;
@@ -319,7 +319,8 @@
   white-space: nowrap;
 }
 .amountOverdue {
-  color: var(--danger, #ef4444);
+  /* On the floating surface: --danger is 4.35:1 on it in Dawn and 3.71:1 in Orbit. */
+  color: var(--danger-text);
 }
 .popoverMarkPaid {
   padding: 4px 10px;
@@ -342,7 +343,7 @@
 }
 .popoverPaidCheck {
   font-size: 16px;
-  color: var(--success, #10b981);
+  color: var(--success-text);
   font-weight: 700;
 }
 

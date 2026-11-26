@@ -72,6 +72,7 @@ import { takeHashFlag } from '../core/hashRoute'
 import { refetchOnActive } from '../core/pageVisibility'
 import { setPeriod, usePeriod } from '../core/periodStore'
 import { rowsOfProfile } from '../core/quickEntryLists'
+import { dialogFocus, dialogFocusWhile } from '../utils/dialogFocus'
 import { fromPill, toRange } from '../utils/period'
 import {
   blankTransaction,
@@ -418,6 +419,13 @@ export default function Transactions() {
   const _closeModals = () => {
     setTransactionModalOpen(false)
   }
+
+  // The form stays on the page while shut: focus goes into it each time it opens and back to what
+  // opened it each time it shuts, however it shuts (dialogFocusWhile). Escape shuts it as Cancel
+  // does, wherever focus is, unless something is open over it (a dialog, a menu, an (i) panel) or
+  // another page is shown.
+  let txModalRef: HTMLDivElement | undefined
+  dialogFocusWhile(isTransactionModalOpen, () => txModalRef, { onEscape: _closeModals })
 
   // Close receipt modal
   const closeReceiptModal = () => {
@@ -1552,6 +1560,7 @@ export default function Transactions() {
 
       {/* Transaction Modal */}
       <div
+        ref={txModalRef}
         class={`${styles.modalOverlay} ${isTransactionModalOpen() ? styles.show : ''}`}
         data-test-id="tx-modal"
         role="dialog"
@@ -2297,7 +2306,13 @@ export default function Transactions() {
           }}
         >
           <div
+            ref={(el) => {
+              dialogFocus(el, { onEscape: closeReceiptModal })
+            }}
             class={`${styles.modal} ${styles.receiptModal}`}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Receipt"
             onclick={(e) => {
               e.stopPropagation()
             }}

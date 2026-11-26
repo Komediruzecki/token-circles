@@ -1,6 +1,7 @@
 import { createSignal, Show } from 'solid-js'
 import { SIGN_IN_MESSAGES } from '../../../shared/signInSchema'
 import { api } from '../core/api'
+import { dialogFocus } from '../utils/dialogFocus'
 import { createForm, Field, FormNotice, SubmitButton } from './form'
 import layoutStyles from './Layout.module.css'
 import { reloadIntoTheApp, SIGN_IN_FAILED } from './signInForm'
@@ -67,7 +68,13 @@ export default function TwofaChallenge(props: { onBack?: () => void }) {
           : 'Enter one of the recovery codes you saved when enabling two-factor authentication. Each works once.'}
       </p>
       <FormNotice form={form} testId="twofa-error" />
-      <form {...form.attrs}>
+      {/* A step inside the sign-in dialog: Escape goes on to the dialog, which closes. */}
+      <form
+        ref={(el) => {
+          dialogFocus(el, { inPlace: true })
+        }}
+        {...form.attrs}
+      >
         <Field
           form={form}
           name="code"
@@ -86,7 +93,6 @@ export default function TwofaChallenge(props: { onBack?: () => void }) {
               autocomplete="one-time-code"
               inputmode={mode() === 'totp' ? 'numeric' : 'text'}
               maxlength={mode() === 'totp' ? 6 : 12}
-              autofocus
               class={`${styles.input} ${mode() === 'totp' ? styles.code : styles.recovery}`}
             />
           )}

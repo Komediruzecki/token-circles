@@ -529,7 +529,8 @@ describe('controls that cannot do anything say so', () => {
     const tip = byTestId(root, 'retirement-life-needs-birth')!
     tip.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     await flush()
-    expect(byTestId(root, 'retirement-life-needs-birth-panel')!.textContent).toContain(
+    // The panel renders at the end of the page, outside the planner.
+    expect(byTestId(document.body, 'retirement-life-needs-birth-panel')!.textContent).toContain(
       'date of birth'
     )
 

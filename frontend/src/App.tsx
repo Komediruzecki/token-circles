@@ -313,6 +313,9 @@ export function App() {
     if (state.showDropdown) applyProfileSelection(selectedProfileIds())
     else setShowDropdown(true)
   }
+  // Create Profile opens from an item in this button's menu, gone by the time the dialog shuts:
+  // focus goes back to the button.
+  let profileButton: HTMLButtonElement | undefined
 
   // Settings > Household edits the household without choosing a profile: it writes the stored
   // selection and bumps profileVersion. Follow it. Otherwise the sidebar kept the old household,
@@ -907,6 +910,7 @@ export function App() {
                 <div class={profileStyles.profileSelector}>
                   <div class={profileStyles.profileDropdown}>
                     <button
+                      ref={profileButton}
                       class={profileStyles.profileDropdownBtn}
                       data-test-id="profile-dropdown-btn"
                       onClick={toggleDropdown}
@@ -1322,6 +1326,7 @@ export function App() {
 
               <Show when={isProfileModalOpen()}>
                 <ProfileModal
+                  returnFocusTo={() => profileButton}
                   onClose={() => {
                     setIsProfileModalOpen(false)
                   }}

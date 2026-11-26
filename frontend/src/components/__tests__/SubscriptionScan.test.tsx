@@ -8,6 +8,7 @@
 /* eslint-disable security/detect-non-literal-fs-filename -- the one stylesheet named below */
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { createSignal } from 'solid-js'
 import { render } from 'solid-js/web'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { BILL_MESSAGES, BILL_NAME_MAX } from '../../../../shared/billSchema'
@@ -820,5 +821,58 @@ describe('the scan in its modal', () => {
     expect(rule('.body')).toMatch(/overflow:\s*hidden/)
     // Embedded in the setup wizard the panel does not scroll on its own: the wizard's middle does.
     expect(rule('.scroll')).not.toMatch(/overflow/)
+  })
+})
+
+describe('the scan dialog and focus', () => {
+  // It stays on the page while shut, faded out: it must not take focus until it opens.
+  it('takes focus only when it opens, and gives it back to the opener when it shuts', async () => {
+    const settle = () => new Promise((r) => setTimeout(r, 0))
+    const [open, setOpen] = createSignal(false)
+    host = document.createElement('div')
+    document.body.appendChild(host)
+    dispose = render(
+      () => (
+        <>
+          <button data-test-id="scan">Scan</button>
+          <SubscriptionScanModal isOpen={open} onClose={() => setOpen(false)} />
+        </>
+      ),
+      host
+    )
+    const opener = host.querySelector<HTMLButtonElement>('[data-test-id="scan"]')!
+    const dialog = host.querySelector('[role="dialog"]')!
+    opener.focus()
+    await settle()
+    expect(document.activeElement).toBe(opener)
+
+    setOpen(true)
+    await vi.waitFor(() => {
+      expect(dialog.contains(document.activeElement)).toBe(true)
+    })
+
+    setOpen(false)
+    await settle()
+    expect(document.activeElement).toBe(opener)
+  })
+
+  // Faded out to nothing while shut, but still on the page: without inert, Tab walked into its
+  // Close button from the Bills and Import pages.
+  it('is inert while shut, so Tab cannot reach it, and not while it is open', () => {
+    const [open, setOpen] = createSignal(false)
+    host = document.createElement('div')
+    document.body.appendChild(host)
+    dispose = render(
+      () => <SubscriptionScanModal isOpen={open} onClose={() => setOpen(false)} />,
+      host
+    )
+    // Solid sets inert as a property, which jsdom does not reflect to the attribute.
+    const overlay = host.querySelector('[role="dialog"]')!.parentElement!
+    const inert = () => overlay.inert || overlay.hasAttribute('inert')
+    expect(inert()).toBe(true)
+    setOpen(true)
+    expect(inert()).toBe(false)
+    setOpen(false)
+    expect(inert()).toBe(true)
   })
 })

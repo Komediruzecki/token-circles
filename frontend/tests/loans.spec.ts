@@ -84,9 +84,11 @@ test.describe('Loans', () => {
     await expect(page.getByTestId('loans-item-total-paid').first()).toBeVisible({ timeout: 10000 })
   })
 
-  test('should have loan edit/delete buttons', async ({ page }) => {
-    await expect(page.getByTestId('loans-item-edit').first()).toBeVisible({ timeout: 10000 })
-    await expect(page.getByTestId('loans-item-delete').first()).toBeVisible()
+  test('should have Edit and Delete in the card menu', async ({ page }) => {
+    // They moved from buttons on the card into its "…" menu, which is portalled to <body>.
+    await page.getByTestId('loans-item-menu').first().click()
+    await expect(page.getByTestId('loans-item-edit')).toBeVisible({ timeout: 10000 })
+    await expect(page.getByTestId('loans-item-delete')).toBeVisible()
   })
 
   test('should chart a what-if against the loan as planned', async ({ page }) => {
@@ -122,9 +124,10 @@ test.describe('Loans', () => {
   })
 
   test('should have prepayment option', async ({ page }) => {
-    // Extra payments moved from a button on the card to the loan's own Extra payments tab.
-    await page.getByTestId('loans-item-name').first().click()
-    await page.getByTestId('loans-tab-extras').click()
+    // The card's menu opens the loan's Extra payments tab with the amount box ready.
+    await page.getByTestId('loans-item-menu').first().click()
+    await page.getByTestId('loans-item-add-extra').click()
     await expect(page.getByTestId('loans-extra-form')).toBeVisible({ timeout: 10000 })
+    await expect(page.getByTestId('loans-extra-amount')).toBeFocused()
   })
 })

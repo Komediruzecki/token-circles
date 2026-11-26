@@ -19,9 +19,7 @@ test.describe('Housing CRUD Operations', () => {
   })
 
   test('should have add expense button', async ({ page }) => {
-    const addBtn = getByTestId(page, 'add-housing-btn')
-    const isVisible = await addBtn.isVisible({ timeout: 3000 }).catch(() => false)
-    expect(isVisible).toBeTruthy()
+    await expect(getByTestId(page, 'add-housing-btn')).toBeVisible()
   })
 
   test('should handle errors gracefully', async ({ page }) => {

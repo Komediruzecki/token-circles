@@ -49,6 +49,18 @@
   --border: #26324f;
   --border-color: #26324f;
 
+  /* Floating surfaces: menus, dropdowns, popovers, tooltips, toasts. A step above the card, with an
+     edge UI-28 asks to be 3:1 in a dark theme: 3.07:1 on --card-bg, 3.31:1 on --bg-secondary and
+     3.52:1 on --bg (2.81:1 on a hovered row, --surface-hover). */
+  --surface-floating: #222b47;
+  --border-floating: #5b698c;
+
+  /* A dialog's edge: the floating edge, 3.44:1 at worst against a ground under a dialog's backdrop
+     (--card-bg under 40% black) and 3.07:1 on the dialog's --card-bg. The sidebar-navy dialogs
+     (sign-in, Create Profile) take it too: 3.52:1 beside them, 3.60:1 on the navy. */
+  --border-dialog: #5b698c;
+  --border-dialog-sidebar: #5b698c;
+
   /* Action — azure */
   --primary: #6e9bff;
   --primary-hover: #93b4ff;
@@ -69,6 +81,9 @@
      --danger itself is under 4.5:1 on --surface. */
   --danger-text: #ff9d9d;
   --warning: #f0a860;
+  /* Small text in the warning hue: 7.0:1 on --surface-floating and 8.4:1 on --surface, so the
+     dark theme uses --warning itself. */
+  --warning-text: #f0a860;
   --info: #6e9bff;
 
   /* Semantic money — reserved for numbers, never decoration */

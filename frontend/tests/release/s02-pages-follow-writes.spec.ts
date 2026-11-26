@@ -364,7 +364,8 @@ for (const [pass, test] of both) {
       expectGets(m, addGets, 1, 'Loans fetches its list once for the add')
 
       const editGets = await getsDuring(m, LOANS, async () => {
-        await loan.getByTestId('loans-item-edit').click()
+        await loan.getByTestId('loans-item-menu').click()
+        await page.getByTestId('loans-item-edit').click()
         await expect(modal).toBeVisible()
         await modal.getByPlaceholder('15000.00').fill('15000')
         await modal.locator('button[type="submit"]').click()
@@ -374,7 +375,8 @@ for (const [pass, test] of both) {
       expectGets(m, editGets, 1, 'Loans fetches its list once for the edit')
 
       const deleteGets = await getsDuring(m, LOANS, async () => {
-        await loan.getByTestId('loans-item-delete').getByRole('button').click()
+        await loan.getByTestId('loans-item-menu').click()
+        await page.getByTestId('loans-item-delete').click()
         await acceptConfirm(page)
         await expect(loan).toHaveCount(0)
       })

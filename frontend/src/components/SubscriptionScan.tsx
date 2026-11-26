@@ -45,6 +45,7 @@ import {
   worthTracking,
 } from '../features/subscriptionDetection'
 import { dayText } from '../utils/dayText'
+import { dialogFocusWhile } from '../utils/dialogFocus'
 import { createForm, FormNotice, SubmitButton } from './form'
 import { OrbitSpinner } from './OrbitSpinner'
 import { refusedMessages } from './refusedSubscriptions'
@@ -635,15 +636,28 @@ export function SubscriptionScanModal(props: SubscriptionScanModalProps) {
   // The line under the title asks to adjust a price or period, so it shows over rows that have
   // them: not over the empty state, the spinner or rows that are all tracked already.
   const [panel, setPanel] = createSignal<{ adjustable: () => number }>()
+
+  // Stays on the page while shut, faded out: focus goes in each time it opens and back each time
+  // it shuts.
+  let modalRef: HTMLDivElement | undefined
+  dialogFocusWhile(props.isOpen, () => modalRef, {
+    onEscape: () => {
+      props.onClose()
+    },
+  })
   return (
     <div
       class={styles.overlay}
       classList={{ [styles.open]: props.isOpen() }}
+      // Faded out while shut but still on the page: inert then, out of the tab order and the
+      // accessibility tree, as the Guided Orbit is.
+      inert={!props.isOpen()}
       onClick={(e) => {
         if (e.target === e.currentTarget) props.onClose()
       }}
     >
       <div
+        ref={modalRef}
         class={styles.modal}
         role="dialog"
         aria-modal="true"

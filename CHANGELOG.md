@@ -23,6 +23,8 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Progress has a tour**: what the page holds, Your next step and the seven circles, one stop each.
 - **Prints on Progress.** Every twelve tracked months in a row make a print: your year drawn as a seal, one petal a month, with no amounts on it. Tap a petal to see its month, or share a print as an image.
 - **Three short articles answer the why behind a step.** Getting started, Your next step, the circles and Worth a look on Progress link to them on about.tokencircles.com, in a new tab: Getting a year out of your bank under the import step (the day-2 mail links it too), Why one month lies under a month in the red and the months on file, and Your first cushion under the cushion step and its check.
+- **A loan's payments on a chart, right under its card.** Click a loan card to see what you owe from the first payment to the last, with today, your extra payments and the month of the last payment marked on the line.
+- **Add an extra payment from a loan's card.** Its three-dot menu opens the loan's Extra payments with the amount box ready to type in.
 
 ### Changed
 
@@ -42,6 +44,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **A statement from a bank the app knows opens on what it brings in.** Import shows the bank, how many entries and from when to when, the new categories and how many are already here, with one button to import them. Check the columns is still there for a closer look.
 - **After an import, Import lists each account it changed with its balance today**, and a field to set it to what your bank shows.
 - **Import says what went wrong next to what you used.** A failed step shows under its form or button, a failed Sync at its sheet's row in Connected sources, and a failed import from a preview inside the preview, not in a banner that on a phone could be a screen away.
+- **A loan's Edit and Delete are in its card's three-dot menu.** So is See every payment, the month-by-month table the loan's name used to open, while What if stays on the card.
 - **The welcome mail's Find your subscriptions opens the scan.** It opened the list of bills. With nothing imported yet, the scan says so and offers an import.
 
 ### Fixed
@@ -64,6 +67,9 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Starting balances stay with their file.** Cancel an import or remove a file in setup, and the next file's accounts could open on the starting balances of the one you set aside, like a YNAB register's, instead of their own.
 - **All time no longer lands on 1970.** Budgets, the bill calendar, Dashboard's cash flow and spending heatmap, and the PDF reports in Settings showed January 1970 with nothing in it. They show this month now, and the period picker's custom range no longer starts on 1 January 1970.
 - **This year's annual PDF report runs from January to this month**, and the Year picker says how far. A report is always made for the year the picker shows.
+- **The three-dot menu on a subscription works from the keyboard.** It opens on its first item with a ring around it, the arrows move through the rest, and Escape or Tab takes you back to the button.
+- **The (i) on Dashboard's Net Worth, Income, Expenses and Balance cards opens its explanation right under the icon.** It opened about 430 px lower, where the card cut it off, so on a laptop or a phone you saw nothing.
+- **Dialogs open with the cursor inside, keep Tab inside them, close with Escape, and put you back on the button that opened them.** The Quick add button no longer sits on top of an open dialog.
 
 ## [5.17.6] — 2026-11-01
 

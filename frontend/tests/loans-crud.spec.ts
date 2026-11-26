@@ -19,9 +19,8 @@ test.describe('Loans CRUD Operations', () => {
   })
 
   test('should have add loan button', async ({ page }) => {
-    const addBtn = page.getByTestId('add-loan-btn')
-    const isVisible = await addBtn.isVisible({ timeout: 3000 }).catch(() => false)
-    expect(isVisible).toBeTruthy()
+    // isVisible() answers at once and ignores a timeout, so it raced the page's first load.
+    await expect(page.getByTestId('add-loan-btn')).toBeVisible()
   })
 
   test('should handle errors gracefully', async ({ page }) => {
@@ -47,8 +46,6 @@ test.describe('Loans CRUD Operations', () => {
     await navigateToRoute(page, 'loans')
 
     // The page header renders once the Loans route mounts; use its test-id as the ready signal.
-    const header = page.getByTestId('loans-header')
-    const hasContent = await header.isVisible({ timeout: 3000 }).catch(() => false)
-    expect(hasContent).toBe(true)
+    await expect(page.getByTestId('loans-header')).toBeVisible()
   })
 })

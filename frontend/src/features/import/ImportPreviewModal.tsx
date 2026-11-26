@@ -4,7 +4,8 @@
  * single set of import actions. Everything else — the selection table, dedup flags, dry-run
  * verdict, date filter — is the exact same component the Import page uses.
  */
-import { onCleanup, onMount, Show } from 'solid-js'
+import { Show } from 'solid-js'
+import { dialogFocus } from '../../utils/dialogFocus'
 import importStyles from '../Import.module.css'
 import styles from './ImportPreviewModal.module.css'
 import { ImportPreviewStep } from './ImportPreviewStep'
@@ -17,16 +18,6 @@ export function ImportPreviewModal(props: {
   subtitle?: string
   onClose: () => void
 }) {
-  const onKey = (e: KeyboardEvent) => {
-    if (e.key === 'Escape' && props.isOpen()) props.onClose()
-  }
-  onMount(() => {
-    document.addEventListener('keydown', onKey)
-    onCleanup(() => {
-      document.removeEventListener('keydown', onKey)
-    })
-  })
-
   const selected = () => props.flow.selectedRows().size
   const duplicates = () => props.flow.duplicateIndices().length
 
@@ -38,7 +29,19 @@ export function ImportPreviewModal(props: {
           if (e.target === e.currentTarget) props.onClose()
         }}
       >
-        <div class={styles.modal} role="dialog" aria-modal="true" aria-label={props.title}>
+        <div
+          ref={(el) => {
+            dialogFocus(el, {
+              onEscape: () => {
+                props.onClose()
+              },
+            })
+          }}
+          class={styles.modal}
+          role="dialog"
+          aria-modal="true"
+          aria-label={props.title}
+        >
           <div class={styles.header}>
             <h2 class={styles.title}>
               {props.title}

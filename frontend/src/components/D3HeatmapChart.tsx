@@ -5,7 +5,7 @@
  */
 import { createEffect, onCleanup, onMount } from 'solid-js'
 import { formatCurrency } from '../core/api'
-import { theme } from '../core/theme'
+import { theme, THEME_SCOPES } from '../core/theme'
 import type * as D3 from 'd3'
 
 let d3Module: typeof D3 | null = null
@@ -26,15 +26,28 @@ interface Props {
 export default function D3HeatmapChart(props: Props) {
   let containerRef: HTMLDivElement | undefined
   let tooltipEl: HTMLDivElement | undefined
+  // The tooltip renders at the end of the page, outside the chart, so it carries the theme scopes
+  // the chart sits in: on Analytics that is the deck, and without it the tooltip painted Orbit's
+  // navy pair over graphite. `display: contents` draws no box of its own.
+  let tooltipScope: HTMLDivElement | undefined
+  // Set when the chart goes. A render still waiting for d3 then stops: drawing on, it would put up
+  // a new tooltip that nothing removes.
+  let gone = false
 
   const ensureTooltip = () => {
-    if (!tooltipEl || !tooltipEl.parentNode) {
+    if (!tooltipEl || !tooltipScope?.isConnected) {
+      tooltipScope = document.createElement('div')
+      tooltipScope.style.display = 'contents'
       tooltipEl = document.createElement('div')
       tooltipEl.id = 'heatmap-tooltip'
       tooltipEl.style.cssText =
-        'position:fixed;display:none;background:var(--card-bg,#1f2937);color:var(--text,#e5e7eb);padding:6px 10px;border-radius:6px;font-size:12px;pointer-events:none;z-index:9999;box-shadow:0 2px 8px rgba(0,0,0,0.3);border:1px solid var(--border,#374151);white-space:nowrap;'
-      document.body.appendChild(tooltipEl)
+        'position:fixed;display:none;background:var(--surface-floating);color:var(--text,#e5e7eb);padding:6px 10px;border-radius:6px;font-size:12px;pointer-events:none;z-index:9999;box-shadow:0 2px 8px rgba(0,0,0,0.3);border:1px solid var(--border-floating);white-space:nowrap;'
+      tooltipScope.appendChild(tooltipEl)
+      document.body.appendChild(tooltipScope)
     }
+    tooltipScope.className = THEME_SCOPES.filter((name) => containerRef?.closest(`.${name}`)).join(
+      ' '
+    )
   }
 
   const renderHeatmap = async () => {
@@ -51,6 +64,7 @@ export default function D3HeatmapChart(props: Props) {
     const height = Math.max(props.height || 0, Math.round(margin.top + 7 * cellSize + 42))
 
     const d3 = await getD3()
+    if (gone) return
     d3.select(container).selectAll('svg').remove()
 
     ensureTooltip()
@@ -196,10 +210,9 @@ export default function D3HeatmapChart(props: Props) {
     })
     if (containerRef) observer.observe(containerRef)
     onCleanup(() => {
+      gone = true
       observer.disconnect()
-      if (tooltipEl && tooltipEl.parentNode) {
-        tooltipEl.parentNode.removeChild(tooltipEl)
-      }
+      tooltipScope?.remove()
     })
   })
 

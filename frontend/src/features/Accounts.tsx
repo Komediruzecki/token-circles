@@ -50,6 +50,7 @@ import { useAppState } from '../core/appStore'
 import { entityVersion } from '../core/dataVersions'
 import { gatedSource } from '../core/pageVisibility'
 import { normalizedTransactionAmount } from '../core/transactionAmount'
+import { dialogFocus } from '../utils/dialogFocus'
 import { createAccountForm } from './accountForm'
 import styles from './AccountsPage.module.css'
 
@@ -453,6 +454,9 @@ export default function Accounts() {
           }}
         >
           <div
+            ref={(el) => {
+              dialogFocus(el, { onEscape: closeModal })
+            }}
             class={styles.modal}
             onclick={(e) => {
               e.stopPropagation()

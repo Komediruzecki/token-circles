@@ -50,6 +50,22 @@
   --border: #dde4f5;
   --border-color: #dde4f5;
 
+  /* Floating surfaces: menus, dropdowns, popovers, tooltips, toasts. Each opens over a ground
+     painted like itself, so its edge is what says where it ends: UI-28 asks 2:1 in a light theme.
+     This edge is 2.35:1 on --card-bg, 2.24:1 on --bg and 2.10:1 on --bg-secondary. */
+  --surface-floating: #ffffff;
+  --border-floating: #a1a9bd;
+
+  /* A dialog's edge. A dialog opens over a backdrop that dims the page to a mid grey, where the
+     floating edge all but vanishes (1.07:1), so this one stays light: the first step past --border
+     that clears 2:1 against every ground under every dialog backdrop in use (2.02:1 at worst, a
+     white card under --modal-overlay), a 1.25:1 hairline on the white surface. */
+  --border-dialog: #e0e6f6;
+  /* Sign-in and Create Profile are painted in the sidebar's navy. This is the colour their 22% mix
+     of --sidebar-text drew on it: 2.97:1 at worst on the page under their backdrop, 1.48:1 on the
+     navy. */
+  --border-dialog-sidebar: #2a3144;
+
   /* Action — azure (deep on light ground for contrast) */
   --primary: #3b6fe0;
   --primary-hover: #2f5cc4;
@@ -69,6 +85,9 @@
      --danger itself is under 4.5:1 on --surface. */
   --danger-text: #b93842;
   --warning: #d97f2e;
+  /* Small text in the warning hue, such as a warning toast's title: 5.3:1 on --surface and
+     --surface-floating, 5.0:1 on --bg. --warning itself is 3.0:1 on them. */
+  --warning-text: #a3590c;
   --info: #3b6fe0;
 
   /* Semantic money */

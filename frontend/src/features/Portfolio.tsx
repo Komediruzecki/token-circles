@@ -22,6 +22,7 @@ import { paletteColor } from '../core/brandPalette'
 import { convertToBase } from '../core/currency'
 import { entityVersion } from '../core/dataVersions'
 import { refetchOnActive } from '../core/pageVisibility'
+import { dialogFocus } from '../utils/dialogFocus'
 import { createHoldingForm } from './holdingForm'
 import styles from './PortfolioPage.module.css'
 import type { PortfolioHolding, PortfolioSummary } from '../types/models'
@@ -384,6 +385,13 @@ export default function Portfolio() {
           }}
         >
           <div
+            ref={(el) => {
+              dialogFocus(el, {
+                onEscape: () => {
+                  holdingForm.close()
+                },
+              })
+            }}
             data-test-id="portfolio-modal"
             class={styles.modal}
             onclick={(e) => {

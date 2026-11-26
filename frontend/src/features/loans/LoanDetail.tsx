@@ -6,23 +6,23 @@
  * calculate route returns. Local-first rows carry their rate periods and extra payments; the
  * Worker's list does not, so in cloud mode the loan's own read supplies them.
  */
-import { createEffect, createMemo, createSignal, For, Match, Show, Switch } from 'solid-js'
+import { createEffect, createMemo, For, Match, Show, Switch } from 'solid-js'
 import { nextPaymentMonth, runScenario, templateOptions } from '../../../../shared/loanScenarios'
 import ConfirmButton from '../../components/ConfirmButton'
-import { apiDelete, apiGet, errorStatus, formatCurrency, showToast } from '../../core/api'
+import { apiDelete, errorStatus, formatCurrency, showToast } from '../../core/api'
 import { plainMessage } from '../../core/apiError'
 import { invalidateEntity } from '../../core/dataVersions'
-import { refetchOnActive } from '../../core/pageVisibility'
 import { localToday } from '../../utils/period'
 import LoanCompare from './LoanCompare'
 import { monthLong } from './loanCopy'
-import { engineInput, hasDetails, savedExtras } from './loanData'
+import { engineInput, savedExtras } from './loanData'
 import LoanExtras from './LoanExtras'
+import { createLoanRecord } from './loanRecord'
 import { LOAN_TABS, loansHash } from './loanRoute'
 import styles from './Loans.module.css'
 import LoanSchedule, { dayLabel } from './LoanSchedule'
 import type { Formats } from './loanCopy'
-import type { LoanRow, SavedExtra, StoredLoan } from './loanData'
+import type { LoanRow, SavedExtra } from './loanData'
 import type { LoansRoute, LoanTab, ScenarioPick } from './loanRoute'
 import type { ListStatus } from './LoansOverview'
 
@@ -37,6 +37,9 @@ interface Props {
   /** The overview's What if was clicked for this loan: open Compare on its first preset. */
   pendingWhatIf: boolean
   onPendingDone: () => void
+  /** A card's Add an extra payment was picked for this loan: focus the amount to add. */
+  pendingExtra: boolean
+  onPendingExtraDone: () => void
   navigate: (route: LoansRoute, options?: { replace?: boolean }) => void
   onEdit: (row: LoanRow, focusRates?: boolean) => void
   onDelete: (row: LoanRow) => Promise<void>
@@ -51,47 +54,9 @@ const TAB_NAMES: Record<LoanTab, string> = {
 }
 
 export default function LoanDetail(props: Props) {
-  const [record, setRecord] = createSignal<StoredLoan | null>(null)
-  const [recordStatus, setRecordStatus] = createSignal<'loading' | 'ready' | 'error'>('loading')
-  let loads = 0
-
-  /** The loan with its rate periods and extra payments, newest answer wins. */
-  const load = async () => {
-    const row = props.row
-    const mine = ++loads
-    if (!row) {
-      setRecord(null)
-      setRecordStatus('loading')
-      return
-    }
-    if (hasDetails(row.listed)) {
-      setRecord(row.listed)
-      setRecordStatus('ready')
-      return
-    }
-    // A record already on screen stays there while it refreshes.
-    if (record()?.id !== row.id) setRecordStatus('loading')
-    try {
-      const full = await apiGet<StoredLoan>(`/api/loans/${row.id}`)
-      if (mine !== loads) return
-      setRecord(full)
-      setRecordStatus('ready')
-    } catch (err) {
-      if (mine !== loads) return
-      console.error('Failed to load loan:', err)
-      setRecordStatus('error')
-    }
-  }
-
-  // The list reloads after every loan write and on a profile change, which hands this page a new
-  // row: that is what refreshes the loan here, so no write below reloads anything by hand.
-  refetchOnActive(
-    'loans',
-    () => props.row,
-    () => {
-      void load()
-    }
-  )
+  // The loan with its rate periods and extra payments: the list row in local-first, the loan's own
+  // read on the Worker. A new row from the list (after any loan write) reads it again.
+  const { record, status: recordStatus, load } = createLoanRecord(() => props.row)
 
   const today = localToday()
   const input = createMemo(() => {
@@ -129,6 +94,11 @@ export default function LoanDetail(props: Props) {
       )
     }
     props.onPendingDone()
+  })
+
+  // Add an extra payment, then another tab picked before the loan had loaded: nothing to focus.
+  createEffect(() => {
+    if (props.pendingExtra && props.route.tab !== 'extras') props.onPendingExtraDone()
   })
 
   const go = (tab: LoanTab) => {
@@ -347,6 +317,8 @@ export default function LoanDetail(props: Props) {
                       canWrite={props.canWrite}
                       ownerName={props.ownerName}
                       compareHref={hrefFor('compare')}
+                      focusAdd={props.pendingExtra}
+                      onFocusAdd={props.onPendingExtraDone}
                       formats={props.formats}
                       onDelete={deleteExtra}
                       onEditRates={() => {

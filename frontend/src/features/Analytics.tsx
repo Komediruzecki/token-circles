@@ -1336,11 +1336,8 @@ export default function Analytics() {
           {/* Heatmap Day Detail Modal */}
           {heatmapModal() && (
             <>
-              <div
-                style="position:fixed;inset:0;background:rgba(0,0,0,0.3);z-index:9998;"
-                onClick={closeHeatmapModal}
-              />
-              <div style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:20px;box-shadow:var(--shadow-lg,0 4px 20px rgba(0,0,0,0.3));z-index:9999;min-width:300px;max-width:400px;max-height:80vh;overflow-y:auto;">
+              <div class={styles.dayBackdrop} onClick={closeHeatmapModal} />
+              <div class={styles.dialog}>
                 {heatmapModal()!.loading ? (
                   <div style="text-align:center;padding:20px;color:var(--text-secondary);">
                     Loading...

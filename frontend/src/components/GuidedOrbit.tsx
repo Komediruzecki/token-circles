@@ -19,8 +19,8 @@ import { api, getLocalCurrency, toast } from '../core/api'
 import { plainMessage } from '../core/apiError'
 import { handFocusTo, isEditableTarget } from '../core/domFocus'
 import { quickEntrySave } from '../core/quickEntryLists'
+import { dialogFocusWhile } from '../utils/dialogFocus'
 import { localToday } from '../utils/period'
-import { returnFocus } from '../utils/returnFocus'
 import styles from './GuidedOrbit.module.css'
 import type { QuickEntryList } from '../core/quickEntryLists'
 import type { Account, Category } from '../types/models'
@@ -115,17 +115,16 @@ export function GuidedOrbit(props: GuidedOrbitProps) {
     setDate(todayIso())
   }
 
-  // Shut, focus goes back to what had it before: the shut sheet is inert, and focus left inside
-  // it would be lost.
-  let overlayRef: HTMLDivElement | undefined
-  let opener: Element | null = null
+  // Open, focus starts in the sheet; shut, it goes back to what had it before: the shut sheet is
+  // inert, and focus left inside it would be lost (dialogFocusWhile).
+  let sheetRef: HTMLDivElement | undefined
+  dialogFocusWhile(props.isOpen, () => sheetRef, {
+    onEscape: () => {
+      props.onClose()
+    },
+  })
   createEffect(() => {
-    if (props.isOpen()) {
-      opener = document.activeElement
-      reset()
-    } else {
-      returnFocus(opener, overlayRef)
-    }
+    if (props.isOpen()) reset()
   })
 
   // keypad
@@ -233,15 +232,10 @@ export function GuidedOrbit(props: GuidedOrbitProps) {
   // Desktop keyboard support: this modal shows on desktop too, so typing digits
   // should go straight to the amount instead of forcing clicks on the on-screen
   // keypad. Active only while open; the confirm step's text/date inputs keep
-  // their own typing. Escape closes.
+  // their own typing. Escape closes it through dialogFocusWhile above.
   createEffect(() => {
     if (!props.isOpen()) return
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault()
-        props.onClose()
-        return
-      }
       // Never hijack keyboard shortcuts (⌘K, Ctrl+digit tab-switch, …) — only
       // plain keystrokes drive the amount.
       if (e.ctrlKey || e.metaKey || e.altKey) return
@@ -276,7 +270,6 @@ export function GuidedOrbit(props: GuidedOrbitProps) {
 
   return (
     <div
-      ref={overlayRef}
       class={styles.overlay}
       classList={{ [styles.open]: props.isOpen() }}
       // Mounted while shut so it can fade, and inert then: out of the accessibility tree and the
@@ -287,6 +280,7 @@ export function GuidedOrbit(props: GuidedOrbitProps) {
       }}
     >
       <div
+        ref={sheetRef}
         class={styles.sheet}
         role="dialog"
         aria-modal={props.isOpen() ? 'true' : undefined}

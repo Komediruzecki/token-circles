@@ -83,6 +83,7 @@ import { entityVersion } from '../core/dataVersions'
 import { takeHashFlag } from '../core/hashRoute'
 import { gatedSource } from '../core/pageVisibility'
 import { monthlyEquivalent } from '../core/subscriptionMath'
+import { dialogFocus } from '../utils/dialogFocus'
 import BillCalendar from './BillCalendar'
 import { daysToDue, dueDateLabel, dueInWords, nextDue } from './billDue'
 import { createBillForm } from './billForm'
@@ -831,6 +832,9 @@ export default function Bills() {
           }}
         >
           <div
+            ref={(el) => {
+              dialogFocus(el, { onEscape: closeBillModal })
+            }}
             class={styles.modal}
             data-test-id="bill-modal"
             onclick={(e) => {
@@ -867,7 +871,6 @@ export default function Bills() {
                     placeholder="e.g., Rent, Electricity, Internet"
                     value={billForm.values.name}
                     onInput={(e) => billForm.set('name', e.currentTarget.value)}
-                    autofocus
                     required
                   />
                 )}
@@ -1029,6 +1032,9 @@ export default function Bills() {
           }}
         >
           <div
+            ref={(el) => {
+              dialogFocus(el, { onEscape: () => setShowCategoryModal(false) })
+            }}
             class={styles.modal}
             onclick={(e) => {
               e.stopPropagation()
@@ -1059,7 +1065,6 @@ export default function Bills() {
                     placeholder="e.g., Utilities, Entertainment"
                     value={categoryForm.values.name}
                     onInput={(e) => categoryForm.set('name', e.currentTarget.value)}
-                    autofocus
                     required
                   />
                 )}

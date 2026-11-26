@@ -13,7 +13,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { HOLDING_MESSAGES as M } from '../../../../shared/holdingSchema'
 import { formatCurrency } from '../../core/api'
 import { setCurrentProfile, setPage, setProfiles } from '../../core/appStore'
-import { confirmRequests, resolveConfirm } from '../../core/confirmStore'
+import { chooseAlternative, confirmRequests, resolveConfirm } from '../../core/confirmStore'
 import { __resetDataVersionsForTest } from '../../core/dataVersions'
 import { getDB } from '../../core/storage/idb'
 import { removeToast, toasts } from '../../core/toastStore'
@@ -80,16 +80,26 @@ async function seed(values: Row): Promise<void> {
   } as never)
 }
 
-async function showPage(): Promise<void> {
+/** The page, and with `asks` the dialog that asks the merge question, as App has them. */
+async function showPage(asks = false): Promise<void> {
   const { default: Portfolio } = await import('../Portfolio')
-  dispose = render(() => <Portfolio />, host)
+  const { default: ConfirmDialog } = await import('../../components/ConfirmDialog')
+  dispose = render(
+    () => (
+      <>
+        <Portfolio />
+        {asks && <ConfirmDialog />}
+      </>
+    ),
+    host
+  )
   await vi.waitFor(() => {
     expect(host.textContent).not.toContain('Loading portfolio...')
   })
 }
 
-async function openAdd(): Promise<void> {
-  await showPage()
+async function openAdd(asks = false): Promise<void> {
+  await showPage(asks)
   host.querySelector<HTMLButtonElement>('[data-test-id="add-holding-btn"]')!.click()
   await vi.waitFor(() => {
     expect(dialog()).not.toBeNull()
@@ -145,13 +155,14 @@ async function holdings(): Promise<Row[]> {
   return (await (await getDB()).getAll('portfolioHoldings')) as Row[]
 }
 
-/** Answer the merge question the dialog asks. */
-async function answerMerge(merge: boolean): Promise<string> {
+/** Answer the merge question the dialog asks: Merge, or Add separately. */
+async function answerMerge(answer: 'merge' | 'separately'): Promise<string> {
   await vi.waitFor(() => {
     expect(confirmRequests()).toHaveLength(1)
   })
   const [request] = confirmRequests()
-  resolveConfirm(request.id, merge)
+  if (answer === 'merge') resolveConfirm(request.id, true)
+  else chooseAlternative(request.id)
   return typeof request.message === 'string' ? request.message : request.message.join(' ')
 }
 
@@ -247,7 +258,7 @@ describe('a buy of a ticker already held', () => {
     fillBuy('exmpl', '2', '110', '2026-01-05')
 
     submit()
-    const question = await answerMerge(true)
+    const question = await answerMerge('merge')
 
     expect(question).toContain('You already hold 10 shares of EXMPL')
     await vi.waitFor(async () => {
@@ -268,13 +279,13 @@ describe('a buy of a ticker already held', () => {
     ])
   })
 
-  it('is added as a holding of its own when the merge is declined', async () => {
+  it('is added as a holding of its own on Add separately', async () => {
     await seed({})
     await openAdd()
     fillBuy('exmpl', '2', '110', '2026-03-02')
 
     submit()
-    await answerMerge(false)
+    await answerMerge('separately')
 
     await vi.waitFor(async () => {
       expect((await holdings()).map((h) => h.shares)).toEqual([10, 2])
@@ -317,7 +328,7 @@ describe('a buy of a ticker already held', () => {
     fillBuy('exmpl', '500000000000', '110', '2026-03-02')
 
     submit()
-    await answerMerge(true)
+    await answerMerge('merge')
 
     await vi.waitFor(() => {
       expect(describedBy(field('Shares'))).toBe(M.sharesMax)
@@ -327,6 +338,78 @@ describe('a buy of a ticker already held', () => {
     expect(dialog()).not.toBeNull()
     expect((await holdings()).map((h) => h.shares)).toEqual([600_000_000_000])
     expect(failureToasts()).toEqual([])
+  })
+})
+
+describe('the merge question, answered in its dialog', () => {
+  const question = () => document.querySelector<HTMLElement>('[role="alertdialog"]')
+
+  /** Submits a buy of the held ticker and waits for the question. */
+  async function ask(): Promise<HTMLElement> {
+    await seed({})
+    await openAdd(true)
+    fillBuy('exmpl', '2', '110', '2026-03-02')
+    submit()
+    return vi.waitFor(() => {
+      expect(question()).not.toBeNull()
+      return question()!
+    })
+  }
+
+  /** Waits for the submit to end: the form no longer busy, or shut. */
+  async function submitEnded(): Promise<void> {
+    await vi.waitFor(() => {
+      expect(dialog()?.querySelector('form')?.getAttribute('aria-busy') ?? 'shut').not.toBe('true')
+    })
+    await settle()
+  }
+
+  /** Nothing saved, and the form still open with the buy as it was typed. */
+  async function nothingSaved(): Promise<void> {
+    await submitEnded()
+    expect(question()).toBeNull()
+    expect((await holdings()).map((h) => h.shares)).toEqual([10])
+    expect(dialog()).not.toBeNull()
+    expect(field('Shares').value).toBe('2')
+    expect(field('Purchase Price').value).toBe('110')
+    expect(field('Purchase Date').value).toBe('2026-03-02')
+    expect(successToasts()).toEqual([])
+  }
+
+  it('saves nothing on Escape, and the form keeps what was typed', async () => {
+    await ask()
+    ;(document.activeElement ?? document.body).dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+    )
+    await nothingSaved()
+  })
+
+  it('saves nothing on a click outside it, or on Cancel', async () => {
+    const asked = await ask()
+    asked.parentElement!.click()
+    await nothingSaved()
+
+    submit()
+    await vi.waitFor(() => {
+      expect(question()).not.toBeNull()
+    })
+    question()!.querySelector<HTMLButtonElement>('[data-test-id="confirm-cancel"]')!.click()
+    await nothingSaved()
+  })
+
+  it('offers Merge, Add separately and Cancel, and Add separately adds a holding of its own', async () => {
+    const asked = await ask()
+    expect([...asked.querySelectorAll('button')].map((b) => b.textContent)).toEqual([
+      'Cancel',
+      'Add separately',
+      'Merge',
+    ])
+    asked.querySelector<HTMLButtonElement>('[data-test-id="confirm-alternative"]')!.click()
+
+    await vi.waitFor(async () => {
+      expect((await holdings()).map((h) => h.shares)).toEqual([10, 2])
+    })
+    expect(successToasts()).toEqual(['Added "EXMPL" to your portfolio.'])
   })
 })
 

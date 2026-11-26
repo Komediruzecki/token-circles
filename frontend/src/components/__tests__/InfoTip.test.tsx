@@ -8,7 +8,7 @@
  * with its neighbour is what prompted the change.
  */
 import { render } from 'solid-js/web'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import InfoTip from '../InfoTip'
 
 let host: HTMLDivElement
@@ -198,5 +198,146 @@ describe('InfoTip', () => {
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
       window.dispatchEvent(new Event('resize'))
     }).not.toThrow()
+  })
+})
+
+/**
+ * The panel is `position: fixed`, and an ancestor with a backdrop-filter, a transform or a filter
+ * turns "fixed" into "fixed to that ancestor": Dashboard's metric cards blur what is behind them,
+ * and their explanations opened about 430 px below their icons, off the bottom of the window. So
+ * the panel renders at the end of the page, where no ancestor can capture it, carrying along the
+ * theme scope its icon sits in.
+ */
+describe('InfoTip, rendered where nothing can move it', () => {
+  const mountIn = (scope: HTMLElement) => {
+    host = document.createElement('div')
+    scope.appendChild(host)
+    document.body.appendChild(scope)
+    dispose = render(() => <InfoTip text="Sum of every balance." testId="tip" />, host)
+    return host.querySelector<HTMLButtonElement>('[data-test-id="tip"]')!
+  }
+
+  afterEach(() => {
+    document.querySelectorAll('[data-scope]').forEach((el) => {
+      el.remove()
+    })
+  })
+
+  it('renders its panel outside the card it explains, at the end of the page', () => {
+    const card = document.createElement('div')
+    card.dataset.scope = ''
+    card.style.backdropFilter = 'blur(14px)'
+    const trigger = mountIn(card)
+    trigger.click()
+    expect(panel()).not.toBeNull()
+    expect(card.contains(panel())).toBe(false)
+    expect(document.body.contains(panel())).toBe(true)
+    // Still the trigger's description, wherever the panel lives.
+    expect(trigger.getAttribute('aria-describedby')).toBe(panel()!.id)
+  })
+
+  it("keeps the deck's theme scope, so a tip on Analytics paints the deck's own pair", () => {
+    const deck = document.createElement('div')
+    deck.dataset.scope = ''
+    deck.className = 'instrument-deck'
+    const trigger = mountIn(deck)
+    trigger.click()
+    const scope = panel()!.closest('.instrument-deck')
+    expect(scope).not.toBeNull()
+    expect(scope).not.toBe(deck)
+    // The scope only carries tokens: it draws no box of its own, so the deck's background and
+    // radius never paint around the panel.
+    expect((scope as HTMLElement).style.display).toBe('contents')
+  })
+
+  // Every visited page stays mounted and is hidden with display: none (#317), and the panel lives
+  // at the end of the page, outside it. A tip pinned on Dashboard stayed open over the next page,
+  // after a hash change or Back, drawn at the top left of the window from its hidden icon's empty
+  // box, until the next press anywhere.
+  it('closes when the page around it is hidden, which is how a page is left without a press', () => {
+    const reports: Array<() => void> = []
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        report: () => void
+        constructor(report: () => void) {
+          this.report = report
+        }
+        observe() {
+          reports.push(this.report)
+        }
+        unobserve() {}
+        disconnect() {}
+      }
+    )
+    try {
+      const trigger = mount()
+      trigger.click()
+      expect(panel()).not.toBeNull()
+
+      host.style.display = 'none'
+      // What the browser does when the page is hidden: the icon's box goes to nothing.
+      for (const report of reports) report()
+      expect(panel()).toBeNull()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('is never placed from a hidden icon: a scroll after its page is hidden closes it', () => {
+    const trigger = mount()
+    trigger.click()
+    host.style.display = 'none'
+    window.dispatchEvent(new Event('scroll'))
+    expect(panel()).toBeNull()
+  })
+
+  it('takes no scope when its icon sits in none', () => {
+    mount().click()
+    expect(panel()!.closest('.instrument-deck')).toBeNull()
+  })
+
+  // Analytics' and Budgets' titles each hold a tip, and a title sets the display serif. The
+  // panel names its own face, weight and style, so its words read as body text wherever it
+  // renders: under the heading it explains, or at the end of the page, given the title's type
+  // here too.
+  it('sets its own type, so a tip in a heading reads in the body face', () => {
+    const heading = document.createElement('h1')
+    heading.dataset.scope = ''
+    const pageStyle = document.body.getAttribute('style')
+    try {
+      for (const el of [heading, document.body]) {
+        el.style.fontFamily = 'var(--font-display)'
+        el.style.fontWeight = '700'
+        el.style.fontStyle = 'italic'
+      }
+      mountIn(heading).click()
+      const type = window.getComputedStyle(panel()!)
+      expect({ family: type.fontFamily, weight: type.fontWeight, style: type.fontStyle }).toEqual({
+        family: 'var(--font-inter)',
+        weight: '400',
+        style: 'normal',
+      })
+    } finally {
+      if (pageStyle === null) document.body.removeAttribute('style')
+      else document.body.setAttribute('style', pageStyle)
+    }
+  })
+
+  it('stays above every dialog overlay, now that it no longer opens inside one', async () => {
+    mount().click()
+    const overlays = Object.values(
+      import.meta.glob<string>('../../**/*.module.css', {
+        query: '?raw',
+        import: 'default',
+        eager: true,
+      })
+    )
+      // Comments stripped first, so one that mentions an overlay is not read as a rule.
+      .map((css) => css.replace(/\/\*[\s\S]*?\*\//g, ' '))
+      .flatMap((css) => [...css.matchAll(/([^{}]*verlay[^{}]*)\{([^{}]*)\}/g)])
+      .map(([, , body]) => Number(/z-index:\s*(\d+)/.exec(body)?.[1] ?? 0))
+    expect(Math.max(...overlays)).toBeGreaterThan(1000)
+    expect(Number(window.getComputedStyle(panel()!).zIndex)).toBeGreaterThan(Math.max(...overlays))
   })
 })

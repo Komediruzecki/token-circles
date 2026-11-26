@@ -541,6 +541,33 @@
   border-radius: 2px;
 }
 
+/* A heatmap day's transactions, over the page dimmed behind them. */
+.day-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  /* The feature pages' backdrop. At 30% the page stayed too light in Dawn for any edge short of
+     white to stand 2:1 beside the dialog. */
+  background: var(--modal-overlay, rgba(0, 0, 0, 0.5));
+}
+
+.dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 9999;
+  min-width: 300px;
+  max-width: 400px;
+  max-height: 80vh;
+  overflow-y: auto;
+  padding: 20px;
+  border: 1px solid var(--border-dialog);
+  border-radius: 12px;
+  background: var(--card-bg);
+  box-shadow: var(--shadow-lg, 0 4px 20px rgba(0, 0, 0, 0.3));
+  transform: translate(-50%, -50%);
+}
+
 /* legacy class mappings for analytics page */
 .analytics-stats {
   display: grid;

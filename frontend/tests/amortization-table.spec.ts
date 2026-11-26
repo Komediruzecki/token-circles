@@ -8,11 +8,12 @@ test.describe('Loan Amortization Table', () => {
   })
 
   test('should display the amortization schedule on the Month by month tab', async ({ page }) => {
-    // The relayout moved the schedule from a panel under the card to the loan's own page: its
-    // name opens the Month by month tab, still wrapped in the `loans-amortization` container.
-    const name = page.getByTestId('loans-item-name').first()
-    await expect(name).toBeVisible({ timeout: 10000 })
-    await name.click()
+    // The schedule is on the loan's own page: See every payment in the card's menu opens the
+    // Month by month tab, still wrapped in the `loans-amortization` container.
+    const more = page.getByTestId('loans-item-menu').first()
+    await expect(more).toBeVisible({ timeout: 10000 })
+    await more.click()
+    await page.getByTestId('loans-item-schedule').click()
     await expect(page.getByTestId('loans-tab-schedule')).toHaveAttribute('aria-selected', 'true')
 
     const amortization = page.getByTestId('loans-amortization')

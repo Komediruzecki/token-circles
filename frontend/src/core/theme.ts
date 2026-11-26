@@ -22,6 +22,13 @@ export const THEMES: ThemeDefinition[] = [
   { id: 'light', label: 'Dawn (light)', scheme: 'light' },
 ]
 
+/**
+ * Classes that re-ground a theme for the part of the page under them, in styles/themes/: the
+ * deck that Analytics and Portfolio sit in. Something rendered away from its place, like an
+ * InfoTip's panel at the end of the page, takes these along to keep that part's tokens.
+ */
+export const THEME_SCOPES = ['instrument-deck'] as const
+
 const DEFAULT_THEME = 'dark'
 
 export type Theme = string

@@ -2912,6 +2912,136 @@ check')` first, as the cushion and debt cases do.
   an unread sheet at the row, cleared by the next try; the modal's error above Import selected).
   All three fail on the old code.
 
+### Loans: a chart under the card, and a card menu
+
+- **The chart under a card** (`frontend/src/features/loans/LoanChartPanel.tsx`,
+  `LoanPayoffChart.tsx`, `loanTimeline.ts`). A card's name is a stretched button
+  (`loans-item-name`, `aria-expanded`, `aria-controls`) that opens a full-row panel straight after
+  its `<article>`: `.chart-panel` spans `grid-column: 1 / -1`, and `.cards` has
+  `grid-auto-flow: row dense`, so the cards beside the opened one fill its row back in above the
+  panel instead of wrapping below it. One chart at a time: `openId` lives in `Loans.tsx`, so Back
+  from a loan's page finds it still open. It goes with its loan: a list read without the loan
+  clears it, and so does a profile switch (`state.currentProfile?.id`), so switching away and back
+  from another page does not find it open again. A second click, the panel's Close or Escape
+  closes it. Escape counts only while the Loans page is shown (`usePageActive('loans')`: pages
+  stay in the document as `display: none`), from the cards, the chart or with focus nowhere; not
+  from elsewhere on the page, not for a key another listener handled (`defaultPrevented`), and not
+  while an `aria-modal` dialog or a `role="menu"` with a box is open. A box, because Transactions'
+  entry form and the subscription scan stay in the DOM saying `aria-modal` while shut, and a hidden
+  page's dialogs do too: with every page visited, four sit in the document on Loans, none shown.
+  `getClientRects()` replaces `checkVisibility`. Closing gives focus back to the card's button and
+  scrolls it into view (`block: 'nearest'`), as Escape from another card left it out of sight.
+  When a chart higher up closes as another opens, `toggle` scrolls by the distance the clicked
+  card moved, so it stays under the pointer.
+- **Focus order stays card A, A's chart, then B and C**, though B and C sit above the chart in A's
+  row: the chart belongs to A and follows its card in the document. Deliberate.
+- **What it draws.** `loanTimeline(loan, today)` splits the shared engine's rows (`amortizeLoan`,
+  no fork) where the card does: a payment due on or before today counts as made. `today` is the
+  day the list was read (`listToday` in `Loans.tsx`), as the card's figures are, so a list read
+  after midnight on a payment day moves both. It gives made, owed, repaid (the principal: amount
+  borrowed less owed, what the card's "% repaid" measures), months left, the payoff month, extras
+  made or planned, paid off, never repaid and dated. The SVG is drawn at its measured width
+  (ResizeObserver), so its text stays 12 px: the past as a solid line in the ring gradient over a
+  filled area, the future dotted, today a dashed warm line with a Today pill and a dot on the line
+  at what is owed, the years along the axis (this year always named and banded, the rest thinned
+  to fit), extra payments as filled (made) or hollow (planned) dots with a `+€X` label while there
+  are at most six and they fit, and the payoff month at the end, or "Never repaid at this rate"
+  where the engine stops. A label goes right of its mark, or left where the right runs off the
+  chart or into another label, raised 3 px clear of the line where it runs highest over the label,
+  and never over the Today pill or today's dot and its glow. Where neither side above has room, it
+  goes under the line: under the mark, then under and to its left,
+  3 px under the line where the line runs lowest over the label, so the line never crosses it, and
+  under today's glow only as a last resort. It is left off only when none of those fits. On the
+  demo's Investment Property Loan, 5,000 paid extra at payment 20 had no label at 820, 600 or
+  390 px: the Today pill above it, the plot's edge to its left. It now sits under its mark at 820
+  and 600 px, and at 390 px, with today's glow 13 px from the mark, under that glow. A loan
+  whose first payment falls in a later year has no Today: its axis starts in that year. The
+  sentence above it (`timelineSentence`) and a four-figure readout (Repaid so far, Still owed,
+  Months left, Last payment) carry the numbers. Each figure's key is its own mark on the line: the
+  solid stretch for Repaid so far (its fall from the amount borrowed to today is that figure), the
+  dotted stretch for Still owed, the end mark for Last payment; Months left has none. A loan with
+  no schedule (no amount, or no term) shows its sentence only. The SVG is one `role="img"` named
+  by its `<title>` and described by its `<desc>` (`timelineDescription`). Motion: the box fades in
+  and drops 8 px in 280 ms, the line draws left to right (`clip-path`, 900 ms) and today fades in
+  after it; with reduced motion, a 120 ms fade only. It plays once per open: once
+  `getAnimations({ subtree: true })` have settled the panel gets `data-played` and
+  `animation: none`, as `display: none` on the hidden page started them over on every return.
+- **Its box answers for its own width** (`.chart-box`: `container-type: inline-size`, one
+  `minmax(0, 1fr)` column). The readout goes four to a row from 600 px of box, two below that,
+  two equal halves below 340 px and one to a row below 286 px (`@container`), and a figure never
+  breaks inside ("A figure in the loan chart's readout never breaks inside", below). Four need 525
+  px with €1,182,363.57 owed and 508 px
+  with €195,000.53, measured at 1440 px.
+  The viewport query it replaces left the box overflowing between 769 and 925 px and between 561
+  and 637 px: at 820 px, with the sidebar shown, the box had 426 px and the readout needed 532,
+  Close was cut to nothing and the SVG was drawn to the overflow. The sentence on top runs the
+  box's width (`max-width: 70ch` left "November 2038." alone on a second line) and wraps balanced.
+- **Loading.** `createLoanRecord` (`loanRecord.ts`, taken out of `LoanDetail.tsx`, which uses it
+  too) gives the panel the listed row when it carries its rate periods and extra payments
+  (local-first) and fetches `GET /api/loans/:id` when it does not (the Worker's list leaves them
+  out); the newest answer wins, and a failure shows Try again. Once the loan is there, a frame
+  later, the panel scrolls itself into view (`scrollBy`, smooth unless motion is reduced) without
+  taking its card off the top, or under what the page keeps clear there: the page's
+  `scroll-padding-top`, which on a phone is the floating menu button's 48 px (at 390 x 600 the
+  card stopped at 16 px, under the button). `LoansOverview` loops over loan ids rather than row
+  objects, so a list read again after a write keeps the same card and chart nodes: no replayed
+  draw, no lost focus. The page keeps no bottom room of its own for the floating add button any
+  more: `.main` keeps it for every page (Layout.module.css).
+- **The card menu** (`frontend/src/components/OverflowMenu.tsx`, shared with `SubscriptionCard`):
+  Add an extra payment (a loan you can change, with payments left), See every payment, and Edit and
+  Delete (a loan you can change). Its items are a memo of whether the loan can be changed and is
+  paid off, and read the card's latest row when picked: built from the row, a list read with the
+  menu open built its buttons again and dropped focus. Delete asks through `showConfirm`, in the
+  words the card's delete button used. Add an extra payment sets `pendingExtra` in `Loans.tsx` and
+  opens `#loans/<id>/extras`; `LoanExtras` focuses `loans-extra-amount` when it mounts with
+  `focusAdd`, and `LoanDetail` drops the hand-off when another tab is picked before the loan
+  loaded. The card's edit and delete icon buttons and the name's link to the schedule are gone;
+  What if stays.
+- **`OverflowMenu` follows the WAI-ARIA menu button pattern.** The menu is portalled, which took it
+  out of the tab order. Opening now focuses its first item (ArrowUp on the trigger, the last), the
+  arrows wrap, Home and End jump, Escape and Tab close it with focus back on the trigger (Tab is not
+  prevented, so the browser moves on from there), and an item closes the menu before it runs. A menu
+  with no room below opens above. A scroll closes it only when the trigger has moved since it
+  opened: scroll events come a frame late, and the one for a scroll that came with the opening press
+  closed the menu at once (seen at 390 px when the page scrolled to the trigger as it was pressed).
+  Items are 44 px tall on a coarse pointer, and the trigger and icons fall back to
+  `--text-secondary`, as `--text-muted` is not a theme token. The focused item draws a 2 px
+  `--primary` ring (4.6:1 on Dawn's menu, 5.2:1 on Orbit's); hover keeps the tint, which focus used
+  to share at 1.14:1. The menu paints the floating pair, `--surface-floating` and
+  `--border-floating` ("Every floating surface draws its own edge", below): #222b47 with a #5b698c
+  edge in Orbit Dark and white with #a1a9bd in Dawn Light, an edge of 3.07 and 2.35:1 on the card,
+  where it was the card's own colour with a 1.32:1 border. It sits at z-index 1500, above the
+  floating add button, which covered its corner on a phone.
+- **Card figures** (`.figures`): `repeat(3, minmax(max-content, 1fr))` and a 12 px column gap, so
+  an amount takes the width it needs. With `minmax(0, 1fr)` and `overflow-wrap: anywhere`,
+  €175,923.83 broke after the 8 at 390 px.
+- The Loans tour's "Your loans" step says what a card opens and what its menu holds. Its anchors
+  are unchanged.
+- **Tests:** `loanTimeline.test.ts`, `loanPayoffChart.test.tsx` and new cases in `loanCopy.test.ts`
+  (the split at today and the due-today boundary, today on the line, this year, extra labels only
+  while few, on the left at the right edge and clear of today's glow, the demo loan's two extras
+  labelled at a phone's, a 600 px and an 820 px chart width, by their marks and clear of the line,
+  Today and each other, paid off, never repaid, no
+  start date, a first payment next year, the title and description, every sentence and the
+  description). `loansPage.test.tsx`: open and close, one at a time, Escape and each exception (a
+  shut dialog with no box, another page shown), the card brought into view on Escape, the scroll
+  that keeps a clicked card in place, the same chart node after the list is read again, today from
+  the list, a loan with no schedule, a deleted loan, a list read and a profile switch that forget
+  the open chart, a fetched loan and Try again, the readout's labels and keys, the menu by state
+  and kept open with its focus through a list read, the extras focus hand-off and its drop, See
+  every payment. `overflowMenu.test.tsx`: the keyboard pattern, a scroll that moves nothing, and
+  where it opens (under, above, under when neither has room). `frontend/tests/loan-chart.spec.ts`
+  (`@smoke`, local-first, its own loans): same-row cards keep their place and the panel spans the
+  grid, Escape and focus, today and the sentence, one chart at a time, the opening played once,
+  the menu by keyboard to a saved extra payment and its planned mark, its focus ring and its edge
+  in both themes, a seven-figure loan's chart inside its box from 1440 to 390 px, and on a phone
+  the panel straight under its card and in view, its card clear of the menu button on a short
+  screen, amounts on one line, the menu staying open and above the add button, and the only
+  loan's chart ending above the add button when scrolled to the end. Specs that edited, deleted
+  or opened the schedule from a card go through the menu now (`loans.spec.ts`,
+  `amortization-table.spec.ts`, `loan-form-errors.spec.ts`,
+  `release/s02-pages-follow-writes.spec.ts`). Each guard was taken out and its test seen failing.
+
 ### Fixed
 
 - **A bank's name counts in an account's name only where no letter touches it.**
@@ -3359,6 +3489,586 @@ check')` first, as the cushion and debt cases do.
   where the standard `--border` measures 1.58:1. `src/__tests__/dialogEdges.test.ts` reads every CSS
   module and fails on a `.modal`, `.dialog` or `.sheet` that paints a background without a visible
   border.
+- **Every floating surface draws its own edge (UI-28).** Menus, dropdowns, popovers, tooltips and
+  toasts open over grounds painted like themselves, and most drew their edge in `--border`, the
+  hairline between cards. Measured in the browser on 19 Nov: the filter dropdowns, the bill
+  calendar's day popover and the section rail's labels had an edge of 1.27:1 on the card in Dawn
+  Light and 1.32:1 in Orbit Dark; the heatmap's tooltip 1.27:1 in Dawn and 1.45:1 over the graphite
+  deck; toasts 1.67 to 1.90:1 in Dawn; Chart.js tooltips drew none, and in Orbit their 80% black
+  sat 1.22:1 on the card. Two theme tokens now
+  carry the surface and the edge, set where each theme sets its grounds: `--surface-floating` and
+  `--border-floating`, at the card menu's values (#ffffff and #a1a9bd in Dawn, #222b47 and #5b698c
+  in Orbit, an edge of 2.35:1 and 3.07:1 on the card). `.instrument-deck` re-grounds Orbit in
+  graphite and sets its own pair, #202329 and #5e656d: the card menu's mix gives 2.49:1 there, 66%
+  of its `--text-secondary` gives 3.12:1. The pair paints `OverflowMenu .menu`,
+  `FilterBar .dropdownContent`, `BillCalendar .popover`, `InfoTip .panel`, `Spotlight .tooltip`,
+  `Profile .profileDropdownMenu.visible`, `Toast .toast`, `SectionRail .rail` and `.tip`, the
+  inline style of `D3HeatmapChart`'s tooltip, and the two unused dropdowns in
+  `Dashboard/PeriodNavigator.module.css` and `BudgetsPage.module.css`. InfoTip, the rail and the
+  toasts keep their tint of `--primary` or of the toast's kind, mixed into the new edge, and the
+  rail and its labels keep their translucency. Every edge now measures at least 2:1 in Dawn and 3:1
+  in Orbit and in the deck. Chart tooltips take the pair from `components/chartFloatingTooltip.ts`,
+  which `Chart` and `ChartWrapper` install as Chart.js defaults: scriptable colours read off the
+  chart's canvas each time it draws, so a theme switch needs no rebuild and a chart in the deck gets
+  the deck's pair. Their text takes `--text-primary`, since Chart.js's white would vanish on Dawn's
+  white, and `ChartWrapper` no longer sets a translucent blue tooltip of its own. Nothing else
+  changed: no layout, spacing, radius, shadow or behaviour. The tour step's edge in Dawn went from
+  3.72:1 to 2.02:1 against the page its backdrop dims; its white surface stands 4.74:1 on the same.
+  `styles/themes/README.md` lists the pair in the token contract.
+- **Tests:** `src/__tests__/floatingEdges.test.ts` lists every floating surface and fails when one
+  stops painting `var(--surface-floating)` or drawing a visible border with `var(--border-floating)`.
+  It also fails on any rule positioned absolute or fixed with a z-index and a background that is on
+  neither that list nor its list of exceptions (the sidebar, three buttons, the status-bar strip),
+  and on a theme in `THEMES`, or a block that re-grounds one, that sets no opaque pair or one whose
+  edge is under 2:1 (light) or 3:1 (dark) against `--bg`, `--bg-secondary`, `--surface`,
+  `--card-bg`, `--stat-bg` or `--table-header-bg`. `src/components/__tests__/chartFloatingTooltip.test.tsx`
+  checks that the Chart.js defaults read the tokens off the canvas and fall back to Chart.js's own
+  colours, that `Chart` and `ChartWrapper` install them, and that `ChartWrapper`'s defaults leave
+  the surface and the edge to them.
+- **Compare's what-if chart no longer sets off a resize loop.** `loans/LoanBalanceChart.tsx` took
+  its width inside its `ResizeObserver` callback. A new width gives the chart a new height (its
+  payoff labels wrap into more rows when it is narrow), so the box it watched resized in the same
+  frame, and Chromium reported "ResizeObserver loop completed with undelivered notifications" on
+  every opening of Compare: 12 of 12 in a headless run at 390, 600, 820 and 1440 px, and as an
+  unhandled error in the e2e log of `loans.spec.ts`. It now measures its box once on mount, before
+  the first paint, and takes each later width a frame after the observer reports it, as
+  `LoanPayoffChart` does: 0 of 12. `loans/__tests__/loanBalanceChartResize.test.tsx` fails when a
+  width is set inside the callback, or when the chart first paints at its made-up 640 px.
+- **An (i) explanation opens beside its icon, wherever the icon sits.** `components/InfoTip.tsx`
+  places its `position: fixed` panel from the icon's box in window coordinates, and rendered it next
+  to the icon. An ancestor with a `backdrop-filter`, a `transform` or a `filter` becomes the
+  containing block of its fixed descendants, and Dashboard's metric cards blur what is behind them
+  (`.metric-card` in `features/DashboardPage.module.css`, which also hides its overflow), so each
+  card's tip opened as far below its icon as the card sat from the top of the window, and the card
+  clipped it. Measured on 19 Nov in a headless run with the page at the top: all four (Net Worth,
+  Income, Expenses, Balance) opened 431 px below their icon at 1440x900, two of them also past the
+  right edge, and 427 px below at 390x844, off the bottom of the window every time. The panel now
+  renders at the end of `body` through Solid's `Portal`, where no ancestor can move or clip it. A
+  `display: contents` wrapper around it carries the theme scopes its icon sits in (`THEME_SCOPES` in
+  `core/theme.ts`, today `instrument-deck`), so a tip in the Analytics or Portfolio deck still paints
+  the deck's surface, #202329, and mixes its edge from the deck's #5e656d. Its z-index goes from 1000 to 10001: outside every dialog's
+  stacking context now, it has to clear the highest dialog overlay (10000) to show over a dialog it
+  was opened in. Hover, focus, the `aria-describedby` link, Escape and outside-click are unchanged;
+  outside-click already tested the panel by reference, not by where it sits in the page. Pinning
+  did change: a pinned panel outlived its page, which "A pinned (i) explanation closes with its
+  page", below, fixes. After the change a script opened every tip on Dashboard (4), Budgets (1) and Analytics (17)
+  at both sizes: all 22 inside the window and beside their icon, as Budgets' and Analytics' already
+  were.
+- **Tests:** `frontend/tests/info-tip-placement.spec.ts` (@smoke) opens Net Worth's tip from the
+  keyboard at 1440x900 and on a 390x844 phone, and fails when any part of the panel leaves the
+  window, when it is more than 12 px above or below its icon, or when the icon's centre is not over
+  it; with the portal taken out it measured 251 and 372 px. `src/components/__tests__/InfoTip.test.tsx`
+  checks that the panel renders outside the element that holds its icon, wears the deck's scope in
+  the deck and none outside one, and stands above every overlay rule in the CSS modules.
+  `src/__tests__/floatingEdges.test.ts` fails on a block in `styles/themes/` that re-grounds a theme
+  under a class `THEME_SCOPES` does not list.
+- **An (i) explanation sets its own type.** `InfoTip`'s `.panel` now declares
+  `font-family: var(--font-inter)` and `font-style: normal` beside the `font-weight: 400` it had, so
+  its words read as body text wherever it renders. Analytics' and Budgets' titles each hold a tip:
+  measured on 19 Nov in Dawn and Orbit, the panel sat inside the title before this round and read in
+  the title's Fraunces; it now reads in Inter at 400. The portal above already takes the panel out
+  of the title, and this keeps its type from depending on where it renders.
+- **Tests:** `src/components/__tests__/InfoTip.test.tsx` gives the heading and the page the title's
+  serif, bold and italic, and fails unless the panel's computed type is `var(--font-inter)`, 400
+  and normal.
+- **A pinned (i) explanation closes with its page.** Since the panel moved to the end of the page, a
+  tip pinned open with a click or a tap stayed open when its page was left without a press: Back on
+  a phone, Alt+Left, a link or a hash change. Every visited page stays mounted and is hidden with
+  `display: none`, so the tip was never disposed, and its hidden icon measures nothing: on 19 Nov
+  Net Worth's tip, pinned on Dashboard, sat at top 6, left 8 over Loans, above the toasts, until the
+  next press anywhere. `components/InfoTip.tsx` now watches its icon with a `ResizeObserver` while
+  the panel is open and closes the moment the icon is no longer drawn (`checkVisibility()`, or a
+  walk for `display: none` where that is missing); `place()` closes it too rather than place it from
+  a hidden icon, and never places it from an empty box.
+- **Tests:** `src/components/__tests__/InfoTip.test.tsx` pins a tip, hides the element around it and
+  fails unless the panel is gone, once when the browser reports the icon's box and once when the
+  page scrolls. `frontend/tests/info-tip-placement.spec.ts` (@smoke) pins Net Worth's tip with a
+  click at 1440x900 and goes to Loans by hash, and taps it on a 390x844 phone and goes Back; each
+  fails while a panel is left, as each did before the change.
+- **The heatmap's tooltip paints the deck's colours.** `components/D3HeatmapChart.tsx` appends its
+  tooltip at the end of the page, outside the chart, and the tooltip took its `--surface-floating`
+  and `--border-floating` from there: over Analytics' graphite deck in Orbit Dark it painted Orbit's
+  navy pair, #222b47 and #5b698c, instead of the deck's #202329 and #5e656d. It now sits in a
+  `display: contents` wrapper that carries the theme scopes its chart sits in (`THEME_SCOPES`), as
+  InfoTip's panel does, and the wrapper goes with the chart.
+- **Tests:** `src/components/__tests__/heatmapTooltipScope.test.tsx` mounts the chart inside
+  `.instrument-deck` and fails unless the tooltip renders outside the chart, inside a scope of the
+  deck's class that draws no box; outside a deck it takes none, and nothing is left behind when the
+  chart goes.
+- **A heatmap that goes while d3 is loading leaves no tooltip behind.** The chart loads d3 the first
+  time it draws, and a render still waiting for it came back after the chart had gone: it found no
+  tooltip and put up a new one at the end of the page, which nothing removed. That was so before the
+  wrapper above (the old check was the tooltip's parent). The full unit suite caught it on 26 Nov:
+  "nothing is left behind" failed once with eight workers, when d3 arrived between two cases, and
+  passed three times run alone, where d3 arrives only after the last case. A render now stops after
+  the wait once the chart has gone.
+- **Tests:** `heatmapTooltipScope.test.tsx` now disposes the chart, waits for every dynamic import
+  to settle (`vi.dynamicImportSettled()`), and fails on any tooltip or wrapper left on the page. It
+  failed every time before the change; with either half of the guard taken out it fails again.
+- **Text on a floating surface reads 4.5:1 in every theme.** Measured in the browser on 19 Nov,
+  the card menu's Delete was 4.35:1 on the floating surface in Dawn Light, 3.71:1 in Orbit Dark and
+  4.18:1 in the deck, and the bill calendar popover's overdue amount 3.48:1 on its overdue row in
+  Orbit. A toast's title and action took its kind's colour: 2.99:1 for a warning in Dawn, 3.70:1
+  for a success title, 4.35:1 for an error, and 3.71:1 for an error in Orbit, with the action's
+  hover tint taking each lower (2.60:1 for a warning in Dawn). The active profile in the profile
+  switcher was 4.11:1 on its tint in Dawn, and the popover's paid check 3.61:1. Each now takes the
+  hue's text token: `--danger-text` for Delete and the overdue amount, `--success-text` for the paid
+  check, `--primary-hover`, the azure the app already sets text in, for the active profile, and a
+  toast's new `--toast-ink` (`--primary-hover`, `--success-text`, `--warning-text` or
+  `--danger-text`) for its title and action. `--toast-accent` keeps the icon, the edge, the
+  outline and the hover tint: the icon is a mark, and keeps the status colour as a met circle
+  check's mark does. `--warning-text` is new: #a3590c in Dawn (5.26:1 on the surface, 5.0:1 on
+  `--bg`) and Orbit's own `--warning` in Orbit. Of 75 text pairs measured in the three, 24 were
+  under 4.5:1 before and none are after; the lowest is 4.56:1, a success toast's action under the
+  pointer in Dawn. The surfaces and their edges did not change.
+- **Tests:** `src/__tests__/floatingEdges.test.ts` reads the text colour of every rule inside each
+  floating surface (`TEXT_ON_FLOATING`, a scope per surface's stylesheet) with what it is painted
+  on: its own background, a band such as the popover's header, or a hover's tint under the text of
+  the rule it repaints. It resolves each block that re-grounds a theme, and a toast's kinds, and
+  fails on a pair under 4.5:1, on a floating stylesheet with no scope and on a scope that finds no
+  text. A toast's icon is listed as a mark, not text. It failed in Dawn, Orbit and the deck before
+  the change, and fails again when any one part of it is taken back, when the overdue row's tint or
+  the action's hover tint is made stronger, and when a new rule in the card menu's stylesheet is set
+  in `--warning`. `src/__tests__/successTextContrast.test.ts` reads the success toast's button
+  through `--toast-ink` now, and still fails unless the icon and the edge keep `--success`.
+- **The passkey offer is painted like every other floating surface.** The card that offers a
+  passkey after a sign-in (`components/PasskeyNudge.tsx`, fixed in the bottom-right corner) was
+  styled inline, where `floatingEdges.test.ts` could not read it: it painted `--surface` with a
+  `--border` edge, 1.21:1 against the page in Dawn Light and 1.51:1 in Orbit Dark. It now lives in
+  `components/PasskeyNudge.module.css` on the floating pair, an edge of 2.24:1 on the page in Dawn
+  and 3.52:1 in Orbit. Its place, size, text and buttons did not change.
+- **Tests:** `src/__tests__/floatingEdges.test.ts` finds a floating surface by its shadow or its
+  edge as well as its z-index, so the section rail's labels, which have neither a z-index nor a
+  shadow, are found rather than only listed. Nine rules it now finds are named as not floating (the
+  dots of the timeline, the orbit and the not-found page, the toggle's knob, the period orbit's
+  buttons and centre, a benchmark's marker and a loan card's pull). It also reads every style
+  written in script, JSX style objects, style strings and cssText, and fails on one that positions
+  and paints a box unless `INLINE` names it: the heatmap's tooltip and a plan card's badge. With
+  discovery as it was, the rail's labels taken off the list, a shadowed popover with no z-index and
+  the passkey offer styled inline again all passed; each fails now.
+- **The loan form takes focus when it opens, and gives it back.** Its name field had `autofocus`,
+  which the browser applies only while a page loads, never to a dialog put on the page later: Add a
+  loan and Edit left focus on the button that opened them, behind the dialog. The form now focuses
+  its name itself, or the first rate field when "Edit rates" opens it at its rate periods, and when
+  it shuts, by Escape, Cancel, the close button or a save, focus goes back to the button that
+  opened it (`utils/returnFocus.ts`): the add button, or the card menu's button for Edit. Eight
+  other fields in forms opened later still rely on `autofocus`: Bills.tsx:825 (Add bill) and :1017
+  (its Add Category), Goals.tsx:420 (add money), :657 (New Goal) and :845 (its Add Category),
+  Settings.tsx:1928 (renaming the household), ProfileModal.tsx:80 (Create profile) and
+  TwofaChallenge.tsx:89 (the sign-in code). Opened on 19 Nov, Add bill and New Goal left focus on
+  their buttons; Tags.tsx already focuses its field itself.
+- **Tests:** `src/features/loans/__tests__/loanFormFocus.test.tsx` opens the form for Add and Edit
+  from a button and fails unless the name has focus, and unless that button has it again after
+  Escape or Cancel; opened at its rate periods, the first rate field must have it, and focus moved
+  elsewhere before the form shuts stays there. `frontend/tests/loan-form-focus.spec.ts` (@smoke)
+  does the same in the browser with the add button and the card menu's Edit; both failed before the
+  change, with focus left on the button.
+- **The floating add button sits under whatever opens over the page.** At z-index 1400 it was
+  over every dialog's backdrop (1000) and the phone drawer's (99): with the loan form open, a press
+  on it opened the Guided Orbit over the form. Measured with `document.elementFromPoint` at the
+  button's centre on 19 Nov, a press reached the button through 14 of the 24 things opened by script
+  (Add a loan and Edit, Add bill and the bill calendar's day, New Goal, Budgets, Transactions,
+  Housing, Portfolio and Retirement, Create profile, the keyboard shortcuts, the phone drawer, and
+  Add a loan on a phone). At 90 (`components/Layout.module.css`) it is over the page's own floating
+  pieces, the section rail and the passkey offer at 60 and the period bar at 20, and under the
+  lowest backdrop, the drawer's and the filter dropdowns' at 99: each of those 14 now reaches the
+  dialog, the drawer or the popover's backdrop. The card menu and the profile menu draw no backdrop
+  and do not reach the button's corner, so a press there still reaches it; a toast does not reach
+  it either.
+- **Tests:** `frontend/tests/floating-button-room.spec.ts` (@smoke) opens Add a loan and fails
+  unless a press at the button's centre reaches the dialog's backdrop, shuts the form and leaves the
+  Guided Orbit shut, and on a 390 x 844 phone opens the drawer and fails while the button is what
+  a press there reaches. With the button back at 1400 both fail, and the press alone fails too.
+- **Escape shuts Transactions' entry form, and focus goes back to the button that opened it.**
+  Reproduced on 19 Nov: with the form open from Add transaction, one Escape and then a second left
+  it open, with focus on the add button behind the form (where opening leaves it), in its amount or
+  in its description. The form had no Escape at all; Cancel, the close button and a press outside
+  were the only ways out. Escape now shuts it as Cancel does, from a field or from the add button,
+  and however the form shuts, focus goes back to the button that opened it
+  (`utils/returnFocus.ts`). Something open over the form takes the first Escape for itself: a
+  dialog, a menu, the keyboard shortcuts, or an (i) panel in the form. Some of those shut on Escape
+  without saying so, so the form looks at what is over it as Escape comes in, before any listener
+  has had it, and shuts only when nothing was there and nothing spent the key on its way out
+  (heard on `window`, which hears it last), and only while Transactions is the page shown. The
+  keyboard shortcuts list (`components/KeyboardShortcutsModal.tsx`) now says `aria-modal="true"`,
+  as the other dialogs over a backdrop do: without it, "?" over the form and then Escape shut both,
+  and the half-filled form was cleared. The loan chart's Escape (`LoansOverview.tsx`) looks for a
+  dialog over the page the same way, so it should leave Escape to the list now too; that is read
+  from the code, not tested. The form takes focus when it opens since "Every dialog takes focus",
+  below.
+- **Tests:** `src/features/__tests__/transactionFormEscape.test.tsx` opens the form from the add
+  button and fails unless Escape shuts it from the button and from the amount, and unless focus is
+  back on the button after Escape and after Cancel. It fails if Escape shuts the form while
+  something over it has the key (a dialog that shuts on Escape without saying so, the real
+  shortcuts list, an open (i) panel), once a later listener has spent it, or while another page is
+  shown, and if a dialog left in the page while shut holds Escape back. Each of its eleven guards,
+  taken out, fails at least one case. `frontend/tests/transaction-form-escape.spec.ts` (@smoke)
+  does the same in the browser: Escape from the add button and from the amount, and an (i) panel
+  and the shortcuts list each taking the first Escape. All four failed before the change; with the
+  list not marked modal, the shortcuts case failed with the form shut by the first Escape.
+- **Every dialog takes focus when it opens and gives it back when it shuts**
+  (`utils/dialogFocus.ts`). A dialog put on the page after it loaded left focus on the button that
+  opened it, behind the dialog: `autofocus` works only while a page loads, so the eight fields
+  that had it (Add bill and its Add Category, New Goal and its Add Category, Add money, the
+  household rename, Create Profile, the 2FA code) never had the cursor, and Tab walked the page
+  under the dialog. One helper does both halves now. Opening puts focus on the first field a
+  person can type in or choose from (not hidden, disabled or undrawn), or on the dialog itself when
+  it has none, which then gets `tabindex="-1"` and no ring round the whole panel
+  (`styles/index.css`). Shutting gives focus back through `returnFocus`. `ref={dialogFocus}` is
+  for a dialog put on the page when it opens; `dialogFocusWhile(open, () => el)` for one that
+  stays on the page, shown by a class: Transactions' entry form, Auto Categorize, Reconciliation,
+  the Guided Orbit, and the subscription scan and catalog. A dialog fading in from
+  `visibility: hidden` (Auto Categorize) cannot hold focus until its first frame is drawn, so the
+  helper tries again for up to ten frames, while the dialog is open and nobody else has moved
+  focus. `first` names another start (the loan form's rates; the token reveal's "I've saved it",
+  its only way out, which focused itself before). `returnTo` names where focus goes when the
+  opener has gone by the time the dialog shuts: Add money and Delete account take their buttons'
+  place and make them again, and Create Profile is an item in the profile menu, so focus goes to
+  the profile button. 41 dialogs use it. The ones with no field now have a role and a name, so
+  focus on them reads something: Dashboard Views, the receipt viewer, the changelog, Take a Tour
+  and the bill calendar's day popover; the token reveal is named by its heading, and Take a Tour's
+  close button is named Close. Left as they are, each with its own focus: the command bar (its
+  input, after its 60 ms open), the setup wizard (its panel and each step's heading), Tags' rename
+  (a field that focuses itself), the menus (the card, profile and filter menus), and the phone
+  drawer, the spotlight tour and the (i) panels, which are not dialogs. The transaction form's
+  `txOpener`, the Guided Orbit's own opener and the loan form's focus code are gone into the
+  helper. Not changed here: the subscription scan and catalog stay in the tab order while shut
+  (`opacity: 0` and `pointer-events: none`, nothing that takes them out of it), and most dialogs
+  still have no Escape, so the spec below shuts those with Cancel or Close.
+- **Tests:** `src/utils/__tests__/dialogFocus.test.tsx` (14 cases) covers both shapes: the first
+  field, a skipped hidden, disabled or undrawn one, the dialog itself when it has no field, a field
+  that focused itself, `first`, `returnTo`, focus moved away before the dialog shut, two rounds of
+  a class-shown form, one shut again before focus could move, and a dialog fading in (focus taken
+  on a later frame, left where someone moved it, ten frames at most). Each of its twelve guards,
+  taken out, fails at least one case. `frontend/tests/dialog-focus.spec.ts` (@smoke, 8 cases)
+  opens 36 dialogs on nine pages the way a person does, checks focus is in each, shuts it with
+  Escape, Cancel or Close, and checks focus is back on what opened it. With the helper taken out
+  all eight fail at their first dialog, focus not going in; with only its giving back taken out,
+  all eight fail with focus not coming back. Five more open where the
+  browser cannot reach them from the fixture, so a unit test opens each: the sign-in dialog
+  (`loginModal.backGesture.test.tsx`), the 2FA step (`TwofaChallenge.test.tsx`), the token
+  reveal (`apiAccess.test.tsx`), the bank import preview (`importPreviewIsNotAWrite.test.tsx`)
+  and the receipt viewer (`transactionFormEscape.test.tsx`). The scan and the catalog each have
+  one that fails if they take focus while shut (`SubscriptionScan.test.tsx`,
+  `SubscriptionCatalogModal.test.tsx`). `transaction-form-escape.spec.ts` now expects focus in
+  the form once it opens, and types "?" from its close button rather than from the add button
+  behind it.
+- **A toast's icon and focus rings are drawn in its ink.** Dawn's warning toast drew both in
+  `--warning`, 2.99:1 on the toast's surface, under the 3:1 a mark needs (WCAG 1.4.11). Every kind
+  now draws them in its ink, the text token its title and action already use, so the five kinds
+  read alike: 5.26:1 for Dawn's warning, the lowest of the five kinds in Dawn, Orbit and the
+  instrument deck, up to 7.92:1. The edge, the action's outline and its hover tint keep the accent.
+- **Tests:** `src/__tests__/floatingEdges.test.ts` no longer exempts the toast's icon (`MARKS` is
+  gone): it is measured as every other colour on a floating surface is, and a new case measures
+  every focus ring on one at 3:1 in each theme and kind. With the icon and the rings back on the
+  accent, the colour case fails in all three themes (the icon at 2.99, 3.70 and 4.35:1 in Dawn,
+  3.71:1 in Orbit and 4.18:1 in the instrument deck) and the ring case at 2.99:1 for Dawn's
+  warning. `successTextContrast.test.ts` (D1) reads the rules: the icon and the rings on the ink,
+  the edge on the accent.
+- **The passkey offer stands above the floating add button.** After a sign-in the offer sat in the
+  button's corner, and the button (z 90) stood over its Add passkey and Not now (z 60). Measured on
+  26 Nov, the button's whole box was inside the offer's: at 1440 x 900 the offer ran 1084 to 1424
+  across and 742 to 884 down, the button 1362 to 1418 and 822 to 878; at 390 x 844 the offer ran
+  34 to 374 and 686 to 828, the button 322 to 374 and 776 to 828. The offer now reads the two
+  values the shell sets for the button (`--fab-offset`, `--fab-size`): its right edge on the
+  button's and its bottom 12 px above the button's top, clear of the halo drawn round it (8 px when
+  hovered). After: 1078 to 1418 and 668 to 810 on the desktop, 34 to 374 and 622 to 764 on the
+  phone; the button has not moved.
+- **Tests:** `frontend/tests/floating-button-room.spec.ts` (@smoke, two cases) signs in with the
+  offer's flag set and an empty passkey list, saves both boxes and a capture, and fails unless the
+  offer ends 8 px or more above the button with its right edge on the button's, and the button is
+  its size at its gaps from the edges (56 px at 22 on the desktop, 52 at 16 on the phone). Both
+  failed before the change, with the offer's bottom at 884 and 828.
+- **Specs: an `isVisible({ timeout })` read as an assertion is an assertion now.** Playwright
+  ignores `isVisible`'s `timeout` (deprecated: it returns at once, Playwright 1.64.1's types say),
+  so these checks never waited. `housing-crud.spec.ts` asserts the add button with `toBeVisible`,
+  and a call in `transactions-crud.spec.ts` whose answer nothing read is gone (the two
+  `retirement-crud.spec.ts` empty-state checks are deleted, below). Left as conditions, which they
+  are, and listed: the setup wizard's leave confirmation in 13 specs and `form-errors-helpers.ts`
+  (Skip always asks today, and the confirmation is up in the same click, so each check is true
+  whenever it runs), and in `transactions-crud.spec.ts` four receipt cases and a type-selector
+  case that never open what they check for, so their bodies never run.
+- **Escape shuts every dialog, and only the one on top** (`utils/dialogFocus.ts`). 18 of the 32
+  files using the dialog helper had no Escape. 24 dialogs in 17 files shut on Escape now (16 of
+  those 18, and Goals, where only Add money had it): Add bill and its Add Category, New Goal and its
+  Add Category, Add account, Add housing, Add holding, the retirement goal, the Budgets and
+  Categories dialogs, Dashboard Views, Take a Tour, the changelog, the bill calendar's day popover,
+  the bulk Change Category, Change Type and Tags, Recurring's rule, the subscription scan and
+  catalog, and the confirm dialog. The helper takes `onEscape`, the same function the dialog's
+  Cancel or Close runs, so Escape does what Cancel does and nothing more: the confirm dialog cancels
+  and never confirms. The helper keeps the open dialogs in the order they opened, and only the one
+  on top hears Escape: in Add Category over Add bill the first Escape shuts Add Category and leaves
+  Add bill as it was, the second shuts Add bill. A dialog that hears Escape itself is on that list
+  without `onEscape`, so one under it hears nothing (the icon gallery over Add Category). Escape is
+  read as it comes in (which dialog is on top, and is an (i) panel, a menu or a modal the helper
+  does not know, the command bar, over it?) and acted on as it goes out (did something spend it?),
+  the way Transactions' entry form reads it; Escape while an input method is composing is the input
+  method's. Not given Escape: the API token reveal, which says why (shutting it before the secret is
+  saved loses it, so "I've saved it" stays the only way out), and the 2FA code step, which is a step
+  of sign-in, not a dialog; the sign-in dialog around it already shuts on Escape. The dialogs that
+  had their own Escape keep it.
+- **Tests:** `src/utils/__tests__/dialogFocus.test.tsx` has 11 new cases (25 in all): Escape runs
+  `onEscape` and spends the key, for both shapes; Add Category over Add bill shuts first; a dialog
+  on top that hears Escape itself keeps the one below open; one that shut itself on the way is not
+  shut again; Escape spent inside, an open (i) panel, an open modal the helper does not know (with
+  focus in it, and with focus dropped to the page) and a composing input method each keep the dialog
+  open; a modal left on the page while shut (`pointer-events: none`, or hidden) does not; and a
+  dialog shut or gone hears nothing. Each of its nine guards, taken out, fails at least one case;
+  the three that need `onEscape` failed before it existed. `ConfirmDialog.test.tsx`: Escape resolves
+  the confirm false and never runs its work; it fails with the confirm dialog as it was.
+  `frontend/tests/dialog-focus.spec.ts` (@smoke, 8 cases) opens again each of the 24 dialogs it
+  shuts with Cancel or Close and shuts it with Escape, so all 37 of its round trips end with an
+  Escape and focus back on what opened the dialog; Bills adds the nested case (Escape shuts Add
+  Category with Add bill still open and focus on its Add Category button, then Add bill with focus
+  on Add bill), Categories shuts Add Category with Escape, and Loans checks the loan count is the
+  same after the confirm's Escape. With the helper's Escape listener taken out, all eight fail, each
+  at its first dialog wired here.
+- **A shut subscription scan or catalog is out of the tab order.** Both stay on the page while
+  shut, faded to nothing (`opacity: 0`, `pointer-events: none`), and Tab walked into them:
+  measured on 26 Nov with nothing open, Tab stopped 126 times in the shut catalog and once in the
+  shut scan (its Close) on Bills, and once in the scan on Import. Each is `inert` while shut now,
+  as the Guided Orbit and the command bar are, so neither Tab nor a screen reader finds it. A probe
+  of every page (21 page views, 104 dialog elements, nothing open) found no other shut dialog Tab
+  could reach before or after: Transactions' entry form and Reconciliation are `display: none`
+  while shut, Auto Categorize is `visibility: hidden`, and the Guided Orbit and the command bar
+  were already inert. Only the overlay around each dialog changed; what the scan shows is as it
+  was.
+- **Tests:** `SubscriptionScan.test.tsx` and `SubscriptionCatalogModal.test.tsx` each fail unless
+  the overlay is inert while shut and not while open; both failed before the change.
+  `frontend/tests/dialog-focus.spec.ts` has a ninth case (@smoke): Tab through Bills, its
+  Subscriptions tab and Import, from the top until focus comes round again, never stops inside a
+  dialog. Before the change, and again with the two `inert` lines taken out, it failed on Bills
+  with 127 stops in the shut dialogs (126 in the catalog, the scan's Close).
+- **After "I've saved it", focus goes to the token's name field.** The reveal gave focus back to
+  what opened it, Create token, which is disabled while the token is made and again once the name
+  is cleared, so focus dropped to the page and Tab started over from the top. It goes to the name
+  field now, where the next token starts (`returnTo`, which `utils/dialogFocus.ts` now also uses
+  when the opener is still there but cannot take focus).
+- **Tests:** `src/features/__tests__/apiAccess.test.tsx` creates a token from a focused Create
+  token, acknowledges it and fails unless focus is on the name field; before the change focus was
+  on `<body>`.
+- **Specs: five cases that never ran say so.** In `transactions-crud.spec.ts` four receipt cases
+  look for the receipt viewer, which no transaction in the e2e fixture can open (none has a
+  receipt), and the type-selector case looks inside the entry form without opening it. Their
+  bodies never ran, and round 7's full run counted all five as passed. Each is `test.fixme` now
+  with its reason as an annotation, so the report lists them as skipped.
+- **CHANGELOG: the dialog line is two sentences.** "Dialogs open with the cursor inside, keep Tab
+  inside them, close with Escape, and put you back on the button that opened them. The Quick add
+  button no longer sits on top of an open dialog." It replaces a line that listed dialogs by name
+  and said Escape closed only Add transaction. The passkey offer's place above the add button stays
+  here only.
+- **Escape has one path: the dialog helper's.** The 14 dialogs and forms that still heard Escape
+  themselves hear it through `onEscape` now: the loan form, the keyboard shortcuts list, Auto
+  Categorize, Reconcile, the import preview and the sign-in dialog (each listened on the whole
+  document), Create Profile, the icon gallery, the period picker, the Guided Orbit, Transactions'
+  entry form, and three forms that open in place (Add money, a profile's rename, Delete account's
+  confirmation). With the shortcuts list ("?") open over the loan form, one Escape shut both,
+  because the form heard Escape at the document whatever was over it. It shuts only the list now,
+  and the next Escape the form. The receipt viewer, which had no Escape, shuts on it too. The
+  command bar, the setup wizard and the menus keep their own.
+- A form that opens in place (`inPlace`) is not over the page: it takes Escape only while focus is
+  in it. The 2FA step is in place with no `onEscape`, so Escape goes on to the sign-in dialog
+  around it. A modal the helper does not know holds Escape only while it has a box, so one left on
+  the page while shut holds nothing. Transactions' own two-step listener and its page check are
+  gone: the helper reads Escape the same way, and a dialog on a page not shown is not drawn, so it
+  is never on top.
+- **Tests:** `src/utils/__tests__/dialogFocus.test.tsx` has two new cases and one changed (27 in
+  all): a form open in place takes Escape only with focus in it; a step in place with no
+  `onEscape` passes Escape to the dialog around it; a modal with no box holds nothing. All three
+  failed before the change. `transactionFormEscape.test.tsx`: the receipt viewer shuts on Escape
+  (it failed before), and the case for another page now hides the page as the shell does (it fails
+  with the helper's drawn check taken out). `IconPicker.test.tsx`: Escape closes the gallery and
+  not the dialog under it (it fails with the gallery's `onEscape` taken out).
+  `loginModal.backGesture.test.tsx` and `importPreviewIsNotAWrite.test.tsx` send Escape as a key
+  press does, bubbling up to the window. `frontend/tests/dialog-focus.spec.ts` has a new @smoke
+  case: "?" over Add a loan and over Add transaction, then Escape shuts only the list and puts
+  focus back on the button it was opened from, and the next Escape shuts the dialog. On the code
+  before the change it fails at the loan form, where the first Escape shut both.
+- **Tab stays inside the dialog on top** (`utils/dialogFocus.ts`). Measured on 26 Nov before the
+  change, Tab walked out of all 34 dialogs that open over a page (27 of them onto Quick add), and
+  Shift+Tab from each one's first stop walked out of all 34 too. The helper now steps in at the
+  edges only: Tab on the last stop goes to the first, Shift+Tab on the first goes to the last, and
+  from outside the dialog (the page behind it, or the dialog itself) Tab goes in at the edge it is
+  heading for. Between stops the browser moves focus as it always does. A stop is a control Tab
+  can reach that is not disabled, inert or hidden, and a group of radios is one stop (the checked
+  one, or the first). A dialog with nothing to stop on keeps focus on itself. Only the dialog on
+  top keeps Tab (Add Category over Add bill), never a form open in place, and never a dialog on a
+  page not shown. Tab is left alone with Ctrl, Alt or Meta held, while an input method is
+  composing, once something has spent it, and while focus is in a layer opened over the dialog:
+  an (i) panel, a menu, the command bar or a running tour's card (`data-tour-card` in
+  `Spotlight.tsx`). The command bar keeps its own keys and keeps Tab in itself from its own
+  keydown, with the helper's `keepTabIn`. Known gap: a cross-origin frame (the sign-in captcha)
+  sends no keydown out, so Tab from inside one is the browser's.
+- **Tests:** `src/utils/__tests__/dialogFocus.test.tsx` has 21 new cases (48 in all): the wrap at
+  both edges, nothing done between stops, a dialog with no stop, Tab from the page behind and from
+  the dialog itself, from inside past either edge, disabled, out-of-order, undrawn, hidden and
+  inert controls passed over, one stop per radio group, the top dialog only, no Tab kept in a form
+  open in place or a dialog on a page not shown, modifiers and composing, a Tab spent inside or
+  with the dialog shut on its way, and each of the four layers. Each of the 28 guards and branches,
+  taken out, fails at least one case. `spotlightDialogTab.test.tsx` renders the real tour over a
+  dialog: Tab from End Tour stays the browser's, and it fails with `data-tour-card` taken out.
+  `frontend/tests/dialog-tab-trap.spec.ts` (@smoke) opens each of the 34 dialogs, presses Tab
+  once per stop and three times more, then Shift+Tab once from the first stop, and checks focus
+  stays inside each time; each dialog is a soft check, so a run names every dialog that leaks.
+  On the code before the change all 34 failed both ways (a wrangler drop in the full run cut off
+  Categories and Budgets, which failed its six alone). Its seventh case Tabs to the (i) in Add
+  transaction: the panel opens on focus, Escape shuts it with the form still open, Enter pins it
+  and Enter shuts it, and Tab goes on inside the form.
+- **The holding merge question has three answers: Merge, Add separately and Cancel.** Adding a
+  buy of a ticker the profile already holds asked one question with two buttons, and Cancel meant
+  "add it as a holding of its own", so Escape or a click outside saved a second holding. Cancel,
+  Escape and a click outside now save nothing and leave the form as it was typed (the form's
+  `NOT_SENT`), Add separately adds the holding of its own, and Merge merges as before. The
+  question ends "Add separately keeps it as a holding of its own." in place of "Choose Cancel to
+  add it as a separate holding." `core/confirmStore.ts` has `showChoice`, which asks with a third
+  button (`alternativeText`) between Cancel and Confirm and answers 'confirm', 'alternative' or
+  'cancel'; `showConfirm` answers true or false as before.
+- **Tests:** `holdingForm.test.tsx` asks the question in the real dialog. Escape saves nothing
+  and keeps the shares, price and date as typed; before the change it saved a second holding
+  (shares `[10, 2]` where `[10]` was expected). A click outside and Cancel do the same. The
+  buttons read Cancel, Add separately, Merge, and Add separately adds the holding. With the Cancel
+  line taken out of `holdingForm.ts`, Escape and Cancel merge (`[12]`) and both cases fail.
+  `pagesFollowWrites.test.tsx`, which answers deletes with yes, answers the merge with Merge.
+  `confirmStore.test.ts` checks the three answers and that a plain confirm has no third button,
+  and `ConfirmDialog.test.tsx` the third button's place and that Escape answers 'cancel'.
+- **Escape during a tour ends the tour and nothing under it.** Measured on 26 Nov: with the
+  Transactions tour started from Take a Tour and the shortcuts list opened with "?", one Escape
+  ended the tour and shut the list. Take a Tour is a dialog, so the dialogs' Escape was listening
+  before the tour's, shut the list first, and the tour's listener does not ask whether Escape was
+  spent. The tour is drawn over the page: its overlay is z-index 10000, the dialogs 1000 to 9999
+  (the command bar and the Guided Orbit 2000), and only the icon gallery and Take a Tour match
+  it (Take a Tour shuts as the tour starts). So the tour is the one on top.
+  `Spotlight.tsx` takes Escape first now, as it comes in at the window, ends the tour and keeps
+  the key from the rest, so a dialog, a menu or the command bar under the tour stays open for the
+  next Escape. Its other keys are as they were.
+- **Tests:** `spotlightDialogEscape.test.tsx` renders the real tour over a dialog whose Escape
+  listens first: one Escape ends the tour and leaves the dialog open, the next shuts the dialog;
+  and a layer that shuts on any Escape the page hears (as the command bar does) stays open. With
+  the tour's new listener taken out both fail, and without its `stopPropagation` the second does.
+  `frontend/tests/dialog-focus.spec.ts` has a new @smoke case doing the measured steps; on the
+  tour as it was it fails where the list should still be open.
+- **Specs: two cases that checked nothing are gone, and one checks a real change.**
+  `retirement-crud.spec.ts` loses both empty-state cases: Retirement renders nothing with the test
+  id `empty-state`, so they passed whatever the page showed. In `transactions-crud.spec.ts`,
+  "should highlight expense type when selected" read the `active` class without opening the entry
+  form, and asserted only when it found it, which it never did (the class is the CSS module's
+  hashed name, never a bare `active`). It now opens the form, picks Income, checks Expense is not
+  highlighted, clicks Expense and checks it is. With the highlight taken out of `Transactions.tsx`
+  it fails after the click, and with Expense always highlighted it fails before it.
+- **CHANGELOG: the dialog line says Tab stays inside.** Its first sentence gains "keep Tab inside
+  them" (the entry above quotes the whole line), and it is still two sentences. "Escape shuts every
+  dialog, and only the one on top" and its tests entry ran past 100 columns and are rewrapped; their
+  words are unchanged.
+- **No extra-payment label stands on the loan's line.** A label above its mark and to the left of it
+  was placed at the mark's height, where the line has not yet come down to the mark, so the line ran
+  through it. The review's sweep (`LoanPayoffChart` in jsdom: the boat with one extra payment at
+  each month, three amounts and five widths from 308 to 900 px, and a mortgage with three extras
+  close together) found 185 such labels, every one left of its mark; the boat's payment 46 was
+  crossed at every width. An above place now rises to stay 3 px over the line where it runs highest
+  across the label, as an under place stays 3 px under where it runs lowest, and stays inside the
+  chart; one with no room there moves on to the places under the line. The same sweep now finds no
+  crossing. A label is still left off only when no place fits: none in the boat's sweep, and in the
+  mortgage's 360 clusters 84 where 62 were before. Of the 24 newly left off, 17 sit in clusters
+  around today (payment 42), whose raised places run into the Today pill or the glow while the
+  places under are taken by their neighbours, and 6 near the end; 2 came back. The sweep also counts
+  101 labels across today's dashed line, 100 before; that line is not part of this change.
+- **Tests:** `src/features/loans/__tests__/loanPayoffChart.test.tsx` draws the boat with an extra
+  payment at 46 at 308, 426, 494, 640 and 900 px, and with one at each month at 308, 494 and 900 px,
+  and fails on any label the line runs through and on any of those payments left unlabelled. All six
+  cases failed before the change.
+- **A figure in the loan chart's readout never breaks inside.** At 320 px the chart's box holds 242
+  px, and the readout's two equal halves gave each figure 113: €175,923.83, 118 px wide, broke after
+  the 8 (measured on 19 Nov on the demo's Investment Property Loan), and the e2e suite's loan of
+  1,250,000 broke at 360 px too. A figure no longer wraps (`white-space: nowrap` in place of
+  `overflow-wrap: anywhere` in `features/loans/Loans.module.css`), and below 286 px of box, what two
+  seven-figure amounts and the 16 px between them need (€1,182,363.57 is 135 px at 18 px), the
+  readout has one figure to a row. Windows of 320, 340 and 360 px now show one to a row, 390 px
+  keeps its two equal halves, and nothing wraps or leaves the box at any of them.
+- **Tests:** `frontend/tests/loan-chart.spec.ts` sweeps the open chart from 1440 down to 360 and 320
+  px, fails on a figure on two lines or anything past the box, and counts one figure to a row at 320
+  px and two at 390 px; it failed at 360 px before the change.
+- **The heatmap's day detail keeps its edge where the dialog check can see it.** A click on a day
+  in Analytics' heatmap opens a dialog whose box was styled inline in `features/Analytics.tsx`, so
+  `dialogEdges.test.ts`, which reads the CSS modules, never saw it. Its backdrop and box now live in
+  `features/AnalyticsPage.module.css` as `.day-backdrop` and `.dialog`, with the same values,
+  `border: 1px solid var(--border)` included; the day's rows and its Close button keep their inline
+  styles. Measured on 19 Nov at 1440x900 on the latest day with spending, before and after the move
+  (not one pixel changed): in Dawn Light the white box stands 2.81:1 on the page the 30% backdrop
+  dims beside it, and its edge, #dde4f5, 2.21:1. In Orbit Dark, Analytics sits in the deck, whose
+  `--card-bg` and `--border` are #11141a and #21262d: the box measures 1.04:1 against the dimmed
+  page beside it and its edge 1.25:1.
+- **Tests:** `src/__tests__/dialogEdges.test.ts` covers the day detail: its `.dialog` must paint a
+  background with a visible border, and `Analytics.tsx` must use it.
+  `src/__tests__/floatingEdges.test.ts` lists it in `NOT_FLOATING` as a dialog, which that test
+  leaves to `dialogEdges.test.ts`.
+- **Every dialog's edge is measured, in every theme.** "Every dialog has a visible edge", above,
+  gave each dialog an edge but no number for it, and a dialog opens over a backdrop that dims the
+  page, so its edge has to stand against the dimmed page, not the page at rest. Measured on 19 Nov
+  at 1440x900, 2 px outside each dialog's edge (the median of nine points along it), on the 19
+  dialogs a script could open: in Orbit Dark the `--border` edge, #26324f, stood 1.54 to 1.59:1
+  beside the dialog, and the subscription scan's and catalog's tinted edge 2.06 and 2.09:1; in the
+  deck, Analytics' day detail and Portfolio's Add Holding stood 1.24 and 1.34:1. The card-coloured
+  box itself stands 1.08 to 1.2:1 on the dimmed page in both, so nothing marked where a dialog
+  ended. A new token, `--border-dialog`, carries the edge and is set where each theme sets its
+  grounds, at the floating edge where that clears the numbers: #5b698c in Orbit and #5e656d in the
+  deck. After the change the edge stands 3.59 to 3.69:1 beside the dialog in Orbit (4.13 and 4.2:1
+  tinted) and 3.36 and 3.45:1 in the deck, and 3.07 and 3.12:1 on the dialog's own surface. At full
+  size it reads as a 1px line, not a frame, on the largest of them too (Add a loan, Add
+  Transaction). Dawn Light could not take its floating edge: its 40% navy backdrop dims a white card
+  to a grey that #a1a9bd matches at 1.07:1. A 2:1 edge against that grey is either light or
+  near-black, and a near-black line round a white box is a frame, so Dawn's `--border-dialog` is
+  #e0e6f6, the first step past `--border` (#dde4f5, 1.98:1) that clears 2:1 against every ground
+  under every dialog backdrop in use: 2.02:1 at worst, and 1.25:1 on the white surface, a hairline.
+  In the browser the old edge already stood 2.08:1 or more, and the change is small: the weakest is
+  now 2.18:1 (Add a loan, Add Retirement Goal). In Dawn the white box, 2.72 to 5.74:1 on the dimmed
+  page, is what separates a dialog from the page, not the line. Analytics' day detail opened over
+  its own 30% black, which left the page light enough that no edge short of white cleared 2:1 beside
+  it (#e0e6f6 measures 1.68:1 against a white card under it). Its `.day-backdrop` now takes
+  `--modal-overlay`, as the feature pages' dialogs do, so the page behind it dims more: to Dawn's
+  40% navy and to the deck's 72% near-black. Beside its edge in Dawn: 2.08:1 before, 2.46:1 after.
+  Sign-in and Create Profile are painted in the sidebar's navy in both themes and keep their own
+  edge where it passes. In Dawn their 22% mix of `--sidebar-text` drew #2a3144, 2.5:1 beside Create
+  Profile in the browser (2.97:1 at worst against the grounds) and 1.48:1 on the navy, so
+  `--border-dialog-sidebar` keeps that colour there. In Orbit it drew #282f40, 1.46:1 beside the
+  dialog, and the token takes the floating edge instead: #5b698c, 3.57:1 beside and 3.6:1 on the
+  navy. They need a token of their own because `--border-dialog` would draw a near-white line on
+  navy in Dawn. The guided entry sheet (`GuidedOrbit .sheet`), the subscription scan and the catalog
+  keep their tint of `--primary`, now mixed into `--border-dialog`. 26 border declarations changed,
+  one per stylesheet, and the day backdrop; no surface, radius, shadow, spacing or layout did. Not
+  opened by script, and covered by the stylesheet test only: the changelog (Settings' View Changelog
+  was not reached), the guided entry sheet, sign-in, API access's token reveal (cloud only), the
+  import preview (cloud connected sources), Add Recurring and Dashboard Views.
+- **Tests:** `src/__tests__/dialogEdges.test.ts` fails when a dialog surface it covers draws its
+  edge with anything but `var(--border-dialog)`, or, for sign-in and Create Profile,
+  `var(--border-dialog-sidebar)`. It reads every backdrop in the stylesheets that hold a dialog,
+  resolves `var(--modal-overlay)` per theme, and fails when Dawn, Orbit or the deck sets no
+  `--border-dialog` of its own, or one under 2:1 (light) or 3:1 (dark) against any of its six
+  grounds dimmed by any of those backdrops, or under 1.2:1 or 2:1 on its `--card-bg` and
+  `--surface`; and when a theme's `--border-dialog-sidebar` fails the same numbers beside the navy
+  dialogs or on `--sidebar-bg`. Taken out one at a time, each of these fails one test: the token in
+  `AccountsPage`'s modal, the deck's token, Dawn's value (put back to #a1a9bd), the day backdrop
+  (put back to 30%), Create Profile's token (put back to its own mix) and Orbit's
+  `--border-dialog-sidebar`.
+- **The unused `PeriodNavigator` and Budgets' unused dropdown rules are deleted.**
+  `components/Dashboard/PeriodNavigator.tsx`, a month and year picker with arrows either side, and
+  its stylesheet lost their last importer when `PeriodBar` took their place on Dashboard in #316
+  (`784034d6`). Nothing in `frontend/src`, the e2e specs, the tours or the scripts referred to them,
+  and the component set no `data-tour` or `data-test-id`. `BudgetsPage.module.css` kept
+  `.dropdownWrapper`, `.dropdown`, `.dropdownItem` and its hover, which `Budgets.tsx`, the
+  stylesheet's only importer, never uses. The floating pair the entry above gave both dropdowns goes
+  with them, and so do their two rows in `src/__tests__/floatingEdges.test.ts`;
+  `cssModuleReferences.test.ts` and `cssModuleNaming.test.ts` pass without them.
+- **The rest of Budgets' unused month and year control is deleted.** Budgets picked its month and
+  year in a control of its own until `PeriodBar` took its place in #316 (`784034d6`), and
+  `BudgetsPage.module.css` kept its rules: `.month-selector`, `.month-display`, `.monthBtn` and
+  `.yearBtn` with their hover and minimum widths, `.selected` and `.overlay`, two `.budget-summary`
+  rules for the same selector and display, and the phone-width `flex-wrap` for the selector, 67
+  lines in all (`.month-display` was not used as a class even before #316). `Budgets.tsx`, the
+  stylesheet's only importer, looks none of them up, and its two computed lookups return only
+  `status-*` and `chartStatus*` names. `month-selector` is still the `data-test-id` that `PeriodBar`
+  puts on Budgets' period bar for the e2e specs, an attribute and not a class, and `.monthBtn` in
+  `PeriodOrbit.module.css` is that component's own. `cssModuleReferences.test.ts`,
+  `cssModuleNaming.test.ts` and `core/__tests__/cssModuleHygiene.test.ts` pass without them.
 - **The unused `components/BulkActions/` tree is deleted.** Its `BulkActionBar`, `BulkCategoryModal`
   and `BulkTypeModal`, with their stylesheets, had no importer anywhere in the repository;
   Transactions uses `components/BulkActionBar.tsx`. The 2026-07-23 integrity audit

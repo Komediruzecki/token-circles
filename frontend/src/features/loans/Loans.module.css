@@ -5,6 +5,8 @@
  * Class names are kebab-case here and camelCase in the components.
  */
 
+/* No room of its own at the bottom: the page around it keeps the floating add button's
+   (Layout.module.css .main). */
 .loans {
   padding: 24px;
   display: grid;
@@ -187,10 +189,14 @@
 .cards {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+  /* Dense: a card's chart spans the whole row and goes in after the card, and the cards beside it
+     fill the row back in above it, so the row stays where it was instead of breaking around it. */
+  grid-auto-flow: row dense;
   gap: 16px;
 }
 
 .card {
+  position: relative;
   display: grid;
   gap: 16px;
   padding: 16px;
@@ -198,6 +204,106 @@
   border: 1px solid var(--border);
   border-radius: 12px;
   min-width: 0;
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.card:hover {
+  border-color: color-mix(in oklab, var(--primary) 45%, var(--border));
+}
+
+/* Open: a second pixel of border drawn inside, so nothing beside the card moves. */
+.card[data-open] {
+  border-color: var(--primary);
+  box-shadow: inset 0 0 0 1px var(--primary);
+}
+
+/* The loan's name is the card's button: its ::after covers the whole card, so a click anywhere on
+   it opens the chart, and the controls on the card sit above it. */
+.card-toggle {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.card-toggle::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 12px;
+}
+
+.card-toggle:focus-visible {
+  outline: none;
+}
+
+.card-toggle:focus-visible::after {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.card .card-menu,
+.card .button-outline {
+  position: relative;
+  z-index: 1;
+}
+
+/* The menu's trigger, at the size of the card's other buttons. */
+.card .card-menu {
+  width: 36px;
+  height: 36px;
+  color: var(--text-secondary);
+}
+
+.card .card-menu:hover,
+.card .card-menu[aria-expanded='true'] {
+  color: var(--text);
+}
+
+/* A pull on the card's bottom edge: it says the card opens downwards, and points at the chart. */
+.card-handle {
+  position: absolute;
+  left: 50%;
+  bottom: -11px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin-left: -11px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--card-bg);
+  color: var(--text-secondary);
+  transition:
+    background 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease;
+}
+
+.card-handle svg {
+  transition: transform 200ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.card:hover .card-handle {
+  border-color: color-mix(in oklab, var(--primary) 45%, var(--border));
+  color: var(--primary);
+}
+
+.card[data-open] .card-handle {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--on-primary);
+}
+
+.card[data-open] .card-handle svg {
+  transform: rotate(180deg);
 }
 
 .card-top {
@@ -215,15 +321,6 @@
   overflow-wrap: anywhere;
 }
 
-.card-name a {
-  color: inherit;
-  text-decoration: none;
-}
-
-.card-name a:hover {
-  text-decoration: underline;
-}
-
 .card-sub {
   margin: 2px 0 0;
   font-size: 12px;
@@ -235,10 +332,12 @@
   gap: 4px;
 }
 
+/* Thirds, until a figure is wider than its third: then it takes what it needs, so an amount
+   never breaks across two lines on a phone. */
 .figures {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(3, minmax(max-content, 1fr));
+  gap: 8px 12px;
   margin: 0;
 }
 
@@ -1107,5 +1206,331 @@
 
   .swatch-b {
     background: CanvasText;
+  }
+}
+
+/* ── The chart under a card ──────────────────────────────────────────────── */
+
+/* A whole row of the grid, straight under the card's row. */
+.chart-panel {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+/* The box answers for its own width: the figures and the drawing in it are laid out to that width
+   (the container queries under .readout), and nothing in it can widen it. */
+.chart-box {
+  container-type: inline-size;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  padding: 16px 20px 12px;
+  background: var(--card-bg);
+  border: 1px solid color-mix(in oklab, var(--primary) 35%, var(--border));
+  border-radius: 12px;
+  min-width: 0;
+}
+
+.chart-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* One line across a wide box. Balanced when it wraps, so its last line is never a word or two on
+   their own. */
+.chart-sentence {
+  min-width: 0;
+  margin: 6px 0 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--text);
+  text-wrap: balance;
+}
+
+.chart-head .button-quiet {
+  flex: none;
+  margin: -4px -8px 0 0;
+}
+
+.chart-skeleton {
+  height: 260px;
+}
+
+/* Four figures sit together on the left, so the eye reads them as one line before the chart. The
+   box's width decides how many go in a row, not the window's: with the sidebar shown, a tablet's
+   box is narrower than a phone's. Measured at 1440 px, four need 525 px with €1,182,363.57 owed
+   and 508 px with €195,000.53; two need 281 and 264 px. A figure never breaks inside: below the
+   width where two fit side by side, there is one to a row. */
+.readout {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, max-content));
+  gap: 12px 40px;
+  min-width: 0;
+  margin: 0;
+}
+
+@container (width < 600px) {
+  .readout {
+    grid-template-columns: repeat(2, minmax(0, max-content));
+  }
+}
+
+@container (width < 340px) {
+  .readout {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 16px;
+  }
+}
+
+/* Two seven-figure amounts and the 16 px between them need 286 px: measured on 19 Nov,
+   €1,182,363.57 is 135 px at 18 px. At 320 px the box holds 242 and €175,923.83 broke after the 8. */
+@container (width < 286px) {
+  .readout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.readout dt {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.readout dd {
+  margin: 4px 0 0;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Each figure's mark on the chart, as its key. */
+.key {
+  flex: none;
+  width: 18px;
+  height: 8px;
+  overflow: visible;
+}
+
+.key-paid {
+  stroke: var(--primary);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.key-owed {
+  stroke: var(--ring-a);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-dasharray: 0.1 5;
+}
+
+.key-end {
+  fill: var(--card-bg);
+  stroke: var(--primary);
+  stroke-width: 2;
+}
+
+@media (max-width: 560px) {
+  .chart-box {
+    padding: 14px 14px 10px;
+  }
+}
+
+.payoff-wrap {
+  width: 100%;
+  min-width: 0;
+}
+
+.payoff-chart {
+  display: block;
+  overflow: visible;
+}
+
+.payoff-grid {
+  stroke: var(--border);
+  stroke-width: 1;
+  stroke-dasharray: 2 4;
+}
+
+.payoff-base {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.payoff-axis-label {
+  fill: var(--text-secondary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.payoff-year {
+  fill: var(--text-secondary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.payoff-year[data-current] {
+  fill: var(--text);
+  font-weight: 600;
+}
+
+.payoff-band {
+  fill: color-mix(in oklab, var(--text-secondary) 5%, transparent);
+}
+
+.payoff-band-now {
+  fill: color-mix(in oklab, var(--primary) 10%, transparent);
+}
+
+.payoff-past-line {
+  fill: none;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.payoff-future-area {
+  fill: color-mix(in oklab, var(--ring-a) 9%, transparent);
+}
+
+.payoff-future-line {
+  fill: none;
+  stroke: var(--ring-a);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 0.1 7;
+}
+
+.payoff-extra {
+  fill: var(--primary);
+  stroke: var(--card-bg);
+  stroke-width: 2;
+}
+
+[data-made='false'] > .payoff-extra {
+  fill: var(--card-bg);
+  stroke: var(--primary);
+}
+
+.payoff-extra-label {
+  fill: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.payoff-end circle {
+  fill: var(--card-bg);
+  stroke: var(--primary);
+  stroke-width: 2.5;
+}
+
+.payoff-end[data-paid] circle {
+  fill: var(--primary);
+}
+
+.payoff-end-label {
+  fill: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.payoff-today-line {
+  stroke: var(--circle-now);
+  stroke-width: 1.5;
+  stroke-dasharray: 3 3;
+}
+
+.payoff-today-halo {
+  fill: var(--circle-now);
+  opacity: 0.22;
+}
+
+.payoff-today-dot {
+  fill: var(--circle-now);
+  stroke: var(--card-bg);
+  stroke-width: 2;
+}
+
+.payoff-pill {
+  fill: var(--circle-now-bg);
+  stroke: var(--circle-now-line);
+}
+
+.payoff-pill-text {
+  fill: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* Opening: the panel drops into place at its full height at once (so the page can scroll it
+   into view straight away), then the line is drawn from the first payment to the last, the way
+   time runs, and today lights as the line passes it. With reduced motion the panel only fades
+   in, in 120 ms, and the chart is all there at once. */
+@media (prefers-reduced-motion: no-preference) {
+  .chart-box {
+    animation: chart-open 280ms cubic-bezier(0.2, 0, 0, 1) both;
+  }
+
+  .payoff-data {
+    animation: payoff-draw 900ms cubic-bezier(0.2, 0, 0, 1) 120ms both;
+  }
+
+  .payoff-today {
+    animation: payoff-today 280ms cubic-bezier(0.2, 0, 0, 1) 560ms both;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chart-box {
+    animation: chart-fade 120ms ease both;
+  }
+}
+
+/* Once per opening: back on Loans from another page, the chart is just there (LoanChartPanel). */
+.chart-panel[data-played] .chart-box,
+.chart-panel[data-played] .payoff-data,
+.chart-panel[data-played] .payoff-today {
+  animation: none;
+}
+
+@keyframes chart-open {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes chart-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes payoff-draw {
+  from {
+    clip-path: inset(-12px 100% -12px -12px);
+  }
+
+  to {
+    clip-path: inset(-12px -12px -12px -12px);
+  }
+}
+
+@keyframes payoff-today {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
   }
 }

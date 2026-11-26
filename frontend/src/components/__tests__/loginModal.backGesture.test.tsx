@@ -128,8 +128,11 @@ async function sendCode() {
   await settle()
 }
 
+/** Escape as a key press sends it: up to the window, where the dialog hears it (dialogFocus). */
+const escapeKey = () => new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
+
 async function escape() {
-  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+  document.dispatchEvent(escapeKey())
   await settle()
 }
 
@@ -262,8 +265,8 @@ describe('closing the dialog by its own controls takes the entry with it', () =>
     expect(history.length).toBe(length + 1)
     const go = vi.spyOn(history, 'go')
     const popped = nextPop()
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    document.dispatchEvent(escapeKey())
+    document.dispatchEvent(escapeKey())
     expect(await popped).toBe(true)
     await settle()
 
@@ -333,5 +336,22 @@ describe('signing in from the dialog reloads with no entry of its own left', () 
     // Closed before leaving: a page the browser restores on the way back shows no dialog.
     expect(leftFor).toEqual({ url: '/api/auth/google/start', state: BEFORE, open: false })
     expect(closes).toBe(1)
+  })
+})
+
+describe('focus', () => {
+  it('starts in the email field, and goes back to the button that opened it on Escape', async () => {
+    const opener = document.createElement('button')
+    opener.textContent = 'Sign In'
+    document.body.appendChild(opener)
+    opener.focus()
+
+    await mount()
+    expect(document.activeElement).toBe(host.querySelector('#login-modal-email'))
+
+    await escape()
+    expect(isOpen()).toBeNull()
+    expect(document.activeElement).toBe(opener)
+    opener.remove()
   })
 })
