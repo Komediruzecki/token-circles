@@ -20,6 +20,7 @@ import { plainMessage } from '../core/apiError'
 import { handFocusTo } from '../core/domFocus'
 import { parseEntry } from '../core/entry/parseEntry'
 import { quickEntrySave } from '../core/quickEntryLists'
+import { keepTabIn } from '../utils/dialogFocus'
 import { localToday } from '../utils/period'
 import { returnFocus } from '../utils/returnFocus'
 import styles from './CommandBar.module.css'
@@ -288,6 +289,12 @@ export function CommandBar(props: CommandBarProps) {
         role="dialog"
         aria-modal={props.isOpen() ? 'true' : undefined}
         aria-label="Quick entry command bar"
+        onKeyDown={(e) => {
+          // Tab stays in the bar, as it does in the dialogs; the bar keeps its own keys.
+          if (e.key === 'Tab' && !e.ctrlKey && !e.altKey && !e.metaKey) {
+            keepTabIn(e, e.currentTarget)
+          }
+        }}
       >
         <div class={styles.inputRow}>
           <span class={styles.caret}>›</span>

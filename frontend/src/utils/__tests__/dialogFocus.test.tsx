@@ -753,3 +753,307 @@ describe('Escape, through onEscape', () => {
     expect(open()).toBe(true)
   })
 })
+
+describe('Tab stays inside the dialog on top', () => {
+  /** Tab pressed where focus is, as a browser sends it. jsdom moves no focus on its own. */
+  const tab = (init: KeyboardEventInit = {}) => {
+    const event = new KeyboardEvent('keydown', {
+      key: 'Tab',
+      bubbles: true,
+      cancelable: true,
+      ...init,
+    })
+    ;(document.activeElement ?? document.body).dispatchEvent(event)
+    return event
+  }
+  const shiftTab = (init: KeyboardEventInit = {}) => tab({ shiftKey: true, ...init })
+
+  /** A dialog with three stops: a field, Cancel and Save, and whatever `children` adds. */
+  function Dialog(props: {
+    open: () => boolean
+    name: string
+    inPlace?: boolean
+    before?: JSX.Element
+    children?: JSX.Element
+  }) {
+    return (
+      <Show when={props.open()}>
+        <div
+          role="dialog"
+          aria-modal="true"
+          data-test-id={props.name}
+          ref={(el) => {
+            dialogFocus(el, { inPlace: props.inPlace })
+          }}
+        >
+          {props.before}
+          <input data-test-id={`${props.name}-field`} />
+          <button data-test-id={`${props.name}-cancel`}>Cancel</button>
+          <button data-test-id={`${props.name}-save`}>Save</button>
+          {props.children}
+        </div>
+      </Show>
+    )
+  }
+
+  async function openBill(extra: { before?: JSX.Element; children?: JSX.Element } = {}) {
+    const [open, setOpen] = createSignal(false)
+    mount(() => (
+      <>
+        <button data-test-id="behind">Add bill</button>
+        <Dialog open={open} name="bill" before={extra.before}>
+          {extra.children}
+        </Dialog>
+      </>
+    ))
+    setOpen(true)
+    await settle()
+    expect(document.activeElement).toBe(byTestId('bill-field'))
+    return setOpen
+  }
+
+  it('goes from the last stop to the first, and on Shift+Tab from the first to the last', async () => {
+    await openBill()
+    byTestId('bill-save').focus()
+    const event = tab()
+    expect(event.defaultPrevented).toBe(true)
+    expect(document.activeElement).toBe(byTestId('bill-field'))
+
+    expect(shiftTab().defaultPrevented).toBe(true)
+    expect(document.activeElement).toBe(byTestId('bill-save'))
+  })
+
+  it('leaves Tab between stops to the browser', async () => {
+    await openBill()
+    expect(tab().defaultPrevented).toBe(false)
+    expect(document.activeElement).toBe(byTestId('bill-field'))
+    byTestId('bill-cancel').focus()
+    expect(shiftTab().defaultPrevented).toBe(false)
+    expect(tab().defaultPrevented).toBe(false)
+  })
+
+  it('keeps focus on a dialog with nothing to stop on', async () => {
+    const [open, setOpen] = createSignal(false)
+    mount(() => (
+      <Show when={open()}>
+        <div role="dialog" aria-modal="true" data-test-id="saved" ref={dialogFocus}>
+          <p>Saved</p>
+        </div>
+      </Show>
+    ))
+    setOpen(true)
+    await settle()
+    expect(document.activeElement).toBe(byTestId('saved'))
+
+    expect(tab().defaultPrevented).toBe(true)
+    expect(document.activeElement).toBe(byTestId('saved'))
+    expect(shiftTab().defaultPrevented).toBe(true)
+    expect(document.activeElement).toBe(byTestId('saved'))
+  })
+
+  it('brings Tab from the page behind, or from the dialog itself, in at the edge it goes to', async () => {
+    await openBill()
+    byTestId('behind').focus()
+    expect(tab().defaultPrevented).toBe(true)
+    expect(document.activeElement).toBe(byTestId('bill-field'))
+    byTestId('behind').focus()
+    shiftTab()
+    expect(document.activeElement).toBe(byTestId('bill-save'))
+
+    const dialog = byTestId('bill')
+    dialog.tabIndex = -1
+    dialog.focus()
+    tab()
+    expect(document.activeElement).toBe(byTestId('bill-field'))
+    dialog.focus()
+    shiftTab()
+    expect(document.activeElement).toBe(byTestId('bill-save'))
+  })
+
+  it('wraps from something inside that Tab does not stop on, past either edge', async () => {
+    await openBill({
+      before: (
+        <h2 tabIndex={-1} data-test-id="title">
+          Add bill
+        </h2>
+      ),
+      children: (
+        <p tabIndex={-1} data-test-id="note">
+          Due monthly
+        </p>
+      ),
+    })
+    byTestId('note').focus()
+    tab()
+    expect(document.activeElement).toBe(byTestId('bill-field'))
+    byTestId('title').focus()
+    shiftTab()
+    expect(document.activeElement).toBe(byTestId('bill-save'))
+    // Between the stops it is the browser's.
+    byTestId('title').focus()
+    expect(tab().defaultPrevented).toBe(false)
+  })
+
+  it.each([
+    ['disabled', () => <button disabled>Delete</button>],
+    ['out of the tab order', () => <button tabIndex={-1}>Delete</button>],
+    ['not drawn', () => <button style={{ display: 'none' }}>Delete</button>],
+    ['hidden', () => <button style={{ visibility: 'hidden' }}>Delete</button>],
+    [
+      'inert',
+      () => (
+        <div inert>
+          <button>Delete</button>
+        </div>
+      ),
+    ],
+  ])('passes over a control that is %s at the edges', async (_, control) => {
+    await openBill({ before: control(), children: control() })
+    // One before the field and one after Save, so both edges pass over one.
+    expect(byTestId('bill').querySelectorAll('button').length).toBe(4)
+    byTestId('bill-save').focus()
+    tab()
+    expect(document.activeElement).toBe(byTestId('bill-field'))
+    shiftTab()
+    expect(document.activeElement).toBe(byTestId('bill-save'))
+  })
+
+  it('stops once in a group of radios: on the checked one, or the first when none is', async () => {
+    await openBill({
+      children: (
+        <>
+          <input type="radio" name="kind" data-test-id="monthly" />
+          <input type="radio" name="kind" data-test-id="yearly" checked />
+        </>
+      ),
+    })
+    // The checked one is the group's stop, and the last in the dialog.
+    shiftTab()
+    expect(document.activeElement).toBe(byTestId('yearly'))
+    expect(tab().defaultPrevented).toBe(true)
+    expect(document.activeElement).toBe(byTestId('bill-field'))
+    // With none checked, the first is.
+    ;(byTestId('yearly') as HTMLInputElement).checked = false
+    shiftTab()
+    expect(document.activeElement).toBe(byTestId('monthly'))
+    expect(tab().defaultPrevented).toBe(true)
+    expect(document.activeElement).toBe(byTestId('bill-field'))
+  })
+
+  it('keeps Tab in the dialog on top only: Add Category over Add bill', async () => {
+    const [bill, setBill] = createSignal(false)
+    const [category, setCategory] = createSignal(false)
+    mount(() => (
+      <Dialog open={bill} name="bill">
+        <Dialog open={category} name="category" />
+      </Dialog>
+    ))
+    setBill(true)
+    await settle()
+    setCategory(true)
+    await settle()
+
+    byTestId('category-save').focus()
+    tab()
+    expect(document.activeElement).toBe(byTestId('category-field'))
+    shiftTab()
+    expect(document.activeElement).toBe(byTestId('category-save'))
+    // From the dialog under it, Tab comes up into the one on top.
+    byTestId('bill-save').focus()
+    tab()
+    expect(document.activeElement).toBe(byTestId('category-field'))
+  })
+
+  it('keeps no Tab in a form open in place, and keeps it in the dialog around one', async () => {
+    const [open, setOpen] = createSignal(false)
+    const [step, setStep] = createSignal(false)
+    mount(() => (
+      <>
+        <Dialog open={open} name="amount" inPlace />
+        <Dialog open={step} name="signin">
+          <Dialog open={step} name="code" inPlace />
+        </Dialog>
+      </>
+    ))
+    setOpen(true)
+    await settle()
+    byTestId('amount-save').focus()
+    expect(tab().defaultPrevented).toBe(false)
+
+    setOpen(false)
+    setStep(true)
+    await settle()
+    byTestId('code-save').focus()
+    tab()
+    expect(document.activeElement).toBe(byTestId('signin-field'))
+  })
+
+  it('keeps no Tab in a dialog on a page not shown', async () => {
+    await openBill()
+    const elsewhere = document.createElement('button')
+    document.body.appendChild(elsewhere)
+    onTestFinished(() => {
+      elsewhere.remove()
+    })
+    host!.style.display = 'none'
+    elsewhere.focus()
+    expect(tab().defaultPrevented).toBe(false)
+    expect(document.activeElement).toBe(elsewhere)
+  })
+
+  it('leaves Tab alone with Ctrl, Alt or Meta held, or while an input method is composing', async () => {
+    await openBill()
+    for (const held of [
+      { ctrlKey: true },
+      { altKey: true },
+      { metaKey: true },
+      { isComposing: true },
+    ]) {
+      byTestId('bill-save').focus()
+      expect(tab(held).defaultPrevented).toBe(false)
+      expect(document.activeElement).toBe(byTestId('bill-save'))
+    }
+  })
+
+  it('leaves a Tab that something inside already spent', async () => {
+    await openBill()
+    const save = byTestId('bill-save')
+    const spend = (e: KeyboardEvent) => {
+      e.preventDefault()
+    }
+    save.addEventListener('keydown', spend)
+    save.focus()
+    tab()
+    save.removeEventListener('keydown', spend)
+    expect(document.activeElement).toBe(save)
+  })
+
+  it('leaves Tab alone when the dialog shut on its way', async () => {
+    const setOpen = await openBill()
+    const save = byTestId('bill-save')
+    save.addEventListener('keydown', () => setOpen(false))
+    save.focus()
+    expect(tab().defaultPrevented).toBe(false)
+  })
+
+  it.each([
+    ['an (i) panel', { role: 'tooltip' }],
+    ['a menu', { role: 'menu' }],
+    ['a modal it does not know, such as the command bar', { role: 'dialog', 'aria-modal': 'true' }],
+    ["a running tour's card", { 'data-tour-card': '' }],
+  ])('leaves Tab to %s while focus is in it', async (_, attrs: Record<string, string>) => {
+    await openBill()
+    const layer = document.createElement('div')
+    for (const [name, value] of Object.entries(attrs)) layer.setAttribute(name, value)
+    const inside = document.createElement('button')
+    layer.appendChild(inside)
+    document.body.appendChild(layer)
+    onTestFinished(() => {
+      layer.remove()
+    })
+    inside.focus()
+    expect(tab().defaultPrevented).toBe(false)
+    expect(document.activeElement).toBe(inside)
+    expect(shiftTab().defaultPrevented).toBe(false)
+  })
+})

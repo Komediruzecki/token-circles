@@ -3073,6 +3073,36 @@ check')` first, as the cushion and debt cases do.
   case: "?" over Add a loan and over Add transaction, then Escape shuts only the list and puts
   focus back on the button it was opened from, and the next Escape shuts the dialog. On the code
   before the change it fails at the loan form, where the first Escape shut both.
+- **Tab stays inside the dialog on top** (`utils/dialogFocus.ts`). Measured on 26 Nov before the
+  change, Tab walked out of all 34 dialogs that open over a page (27 of them onto Quick add), and
+  Shift+Tab from each one's first stop walked out of all 34 too. The helper now steps in at the
+  edges only: Tab on the last stop goes to the first, Shift+Tab on the first goes to the last, and
+  from outside the dialog (the page behind it, or the dialog itself) Tab goes in at the edge it is
+  heading for. Between stops the browser moves focus as it always does. A stop is a control Tab
+  can reach that is not disabled, inert or hidden, and a group of radios is one stop (the checked
+  one, or the first). A dialog with nothing to stop on keeps focus on itself. Only the dialog on
+  top keeps Tab (Add Category over Add bill), never a form open in place, and never a dialog on a
+  page not shown. Tab is left alone with Ctrl, Alt or Meta held, while an input method is
+  composing, once something has spent it, and while focus is in a layer opened over the dialog:
+  an (i) panel, a menu, the command bar or a running tour's card (`data-tour-card` in
+  `Spotlight.tsx`). The command bar keeps its own keys and keeps Tab in itself from its own
+  keydown, with the helper's `keepTabIn`. Known gap: a cross-origin frame (the sign-in captcha)
+  sends no keydown out, so Tab from inside one is the browser's.
+- **Tests:** `src/utils/__tests__/dialogFocus.test.tsx` has 21 new cases (48 in all): the wrap at
+  both edges, nothing done between stops, a dialog with no stop, Tab from the page behind and from
+  the dialog itself, from inside past either edge, disabled, out-of-order, undrawn, hidden and
+  inert controls passed over, one stop per radio group, the top dialog only, no Tab kept in a form
+  open in place or a dialog on a page not shown, modifiers and composing, a Tab spent inside or
+  with the dialog shut on its way, and each of the four layers. Each of the 28 guards and branches,
+  taken out, fails at least one case. `spotlightDialogTab.test.tsx` renders the real tour over a
+  dialog: Tab from End Tour stays the browser's, and it fails with `data-tour-card` taken out.
+  `frontend/tests/dialog-tab-trap.spec.ts` (@smoke) opens each of the 34 dialogs, presses Tab
+  once per stop and three times more, then Shift+Tab once from the first stop, and checks focus
+  stays inside each time; each dialog is a soft check, so a run names every dialog that leaks.
+  On the code before the change all 34 failed both ways (a wrangler drop in the full run cut off
+  Categories and Budgets, which failed its six alone). Its seventh case Tabs to the (i) in Add
+  transaction: the panel opens on focus, Escape shuts it with the form still open, Enter pins it
+  and Enter shuts it, and Tab goes on inside the form.
 - **No extra-payment label stands on the loan's line.** A label above its mark and to the left of it
   was placed at the mark's height, where the line has not yet come down to the mark, so the line ran
   through it. The review's sweep (`LoanPayoffChart` in jsdom: the boat with one extra payment at

@@ -11,6 +11,10 @@
  * a question about unsaved work still comes first. A dialog opened over another (Add Category over
  * Add bill) is on top until it shuts, and Escape shuts only that one.
  *
+ * Tab stays inside the dialog on top. Only at its edges does this step in: Tab on its last stop
+ * goes to its first, and Shift+Tab on its first to its last. Between them the browser moves focus
+ * as it always does.
+ *
  * Two shapes:
  *  - `ref={dialogFocus}` on a dialog put on the page when it opens and taken off when it shuts
  *    (`<Show>`, `cond() && (...)`, an `<Index>` row). The ref runs as the element is made, which is
@@ -40,7 +44,7 @@ export interface DialogFocusOptions {
   /**
    * A form that opens in place on the page, not over it (Add money, a profile's rename, Delete
    * account, the 2FA step). It hears Escape only while focus is in it, and one with no `onEscape`
-   * passes Escape on to the dialog it is in.
+   * passes Escape on to the dialog it is in. Tab is not kept in it: it is part of the page.
    */
   inPlace?: boolean
 }
@@ -142,7 +146,7 @@ function shut(entry: OpenDialog): void {
 function opened(entry: OpenDialog): void {
   shut(entry)
   openDialogs.push(entry)
-  listenForEscape()
+  listenForKeys()
 }
 
 /**
@@ -191,17 +195,138 @@ function takenElsewhere(): boolean {
   return false
 }
 
+/** The dialog over the page that Tab stays in: the last one opened that is drawn and not in place. */
+function overPage(): OpenDialog | undefined {
+  for (let i = openDialogs.length - 1; i >= 0; i--) {
+    const entry = openDialogs[i]
+    const el = entry.dialog()
+    if (el && !entry.inPlace && drawn(el)) return entry
+  }
+  return undefined
+}
+
+/** What Tab can stop on, before the checks in `tabStops`. */
+const TABBABLE = [
+  'a[href]',
+  'area[href]',
+  'button',
+  'input:not([type="hidden"])',
+  'select',
+  'textarea',
+  'summary',
+  'iframe',
+  'audio[controls]',
+  'video[controls]',
+  '[tabindex]',
+  '[contenteditable]:not([contenteditable="false"])',
+].join(', ')
+
+/** Inside something inert: neither Tab nor a click reaches it. */
+function inert(el: Element): boolean {
+  for (let at: Element | null = el; at; at = at.parentElement) {
+    if ((at as HTMLElement).inert || at.hasAttribute('inert')) return true
+  }
+  return false
+}
+
+/** Drawn and not `visibility: hidden`: what Tab can land on. */
+function shown(el: HTMLElement): boolean {
+  if (!el.isConnected) return false
+  if (typeof el.checkVisibility === 'function') {
+    return el.checkVisibility({ visibilityProperty: true })
+  }
+  return drawn(el) && window.getComputedStyle(el).visibility !== 'hidden'
+}
+
+/**
+ * Where Tab stops inside `root`, in order: what it can reach that is not disabled, inert or hidden,
+ * and of a group of radios only the checked one, or the first when none is.
+ */
+function tabStops(root: HTMLElement): HTMLElement[] {
+  const stops: HTMLElement[] = []
+  const groups = new Map<string, HTMLInputElement>()
+  for (const el of root.querySelectorAll<HTMLElement>(TABBABLE)) {
+    if (el.tabIndex < 0 || el.matches(':disabled') || inert(el) || !shown(el)) continue
+    if (el instanceof HTMLInputElement && el.type === 'radio' && el.name !== '') {
+      const group = `${el.form?.id ?? ''}|${el.name}`
+      const chosen = groups.get(group)
+      if (chosen === undefined) {
+        groups.set(group, el)
+        stops.push(el)
+      } else if (el.checked && !chosen.checked) {
+        groups.set(group, el)
+        stops[stops.indexOf(chosen)] = el
+      }
+      continue
+    }
+    stops.push(el)
+  }
+  return stops
+}
+
+/** Where Tab from `active` must go to stay in `root`, or null where the browser can take it. */
+function wrapTarget(root: HTMLElement, active: Element | null, back: boolean): HTMLElement | null {
+  const stops = tabStops(root)
+  // Nothing to stop on: focus stays on the dialog.
+  if (stops.length === 0) {
+    if (!root.hasAttribute('tabindex')) root.tabIndex = -1
+    return root
+  }
+  const first = stops[0]
+  const last = stops[stops.length - 1]
+  // From the dialog itself, or from outside it: in at the edge Tab is going towards.
+  if (active === null || active === root || !root.contains(active)) return back ? last : first
+  const at = stops.indexOf(active as HTMLElement)
+  if (at !== -1) {
+    if (!back && at === stops.length - 1) return first
+    if (back && at === 0) return last
+    return null
+  }
+  // Focus on something inside that Tab does not stop on: past the last stop, or before the first.
+  const follows = (stop: HTMLElement) =>
+    (active.compareDocumentPosition(stop) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0
+  if (!back && !stops.some(follows)) return first
+  if (back && stops.every(follows)) return last
+  return null
+}
+
+/**
+ * Keeps a Tab press inside `root`, at its edges only: Tab on the last stop goes to the first,
+ * Shift+Tab on the first to the last, and from outside `root` Tab goes to its first stop and
+ * Shift+Tab to its last. With nothing to stop on, focus stays on `root`. For a modal this file does
+ * not keep (the command bar), from its own keydown.
+ */
+export function keepTabIn(e: KeyboardEvent, root: HTMLElement): void {
+  const target = wrapTarget(root, document.activeElement, e.shiftKey)
+  if (!target) return
+  e.preventDefault()
+  target.focus()
+}
+
+/**
+ * A layer opened over a dialog that keeps Tab while focus is in it: an (i) panel, a menu, a modal
+ * this file does not know (the command bar), or the card of a running tour.
+ */
+function inLayer(el: Element | null): boolean {
+  if (el === null) return false
+  if (el.closest('[role="tooltip"], [role="menu"], [data-tour-card]') !== null) return true
+  const modal = el.closest('[aria-modal="true"]')
+  return modal !== null && !known(modal)
+}
+
 /** The dialog an Escape on its way in was for, until it is on its way out. */
 let escapeFor: OpenDialog | undefined
+/** The dialog a Tab on its way in is kept in, until it is on its way out. */
+let tabFor: OpenDialog | undefined
 let listening = false
 
 /**
- * Escape is read twice, as the page's own Escapes are (Transactions' entry form). On its way in,
- * before anything has had it: which dialog is on top, and is something else over it? On its way
- * out, after every other listener: did something spend it (a list inside that shuts, a dialog that
- * hears Escape itself)? Only when neither does the dialog on top shut.
+ * Escape is read twice. On its way in, before anything has had it: which dialog is on top, and is
+ * something else over it? On its way out, after every other listener: did something spend it (a
+ * list inside that shuts, a dialog that hears Escape itself)? Only when neither does the dialog on
+ * top shut.
  */
-function listenForEscape(): void {
+function listenForKeys(): void {
   if (listening) return
   listening = true
   window.addEventListener(
@@ -224,6 +349,27 @@ function listenForEscape(): void {
     if (!entry.onEscape) return
     e.preventDefault()
     entry.onEscape()
+  })
+  // Tab the same way: on its way in, is focus in a layer over the dialog? On its way out, did
+  // something spend it? A modifier makes it someone else's (Ctrl+Tab changes the browser's tab).
+  window.addEventListener(
+    'keydown',
+    (e) => {
+      if (e.key !== 'Tab') return
+      tabFor = undefined
+      if (e.ctrlKey || e.altKey || e.metaKey || e.isComposing) return
+      if (inLayer(document.activeElement)) return
+      tabFor = overPage()
+    },
+    true
+  )
+  window.addEventListener('keydown', (e) => {
+    if (e.key !== 'Tab') return
+    const entry = tabFor
+    tabFor = undefined
+    if (!entry || e.defaultPrevented || !openDialogs.includes(entry)) return
+    const dialog = entry.dialog()
+    if (dialog) keepTabIn(e, dialog)
   })
 }
 

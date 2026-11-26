@@ -348,6 +348,9 @@ export default function Spotlight() {
           so there are no per-placement classes to toggle here. */}
       <div
         ref={tooltipRef}
+        // Marks the tour's card for the dialogs under it: focus here keeps its Tab
+        // (utils/dialogFocus.ts).
+        data-tour-card
         class={styles.tooltip}
         classList={{ [styles.visible]: tooltipReady() }}
         style={tooltipStyle()}
