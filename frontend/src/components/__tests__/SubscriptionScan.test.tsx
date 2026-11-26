@@ -447,6 +447,90 @@ describe('regular payments it has no name for', () => {
   })
 })
 
+// Review of 19 Nov, round 5. With the data kept in this browser, a household's scan reads every
+// chosen profile's categories and charges, and both runtimes refuse a bill on another profile's
+// category. The scan filed a row under the first category of the name it looked for, another
+// profile's as often as its own, and the add was refused.
+describe('in a household', () => {
+  const OURS = 1
+  const THEIRS = 2
+
+  /** The bill the scan sent for `name`. */
+  const sent = (name: string) =>
+    apiMocks.apiPost.mock.calls
+      .map(([, body]) => body as { name: string; category_id?: number; type?: string })
+      .find((body) => body.name === name)
+
+  beforeEach(() => {
+    localStorage.setItem('currentProfileId', String(OURS))
+    localStorage.setItem('selectedProfileIds', JSON.stringify([OURS, THEIRS]))
+    apiMocks.apiPost.mockResolvedValue({ id: 1 })
+  })
+
+  afterEach(() => {
+    localStorage.removeItem('currentProfileId')
+    localStorage.removeItem('selectedProfileIds')
+  })
+
+  it("files a find under this profile's category, never another profile's", async () => {
+    // Netflix looks for Entertainment, Subscriptions, then Streaming; Spotify for Entertainment,
+    // Subscriptions, then Music. Only the other profile has Entertainment and Music.
+    const categories = [
+      { id: 21, name: 'Entertainment', type: 'expense', profile_id: THEIRS },
+      { id: 23, name: 'Music', type: 'expense', profile_id: THEIRS },
+      { id: 11, name: 'Streaming', type: 'expense', profile_id: OURS },
+    ]
+    apiMocks.apiGet.mockImplementation(async (url: string) =>
+      url === '/api/transactions'
+        ? [
+            ...[95, 65, 35, 5].map((days) => charge('NETFLIX.COM AMSTERDAM', 13.99, days)),
+            ...[95, 65, 35, 5].map((days) => charge('Spotify P0FF8B1C34', 10.99, days)),
+          ]
+        : url === '/api/categories'
+          ? categories
+          : []
+    )
+    const scan = await mountScan()
+
+    expect(await scan.addSelected()).toBe(2)
+
+    expect(sent('Netflix')?.category_id).toBe(11)
+    expect(sent('Spotify')?.category_id).toBeUndefined()
+  })
+
+  it("files a regular payment under this profile's category of the same name, or under none", async () => {
+    const LANDLORD = 'Hausverwaltung Muster GmbH'
+    const GYM = 'Kraftraum Beispielstadt'
+    const categories = [
+      { id: 22, name: 'Housing', type: 'expense', kind: 'housing', profile_id: THEIRS },
+      { id: 24, name: 'Sport', type: 'expense', profile_id: THEIRS },
+      { id: 12, name: 'Housing', type: 'expense', kind: 'housing', profile_id: OURS },
+    ]
+    const rows = [
+      ...[95, 65, 35, 5].map((days) => ({
+        ...charge('MIETE', 850, days),
+        beneficiary: LANDLORD,
+        category_id: 22,
+      })),
+      ...[95, 65, 35, 5].map((days) => ({
+        ...charge('MITGLIEDSBEITRAG', 29.9, days),
+        beneficiary: GYM,
+        category_id: 24,
+      })),
+    ]
+    apiMocks.apiGet.mockImplementation(async (url: string) =>
+      url === '/api/transactions' ? rows : url === '/api/categories' ? categories : []
+    )
+    const scan = await mountScan()
+
+    expect(await scan.addSelected()).toBe(2)
+
+    // Still a bill, for a home: the kind is read from the category the charges are filed under.
+    expect(sent(LANDLORD)).toMatchObject({ category_id: 12, type: 'bill' })
+    expect(sent(GYM)?.category_id).toBeUndefined()
+  })
+})
+
 describe('in the setup wizard', () => {
   const rescan = () =>
     [...host.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Rescan')

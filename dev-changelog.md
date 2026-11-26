@@ -3084,15 +3084,40 @@ check')` first, as the cushion and debt cases do.
   `BILL_NAME_MAX`, a due date, and any other detail ("A detail the scan doesn't show was refused.
   Add it from Bills, where every detail can be changed."). `refusedMessages`
   (`refusedSubscriptions.ts`) takes a host's own words (`instead`) and still says each reason once;
-  the catalog sends none, so it is unchanged. The category case is real in a view of several
-  profiles: `GET /api/categories` and the transactions answer every selected profile's, the scan
-  files a row under a category from them, and the bill goes to the current profile, which refuses
-  another profile's category. Which category the scan picks there is not changed here.
+  the catalog sends none, so it is unchanged. The category case is real in local-first with
+  several profiles selected: there `GET /api/categories` and the transactions answer every
+  selected profile's, the scan filed a row under a category from them, and the bill goes to the
+  current profile, which refuses another profile's category. Round 5 makes the scan pick the
+  current profile's (the next entry).
   - **Tests:** `SubscriptionScan.test.tsx` (each of the four details, a refused period in the
     runtime's words, two refused for one detail said once with "them", and the two notice tests
     that expected the runtime's words) and `refusedSubscriptions.test.ts` (a host's words, one or
     several). With the scan's words taken out, seven fail; with `refusedMessages` ignoring them,
     eight.
+- **The scan files what it adds under its own profile's categories.** Round 5 of the 19 Nov
+  review. In local-first with several profiles selected, the scan reads every selected profile's
+  categories and charges (the list handlers read the selection; for the scan's requests the
+  Worker answers the active profile alone), and it filed a row under the first category of the
+  name it looked for, or, for a regular payment, under the category its charges are filed under:
+  another profile's as often as its own. The bill goes to the active profile, and both runtimes
+  refuse another profile's category, so the add was refused. `categoryOf` (`SubscriptionScan.tsx`)
+  files a row only under a category of the profile the add writes to (`activeProfileId()`): a
+  named find takes the first of its hints that profile has, and a regular payment whose charges
+  are filed under another profile's category takes the active profile's of the same name and
+  type, or none. Detection still reads every category it is given, so a home's charges filed
+  under another profile's Housing still make a bill. A category without a `profile_id` counts as
+  the active profile's; both runtimes send one.
+  - **Neither runtime takes such a bill:** the contract scenario "another profile's bill is not
+    read, changed, paid or removed" posts one on the other profile's category from the active
+    profile alone and, new here, with both profiles selected, as a household's scan sends it. Both
+    are refused at `category_id` (400) in local-first and on the Worker, and neither profile gains a
+    bill.
+  - **Tests:** `SubscriptionScan.test.tsx` "in a household": a find whose first hint only the
+    other profile has goes under the active profile's Streaming, and one with no hint the active
+    profile has goes under none (before: the other profile's Entertainment, 21 for 11); a regular
+    payment filed under the other profile's Housing goes under the active profile's and is still a
+    bill, and one whose category has no namesake here goes under none (before: 22 for 12). With
+    the active-profile filter taken out both fail; with the same-name match taken out, the second.
 - **The Bills header's buttons stay whole at every width.** Round 3 of the 19 Nov review. At
   820 px, beside the sidebar, Scan transactions, Browse catalog and Add Subscription took two lines
   each next to the title, and at 390 the third ran past the screen's edge: 60 px tall each at both

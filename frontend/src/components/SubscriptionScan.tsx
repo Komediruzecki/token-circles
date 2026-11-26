@@ -35,6 +35,7 @@ import { BILL_MESSAGES, BILL_NAME_MAX, checkBillCreate } from '../../../shared/b
 import { BANK_IMPORT_HASH } from '../../../shared/importRoute'
 import { apiGet, apiPost, getLocalCurrency, listRows, showToast } from '../core/api'
 import { ApiError } from '../core/apiError'
+import { activeProfileId } from '../core/apiProfileScope'
 import { parseDecimalInput } from '../core/decimalInput'
 import { monthlyEquivalent } from '../core/subscriptionMath'
 import { matchBrand } from '../features/subscriptionBrands'
@@ -67,6 +68,8 @@ interface CategoryRow extends KindedCategory {
   id: number
   name: string
   type: string
+  /** Both runtimes answer it; a row without one is taken as the current profile's. */
+  profile_id?: number | null
 }
 
 export interface SubscriptionScanPanelProps {
@@ -247,11 +250,40 @@ export function SubscriptionScanPanel(props: SubscriptionScanPanelProps) {
     }
   }
 
-  const resolveCategoryId = (d: DetectedSubscription): number | undefined => {
-    const cats = categories().filter((c) => c.type === 'expense')
-    const hints = [...d.categoryHints, matchBrand(d.name).defaultCategory]
-    for (const hint of hints) {
-      const hit = cats.find((c) => c.name.toLowerCase() === hint.toLowerCase())
+  /**
+   * The categories a row's bill can be filed under: those of the profile it goes to, the one the
+   * add writes to. With the data kept in this browser, a household's scan reads every chosen
+   * profile's categories (and charges), and both runtimes refuse a bill on another profile's.
+   */
+  const ownCategories = () => {
+    const profile = activeProfileId()
+    return categories().filter(
+      (c) => c.profile_id === null || c.profile_id === undefined || c.profile_id === profile
+    )
+  }
+
+  const named = (cats: readonly CategoryRow[], name: string) =>
+    cats.find((c) => c.name.toLowerCase() === name.toLowerCase())
+
+  /**
+   * The category a row's bill is filed under, always one of its own profile's. A named find takes
+   * the first of its hints that profile has. A regular payment keeps the category its charges are
+   * filed under, or where that is another profile's, its own of the same name and type, or none.
+   */
+  const categoryOf = (d: DetectedSubscription): number | undefined => {
+    const own = ownCategories()
+    if (d.matchedVia === 'recurring') {
+      if (d.categoryId === undefined || own.some((c) => c.id === d.categoryId)) return d.categoryId
+      const theirs = categories().find((c) => c.id === d.categoryId)
+      if (!theirs) return undefined
+      return named(
+        own.filter((c) => c.type === theirs.type),
+        theirs.name
+      )?.id
+    }
+    const expense = own.filter((c) => c.type === 'expense')
+    for (const hint of [...d.categoryHints, matchBrand(d.name).defaultCategory]) {
+      const hit = named(expense, hint)
       if (hit) return hit.id
     }
     return undefined
@@ -262,7 +294,7 @@ export function SubscriptionScanPanel(props: SubscriptionScanPanelProps) {
     name: d.name,
     amount: amountOf(price),
     dueDate: d.suggestedDueDate,
-    category_id: d.matchedVia === 'recurring' ? d.categoryId : resolveCategoryId(d),
+    category_id: categoryOf(d),
     frequency: row(d.key).frequency,
     type: d.billType,
   })
