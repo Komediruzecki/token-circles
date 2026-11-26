@@ -18,7 +18,7 @@ import {
   unreadableNumbersReason,
 } from '../../../../../shared/importRowChecks'
 import { importRowLabel } from '../../../../../shared/importRowLabel'
-import { checkSheetFetch, SHARE_SHEET_BY_LINK } from '../../../../../shared/importSourceSchema'
+import { checkSheetFetch, SHEET_UNREADABLE } from '../../../../../shared/importSourceSchema'
 import { IMPORT_UPLOAD_MESSAGES, uploadRefusal } from '../../../../../shared/importUpload'
 import { refusalOf } from '../../../../../shared/refusal'
 import { transactionInvariantError } from '../../../../../shared/transactionInvariant'
@@ -485,10 +485,10 @@ export async function importGoogleSheet(body: unknown): Promise<Response> {
   } catch {
     return json(
       {
-        error: 'Could not access the Google Sheet from the browser.',
-        // What the link's own refusal says (M.published): share the sheet by its link. It said to
-        // publish it first, and the link Publish to web gives is the one the field refuses.
-        message: `${SHARE_SHEET_BY_LINK} Or download the sheet as CSV and use the File Upload tab.`,
+        // The Worker's words for a sheet it cannot read: share it by its link, or upload it. The
+        // page shows `error` at the link. It said "Could not access the Google Sheet from the
+        // browser." there, and kept the advice in `message`, which nothing showed.
+        error: SHEET_UNREADABLE,
         serverlessMode: true,
       },
       422

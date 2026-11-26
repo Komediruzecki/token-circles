@@ -1,11 +1,14 @@
 /**
- * When a Google Sheet cannot be read as CSV, POST /api/import/googlesheet answers 501 with a
- * sentence the import page shows as is. That sentence used to splice in the caught error's
- * message whatever it was, so a network failure's internal text reached the page. Its own reasons
- * (not shared publicly, no rows, Google's HTTP status) still do; anything else is logged and
- * replaced with a plain reason.
+ * When a Google Sheet cannot be read as CSV, POST /api/import/googlesheet answers 501, and the
+ * Import page shows its `error` at the link. That sentence used to splice in the caught error's
+ * message whatever it was, so a network failure's internal text reached the page; then it gave its
+ * own reason ("got HTML instead of CSV", "HTTP 404") and an XLSX fallback the deployment lacks.
+ * Now `error` says what local-first says of a sheet it cannot read, how to share it or upload it
+ * (SHEET_UNREADABLE), and an empty sheet says it has no header row (SHEET_EMPTY). The reason goes
+ * in `reason`: its own reasons as they are, anything else logged and replaced with a plain one.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { SHEET_EMPTY, SHEET_UNREADABLE } from '../../shared/importSourceSchema';
 import { fetchGoogleSheetRows } from '../src/routes/imports';
 
 const SHEET = 'https://docs.google.com/spreadsheets/d/SHEET123/edit#gid=0';
@@ -34,11 +37,8 @@ describe('fetchGoogleSheetRows failures', () => {
     });
     const { status, body } = await fetchGoogleSheetRows(SHEET);
     expect(status).toBe(501);
-    const error = String(body.error);
-    expect(error).not.toContain('ECONNREFUSED');
-    expect(error).not.toContain('egress-proxy');
-    expect(error).toMatch(/^Could not import this Google Sheet via CSV export: /);
-    expect(error).toContain('Anyone with link can view');
+    expect(body).toEqual({ error: SHEET_UNREADABLE, reason: 'the download did not complete' });
+    expect(JSON.stringify(body)).not.toMatch(/ECONNREFUSED|egress-proxy/);
 
     const line = consoleError.mock.calls
       .map((args) => String(args[0]))
@@ -51,27 +51,30 @@ describe('fetchGoogleSheetRows failures', () => {
     expect(line).not.toContain('SHEET123');
   });
 
-  it('keeps its own reason for a sheet that is not shared publicly', async () => {
+  it('says how to share a sheet that is not shared publicly, and keeps its own reason', async () => {
     serve(() => new Response('<!DOCTYPE html><html></html>', { status: 200 }));
     const { status, body } = await fetchGoogleSheetRows(SHEET);
     expect(status).toBe(501);
-    expect(body.error).toContain('Sheet is not publicly accessible (got HTML instead of CSV)');
+    expect(body).toEqual({
+      error: SHEET_UNREADABLE,
+      reason: 'Sheet is not publicly accessible (got HTML instead of CSV)',
+    });
     expect(consoleError).not.toHaveBeenCalled();
   });
 
-  it('keeps its own reason for an empty sheet', async () => {
+  it('says an empty sheet has no header row, and keeps its own reason', async () => {
     serve(() => new Response('', { status: 200 }));
     const { status, body } = await fetchGoogleSheetRows(SHEET);
     expect(status).toBe(501);
-    expect(body.error).toContain('No rows found');
+    expect(body).toEqual({ error: SHEET_EMPTY, reason: 'No rows found' });
     expect(consoleError).not.toHaveBeenCalled();
   });
 
-  it("keeps Google's HTTP status as the reason", async () => {
+  it("says how to share a sheet Google refuses, and keeps Google's HTTP status as the reason", async () => {
     serve(() => new Response('not found', { status: 404 }));
     const { status, body } = await fetchGoogleSheetRows(SHEET);
     expect(status).toBe(501);
-    expect(body.error).toContain('HTTP 404');
+    expect(body).toEqual({ error: SHEET_UNREADABLE, reason: 'HTTP 404' });
     expect(consoleError).not.toHaveBeenCalled();
   });
 });

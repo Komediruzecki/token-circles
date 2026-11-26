@@ -12,7 +12,7 @@ import { requireAuth } from '../auth';
 import { getProfileId } from '../profile';
 import { accept, HttpError } from '../http';
 import { refusalOf, summarizeFields } from '../../../shared/refusal';
-import { readSheetUrl } from '../../../shared/importSourceSchema';
+import { readSheetUrl, SHEET_EMPTY, SHEET_UNREADABLE } from '../../../shared/importSourceSchema';
 import {
   IMPORT_UPLOAD_MAX_BYTES,
   IMPORT_UPLOAD_MESSAGES,
@@ -272,8 +272,10 @@ importRoutes.post('/api/import/file-sheet', requireAuth, async (c) => {
   );
 });
 
-/** A reason fetchGoogleSheetRows writes itself, safe to show in its 501. */
+/** A reason fetchGoogleSheetRows writes itself, safe to answer as its 501's `reason`. */
 class SheetUnreadable extends Error {}
+/** A sheet read with nothing in it: its words say so, not how to share it. */
+class SheetEmpty extends SheetUnreadable {}
 
 // ── fetchGoogleSheetRows — fetch + parse a link-shared sheet's CSV export (Workers-safe) ──
 // Extracted from the HTTP handler so the route, the daily cron sync and email-in can all call
@@ -313,7 +315,7 @@ export async function fetchGoogleSheetRows(
         },
       };
     }
-    throw new SheetUnreadable('No rows found');
+    throw new SheetEmpty('No rows found');
   } catch (err) {
     // CSV export failed / returned nothing. The Express fallback parses the XLSX export to
     // enumerate tabs, which the spreadsheet parser can't do on Workers yet.
@@ -333,15 +335,12 @@ export async function fetchGoogleSheetRows(
         })
       );
     }
+    // The words are local-first's for a sheet it cannot read, and the page shows them at the link:
+    // how to share it, or to upload it. They named the reason ("got HTML instead of CSV") and an
+    // XLSX fallback this deployment lacks; the reason is beside them now, as `reason`.
     return {
       status: 501,
-      body: {
-        error:
-          'Could not import this Google Sheet via CSV export: ' +
-          reason +
-          ". Make sure the sheet is shared as 'Anyone with link can view'. " +
-          'The XLSX fallback is not available on this deployment yet.',
-      },
+      body: { error: err instanceof SheetEmpty ? SHEET_EMPTY : SHEET_UNREADABLE, reason },
     };
   }
 }

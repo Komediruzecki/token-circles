@@ -81,10 +81,24 @@ export const IMPORT_SOURCE_LABEL_MAX = 200;
 
 /**
  * How to share a sheet so both runtimes can read it: by its link. The words for a "Publish to
- * web" link, and local-first's answer for a sheet the browser could not read, both say it.
+ * web" link, and both runtimes' answer for a sheet they could not read, say it.
  */
 export const SHARE_SHEET_BY_LINK =
   'In Google Sheets, choose Share, set General access to "Anyone with the link", and paste that link instead.';
+
+/**
+ * What both runtimes answer, as `error`, for a sheet they could not read: local-first's 422 and the
+ * Worker's 501. The Import page and Add a sheet show it at the link: how to share the sheet so it
+ * can be read, or to bring it in as a file.
+ */
+export const SHEET_UNREADABLE = `Couldn't read that sheet. ${SHARE_SHEET_BY_LINK} Or download the sheet as CSV and use the File Upload tab.`;
+
+/**
+ * Said at the link when a sheet was read but has no header row to map: the Import page's words for
+ * local-first's empty answer, and the Worker's `error` for an empty sheet.
+ */
+export const SHEET_EMPTY =
+  'That sheet has no header row to read. Check the link points at the tab with your transactions.';
 
 /** The words for each refusal. A form shows them under the field; a summary joins them. */
 export const IMPORT_SOURCE_MESSAGES = {

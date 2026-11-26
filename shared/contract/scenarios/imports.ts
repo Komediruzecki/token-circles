@@ -1,6 +1,6 @@
 import { ACCOUNT_MESSAGES, importedAccountTypeError } from '../../accountSchema';
 import { IMPORT_UPLOAD_MESSAGES } from '../../importUpload';
-import { IMPORT_SOURCE_MESSAGES } from '../../importSourceSchema';
+import { IMPORT_SOURCE_MESSAGES, SHEET_UNREADABLE } from '../../importSourceSchema';
 import { addCategory, balanceOf, expectMoney, listTransactions, rowsOf } from '../helpers';
 import { SHEETS } from '../outbound';
 import { expectOk, scenario } from '../types';
@@ -427,6 +427,17 @@ export const imports = [
       error: IMPORT_SOURCE_MESSAGES.published,
       fields: { url: IMPORT_SOURCE_MESSAGES.published },
     });
+
+    // A sheet shared with no one cannot be read in any way either runtime tries. Both say how to
+    // share it, or to upload it instead, in one set of words as `error` and with no field named:
+    // the Import page and Add a sheet show that at the link.
+    const unread = await api.post('/api/import/googlesheet', {
+      url: 'https://docs.google.com/spreadsheets/d/contract-unshared-sheet/edit',
+    });
+    // DIFFERENCE sheet-unread-status
+    expect(unread.status).toBe(api.runtime === 'worker' ? 501 : 422);
+    expect(unread.body).toMatchObject({ error: SHEET_UNREADABLE });
+    expect(unread.body.fields).toBeUndefined();
   }),
 
   scenario('a spreadsheet file is uploaded for the mapping step', async (api, expect) => {

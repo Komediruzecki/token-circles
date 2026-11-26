@@ -18,7 +18,7 @@ import {
   freshImportTypes,
   syncTypes,
 } from '../../../../shared/importCategoryTypes'
-import { readSheetUrl } from '../../../../shared/importSourceSchema'
+import { readSheetUrl, SHEET_EMPTY } from '../../../../shared/importSourceSchema'
 import { IMPORT_UPLOAD_MESSAGES } from '../../../../shared/importUpload'
 import { getLocalCurrency, toast } from '../../core/api'
 import { ApiError, apiErrorFrom } from '../../core/apiError'
@@ -48,9 +48,6 @@ import type { BankId, CategoryRuleSet, StatementMeta, TransferRuleSet } from '..
 import type { CategoryRuleDraft } from '../../core/bankImport/rulesCheck'
 import type { PreviewFilter, VoidTransferContext } from './previewFilter'
 
-/** Said when a sheet's link was read but the sheet has no header row to map. */
-export const SHEET_EMPTY =
-  'That sheet has no header row to read. Check the link points at the tab with your transactions.'
 /** Said when the sheet could not be read for a reason the answer did not name. */
 export const SHEET_UNREAD =
   "Couldn't read that sheet. Check it is shared so anyone with the link can view it, and try again."
@@ -1390,7 +1387,9 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
       })
       if (!response.ok) {
         const refused = await apiErrorFrom(response)
-        // A sheet either runtime could not read is about its link: the words say how to share it.
+        // A sheet the runtime could not read (422 in local-first, 501 on the Worker) names no
+        // field, and its `error` is marked at the link: how to share the sheet or upload it
+        // instead (SHEET_UNREADABLE), or, from the Worker, that the sheet is empty (SHEET_EMPTY).
         const unread =
           Object.keys(refused.fields).length === 0 &&
           (response.status === 422 || response.status === 501)

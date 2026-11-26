@@ -17,12 +17,13 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import {
   IMPORT_SOURCE_MESSAGES as M,
   SHARE_SHEET_BY_LINK,
+  SHEET_EMPTY,
+  SHEET_UNREADABLE,
 } from '../../../../../shared/importSourceSchema'
 import { setPage } from '../../../core/appStore'
 import { __resetDataVersionsForTest } from '../../../core/dataVersions'
 import { getDB } from '../../../core/storage/idb'
 import { removeToast, toasts } from '../../../core/toastStore'
-import { SHEET_EMPTY } from '../importFlow'
 import type { apiFetch as ApiFetch } from '../../../core/apiFetch'
 import type { ImportFlow } from '../importFlow'
 
@@ -276,22 +277,25 @@ describe('Connected Sources: Add a sheet', () => {
     expect(failureToasts()).toEqual([])
   })
 
-  it('marks a sheet that cannot be read at its link, in the words that say how to share it', async () => {
+  it('marks a sheet it cannot read at its link, saying how to share it or upload it instead', async () => {
     await openAdd()
     type(urlInput(), PRIVATE)
     submit(save())
     await vi.waitFor(() => {
       expect(urlInput().getAttribute('aria-invalid')).toBe('true')
     })
-    expect(describedBy(urlInput())).toContain('Could not access the Google Sheet from the browser.')
+    expect(describedBy(urlInput())).toContain(SHEET_UNREADABLE)
     expect(net.sent).toEqual(['POST /api/import/googlesheet'])
-    // Its advice is the link's own: share it by its link. It asked for Publish to web, whose link
-    // the field refuses (M.published).
     const [answer] = net.answers
-    expect(answer).toMatchObject({ path: '/api/import/googlesheet', status: 422 })
-    const { message } = answer.body as { message: string }
-    expect(message).toContain(SHARE_SHEET_BY_LINK)
-    expect(message).not.toMatch(/publish/i)
+    expect(answer).toMatchObject({
+      path: '/api/import/googlesheet',
+      status: 422,
+      body: { error: SHEET_UNREADABLE },
+    })
+    // The advice is the link's own, to share it by its link, not to publish it: the field refuses
+    // the link Publish to web gives (M.published).
+    expect(SHEET_UNREADABLE).toContain(SHARE_SHEET_BY_LINK)
+    expect(SHEET_UNREADABLE).not.toMatch(/publish/i)
     expect(await storedSources()).toEqual([])
     expect(failureToasts()).toEqual([])
     expect(byTestId('source-add-form')).not.toBeNull()
@@ -467,15 +471,43 @@ describe("the Import page's Google Sheets link", () => {
     expect(help).not.toMatch(/publish/i)
   })
 
-  it('marks a sheet that cannot be read at its link, not in the banner', async () => {
+  it('marks a sheet it cannot read at its link, saying how to share it, not in the banner', async () => {
     const flow = await openSheets()
     type(urlInput(), PRIVATE)
     submit(fetchButton())
     await vi.waitFor(() => {
       expect(urlInput().getAttribute('aria-invalid')).toBe('true')
     })
-    expect(describedBy(urlInput())).toContain('Could not access the Google Sheet from the browser.')
+    expect(describedBy(urlInput())).toContain(SHEET_UNREADABLE)
     expect(net.sent).toEqual(['POST /api/import/googlesheet'])
+    expect(flow.error()).toBeNull()
+    expect(flow.activeStep()).toBe('upload')
+    expect(failureToasts()).toEqual([])
+  })
+
+  it("marks the Worker's answer for a sheet it cannot read, or an empty one, at the link", async () => {
+    const flow = await openSheets()
+    // As the Worker answers them (fetchGoogleSheetRows in worker/src/routes/imports.ts): 501, its
+    // words as `error`, its own reason beside them, and no field named.
+    for (const [words, reason] of [
+      [SHEET_UNREADABLE, 'HTTP 404'],
+      [SHEET_EMPTY, 'No rows found'],
+    ]) {
+      net.answerOnce = {
+        path: '/api/import/googlesheet',
+        response: () =>
+          new Response(JSON.stringify({ error: words, reason }), {
+            status: 501,
+            headers: { 'content-type': 'application/json' },
+          }),
+      }
+      type(urlInput(), PRIVATE)
+      submit(fetchButton())
+      await vi.waitFor(() => {
+        expect(describedBy(urlInput())).toContain(words)
+      })
+      expect(describedBy(urlInput())).not.toContain(reason)
+    }
     expect(flow.error()).toBeNull()
     expect(flow.activeStep()).toBe('upload')
     expect(failureToasts()).toEqual([])

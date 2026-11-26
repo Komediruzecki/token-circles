@@ -3249,23 +3249,45 @@ check')` first, as the cushion and debt cases do.
     words starts where the name does. Before the change it failed at 42 against 56.3. With the grid
     taken out the arrow, a block by the preflight's `svg { display: block }`, sits above the name,
     and the test fails at the arrow (its right edge at 54, the name at 42).
-- **Local-first's answer for a sheet it cannot read says to share it by its link.** Round 5 of
-  the 19 Nov review. When every way local-first has of reading a sheet fails, `importGoogleSheet`
-  (`core/storage/handlers/importFlow.ts`) answers 422, and its `message` said first to publish the
-  sheet to the web. The link Publish to web gives (`/d/e/`) is the one both runtimes refuse at the
-  field, with "A "Publish to web" link can't be read. In Google Sheets, choose Share, ...". That
-  advice is one constant now, `SHARE_SHEET_BY_LINK` (`shared/importSourceSchema.ts`):
-  `M.published` ends with it, and the 422's `message` is it and the CSV and File Upload way. A
-  `/d/e/` link itself never reaches the 422: both runtimes refuse it at the link before anything is
-  fetched (contract scenario "a shared Google Sheet is read for the mapping step"). The app does not
-  show the `message`: `apiErrorFrom` takes the answer's `error`, so the field still says "Could not
-  access the Google Sheet from the browser." and nothing about sharing. The Worker's comments that
-  said it fetches a "published" sheet say what it does: the CSV export of a sheet shared by its
-  link, with a Publish to web link refused at the link.
-  - **Test:** `sheetForms.test.tsx` "marks a sheet that cannot be read at its link, in the words
-    that say how to share it" reads the router's answer too: a 422 whose `message` holds
-    `SHARE_SHEET_BY_LINK` and says nothing of publishing. Before the change it failed on "To
-    import this sheet, either: (1) Publish it to the web ...".
+- **A sheet neither runtime can read is marked at its link with how to share it.** Rounds 5 and 6
+  of the 19 Nov review. When every way local-first has of reading a sheet fails, `importGoogleSheet`
+  (`core/storage/handlers/importFlow.ts`) answers 422; when the Worker cannot read a sheet's CSV
+  export, `fetchGoogleSheetRows` (`worker/src/routes/imports.ts`) answers 501. The Import page and
+  Add a sheet mark either at the link with the answer's `error`, and the two said different things,
+  neither of them how to fix it. Local-first said "Could not access the Google Sheet from the
+  browser.", with advice in a `message` that nothing showed and that first said to publish the
+  sheet to the web, whose link the field refuses. The Worker said "Could not import this Google
+  Sheet via CSV export: HTTP 404. Make sure the sheet is shared as 'Anyone with link can view'. The
+  XLSX fallback is not available on this deployment yet." Both answer one `error` now,
+  `SHEET_UNREADABLE` (`shared/importSourceSchema.ts`): "Couldn't read that sheet.", then
+  `SHARE_SHEET_BY_LINK`, the advice `M.published` ends with ("In Google Sheets, choose Share, set
+  General access to "Anyone with the link", and paste that link instead."), then "Or download the
+  sheet as CSV and use the File Upload tab." Local-first's `message` is gone. The Worker keeps its
+  own reason ("HTTP 404", "got HTML instead of CSV") as `reason`, which the page does not show, and
+  an unexpected error still goes to the log in its place. An empty sheet on the Worker ("No rows
+  found") says `SHEET_EMPTY` instead, the words the page already gave local-first's empty answer,
+  moved to the shared file: "That sheet has no header row to read. Check the link points at the tab
+  with your transactions." The statuses stay 422 and 501 (contract difference
+  `sheet-unread-status`). A `/d/e/` link reaches neither answer: both runtimes refuse it at the
+  link before anything is fetched. The Worker's comments that said it fetches a "published" sheet
+  say what it does: the CSV export of a sheet shared by its link.
+  - **Tests:** the contract scenario "a shared Google Sheet is read for the mapping step" asks both
+    runtimes for a sheet shared with no one: 501 on the Worker and 422 in local-first, each with
+    `SHEET_UNREADABLE` as `error` and no field. Before round 6 it failed on both, at "Could not
+    import this Google Sheet via CSV export: HTTP 404. ..." and at "Could not access the Google
+    Sheet from the browser.". `sheetForms.test.tsx` "marks a sheet it cannot read at its link,
+    saying how to share it or upload it instead" (Add a sheet) and "marks a sheet it cannot read at
+    its link, saying how to share it, not in the banner" (the Import page) read local-first's
+    answer at the field; both failed on "Could not access the Google Sheet from the browser.".
+    "marks the Worker's answer for a sheet it cannot read, or an empty one, at the link" gives the
+    page the Worker's two 501s: each is marked in its words, without its reason. It passed on round
+    5's page too, which already marked a 501 at the link; nothing tested that before.
+    `worker/test/google-sheet-errors.test.ts` pins the Worker's `error` and `reason` for an
+    unexpected error, a sign-in page, an empty sheet and a 404: all four failed on the old answer,
+    and with the empty sheet's words taken out, its case fails. The contract's stand-in for Google
+    (`shared/contract/outbound.ts`) now answers corsproxy.io, local-first's last way in, as the
+    export it fetches: it threw "a contract scenario reached the network" there, inside the
+    handler, which swallowed it.
 - **Import's messages have no em dashes.** Each is a full stop, a colon or parentheses: the
   preview's notes, the paste help, the bank tab's "no accounts yet", Recent Imports' line and its
   delete confirm, Connected sources' toast and remove confirm, two errors, and a skipped row's
