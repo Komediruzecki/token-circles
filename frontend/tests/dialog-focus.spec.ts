@@ -180,7 +180,13 @@ test.describe('every dialog takes focus and gives it back @smoke', () => {
     })
 
     await page.getByRole('button', { name: 'Calendar', exact: true }).click()
-    const day = page.locator('[role="button"][tabindex="0"]').filter({ hasText: /^\d{1,2}/ })
+    // In the grid: the shut catalog stays on the page, faded out, and its 1Password row is a
+    // button whose text starts with a digit too. While the calendar's first month loads, that row
+    // would be the first match, and a click on it never lands.
+    const day = page
+      .getByTestId('bill-calendar-grid')
+      .locator('[role="button"][tabindex="0"]')
+      .filter({ hasText: /^\d{1,2}/ })
     await expect(day.first()).toBeVisible()
     const popover = page
       .getByRole('dialog')

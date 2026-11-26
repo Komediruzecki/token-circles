@@ -3044,6 +3044,16 @@ check')` first, as the cushion and debt cases do.
 
 ### Fixed
 
+- **The dialog specs click a calendar day, not the shut catalog's 1Password row.**
+  `dialog-focus.spec.ts` and `dialog-tab-trap.spec.ts` (Bills) took the first
+  `[role="button"][tabindex="0"]` on the page whose text starts with a digit. The shut
+  subscription catalog stays on the page, faded out and inert, and its 1Password row is such a
+  button; Playwright counts opacity 0 as visible. Since the calendar's first load waits in the
+  calendar's place instead of suspending the page (`fix(bills)`, ff73ade5), that row was the first
+  match while the month loaded, and the click on it was intercepted until the test timed out. The specs
+  passed on the loan-chart branch, which has no such wait; on the merge they failed every time.
+  Both specs now look inside
+  `bill-calendar-grid`.
 - **A bank's name counts in an account's name only where no letter touches it.**
   `resolveTargetAccount` (`shared/bankImport/accountResolver.ts`) took an account whose name or
   bank name held the bank's id anywhere, so an ING statement went into the first account with
