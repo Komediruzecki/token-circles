@@ -2867,7 +2867,7 @@ check')` first, as the cushion and debt cases do.
     Sync.
   - **Deleting its import in Recent Imports clears it.** `ImportSummary` and the card carry the
     import's `importId`, which the history entry holds as `import_id` (`ImportLogEntry` now names
-    it); a delete of that entry drops the card.
+    it); a delete of that entry drops the card, and a delete of another entry leaves it.
   - **A quick-add keeps it.** The floating add button's save bumps `profileVersion`, which
     cleared the card and an unsaved Save sheet offer with it. The card now goes only when the
     current profile changes; on a bump with the same profile its balances are read again, as the
@@ -2877,7 +2877,10 @@ check')` first, as the cushion and debt cases do.
     card gone after its import is deleted, the card and its offer through a quick-add, and the
     balances read again after one. The first three fail on the old page; with the balances not
     read again, the last fails. `importFollowsWrites.test.tsx` counts the card's two reads of
-    the accounts after a Sync.
+    the accounts after a Sync. Round 4 of the review: "stays when a different import is deleted
+    in Recent Imports" imports the ledger without its coffee, then a day later with it, and
+    deletes the first; the card about the second stays. With the entry's `import_id` no longer
+    compared, it fails at the card.
 - **The Save sheet offer says what Sync does.** Review of 19 Nov: Sync sends every row of the
   sheet and the import skips the ones in already, so rows this import left out come in with the
   first Sync. The card's sheet row now reads "Sync brings in every row of the sheet that isn't in

@@ -132,6 +132,20 @@ async function importTheSheet(expected: string, leaveOut = 0): Promise<void> {
   )
 }
 
+/** Recent Imports' row for the import that brought in `count` rows, once the list shows it. */
+async function recentImport(count: number): Promise<HTMLElement> {
+  return vi.waitFor(
+    () => {
+      const row = [...host.querySelectorAll<HTMLElement>('details')].find((details) =>
+        details.querySelector('summary')?.textContent?.includes(`(${count}\u00a0imported`)
+      )
+      expect(row).toBeDefined()
+      return row!
+    },
+    { timeout: 8_000 }
+  )
+}
+
 /** Save the sheet the import read, from the card, under a name. */
 async function saveTheSheet(name: string): Promise<void> {
   const save = await vi.waitFor(() => {
@@ -249,6 +263,35 @@ describe('the card after an import', () => {
     await vi.waitFor(() => {
       expect(byTestId('import-after')).toBeNull()
     })
+  }, 40_000)
+
+  it('stays when a different import is deleted in Recent Imports', async () => {
+    await mountImport()
+    // An earlier import: the ledger with its coffee left out.
+    await importTheSheet('Imported 1 transaction', 1)
+    await recentImport(1)
+    // The card's import: the ledger a day later, its coffee and pills new.
+    sheet = LATER
+    await importTheSheet('Imported 2 transactions')
+    await recentImport(2)
+
+    const earlier = await recentImport(1)
+    const remove = [...earlier.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Delete import'
+    )
+    remove!.click()
+    const asked = await vi.waitFor(() => {
+      expect(confirmRequests()).toHaveLength(1)
+      return confirmRequests()[0]
+    })
+    expect(asked.message).toContain('(1 transaction)')
+    await acceptConfirm(asked.id)
+
+    await vi.waitFor(() => {
+      expect(host.querySelectorAll('details')).toHaveLength(1)
+    })
+    expect(byTestId('import-after')).not.toBeNull()
+    expect(byTestId('import-result')?.textContent).toContain('Imported 2 transactions')
   }, 40_000)
 
   it('stays through a quick-add, with its Save sheet offer', async () => {
