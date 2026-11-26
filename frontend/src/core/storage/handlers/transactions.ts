@@ -8,6 +8,7 @@ import {
   TRANSACTION_MESSAGES,
 } from '../../../../../shared/transactionSchema'
 import { localTransactionDefaults } from '../../validation'
+import { ensureBaseCurrency } from '../baseCurrency'
 import { getDB } from '../idb'
 import { recalcGoalsByCategory } from './goals'
 import {
@@ -25,6 +26,17 @@ import {
 import { normalizeTransaction } from './normalize'
 import { autoApplyTagRules } from './tagRules'
 import type { FieldErrors } from '../../../../../shared/refusal'
+import type { TransactionDefaults } from '../../../../../shared/transactionSchema'
+
+/**
+ * What a blank date or currency means in a body: today on this device's calendar, and the base
+ * currency the balances are kept in, as the Worker reads its profile's (configuredBaseCurrency).
+ * The browser's own currency stands in until one is stored, as it does for a new account. It was
+ * always the browser's: a base currency stored by PUT /api/settings went unread here.
+ */
+async function transactionDefaults(): Promise<TransactionDefaults> {
+  return { ...localTransactionDefaults(), currency: await ensureBaseCurrency(undefined, false) }
+}
 
 const toCat = (v: unknown): number | null =>
   typeof v === 'number' ? v : typeof v === 'string' && v ? Number(v) : null
@@ -153,7 +165,7 @@ async function foreignLinks(
 export async function transactionsCreate(body: unknown, headers?: HeadersInit): Promise<Response> {
   // The Worker's rules and words (shared/transactionSchema.ts). The router has already run this
   // check on the way in; a direct call (tests, other handlers) gets the same answer.
-  const checked = checkTransactionCreate(body, localTransactionDefaults())
+  const checked = checkTransactionCreate(body, await transactionDefaults())
   if (!checked.ok) return refuse(checked.fields)
   const profileId = await writeProfileIdFromHeaders(headers)
   const foreign = await foreignLinks(checked.value, profileId)
@@ -202,7 +214,7 @@ export async function transactionsUpdate(
   // back with the value the row holds is neither checked nor written, so a row saved under older
   // rules can still be edited. An edit that changes how the row moves money is checked against
   // the whole row it leaves behind, as the balances are reversed and applied again from it.
-  const checked = checkTransactionEdit(body, before, localTransactionDefaults())
+  const checked = checkTransactionEdit(body, before, await transactionDefaults())
   if (!checked.ok) {
     // The router logs this for every body its checks refuse, and the release suite fails a
     // local-first run that shows one (tests/release/release-fixtures.ts). An edit is checked here,

@@ -386,11 +386,23 @@ export const transactions = [
     // The app's own requests always name one; a hand-written request or a script can leave it out.
     // The Worker gave it 'USD', the column's DEFAULT, so a euro profile's subscription scan priced
     // it in dollars. (The MCP server and /api/v1/import go through the import, which took the base.)
+    // The profile's base is pounds, so a 'EUR' written in for the default would fail it too.
+    expectOk(expect, await api.put('/api/settings', { currency: 'GBP' }), 'PUT the base currency');
     const body: Record<string, unknown> = entry({ description: 'No currency named', amount: 12 });
     delete body.currency;
     const id = await added(api, expect, '/api/transactions', body);
     const row = (await api.get(`/api/transactions/${id}`)).body;
-    expect(row.currency).toBe('EUR');
+    expect(row.currency).toBe('GBP');
+
+    // An edit that empties the currency puts the base currency in, as a new one does.
+    const priced = entry({ description: 'Priced in dollars', amount: 30, currency: 'USD' });
+    const dollars = await added(api, expect, '/api/transactions', priced);
+    expectOk(
+      expect,
+      await api.put(`/api/transactions/${dollars}`, { ...priced, currency: '' }),
+      'PUT the transaction with no currency'
+    );
+    expect((await api.get(`/api/transactions/${dollars}`)).body.currency).toBe('GBP');
   }),
 
   scenario(

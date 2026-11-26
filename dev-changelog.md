@@ -3043,6 +3043,19 @@ check')` first, as the cushion and debt cases do.
   - **Test:** contract scenario "a transaction sent without a currency is in the base currency"
     (`shared/contract/scenarios/transactions.ts`, both runtimes): before the change it passed on
     local-first and failed on the Worker (expected 'USD' to be 'EUR'); it passes on both after.
+  - **Round 4 of the review: the scenario's profile keeps pounds.** It expected 'EUR', the default
+    on both runtimes, so a default hard-coded to 'EUR' passed it. It now sets GBP with
+    `PUT /api/settings` first, and checks an edit that empties the currency as well as a new row.
+    That showed local-first never read a stored base currency for a transaction:
+    `localTransactionDefaults` reads the browser's (`localCurrency` in localStorage), which only
+    Settings and setup keep in step with the stored one, so local-first answered 'EUR'.
+    `transactionsCreate` and `transactionsUpdate` (`core/storage/handlers/transactions.ts`) now
+    take `ensureBaseCurrency(undefined, false)`: the stored base currency, or the browser's while
+    none is stored, as a new account does. The app's forms name a currency, so they are not
+    affected. With either runtime's default hard-coded to 'EUR' the scenario fails there (expected
+    'EUR' to be 'GBP'), and it failed the same way on local-first before its change. A paid bill
+    and a recurring rule on local-first still take the browser's currency (`bills.ts`,
+    `recurring.ts`).
 - **The scan's modal asks to adjust a price or period only over rows that have one.** Round 3 of
   the 19 Nov review: "Recurring charges we recognized · adjust price or period" sat over "No known
   subscriptions found". `SubscriptionScanModal` (Bills and Import) reads `adjustable` from the
