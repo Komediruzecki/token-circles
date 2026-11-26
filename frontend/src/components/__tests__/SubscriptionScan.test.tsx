@@ -10,7 +10,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { render } from 'solid-js/web'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { BILL_MESSAGES } from '../../../../shared/billSchema'
+import { BILL_MESSAGES, BILL_NAME_MAX } from '../../../../shared/billSchema'
 import { ApiError } from '../../core/apiError'
 import { orientationFacts } from '../../core/orientation'
 import { dayText } from '../../utils/dayText'
@@ -105,6 +105,10 @@ function type(element: HTMLInputElement, value: string) {
 
 const errorToasts = () => apiMocks.showToast.mock.calls.filter(([, kind]) => kind === 'error')
 
+/** What the scan says when the runtime refuses the category it chose, for one or several. */
+const NO_CATEGORY = (it: 'it' | 'them') =>
+  `The scan chose a category this profile doesn't have. Add ${it} from Bills and pick one there.`
+
 describe('adding what the scan found', () => {
   it("marks a price the runtime refuses under its row, in the runtime's words, and keeps it selected", async () => {
     apiMocks.apiPost.mockImplementation(async (_url: string, body: { name: string }) => {
@@ -136,10 +140,70 @@ describe('adding what the scan found', () => {
 
     expect(await scan.addSelected()).toBe(1)
 
-    expect(notice()).toBe(`Couldn't add "Spotify". ${BILL_MESSAGES.category}`)
+    expect(notice()).toBe(`Couldn't add "Spotify". ${NO_CATEGORY('it')}`)
     expect(price('Spotify').getAttribute('aria-invalid')).toBeNull()
     expect(errorToasts()).toEqual([])
     expect(scan.chosenCount()).toBe(1)
+  })
+
+  // Round 4 of the review: a refusal of a detail the scan has no control for said the runtime's
+  // words, "Choose a category from the list, or leave it blank.", in a modal with no category.
+  it.each([
+    ['category_id', BILL_MESSAGES.category, NO_CATEGORY('it')],
+    [
+      'name',
+      BILL_MESSAGES.nameLength,
+      `A name longer than ${BILL_NAME_MAX} characters can't be kept. Add it from Bills with a shorter one.`,
+    ],
+    [
+      'due_date',
+      BILL_MESSAGES.dueDate,
+      "The scan couldn't tell when the next payment is due. Add it from Bills and pick the date.",
+    ],
+    [
+      'type',
+      BILL_MESSAGES.type,
+      "A detail the scan doesn't show was refused. Add it from Bills, where every detail can be changed.",
+    ],
+  ])(
+    'says what failed and what to do when its %s is refused, which the scan has no control for',
+    async (field, words, said) => {
+      apiMocks.apiPost.mockImplementation(async (_url: string, body: { name: string }) => {
+        if (body.name === 'Spotify') throw new ApiError(400, words, { [field]: words })
+        return { id: 1 }
+      })
+      const scan = await mountScan()
+
+      expect(await scan.addSelected()).toBe(1)
+
+      expect(notice()).toBe(`Couldn't add "Spotify". ${said}`)
+      expect(notice()).not.toContain(words)
+    }
+  )
+
+  it('says a refused billing period in the words of the runtime: the scan has a control for it', async () => {
+    apiMocks.apiPost.mockImplementation(async (_url: string, body: { name: string }) => {
+      if (body.name === 'Spotify') {
+        throw new ApiError(400, BILL_MESSAGES.frequency, { frequency: BILL_MESSAGES.frequency })
+      }
+      return { id: 1 }
+    })
+    const scan = await mountScan()
+
+    expect(await scan.addSelected()).toBe(1)
+
+    expect(notice()).toBe(`Couldn't add "Spotify". ${BILL_MESSAGES.frequency}`)
+  })
+
+  it('says it once for every subscription refused for the same detail', async () => {
+    apiMocks.apiPost.mockImplementation(async () => {
+      throw new ApiError(400, BILL_MESSAGES.category, { category_id: BILL_MESSAGES.category })
+    })
+    const scan = await mountScan()
+
+    expect(await scan.addSelected()).toBe(0)
+
+    expect(notice()).toBe(`Couldn't add "Netflix" or "Spotify". ${NO_CATEGORY('them')}`)
   })
 
   it('marks a price of zero and one with letters before sending anything, and focuses the first', async () => {
@@ -592,7 +656,7 @@ describe('the scan in its modal', () => {
 
     add.click()
     await vi.waitFor(() => {
-      expect(notice()).toBe(`Couldn't add "Spotify". ${BILL_MESSAGES.category}`)
+      expect(notice()).toBe(`Couldn't add "Spotify". ${NO_CATEGORY('it')}`)
     })
 
     const footer = modal.querySelector('[data-test-id="sub-scan-footer"]')!

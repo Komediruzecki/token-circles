@@ -3066,6 +3066,25 @@ check')` first, as the cushion and debt cases do.
     have one" (rows, a rescan, a charge that does not recur, no transactions, all tracked). Before
     the change it failed over the empty state; with the `Show` taken out, or with the panel counting
     rows while it scans, it fails at the rescan.
+- **A refused add in the scan says what failed and what to do, for a detail it shows no control
+  for.** Round 4 of the review: the notice passed the runtime's words through, "Couldn't add
+  "Spotify". Choose a category from the list, or leave it blank.", in a modal with no category
+  control. A row has a price and a billing period; a refused price is marked at its row and a
+  refused period keeps the runtime's words. For anything else `insteadOf` (`SubscriptionScan.tsx`)
+  says it in the scan's words, about one subscription or several: a category ("The scan chose a
+  category this profile doesn't have. Add it from Bills and pick one there."), a name over
+  `BILL_NAME_MAX`, a due date, and any other detail ("A detail the scan doesn't show was refused.
+  Add it from Bills, where every detail can be changed."). `refusedMessages`
+  (`refusedSubscriptions.ts`) takes a host's own words (`instead`) and still says each reason once;
+  the catalog sends none, so it is unchanged. The category case is real in a view of several
+  profiles: `GET /api/categories` and the transactions answer every selected profile's, the scan
+  files a row under a category from them, and the bill goes to the current profile, which refuses
+  another profile's category. Which category the scan picks there is not changed here.
+  - **Tests:** `SubscriptionScan.test.tsx` (each of the four details, a refused period in the
+    runtime's words, two refused for one detail said once with "them", and the two notice tests
+    that expected the runtime's words) and `refusedSubscriptions.test.ts` (a host's words, one or
+    several). With the scan's words taken out, seven fail; with `refusedMessages` ignoring them,
+    eight.
 - **The Bills header's buttons stay whole at every width.** Round 3 of the 19 Nov review. At
   820 px, beside the sidebar, Scan transactions, Browse catalog and Add Subscription took two lines
   each next to the title, and at 390 the third ran past the screen's edge: 60 px tall each at both

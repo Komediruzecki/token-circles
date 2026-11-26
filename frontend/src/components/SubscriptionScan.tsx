@@ -31,7 +31,7 @@ import {
   onCleanup,
   Show,
 } from 'solid-js'
-import { checkBillCreate } from '../../../shared/billSchema'
+import { BILL_MESSAGES, BILL_NAME_MAX, checkBillCreate } from '../../../shared/billSchema'
 import { BANK_IMPORT_HASH } from '../../../shared/importRoute'
 import { apiGet, apiPost, getLocalCurrency, listRows, showToast } from '../core/api'
 import { ApiError } from '../core/apiError'
@@ -122,6 +122,35 @@ function amountOf(text: string | undefined): number | string | null {
   const raw = (text ?? '').trim()
   if (raw === '') return null
   return parseDecimalInput(raw) ?? raw
+}
+
+/** The details of a bill a row has a control for: its price and its billing period. */
+const SHOWN = new Set(['amount', 'frequency'])
+
+/**
+ * What the scan says when the runtime refuses a detail it has no control for. The runtime's words
+ * ask for that control ("Choose a category from the list, or leave it blank."), which a row does
+ * not have, so the scan says what failed and what to do next: Bills has every detail. A refused
+ * price is marked at its row, and a refused period keeps the runtime's words.
+ */
+function insteadOf(fields: FieldErrors): RefusedSubscription['instead'] {
+  if (fields.category_id) {
+    return (it) =>
+      `The scan chose a category this profile doesn't have. Add ${it} from Bills and pick one there.`
+  }
+  if (fields.name === BILL_MESSAGES.nameLength) {
+    return (it) =>
+      `A name longer than ${BILL_NAME_MAX} characters can't be kept. Add ${it} from Bills with a shorter one.`
+  }
+  if (fields.due_date) {
+    return (it) =>
+      `The scan couldn't tell when the next payment is due. Add ${it} from Bills and pick the date.`
+  }
+  if (Object.keys(fields).some((field) => !SHOWN.has(field))) {
+    return (it) =>
+      `A detail the scan doesn't show was refused. Add ${it} from Bills, where every detail can be changed.`
+  }
+  return undefined
 }
 
 export function SubscriptionScanPanel(props: SubscriptionScanPanelProps) {
@@ -283,7 +312,7 @@ export function SubscriptionScanPanel(props: SubscriptionScanPanelProps) {
       const elsewhere: RefusedSubscription[] = []
       for (const { key, name, error, fields } of refused) {
         if (fields.amount) marks[key] = fields.amount
-        else elsewhere.push({ name, error })
+        else elsewhere.push({ name, error, instead: insteadOf(fields) })
       }
       refusedMessages(elsewhere).forEach((message, index) => {
         marks[`refused:${String(index)}`] = message

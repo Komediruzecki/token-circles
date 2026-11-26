@@ -12,6 +12,11 @@ import { ApiError, statusMessage } from '../core/apiError'
 export interface RefusedSubscription {
   name: string
   error: unknown
+  /**
+   * What to say in place of the refusal's words, about `it` or `them`: a host says this for a
+   * detail it has no control for, where the refusal's words ask for that control.
+   */
+  instead?: (it: 'it' | 'them') => string
 }
 
 /** `"A"`, `"A" or "B"`, `"A", "B" or "C"`. */
@@ -24,10 +29,14 @@ function namesOf(names: readonly string[]): string {
 
 /** One message for each reason: `Couldn't add "Netflix". Enter an amount more than zero.` */
 export function refusedMessages(refused: readonly RefusedSubscription[]): string[] {
-  const byReason = new Map<string, string[]>()
-  for (const { name, error } of refused) {
+  const byReason = new Map<string, { names: string[]; say: (it: 'it' | 'them') => string }>()
+  for (const { name, error, instead } of refused) {
     const reason = error instanceof ApiError ? error.message : statusMessage(0)
-    byReason.set(reason, [...(byReason.get(reason) ?? []), name])
+    const say = instead ?? (() => reason)
+    const group = byReason.get(say('it')) ?? { names: [], say }
+    byReason.set(say('it'), { ...group, names: [...group.names, name] })
   }
-  return [...byReason].map(([reason, names]) => `Couldn't add ${namesOf(names)}. ${reason}`)
+  return [...byReason.values()].map(
+    ({ names, say }) => `Couldn't add ${namesOf(names)}. ${say(names.length === 1 ? 'it' : 'them')}`
+  )
 }

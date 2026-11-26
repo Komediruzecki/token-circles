@@ -24,6 +24,24 @@ describe('refusedMessages', () => {
     ])
   })
 
+  it("says a host's own words in place of the refusal's, about one or several", () => {
+    const refused = new ApiError(400, 'Choose a category from the list, or leave it blank.')
+    const instead = (it: 'it' | 'them') => `Add ${it} from Bills.`
+    expect(
+      refusedMessages([
+        { name: 'Netflix', error: refused, instead },
+        { name: 'Spotify', error: refused, instead },
+        { name: 'Max', error: new ApiError(400, 'Enter an amount more than zero.') },
+      ])
+    ).toEqual([
+      `Couldn't add "Netflix" or "Spotify". Add them from Bills.`,
+      `Couldn't add "Max". Enter an amount more than zero.`,
+    ])
+    expect(refusedMessages([{ name: 'Netflix', error: refused, instead }])).toEqual([
+      `Couldn't add "Netflix". Add it from Bills.`,
+    ])
+  })
+
   it('says nothing when nothing was refused', () => {
     expect(refusedMessages([])).toEqual([])
   })
