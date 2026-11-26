@@ -1,10 +1,13 @@
 /* The passkey offer after a sign-in: a card fixed in the bottom-right corner, over the page. It is a
    floating surface (UI-28), so it paints the floating pair like every menu and toast. Styled inline
    before, it drew its edge in --border, about 1.2:1 against the page in Dawn. */
+/* Above the floating add button, its right edge on the button's: in this corner the button (z 90)
+   stood over the offer's two buttons. Both values are the shell's, which holds the offer
+   (Layout.module.css); 12px clears the halo drawn round the button, 8px when hovered. */
 .nudge {
   position: fixed;
-  right: 16px;
-  bottom: 16px;
+  right: var(--fab-offset, 16px);
+  bottom: calc(var(--fab-offset, 16px) + var(--fab-size, 0px) + 12px);
   z-index: 60;
   max-width: 340px;
   padding: 14px 16px;

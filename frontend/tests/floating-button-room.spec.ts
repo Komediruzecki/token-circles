@@ -13,8 +13,8 @@
  * Local-first with the example data, which fills each of these pages past one screen.
  */
 import { expect, test } from '@playwright/test'
-import { gotoServerless } from './test-helpers'
-import type { Page } from '@playwright/test'
+import { gotoServerless, login } from './test-helpers'
+import type { Page, TestInfo } from '@playwright/test'
 
 /** The setup wizard can open over local-first's example data: leave it if it shows up. */
 async function leaveOnboarding(page: Page): Promise<void> {
@@ -207,5 +207,87 @@ test.describe('the floating add button, under the drawer on a phone', () => {
     await page.getByRole('button', { name: 'Toggle sidebar' }).click()
     await expect(page.locator('nav').first()).toBeInViewport()
     expect((await pressAtButton(page)).reaches, 'under the drawer').not.toBe('button')
+  })
+})
+
+interface Box {
+  left: number
+  top: number
+  right: number
+  bottom: number
+}
+
+/**
+ * The passkey offer and the button, as they stand after a sign-in: their boxes, the screen's size,
+ * and a capture of the corner they share. Saved before anything is asserted, so a failing run
+ * still leaves both.
+ */
+async function offerAndButton(
+  page: Page,
+  testInfo: TestInfo
+): Promise<{ offer: Box; button: Box; width: number; height: number }> {
+  // The offer shows once after a sign-in, on a device that can hold a passkey, to an account with
+  // none: the flag the login leaves, and an empty list whatever the fixture account holds.
+  await page.addInitScript(() => {
+    sessionStorage.setItem('fm:offer-passkey', '1')
+  })
+  await page.route('**/api/auth/passkeys', (route) => route.fulfill({ json: { passkeys: [] } }))
+  await login(page)
+  await expect(page.getByTestId('passkey-nudge')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Quick add entry' })).toBeVisible()
+
+  const boxes = await page.evaluate(() => {
+    const box = (el: Element) => {
+      const r = el.getBoundingClientRect()
+      return { left: r.left, top: r.top, right: r.right, bottom: r.bottom }
+    }
+    return {
+      offer: box(document.querySelector('[data-test-id="passkey-nudge"]')!),
+      button: box(document.querySelector('button[aria-label="Quick add entry"]')!),
+      width: window.innerWidth,
+      height: window.innerHeight,
+    }
+  })
+  await testInfo.attach('boxes.json', {
+    body: JSON.stringify(boxes, null, 2),
+    contentType: 'application/json',
+  })
+  await page.screenshot({ path: testInfo.outputPath('offer-and-button.png') })
+  return boxes
+}
+
+/**
+ * The passkey offer stood in the button's corner, under it: the button (z 90) sat over the offer's
+ * Add passkey and Not now (z 60), its whole box inside the offer's at 1440 and at 390 px wide
+ * (measured 26 Nov 2026). The offer sits above the button, its right edge on the button's, and the
+ * button stays where it was.
+ */
+async function offerClearsButton(page: Page, testInfo: TestInfo, size: number, offset: number) {
+  const { offer, button, width, height } = await offerAndButton(page, testInfo)
+  // The button stays where it is: its size, and its gap from the right and bottom edges.
+  expect(Math.round(button.right - button.left), 'button width').toBe(size)
+  expect(Math.round(width - button.right), 'button gap from the right edge').toBe(offset)
+  expect(Math.round(height - button.bottom), 'button gap from the bottom edge').toBe(offset)
+  // The offer ends above the button, clear of the halo drawn round it (8 px when hovered).
+  expect(offer.bottom, 'the offer ends above the button').toBeLessThanOrEqual(button.top - 8)
+  expect(Math.round(offer.right), "the offer's right edge on the button's").toBe(
+    Math.round(button.right)
+  )
+  expect(offer.left, 'the offer is on the screen').toBeGreaterThanOrEqual(0)
+}
+
+test.describe('the passkey offer, clear of the button, on a desktop', () => {
+  test.use({ viewport: { width: 1440, height: 900 } })
+
+  test('sits above the button @smoke', async ({ page }, testInfo) => {
+    await offerClearsButton(page, testInfo, 56, 22)
+  })
+})
+
+test.describe('the passkey offer, clear of the button, on a phone', () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })
+
+  test('sits above the button @smoke', async ({ page }, testInfo) => {
+    await offerClearsButton(page, testInfo, 52, 16)
   })
 })

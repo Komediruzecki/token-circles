@@ -2951,6 +2951,20 @@ check')` first, as the cushion and debt cases do.
   3.71:1 in Orbit and 4.18:1 in the instrument deck) and the ring case at 2.99:1 for Dawn's
   warning. `successTextContrast.test.ts` (D1) reads the rules: the icon and the rings on the ink,
   the edge on the accent.
+- **The passkey offer stands above the floating add button.** After a sign-in the offer sat in the
+  button's corner, and the button (z 90) stood over its Add passkey and Not now (z 60). Measured on
+  26 Nov, the button's whole box was inside the offer's: at 1440 x 900 the offer ran 1084 to 1424
+  across and 742 to 884 down, the button 1362 to 1418 and 822 to 878; at 390 x 844 the offer ran
+  34 to 374 and 686 to 828, the button 322 to 374 and 776 to 828. The offer now reads the two
+  values the shell sets for the button (`--fab-offset`, `--fab-size`): its right edge on the
+  button's and its bottom 12 px above the button's top, clear of the halo drawn round it (8 px when
+  hovered). After: 1078 to 1418 and 668 to 810 on the desktop, 34 to 374 and 622 to 764 on the
+  phone; the button has not moved.
+- **Tests:** `frontend/tests/floating-button-room.spec.ts` (@smoke, two cases) signs in with the
+  offer's flag set and an empty passkey list, saves both boxes and a capture, and fails unless the
+  offer ends 8 px or more above the button with its right edge on the button's, and the button is
+  its size at its gaps from the edges (56 px at 22 on the desktop, 52 at 16 on the phone). Both
+  failed before the change, with the offer's bottom at 884 and 828.
 - **No extra-payment label stands on the loan's line.** A label above its mark and to the left of it
   was placed at the mark's height, where the line has not yet come down to the mark, so the line ran
   through it. The review's sweep (`LoanPayoffChart` in jsdom: the boat with one extra payment at
