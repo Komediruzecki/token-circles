@@ -206,6 +206,23 @@ describe('the secret reveal', () => {
     expect(dialog.textContent).toContain('Authorization: Bearer tc_pat_SECRETVALUE')
   })
 
+  // Create token is disabled while it creates and again once the name is cleared, so focus cannot
+  // go back to it: it dropped to the page, and Tab started over from the top.
+  it('gives focus to the name field once it is acknowledged', async () => {
+    const root = await mount()
+    await fillName(root, 'My token')
+    const create = byText(root, 'Create token')!
+    create.focus()
+    create.click()
+    await flush()
+    expect(document.activeElement).toBe(ackButton())
+
+    ackButton()!.click()
+    await flush()
+    expect(reveal()).toBeNull()
+    expect(document.activeElement).toBe(nameInput(root))
+  })
+
   it('clears the name field so the next token cannot silently reuse it', async () => {
     const root = await mount()
     await fillName(root, 'My token')

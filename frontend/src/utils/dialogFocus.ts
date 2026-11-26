@@ -25,8 +25,9 @@ export interface DialogFocusOptions {
   /** What to focus instead of the first field, for a dialog that opens on a later part. */
   first?: () => HTMLElement | null | undefined
   /**
-   * Where focus goes when the opener has left the page by the time the dialog shuts: a button the
-   * open form stood in for, made again when it shuts.
+   * Where focus goes when it cannot go back to the opener as the dialog shuts: the opener has left
+   * the page (a button the open form stood in for, made again when it shuts), or can no longer
+   * take focus (the token reveal's Create token, disabled once its name is cleared).
    */
   returnTo?: () => HTMLElement | null | undefined
   preventScroll?: boolean

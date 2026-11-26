@@ -78,6 +78,7 @@ export default function ApiAccess() {
   // The reveal's only way out, where focus starts. The Create button that had focus is disabled
   // the moment the create lands, which drops focus to <body>, outside a dialog with no other exit.
   let ackButton: HTMLButtonElement | undefined
+  let nameField: HTMLInputElement | undefined
 
   const [name, setName] = createSignal('')
   const [scopes, setScopes] = createSignal<ScopeId[]>(['read'])
@@ -237,6 +238,7 @@ export default function ApiAccess() {
             Token name
           </label>
           <input
+            ref={nameField}
             id="api-token-name"
             class={styles.input}
             type="text"
@@ -376,10 +378,12 @@ export default function ApiAccess() {
             <div class={styles.overlay} data-test-id="api-token-reveal">
               {/* No overlay click-to-close and no escape hatch: closing without saving the secret
                 loses it for good, so the acknowledgement is the only way out. Focus moves to the
-                acknowledge button, or a keyboard user is left tabbing through covered controls. */}
+                acknowledge button, or a keyboard user is left tabbing through covered controls.
+                Acknowledged, focus goes to the name field: Create token, which opened this, is
+                disabled by then, its name cleared. */}
               <div
                 ref={(el) => {
-                  dialogFocus(el, { first: () => ackButton })
+                  dialogFocus(el, { first: () => ackButton, returnTo: () => nameField })
                 }}
                 class={styles.dialog}
                 role="alertdialog"

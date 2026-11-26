@@ -3024,6 +3024,14 @@ check')` first, as the cushion and debt cases do.
   Subscriptions tab and Import, from the top until focus comes round again, never stops inside a
   dialog. Before the change, and again with the two `inert` lines taken out, it failed on Bills
   with 127 stops in the shut dialogs (126 in the catalog, the scan's Close).
+- **After "I've saved it", focus goes to the token's name field.** The reveal gave focus back to
+  what opened it, Create token, which is disabled while the token is made and again once the name
+  is cleared, so focus dropped to the page and Tab started over from the top. It goes to the name
+  field now, where the next token starts (`returnTo`, which `utils/dialogFocus.ts` now also uses
+  when the opener is still there but cannot take focus).
+- **Tests:** `src/features/__tests__/apiAccess.test.tsx` creates a token from a focused Create
+  token, acknowledges it and fails unless focus is on the name field; before the change focus was
+  on `<body>`.
 - **No extra-payment label stands on the loan's line.** A label above its mark and to the left of it
   was placed at the mark's height, where the line has not yet come down to the mark, so the line ran
   through it. The review's sweep (`LoanPayoffChart` in jsdom: the boat with one extra payment at
