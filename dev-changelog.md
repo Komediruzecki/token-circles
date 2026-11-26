@@ -2974,6 +2974,40 @@ check')` first, as the cushion and debt cases do.
   (Skip always asks today, and the confirmation is up in the same click, so each check is true
   whenever it runs), and in `transactions-crud.spec.ts` four receipt cases and a type-selector
   case that never open what they check for, so their bodies never run.
+- **Escape shuts every dialog, and only the one on top** (`utils/dialogFocus.ts`). 18 of the 32
+  files using the dialog helper had no Escape. 24 dialogs in 17 files shut on Escape now (16 of
+  those 18, and Goals, where only Add money had it): Add bill and its Add Category, New Goal and its Add Category, Add account, Add housing, Add holding, the
+  retirement goal, the Budgets and Categories dialogs, Dashboard Views, Take a Tour, the
+  changelog, the bill calendar's day popover, the bulk Change Category, Change Type and Tags,
+  Recurring's rule, the subscription scan and catalog, and the confirm dialog. The helper takes
+  `onEscape`, the same function the dialog's Cancel or Close runs, so Escape does what Cancel does
+  and nothing more: the confirm dialog cancels and never confirms. The helper keeps the open dialogs
+  in the order they opened, and only the one on top hears Escape: in Add Category over Add bill the
+  first Escape shuts Add Category and leaves Add bill as it was, the second shuts Add bill. A dialog
+  that hears Escape itself is on that list without `onEscape`, so one under it hears nothing (the
+  icon gallery over Add Category). Escape is read as it comes in
+  (which dialog is on top, and is an (i) panel, a menu or a modal the helper does not know, the
+  command bar, over it?) and acted on as it goes out (did something spend it?), the way
+  Transactions' entry form reads it; Escape while an input method is composing is the input
+  method's. Not given Escape: the API token reveal, which says why (shutting it before the secret
+  is saved loses it, so "I've saved it" stays the only way out), and the 2FA code step, which is a
+  step of sign-in, not a dialog; the sign-in dialog around it already shuts on Escape. The
+  dialogs that had their own Escape keep it.
+- **Tests:** `src/utils/__tests__/dialogFocus.test.tsx` has 11 new cases (25 in all): Escape runs
+  `onEscape` and spends the key, for both shapes; Add Category over Add bill shuts first; a dialog
+  on top that hears Escape itself keeps the one below open; one that shut itself on the way is not
+  shut again; Escape spent inside, an open (i) panel, an open modal the helper does not know (with
+  focus in it, and with focus dropped to the page) and a composing input method each keep the
+  dialog open; a modal left on the page while shut (`pointer-events: none`, or hidden) does not;
+  and a dialog shut or gone hears nothing. Each of its nine guards, taken out, fails at least one
+  case; the three that need `onEscape` failed before it existed. `ConfirmDialog.test.tsx`: Escape
+  resolves the confirm false and never runs its work; it fails with the confirm dialog as it was.
+  `frontend/tests/dialog-focus.spec.ts` (@smoke, 8 cases) opens again each of the 24 dialogs it
+  shuts with Cancel or Close and shuts it with Escape, so all 37 of its round trips end with an
+  Escape and focus back on what opened the dialog; Bills adds the nested case (Escape shuts Add Category with Add bill still open and focus on its Add
+  Category button, then Add bill with focus on Add bill), Categories shuts Add Category with
+  Escape, and Loans checks the loan count is the same after the confirm's Escape. With the helper's
+  Escape listener taken out, all eight fail, each at its first dialog wired here.
 - **No extra-payment label stands on the loan's line.** A label above its mark and to the left of it
   was placed at the mark's height, where the line has not yet come down to the mark, so the line ran
   through it. The review's sweep (`LoanPayoffChart` in jsdom: the boat with one extra payment at

@@ -6,9 +6,9 @@
  * node put on the page later. Opened on 19 Nov, Add bill and New Goal left focus on their buttons,
  * behind the dialog, and the loan form did the same until it focused its name itself.
  */
-import { createSignal, onMount, Show } from 'solid-js'
+import { createSignal, onCleanup, onMount, Show } from 'solid-js'
 import { render } from 'solid-js/web'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, onTestFinished } from 'vitest'
 import { dialogFocus, dialogFocusWhile, firstField } from '../dialogFocus'
 import type { JSX } from 'solid-js'
 
@@ -360,5 +360,327 @@ describe('firstField', () => {
     const div = document.createElement('div')
     div.innerHTML = '<button>Cancel</button><button>Delete</button>'
     expect(firstField(div)).toBeNull()
+  })
+})
+
+/**
+ * Escape shuts a dialog the way its own Cancel or Close does (`onEscape`), so a question about
+ * unsaved work still comes first. Only the dialog on top hears it: Escape in Add Category, opened
+ * over Add bill, shuts Add Category and leaves Add bill as it was.
+ */
+describe('Escape, through onEscape', () => {
+  /** Escape pressed where focus is, as a browser sends it. */
+  const escape = (init: KeyboardEventInit = {}) => {
+    const event = new KeyboardEvent('keydown', {
+      key: 'Escape',
+      bubbles: true,
+      cancelable: true,
+      ...init,
+    })
+    ;(document.activeElement ?? document.body).dispatchEvent(event)
+    return event
+  }
+
+  function Dialog(props: {
+    open: () => boolean
+    onEscape?: () => void
+    name: string
+    children?: JSX.Element
+  }) {
+    return (
+      <Show when={props.open()}>
+        <div
+          role="dialog"
+          data-test-id={props.name}
+          ref={(el) => {
+            dialogFocus(el, { onEscape: props.onEscape })
+          }}
+        >
+          <input data-test-id={`${props.name}-field`} />
+          {props.children}
+        </div>
+      </Show>
+    )
+  }
+
+  it('runs what the dialog says Escape does, and focus goes back to the opener', async () => {
+    const [open, setOpen] = createSignal(false)
+    mount(() => (
+      <>
+        <button data-test-id="opener">Add bill</button>
+        <Dialog open={open} name="bill" onEscape={() => setOpen(false)} />
+      </>
+    ))
+    byTestId('opener').focus()
+    setOpen(true)
+    await settle()
+    expect(document.activeElement).toBe(byTestId('bill-field'))
+
+    const event = escape()
+    expect(open()).toBe(false)
+    // Spent, so a page that also shuts something on Escape leaves its own open.
+    expect(event.defaultPrevented).toBe(true)
+    await settle()
+    expect(document.activeElement).toBe(byTestId('opener'))
+  })
+
+  it('does the same for a dialog that stays on the page while shut', async () => {
+    const [open, setOpen] = createSignal(false)
+    let panel: HTMLDivElement | undefined
+
+    function Page() {
+      dialogFocusWhile(open, () => panel, { onEscape: () => setOpen(false) })
+      return (
+        <>
+          <button data-test-id="opener">Scan</button>
+          <div role="dialog" ref={panel} style={{ display: open() ? 'block' : 'none' }}>
+            <input data-test-id="field" />
+          </div>
+        </>
+      )
+    }
+    mount(() => <Page />)
+    byTestId('opener').focus()
+    setOpen(true)
+    await settle()
+    expect(document.activeElement).toBe(byTestId('field'))
+
+    escape()
+    expect(open()).toBe(false)
+    await settle()
+    expect(document.activeElement).toBe(byTestId('opener'))
+  })
+
+  it('shuts only the dialog on top: Add Category first, then Add bill', async () => {
+    const [bill, setBill] = createSignal(false)
+    const [category, setCategory] = createSignal(false)
+    mount(() => (
+      <>
+        <button data-test-id="add-bill">Add bill</button>
+        <Dialog open={bill} name="bill" onEscape={() => setBill(false)}>
+          <button data-test-id="add-category">Add Category</button>
+        </Dialog>
+        <Dialog open={category} name="category" onEscape={() => setCategory(false)} />
+      </>
+    ))
+    byTestId('add-bill').focus()
+    setBill(true)
+    await settle()
+    byTestId('add-category').focus()
+    setCategory(true)
+    await settle()
+    expect(document.activeElement).toBe(byTestId('category-field'))
+
+    escape()
+    expect(category()).toBe(false)
+    expect(bill()).toBe(true)
+    await settle()
+    expect(document.activeElement).toBe(byTestId('add-category'))
+
+    escape()
+    expect(bill()).toBe(false)
+    await settle()
+    expect(document.activeElement).toBe(byTestId('add-bill'))
+  })
+
+  it('leaves the dialog below alone when the one on top handles Escape itself', async () => {
+    const [bill, setBill] = createSignal(false)
+    const [guide, setGuide] = createSignal(false)
+
+    function Guide() {
+      // Shuts itself on Escape and says nothing (no preventDefault), as the shortcuts guide does.
+      onMount(() => {
+        const onKey = (e: KeyboardEvent) => {
+          if (e.key === 'Escape') setGuide(false)
+        }
+        document.addEventListener('keydown', onKey)
+        onCleanup(() => {
+          document.removeEventListener('keydown', onKey)
+        })
+      })
+      return (
+        <div role="dialog" ref={dialogFocus}>
+          <button data-test-id="guide-close">Close</button>
+        </div>
+      )
+    }
+    mount(() => (
+      <>
+        <button data-test-id="add-bill">Add bill</button>
+        <Dialog open={bill} name="bill" onEscape={() => setBill(false)} />
+        <Show when={guide()}>
+          <Guide />
+        </Show>
+      </>
+    ))
+    byTestId('add-bill').focus()
+    setBill(true)
+    await settle()
+    setGuide(true)
+    await settle()
+
+    escape()
+    expect(guide()).toBe(false)
+    expect(bill()).toBe(true)
+  })
+
+  it('does not run onEscape for a dialog that shut itself on the way', async () => {
+    const [open, setOpen] = createSignal(false)
+    let escapes = 0
+    mount(() => (
+      <Dialog
+        open={open}
+        name="bill"
+        onEscape={() => {
+          escapes += 1
+        }}
+      >
+        <button
+          data-test-id="inside"
+          onKeyDown={(e) => {
+            // Shuts the dialog on Escape and says nothing.
+            if (e.key === 'Escape') setOpen(false)
+          }}
+        >
+          Close
+        </button>
+      </Dialog>
+    ))
+    setOpen(true)
+    await settle()
+    byTestId('inside').focus()
+
+    escape()
+    expect(open()).toBe(false)
+    expect(escapes).toBe(0)
+  })
+
+  it('leaves an Escape that something inside already spent', async () => {
+    const [open, setOpen] = createSignal(false)
+    mount(() => (
+      <Dialog open={open} name="bill" onEscape={() => setOpen(false)}>
+        <select
+          data-test-id="list"
+          onKeyDown={(e) => {
+            // A list that shuts on Escape, and says so.
+            if (e.key === 'Escape') e.preventDefault()
+          }}
+        />
+      </Dialog>
+    ))
+    setOpen(true)
+    await settle()
+    byTestId('list').focus()
+
+    escape()
+    expect(open()).toBe(true)
+  })
+
+  it('leaves Escape to an open (i) panel, which shuts without saying so', async () => {
+    const [open, setOpen] = createSignal(false)
+    const [tip, setTip] = createSignal(false)
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setTip(false)
+    }
+    document.addEventListener('keydown', onKey)
+    onTestFinished(() => {
+      document.removeEventListener('keydown', onKey)
+    })
+    mount(() => (
+      <Dialog open={open} name="bill" onEscape={() => setOpen(false)}>
+        <Show when={tip()}>
+          <div role="tooltip">What a due day is</div>
+        </Show>
+      </Dialog>
+    ))
+    setOpen(true)
+    setTip(true)
+    await settle()
+
+    escape()
+    expect(tip()).toBe(false)
+    expect(open()).toBe(true)
+  })
+
+  it('leaves Escape to an open modal it does not know, such as the command bar', async () => {
+    const [open, setOpen] = createSignal(false)
+    const [bar, setBar] = createSignal(false)
+    mount(() => (
+      <>
+        <Dialog open={open} name="bill" onEscape={() => setOpen(false)} />
+        <Show when={bar()}>
+          <div role="dialog" aria-modal="true">
+            <input data-test-id="bar-input" />
+          </div>
+        </Show>
+      </>
+    ))
+    setOpen(true)
+    await settle()
+    setBar(true)
+    byTestId('bar-input').focus()
+
+    escape()
+    expect(open()).toBe(true)
+    // Nor with focus dropped to the page while the bar is open.
+    byTestId('bar-input').blur()
+    escape()
+    expect(open()).toBe(true)
+  })
+
+  it('still shuts while a modal that stays on the page sits shut beside it', async () => {
+    const [open, setOpen] = createSignal(false)
+    mount(() => (
+      <>
+        <Dialog open={open} name="bill" onEscape={() => setOpen(false)} />
+        {/* The scan, faded out and taking no clicks; Auto Categorize, hidden. */}
+        <div role="dialog" aria-modal="true" style={{ 'pointer-events': 'none' }} />
+        <div role="dialog" aria-modal="true" style={{ visibility: 'hidden' }} />
+      </>
+    ))
+    setOpen(true)
+    await settle()
+
+    escape()
+    expect(open()).toBe(false)
+  })
+
+  it('hears nothing while shut, or once its page has gone', async () => {
+    const [open, setOpen] = createSignal(false)
+    let escapes = 0
+    let panel: HTMLDivElement | undefined
+
+    function Page() {
+      dialogFocusWhile(open, () => panel, {
+        onEscape: () => {
+          escapes += 1
+        },
+      })
+      return (
+        <div role="dialog" ref={panel}>
+          <input />
+        </div>
+      )
+    }
+    mount(() => <Page />)
+    escape()
+    expect(escapes).toBe(0)
+
+    setOpen(true)
+    await settle()
+    dispose?.()
+    dispose = undefined
+    escape()
+    expect(escapes).toBe(0)
+  })
+
+  it('leaves Escape to an input method that is composing', async () => {
+    const [open, setOpen] = createSignal(false)
+    mount(() => <Dialog open={open} name="bill" onEscape={() => setOpen(false)} />)
+    setOpen(true)
+    await settle()
+
+    escape({ isComposing: true })
+    expect(open()).toBe(true)
   })
 })

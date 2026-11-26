@@ -454,7 +454,9 @@ export default function Accounts() {
           }}
         >
           <div
-            ref={dialogFocus}
+            ref={(el) => {
+              dialogFocus(el, { onEscape: closeModal })
+            }}
             class={styles.modal}
             onclick={(e) => {
               e.stopPropagation()

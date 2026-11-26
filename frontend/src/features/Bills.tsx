@@ -787,7 +787,9 @@ export default function Bills() {
           }}
         >
           <div
-            ref={dialogFocus}
+            ref={(el) => {
+              dialogFocus(el, { onEscape: closeBillModal })
+            }}
             class={styles.modal}
             data-test-id="bill-modal"
             onclick={(e) => {
@@ -985,7 +987,9 @@ export default function Bills() {
           }}
         >
           <div
-            ref={dialogFocus}
+            ref={(el) => {
+              dialogFocus(el, { onEscape: () => setShowCategoryModal(false) })
+            }}
             class={styles.modal}
             onclick={(e) => {
               e.stopPropagation()

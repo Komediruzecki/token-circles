@@ -156,7 +156,9 @@ export default function BulkActionBar(props: BulkActionBarProps) {
           }}
         >
           <div
-            ref={dialogFocus}
+            ref={(el) => {
+              dialogFocus(el, { onEscape: () => setShowCategoryModal(false) })
+            }}
             class={styles.modal}
             data-test-id="bulk-category-modal"
             onClick={(e) => {
@@ -236,7 +238,9 @@ export default function BulkActionBar(props: BulkActionBarProps) {
           }}
         >
           <div
-            ref={dialogFocus}
+            ref={(el) => {
+              dialogFocus(el, { onEscape: () => setShowTypeModal(false) })
+            }}
             class={styles.modal}
             data-test-id="bulk-type-modal"
             onClick={(e) => {
@@ -308,7 +312,9 @@ export default function BulkActionBar(props: BulkActionBarProps) {
           }}
         >
           <div
-            ref={dialogFocus}
+            ref={(el) => {
+              dialogFocus(el, { onEscape: () => setShowTagModal(false) })
+            }}
             class={styles.modal}
             data-test-id="bulk-tag-modal"
             onClick={(e) => {

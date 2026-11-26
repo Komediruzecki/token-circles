@@ -291,7 +291,13 @@ export default function RecurringSection(props: RecurringSectionProps) {
           }}
         >
           <div
-            ref={dialogFocus}
+            ref={(el) => {
+              dialogFocus(el, {
+                onEscape: () => {
+                  ruleForm.close()
+                },
+              })
+            }}
             class={styles.modal}
             data-test-id="recurring-modal"
             onClick={(e) => {

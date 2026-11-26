@@ -913,7 +913,9 @@ export default function Dashboard() {
           <Show when={showSettingsModal()}>
             <div class={styles.modalOverlay} onClick={() => setShowSettingsModal(false)}>
               <div
-                ref={dialogFocus}
+                ref={(el) => {
+                  dialogFocus(el, { onEscape: () => setShowSettingsModal(false) })
+                }}
                 class={`${styles.modal} ${styles.modalMd}`}
                 role="dialog"
                 aria-modal="true"

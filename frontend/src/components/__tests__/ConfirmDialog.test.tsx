@@ -58,6 +58,26 @@ describe('the confirm dialog', () => {
     expect(lines).toEqual(['Delete it?'])
   })
 
+  it('cancels on Escape, as Cancel does, and never runs what it asks about', async () => {
+    let deleted = false
+    const answer = showConfirm('Delete this loan?', {
+      confirmText: 'Delete',
+      danger: true,
+      onConfirm: () => {
+        deleted = true
+        return Promise.resolve()
+      },
+    })
+    shown()
+    await new Promise((r) => setTimeout(r, 0))
+    ;(document.activeElement ?? document.body).dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+    )
+    await expect(answer).resolves.toBe(false)
+    expect(deleted).toBe(false)
+    expect(confirmRequests()).toHaveLength(0)
+  })
+
   it('makes its buttons 44px tall on a phone', () => {
     const css = readFileSync(resolve(__dirname, '../ConfirmDialog.module.css'), 'utf8').replace(
       /\/\*[\s\S]*?\*\//g,

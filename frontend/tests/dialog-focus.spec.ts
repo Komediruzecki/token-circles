@@ -7,8 +7,9 @@ import { login, navigateToRoute } from './test-helpers'
  * Focus used to stay on the button that opened a dialog, behind it: `autofocus` works only while a
  * page loads, never on a dialog put on the page later, and most dialogs had nothing else. Tab then
  * walked the page under the dialog, and a screen reader read none of it. Each case opens one
- * dialog the way a person does, checks focus is in it, shuts it with Escape or its Cancel, and
- * checks focus is back on what opened it.
+ * dialog the way a person does, checks focus is in it, shuts it, and checks focus is back on what
+ * opened it. A dialog with a Cancel or a Close is shut both ways: with that, then with Escape, which
+ * shuts only the dialog on top.
  */
 
 /** Whether focus is on `inside` or somewhere within it. */
@@ -21,7 +22,7 @@ interface Trip {
   open?: () => Promise<void>
   /** The dialog, or the field in it that takes focus. */
   inside: Locator
-  /** Escape, or the control that shuts it. */
+  /** Escape, or the control that shuts it: then it is shut once with that and once with Escape. */
   shut: 'Escape' | Locator
   /** Where focus goes back to, when that is not the opener. */
   back?: Locator
@@ -29,17 +30,22 @@ interface Trip {
   shutDone?: () => Promise<void>
 }
 
-async function roundTrip(page: Page, trip: Trip) {
+async function openAndShut(page: Page, trip: Trip, shut: 'Escape' | Locator) {
   await (trip.open ? trip.open() : trip.opener.click())
   await expect(trip.inside).toBeVisible()
   await expect
     .poll(() => holdsFocus(trip.inside), { message: `focus is in what ${trip.opener} opened` })
     .toBe(true)
 
-  if (trip.shut === 'Escape') await page.keyboard.press('Escape')
-  else await trip.shut.click()
+  if (shut === 'Escape') await page.keyboard.press('Escape')
+  else await shut.click()
   await (trip.shutDone ? trip.shutDone() : expect(trip.inside).toBeHidden())
   await expect(trip.back ?? trip.opener).toBeFocused()
+}
+
+async function roundTrip(page: Page, trip: Trip) {
+  await openAndShut(page, trip, trip.shut)
+  if (trip.shut !== 'Escape') await openAndShut(page, trip, 'Escape')
 }
 
 /** A form's Cancel, found by a field only that form has. */
@@ -131,12 +137,26 @@ test.describe('every dialog takes focus and gives it back @smoke', () => {
     await add.click()
     await expect.poll(() => holdsFocus(bill)).toBe(true)
     const categoryName = page.getByPlaceholder('e.g., Utilities, Entertainment')
+    const addCategory = bill.getByRole('button', { name: /Add Category/ })
     await roundTrip(page, {
-      opener: bill.getByRole('button', { name: /Add Category/ }),
+      opener: addCategory,
       inside: categoryName,
       shut: cancelBeside(page, categoryName),
     })
     await bill.getByRole('button', { name: 'Cancel' }).click()
+    await expect(add).toBeFocused()
+
+    // Escape shuts only the dialog on top: Add Category, then Add bill.
+    await add.click()
+    await expect.poll(() => holdsFocus(bill)).toBe(true)
+    await addCategory.click()
+    await expect.poll(() => holdsFocus(categoryName)).toBe(true)
+    await page.keyboard.press('Escape')
+    await expect(categoryName).toBeHidden()
+    await expect(bill).toBeVisible()
+    await expect(addCategory).toBeFocused()
+    await page.keyboard.press('Escape')
+    await expect(bill).toBeHidden()
     await expect(add).toBeFocused()
 
     // The scan and the catalog are on the Subscriptions tab.
@@ -252,6 +272,7 @@ test.describe('every dialog takes focus and gives it back @smoke', () => {
     await category.getByRole('button', { name: 'Cancel' }).click()
     await expect(category).toBeHidden()
     await expect(add).toBeFocused()
+    await roundTrip(page, { opener: add, inside: category, shut: 'Escape' })
 
     const budgetAmount = page.getByPlaceholder('500.00')
     await roundTrip(page, {
@@ -292,7 +313,9 @@ test.describe('every dialog takes focus and gives it back @smoke', () => {
     })
 
     // The menu puts focus back on its button before Delete runs, so that is what opened it.
-    const menu = page.getByTestId('loans-item-menu').first()
+    const menus = page.getByTestId('loans-item-menu')
+    const loans = await menus.count()
+    const menu = menus.first()
     const confirm = page.getByRole('alertdialog')
     await roundTrip(page, {
       opener: menu,
@@ -303,6 +326,8 @@ test.describe('every dialog takes focus and gives it back @smoke', () => {
       inside: confirm,
       shut: page.getByTestId('confirm-cancel'),
     })
+    // Escape cancelled the delete: it never confirms.
+    await expect(menus).toHaveCount(loans)
   })
 
   test('The shell: Dashboard Views, Take a Tour, Create Profile, the period and Quick add', async ({

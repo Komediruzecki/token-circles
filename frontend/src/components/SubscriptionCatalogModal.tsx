@@ -393,7 +393,11 @@ export function SubscriptionCatalogModal(props: SubscriptionCatalogModalProps) {
   // Stays on the page while shut, faded out: focus goes in each time it opens and back each time
   // it shuts.
   let modalRef: HTMLDivElement | undefined
-  dialogFocusWhile(props.isOpen, () => modalRef)
+  dialogFocusWhile(props.isOpen, () => modalRef, {
+    onEscape: () => {
+      props.onClose()
+    },
+  })
 
   return (
     <div

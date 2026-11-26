@@ -389,7 +389,9 @@ export default function HousingForm() {
       {/* Add Housing Modal */}
       {showAddModal() && (
         <div
-          ref={dialogFocus}
+          ref={(el) => {
+            dialogFocus(el, { onEscape: () => setShowAddModal(false) })
+          }}
           class={styles.modalOverlay}
           role="dialog"
           aria-modal="true"

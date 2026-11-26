@@ -385,7 +385,13 @@ export default function Portfolio() {
           }}
         >
           <div
-            ref={dialogFocus}
+            ref={(el) => {
+              dialogFocus(el, {
+                onEscape: () => {
+                  holdingForm.close()
+                },
+              })
+            }}
             data-test-id="portfolio-modal"
             class={styles.modal}
             onclick={(e) => {

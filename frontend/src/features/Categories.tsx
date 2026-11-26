@@ -486,7 +486,9 @@ export default function Categories() {
           }}
         >
           <div
-            ref={dialogFocus}
+            ref={(el) => {
+              dialogFocus(el, { onEscape: closeCategoryModal })
+            }}
             class={styles.modal}
             onclick={(e) => {
               e.stopPropagation()
@@ -729,7 +731,9 @@ export default function Categories() {
           }}
         >
           <div
-            ref={dialogFocus}
+            ref={(el) => {
+              dialogFocus(el, { onEscape: closeBudgetModal })
+            }}
             class={styles.modal}
             onclick={(e) => {
               e.stopPropagation()

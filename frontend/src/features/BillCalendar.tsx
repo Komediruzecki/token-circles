@@ -332,7 +332,9 @@ const BillCalendar: Component = () => {
       <Show when={selectedDay() !== null && selectedBills().length > 0}>
         <div class={styles.popoverBackdrop} onClick={closePopover} />
         <div
-          ref={dialogFocus}
+          ref={(el) => {
+            dialogFocus(el, { onEscape: closePopover })
+          }}
           class={styles.popover}
           style={popoverStyle()}
           role="dialog"

@@ -109,7 +109,13 @@ export default function ChangelogModal(props: { onClose: () => void }) {
   return (
     <div class={styles.overlay} onClick={props.onClose}>
       <div
-        ref={dialogFocus}
+        ref={(el) => {
+          dialogFocus(el, {
+            onEscape: () => {
+              props.onClose()
+            },
+          })
+        }}
         class={styles.modal}
         role="dialog"
         aria-modal="true"

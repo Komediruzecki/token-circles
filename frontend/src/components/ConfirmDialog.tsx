@@ -32,7 +32,13 @@ export default function ConfirmDialog() {
             }}
           >
             <div
-              ref={dialogFocus}
+              ref={(el) => {
+                dialogFocus(el, {
+                  onEscape: () => {
+                    resolveConfirm(req().id, false)
+                  },
+                })
+              }}
               class={styles.dialog}
               role="alertdialog"
               aria-modal="true"

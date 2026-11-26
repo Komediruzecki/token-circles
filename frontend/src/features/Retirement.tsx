@@ -371,7 +371,9 @@ export default function Retirement() {
       {/* Add/Edit Modal */}
       {showAddModal() && (
         <div
-          ref={dialogFocus}
+          ref={(el) => {
+            dialogFocus(el, { onEscape: closeGoalModal })
+          }}
           data-test-id="retirement-modal-overlay"
           class={styles.modalOverlay}
           role="dialog"

@@ -623,7 +623,9 @@ export default function Goals() {
       {/* Add/Edit Modal */}
       {showAddModal() && (
         <div
-          ref={dialogFocus}
+          ref={(el) => {
+            dialogFocus(el, { onEscape: closeGoalModal })
+          }}
           data-test-id="goals-modal"
           class={styles.modalOverlay}
           role="dialog"
@@ -815,7 +817,9 @@ export default function Goals() {
       {/* Add Category Modal (from goal creation) */}
       {showCategoryModal() && (
         <div
-          ref={dialogFocus}
+          ref={(el) => {
+            dialogFocus(el, { onEscape: () => setShowCategoryModal(false) })
+          }}
           class={styles.modalOverlay}
           role="dialog"
           aria-modal="true"

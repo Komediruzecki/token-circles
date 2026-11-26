@@ -1208,7 +1208,9 @@ export default function Budgets() {
           }}
         >
           <div
-            ref={dialogFocus}
+            ref={(el) => {
+              dialogFocus(el, { onEscape: () => setShowAllocateModal(false) })
+            }}
             data-test-id="budgets-allocate-modal"
             class={`${styles.modal} ${styles.modalSmall}`}
             onClick={(e) => {
@@ -1321,7 +1323,9 @@ export default function Budgets() {
           }}
         >
           <div
-            ref={dialogFocus}
+            ref={(el) => {
+              dialogFocus(el, { onEscape: closeCatModal })
+            }}
             class={styles.modal}
             onClick={(e) => {
               e.stopPropagation()
@@ -1467,7 +1471,9 @@ export default function Budgets() {
           }}
         >
           <div
-            ref={dialogFocus}
+            ref={(el) => {
+              dialogFocus(el, { onEscape: closeCatBudgetModal })
+            }}
             class={styles.modal}
             onClick={(e) => {
               e.stopPropagation()

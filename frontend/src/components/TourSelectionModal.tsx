@@ -26,7 +26,9 @@ export default function TourSelectionModal() {
   return (
     <div class={styles.overlay} onClick={() => setShowTourSelection(false)}>
       <div
-        ref={dialogFocus}
+        ref={(el) => {
+          dialogFocus(el, { onEscape: () => setShowTourSelection(false) })
+        }}
         class={styles.modal}
         role="dialog"
         aria-modal="true"
