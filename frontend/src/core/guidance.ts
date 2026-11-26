@@ -14,7 +14,9 @@
  *   before every answer. Read again after each settings write (`entityVersion('settings')`) and
  *   each save of the retirement plan (`entityVersion('retirement')`).
  * - **The profile's holdings** (`GET /api/portfolio/holdings`), at what was paid for them, as both
- *   runtimes value them; read again after each portfolio write.
+ *   runtimes value them; read again after each portfolio write. The household's list, shared with
+ *   the Dashboard's portfolio list (core/portfolioHoldings.ts), so the page asks for it once; this
+ *   profile's rows are picked from it by `profile_id`.
  * - **The base currency** (`getLocalCurrency`), for the region and the answers given in a currency.
  *
  * Working the circles out reads every entry, so it happens only for someone who can see it: while
@@ -37,14 +39,15 @@ import { orientationSteps } from '../../../shared/orientation'
 import { normalizeSettings } from '../../../shared/retirementSettings'
 import { snapshot } from './achievementsStore'
 import { afterPaint } from './afterPaint'
-import { api, apiGet, formatWholeCurrency, getLocalCurrency } from './api'
+import { api, formatWholeCurrency, getLocalCurrency } from './api'
 import { activeProfileId } from './apiProfileScope'
 import { getPage, getProfileVersion } from './appStore'
-import { entityVersion } from './dataVersions'
+import { __forgetSharedReadForTest, entityVersion } from './dataVersions'
 import { answersIn } from './guidanceAnswers'
 import { benchmarksShown } from './guidanceGate'
 import { orientationFactsOnce } from './orientationOnce'
 import { refetchOnActive } from './pageVisibility'
+import { HOLDINGS_PATH, householdHoldings } from './portfolioHoldings'
 import { getStorageMode } from './storage/storageFactory'
 import type { Answers } from '../../../shared/guidance/answers'
 import type { Placement } from '../../../shared/guidance/circles'
@@ -145,7 +148,7 @@ async function loadInputs(profileId: number): Promise<void> {
   const load = ++loads
   const [settings, holdings] = await Promise.all([
     api.getSettings().catch(() => null),
-    apiGet('/api/portfolio/holdings').then(
+    householdHoldings().then(
       (rows) => holdingsOf(rows, profileId),
       () => null
     ),
@@ -229,6 +232,7 @@ type GuidanceRegionImports = Parameters<typeof chooseRegion>[0]['imports']
 /** Forget every profile's inputs and circles. Tests only. */
 export function __resetGuidanceForTest(): void {
   loads++
+  __forgetSharedReadForTest(HOLDINGS_PATH)
   state.setInputs(null)
   state.setView(null)
 }

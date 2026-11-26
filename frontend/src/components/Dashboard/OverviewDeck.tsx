@@ -11,6 +11,7 @@ import { apiHouseholdGet, formatCurrency, formatDate, getLocalCurrency } from '.
 import { useAppState } from '../../core/appStore'
 import { entityVersion } from '../../core/dataVersions'
 import { gatedSource } from '../../core/pageVisibility'
+import { householdHoldings } from '../../core/portfolioHoldings'
 import SankeyChart from '../SankeyChart'
 import styles from './OverviewDeck.module.css'
 import Sparkline from './Sparkline'
@@ -98,7 +99,8 @@ export default function OverviewDeck(props: OverviewDeckProps) {
   const [portfolio] = createResource(
     gatedSource('dashboard', () => ({ pv: state.profileVersion, v: entityVersion('portfolio') })),
     async () => {
-      const holdings = await apiHouseholdGet<Holding[]>('/api/portfolio/holdings')
+      // Shared with the circles on this page, which read the same list: one request for both.
+      const holdings = await householdHoldings<Holding[]>()
       const rows = (Array.isArray(holdings) ? holdings : [])
         .map((h) => ({ ...h, value: h.shares * h.purchase_price }))
         .sort((a, b) => b.value - a.value)

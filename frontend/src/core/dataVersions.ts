@@ -22,10 +22,11 @@
  * defers its refetch until it is shown. This file adds the missing edge to the reactive graph; it
  * does not change when anyone acts on it.
  *
- * NOT a cache. Reads still go to the network/IndexedDB every time, exactly as before. Request
- * de-duplication and scope-keyed caching are the next step, and they attach at the same seam.
+ * NOT a cache. Reads still go to the network/IndexedDB every time, exactly as before, with one
+ * exception that attaches at the same seam: `sharedRead`, for an endpoint that two readers on one
+ * page both ask for. It keeps an answer only until the next write to what it reads.
  */
-import { batch, createSignal } from 'solid-js'
+import { batch, createSignal, untrack } from 'solid-js'
 import { isUserStatePath } from '../../../shared/accountStateKeys'
 import { isReadSentAsPost } from './readsSentAsPost'
 import type { Accessor, Setter } from 'solid-js'
@@ -282,8 +283,51 @@ export function trackedEntities(): string[] {
   return [...slots.keys()]
 }
 
+/** Per endpoint, the last answer and the question it answered (scope and versions). */
+const sharedReads = new Map<string, { asked: string; answer: Promise<unknown> }>()
+
+/**
+ * One read for every reader that asks the same question between the same two writes.
+ *
+ * Two readers that follow the same entity refetch on the same bump. When they ask the same
+ * endpoint, the second gets the first one's answer instead of sending the request again: the
+ * Dashboard's portfolio list and its circles both read `GET /api/portfolio/holdings`, and every
+ * portfolio write, resume and next show asked it twice.
+ *
+ * `scope` says whose data is asked for (the profiles, the storage mode): an answer for another
+ * scope is never handed out. `tags` are what the answer reads, and an answer is handed out only
+ * while none of their counters has moved since it was asked, so the next write, resume or
+ * reconnect asks again. A read that fails is forgotten at once, so the next reader asks again too.
+ * One answer is kept per endpoint. Every reader gets the same object: treat it as read-only.
+ *
+ * Not tracked: the readers already track the counters that tell them when to read.
+ */
+export function sharedRead<T>(
+  endpoint: string,
+  scope: string,
+  tags: readonly string[],
+  read: () => Promise<T>
+): Promise<T> {
+  const versions = untrack(() => tags.map((tag) => `${tag}:${String(entityVersion(tag))}`))
+  const asked = JSON.stringify([scope, versions])
+  const held = sharedReads.get(endpoint)
+  if (held?.asked === asked) return held.answer as Promise<T>
+  const entry = { asked, answer: read() as Promise<unknown> }
+  sharedReads.set(endpoint, entry)
+  entry.answer.catch(() => {
+    if (sharedReads.get(endpoint) === entry) sharedReads.delete(endpoint)
+  })
+  return entry.answer as Promise<T>
+}
+
+/** Test-only: forget the answer `sharedRead` keeps for `endpoint`. */
+export function __forgetSharedReadForTest(endpoint: string): void {
+  sharedReads.delete(endpoint)
+}
+
 /** Test-only: forget every counter so one test's bumps cannot leak into the next. */
 export function __resetDataVersionsForTest(): void {
   slots.clear()
   heldTags.clear()
+  sharedReads.clear()
 }

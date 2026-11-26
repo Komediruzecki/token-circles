@@ -52,7 +52,9 @@ vi.mock('../api', async (importOriginal) => ({
       return { ...net.settings }
     },
   },
-  apiGet: async (url: string) => {
+  // The holdings are read for the household (core/portfolioHoldings.ts), shared with the
+  // Dashboard's portfolio list.
+  apiHouseholdGet: async (url: string) => {
     if (url === '/api/portfolio/holdings') {
       net.holdingsReads++
       return net.holdings

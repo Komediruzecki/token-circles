@@ -303,16 +303,6 @@ for (const [pass, test] of both) {
       const housingDot = () => dotAbove(shownPage(page).getByText(sub, { exact: true }))
 
       // Each shows the category as it is now.
-      // Not a 5.16 regression: v5.15.1 has the same handlers. In local-first nothing joins a
-      // recurring row or a subscription to its category: recurringList returns the stored rows
-      // and billsList (core/storage/handlers/bills.ts:48) the stored bill, and no create path
-      // writes `category_name`/`category_color` onto either. So these views never show a
-      // category's colour, before a rename or after it.
-      // Marked here, not at the top: a failure before this point is retried, not taken for the bug.
-      test.fail(
-        m.kind === 'local',
-        'local-first: recurring rows and subscriptions carry no category colour (since 5.15.1)'
-      )
       await expect.poll(() => backgroundOf(cardDot)).toBe(rgb(before))
       await goPage(page, 'transactions', 'transactions-header')
       await recurringSection(page).getByRole('heading', { name: 'Recurring Transactions' }).click()
@@ -351,14 +341,8 @@ for (const [pass, test] of both) {
       })
       await reloadOn(page, 'bills', 'bills-header')
       await openBillCalendar(page)
-      // Local-first: as in 2.17, no bill carries its category. billsCalendar
-      // (core/storage/handlers/bills.ts:147) reads `category_name`/`category_color` off the
-      // stored bill row, which no create path writes. Same in v5.15.1.
-      // Marked here, not at the top: a failure before this point is retried, not taken for the bug.
-      test.fail(
-        m.kind === 'local',
-        'local-first: bills carry no category name or colour (since 5.15.1)'
-      )
+      // Both modes join a bill to its category: the Worker's calendar route, and local-first's
+      // billsCalendar (core/storage/handlers/bills.ts:147) since #606.
       await expect.poll(() => backgroundOf(calendarDot(page, bill))).toBe(rgb(before))
       const row = await calendarPopoverRow(page, bill)
       await expect(row).toContainText(oldName)
@@ -368,17 +352,18 @@ for (const [pass, test] of both) {
 
       // Back on Bills, the calendar still open: its dot and its popover follow.
       await showFollower(m, 'bills', 'bills-header', [/^\/api\/bills\/calendar/])
-      // Cloud: the calendar refetches on the category write (it tracks `categories` since #578,
-      // and the refetched month carries the new name and colour), but the grid does not redraw.
-      // BillCalendar.tsx:255-257 renders the days with <For each={daysArray()}> over day numbers
-      // and reads `cal()!.days[String(day)]` once, when a day's cell is created; a refetch of the
-      // same month gives the same day numbers, so every cell keeps the bills it read first, and
-      // the day popover is opened with that same array. Reopening the calendar shows the new
-      // data. The grid code is the same in v5.15.1, where nothing refetched an open calendar.
+      // The calendar refetches on the category write in both modes (it tracks `categories` since
+      // #578, and the refetched month carries the new name and colour), but the grid does not
+      // redraw. features/BillCalendar.tsx:256-258 renders the days with <For each={daysArray()}>
+      // over day numbers and reads `cal()!.days[String(day)]` once, when a day's cell is created;
+      // a refetch of the same month gives the same day numbers, so every cell keeps the bills it
+      // read first, and the day popover is opened with that same array. Reopening the calendar
+      // shows the new data. The grid code is the same in v5.15.1, where nothing refetched an open
+      // calendar.
       // Marked here, not at the top: a failure before this point is retried, not taken for the bug.
       test.fail(
-        m.kind === 'cloud',
-        'the open bill calendar keeps its old bills after a refetch (BillCalendar.tsx:257)'
+        true,
+        'the open bill calendar keeps its old bills after a refetch (BillCalendar.tsx:258)'
       )
       await expect.poll(() => backgroundOf(calendarDot(page, bill))).toBe(rgb(after))
       const renamed = await calendarPopoverRow(page, bill)
