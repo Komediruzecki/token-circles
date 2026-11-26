@@ -2667,6 +2667,15 @@ check')` first, as the cushion and debt cases do.
   With the two joins taken out again, the local case fails at its first colour check (the slate
   fallback instead of the category's blue), so the case guards them.
 
+- **Release case s02b 2.17b pins the stale calendar cells in both modes, and nothing else.** It had
+  two pins: local-first "bills carry no category name or colour" before the first colour check, and
+  cloud "the open bill calendar keeps its old bills after a refetch" before the check after the
+  rename. Since #606 local-first bills carry their category, so the local run passed the first check
+  and failed at the second, which only the cloud pin described. One `test.fail(true, ...)` now sits
+  at that check (`features/BillCalendar.tsx:256-258` reads each day's bills once), its comment and
+  the README row no longer say local-first has no colour. With the pin off, both modes fail at that
+  check and nowhere earlier (expected `rgb(224, 112, 138)`, received `rgb(110, 155, 255)`).
+
 ### Found in the first-week test run (3 Nov)
 
 What the 3 Nov test run and the functionality review after it found in the first week's changes,

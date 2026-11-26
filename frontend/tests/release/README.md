@@ -65,12 +65,12 @@ A confirmed bug that the release does not fix is recorded with `test.fail(condit
 stays green while the bug exists and turns red, "expected to fail, but passed", the day it is fixed. Remove the
 line in the PR that fixes it.
 
-| Case       | Mode  | Bug                                                                                                                  |
-| ---------- | ----- | -------------------------------------------------------------------------------------------------------------------- |
-| s02 2.7b   | both  | An open bill calendar keeps a paid bill's "upcoming" dot: its cells read each day once (`BillCalendar.tsx:255`)      |
-| s02b 2.17b | both  | The same stale cells keep a renamed category's old name and colour; in local-first the calendar has no colour at all |
-| s02b 2.14b | cloud | Analytics fetches `stats/monthly` and `category-trends` twice per refresh                                            |
-| s11 11.4b  | both  | The subscription catalog keeps the currency it was first drawn in (5.16.1's fix is incomplete)                       |
+| Case       | Mode  | Bug                                                                                                             |
+| ---------- | ----- | --------------------------------------------------------------------------------------------------------------- |
+| s02 2.7b   | both  | An open bill calendar keeps a paid bill's "upcoming" dot: its cells read each day once (`BillCalendar.tsx:255`) |
+| s02b 2.17b | both  | The same stale cells keep a renamed category's old name and colour                                              |
+| s02b 2.14b | cloud | Analytics fetches `stats/monthly` and `category-trends` twice per refresh                                       |
+| s11 11.4b  | both  | The subscription catalog keeps the currency it was first drawn in (5.16.1's fix is incomplete)                  |
 
 ## Conventions
 
