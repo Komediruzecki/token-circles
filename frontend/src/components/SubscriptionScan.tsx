@@ -72,6 +72,22 @@ interface CategoryRow extends KindedCategory {
   profile_id?: number | null
 }
 
+interface ChargeRow extends DetectableTransaction {
+  /** Both runtimes answer it; a row without one is taken as the current profile's. */
+  profile_id?: number | null
+}
+
+/**
+ * The rows of the profile the scan adds to, the active one. With the data kept in this browser, a
+ * household's lists answer every chosen profile's rows; the Worker answers the scan this profile's.
+ */
+function ofActiveProfile<Row extends { profile_id?: number | null }>(rows: readonly Row[]): Row[] {
+  const profile = activeProfileId()
+  return rows.filter(
+    (r) => r.profile_id === null || r.profile_id === undefined || r.profile_id === profile
+  )
+}
+
 export interface SubscriptionScanPanelProps {
   /** Panel scans when this turns true (and on explicit rescan). */
   active: () => boolean
@@ -176,7 +192,8 @@ export function SubscriptionScanPanel(props: SubscriptionScanPanelProps) {
       ])
       // listRows, not Array.isArray: the server-mode /api/transactions response
       // is a { rows, total } envelope — a bare-array assumption scans nothing.
-      const txns = listRows<DetectableTransaction>(txnsRes)
+      // Only this profile's charges: what the scan finds becomes this profile's bill.
+      const txns = ofActiveProfile(listRows<ChargeRow>(txnsRes))
       const bills = listRows<BillRow>(billsRes)
       const cats = listRows<CategoryRow>(catsRes)
       setCategories(cats)
@@ -253,14 +270,9 @@ export function SubscriptionScanPanel(props: SubscriptionScanPanelProps) {
   /**
    * The categories a row's bill can be filed under: those of the profile it goes to, the one the
    * add writes to. With the data kept in this browser, a household's scan reads every chosen
-   * profile's categories (and charges), and both runtimes refuse a bill on another profile's.
+   * profile's categories, and both runtimes refuse a bill on another profile's.
    */
-  const ownCategories = () => {
-    const profile = activeProfileId()
-    return categories().filter(
-      (c) => c.profile_id === null || c.profile_id === undefined || c.profile_id === profile
-    )
-  }
+  const ownCategories = () => ofActiveProfile(categories())
 
   const named = (cats: readonly CategoryRow[], name: string) =>
     cats.find((c) => c.name.toLowerCase() === name.toLowerCase())

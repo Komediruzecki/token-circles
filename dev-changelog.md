@@ -3130,6 +3130,18 @@ check')` first, as the cushion and debt cases do.
     payment filed under the other profile's Housing goes under the active profile's and is still a
     bill, and one whose category has no namesake here goes under none (before: 22 for 12). With
     the active-profile filter taken out both fail; with the same-name match taken out, the second.
+  - **Round 6: the scan reads only the active profile's charges.** In local-first
+    `GET /api/transactions` answers every selected profile's rows (the list handlers read the
+    selection), so a household's scan proposed another profile's subscriptions as bills for the
+    active one, and Add put them there. `ofActiveProfile` (`SubscriptionScan.tsx`) keeps the
+    charges of the active profile, as the Worker answers the scan, and `ownCategories` uses it too.
+    A row without a `profile_id` counts as the active profile's; both runtimes send one. With only
+    another profile's charges, the scan says there is nothing to scan, as it does on the Worker.
+    The list handlers are unchanged: reading the scope there is a follow-up.
+    - **Tests:** `SubscriptionScan.localFirst.test.tsx`, on the real router and fake-indexeddb
+      with two profiles selected: the active profile's Spotify is found and the other's Netflix is
+      not (before: both), and with only the other profile's charges the scan says there is nothing
+      to scan (before: it proposed Netflix).
 - **The Bills header's buttons stay whole at every width.** Round 3 of the 19 Nov review. At
   820 px, beside the sidebar, Scan transactions, Browse catalog and Add Subscription took two lines
   each next to the title, and at 390 the third ran past the screen's edge: 60 px tall each at both
