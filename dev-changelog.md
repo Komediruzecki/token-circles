@@ -3474,6 +3474,32 @@ true, or is too small for one.
   Checked on 4.13.14 and 4.13.18 by asking the running Worker which router it chose.
   `security-hardening.test.ts` now pins that a 404 for a path holding an encoded line break carries
   the app-wide headers. The worker lockfile moved only hono, under pnpm 10.
+- Every open Dependabot update, as one owner PR with both lockfiles regenerated under pnpm 10:
+  `worker/` takes @simplewebauthn/server 14.1.0, hono 4.13.19, postal-mime 4.2.1 and
+  @cloudflare/workers-types 5.20261120.1 (#710, superseding #705); the frontend takes d3 7.9.2
+  (#709), chart.js 4.6.1 (#688), vite-plugin-pwa 2.0.0 (#631) and the 16 dev-tooling bumps of #703
+  (eslint 10.15.0, prettier 3.10.1, vitest 5.1.1, Playwright 1.65.1, typescript-eslint 8.73.0 and
+  the rest). vite-plugin-pwa 2.0.0 has no source change from 1.3.0, only a wider optional peer
+  range and a Node 20.19 floor; the build is byte-identical with either. Prettier 3.10.1 reformats
+  nothing. vite-plugin-solid 2.11.17 inlines solid-js in jsdom tests where 2.11.14 kept it
+  external, and an inlined runtime is reset by `vi.resetModules()`: a component imported after the
+  reset ran on a second Solid and its onMount never fired, failing 127 tests in 11 files.
+  `vitest.config.ts` now externalises solid-js itself, as the plugin used to.
+- Dependabot alerts #64 (minimatch, GHSA-g3hv-75wg-m249) and #62 (glob, GHSA-3g3m-2fjr-6pw4), both
+  build or lint time. eslint-plugin-sonarjs 4.2.3 moves to minimatch 11, and eslint-plugin-import-x
+  is deduped onto it. glob comes only from workbox-build 7.4.1, the latest, which still asks for
+  glob 11, so the overrides get a floor scoped to the vulnerable range,
+  `"glob@>=9.0.0 <14.0.2": "14.0.2"`; the service worker and its 153 precache entries build
+  byte-identical with glob 11 and 14. sonarjs 4.2.3 adds `no-fixed-wait-in-tests`, which flags five
+  `waitForTimeout` calls in the E2E helpers: each carries an inline disable with its reason, and
+  the rule stays on for new code.
+- The pnpm overrides are now also listed in `pnpm-workspace.yaml`, and `worker/` has its own
+  `pnpm-workspace.yaml` with the worker's. Dependabot writes lockfiles with pnpm 11, which reads
+  overrides only from that file, so every lockfile it wrote since October came without the
+  overrides block, and CI's frozen pnpm 10 install refused it with
+  `ERR_PNPM_LOCKFILE_CONFIG_MISMATCH`. package.json keeps its lists too, because pnpm 10 with
+  `--ignore-workspace` (how CI installs `worker/`) reads only package.json.
+  `pnpmOverridesInSync.test.ts` fails when the two lists drift, at the root or in `worker/`.
 
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
