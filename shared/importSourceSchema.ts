@@ -79,12 +79,18 @@ export function sourceJsonObject(
 /** The longest name a source may have. */
 export const IMPORT_SOURCE_LABEL_MAX = 200;
 
+/**
+ * How to share a sheet so both runtimes can read it: by its link. The words for a "Publish to
+ * web" link, and local-first's answer for a sheet the browser could not read, both say it.
+ */
+export const SHARE_SHEET_BY_LINK =
+  'In Google Sheets, choose Share, set General access to "Anyone with the link", and paste that link instead.';
+
 /** The words for each refusal. A form shows them under the field; a summary joins them. */
 export const IMPORT_SOURCE_MESSAGES = {
   url: 'Paste the link to a Google Sheet. It starts with https://docs.google.com/spreadsheets/d/.',
   // A link from Publish to web (/d/e/2PACX-...): neither runtime can fetch one.
-  published:
-    'A "Publish to web" link can\'t be read. In Google Sheets, choose Share, set General access to "Anyone with the link", and paste that link instead.',
+  published: `A "Publish to web" link can't be read. ${SHARE_SHEET_BY_LINK}`,
   label: 'Give the source a name as text, or leave it blank.',
   labelLength: `Keep the name to ${IMPORT_SOURCE_LABEL_MAX} characters or fewer.`,
   kind: 'Choose google_sheet, google_drive_folder or bank_aggregator.',

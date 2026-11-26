@@ -18,7 +18,7 @@ import {
   unreadableNumbersReason,
 } from '../../../../../shared/importRowChecks'
 import { importRowLabel } from '../../../../../shared/importRowLabel'
-import { checkSheetFetch } from '../../../../../shared/importSourceSchema'
+import { checkSheetFetch, SHARE_SHEET_BY_LINK } from '../../../../../shared/importSourceSchema'
 import { IMPORT_UPLOAD_MESSAGES, uploadRefusal } from '../../../../../shared/importUpload'
 import { refusalOf } from '../../../../../shared/refusal'
 import { transactionInvariantError } from '../../../../../shared/transactionInvariant'
@@ -486,10 +486,9 @@ export async function importGoogleSheet(body: unknown): Promise<Response> {
     return json(
       {
         error: 'Could not access the Google Sheet from the browser.',
-        message:
-          'To import this sheet, either: (1) Publish it to the web (File → Share → Publish to web), ' +
-          'or (2) Set sharing to "Anyone with the link can view", ' +
-          'or (3) Download as CSV and use the File Upload tab.',
+        // What the link's own refusal says (M.published): share the sheet by its link. It said to
+        // publish it first, and the link Publish to web gives is the one the field refuses.
+        message: `${SHARE_SHEET_BY_LINK} Or download the sheet as CSV and use the File Upload tab.`,
         serverlessMode: true,
       },
       422

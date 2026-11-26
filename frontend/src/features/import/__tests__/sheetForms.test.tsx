@@ -14,7 +14,10 @@
 import { createRoot } from 'solid-js'
 import { render } from 'solid-js/web'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { IMPORT_SOURCE_MESSAGES as M } from '../../../../../shared/importSourceSchema'
+import {
+  IMPORT_SOURCE_MESSAGES as M,
+  SHARE_SHEET_BY_LINK,
+} from '../../../../../shared/importSourceSchema'
 import { setPage } from '../../../core/appStore'
 import { __resetDataVersionsForTest } from '../../../core/dataVersions'
 import { getDB } from '../../../core/storage/idb'
@@ -23,9 +26,10 @@ import { SHEET_EMPTY } from '../importFlow'
 import type { apiFetch as ApiFetch } from '../../../core/apiFetch'
 import type { ImportFlow } from '../importFlow'
 
-/** What reached the router, and an answer to give instead of the router's, once. */
+/** What reached the router, what it answered, and an answer to give instead of its own, once. */
 const net = vi.hoisted(() => ({
   sent: [] as string[],
+  answers: [] as Array<{ path: string; status: number; body: unknown }>,
   answerOnce: null as null | { path: string; response: () => Response },
 }))
 
@@ -41,7 +45,15 @@ vi.mock('../../../core/apiFetch', async (importOriginal) => {
         net.answerOnce = null
         return response()
       }
-      return real.apiFetch(url, init)
+      const answer = await real.apiFetch(url, init)
+      if (method !== 'GET') {
+        const body: unknown = await answer
+          .clone()
+          .json()
+          .catch(() => null)
+        net.answers.push({ path: url, status: answer.status, body })
+      }
+      return answer
     },
   }
 })
@@ -123,6 +135,7 @@ beforeEach(async () => {
   await db.add('profiles', { id: 1, name: 'Household', created_at: '2026-01-01T00:00:00.000Z' })
   for (const toast of toasts()) removeToast(toast.id)
   net.sent.length = 0
+  net.answers.length = 0
   net.answerOnce = null
   vi.stubGlobal('fetch', vi.fn(google))
   Element.prototype.scrollIntoView = () => {}
@@ -272,6 +285,13 @@ describe('Connected Sources: Add a sheet', () => {
     })
     expect(describedBy(urlInput())).toContain('Could not access the Google Sheet from the browser.')
     expect(net.sent).toEqual(['POST /api/import/googlesheet'])
+    // Its advice is the link's own: share it by its link. It asked for Publish to web, whose link
+    // the field refuses (M.published).
+    const [answer] = net.answers
+    expect(answer).toMatchObject({ path: '/api/import/googlesheet', status: 422 })
+    const { message } = answer.body as { message: string }
+    expect(message).toContain(SHARE_SHEET_BY_LINK)
+    expect(message).not.toMatch(/publish/i)
     expect(await storedSources()).toEqual([])
     expect(failureToasts()).toEqual([])
     expect(byTestId('source-add-form')).not.toBeNull()

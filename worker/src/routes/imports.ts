@@ -54,8 +54,9 @@ export function parseCsv(text: string): { headers: string[]; rows: string[][] } 
 // What's ported (pure DB / pure-JS text work — Workers-safe):
 //   - POST /api/import/execute    — insert transactions (+ create accounts/categories
 //                                   on the fly) from an already-parsed JSON `rows` array.
-//   - POST /api/import/googlesheet — fetch a published Google Sheet as CSV and parse it
-//                                   in pure JS (preview only; the actual insert is /execute).
+//   - POST /api/import/googlesheet — fetch a Google Sheet shared by its link as its CSV export
+//                                   and parse it in pure JS (preview only; the actual insert is
+//                                   /execute). A "Publish to web" link is refused at the link.
 //
 // What's left 501 (needs a Workers-compatible spreadsheet parser + R2/upload handling):
 //   - POST /api/import/upload      — multipart xlsx/csv FILE upload + SheetJS parse.
@@ -274,7 +275,7 @@ importRoutes.post('/api/import/file-sheet', requireAuth, async (c) => {
 /** A reason fetchGoogleSheetRows writes itself, safe to show in its 501. */
 class SheetUnreadable extends Error {}
 
-// ── fetchGoogleSheetRows — fetch + parse a published sheet as CSV (Workers-safe) ──
+// ── fetchGoogleSheetRows — fetch + parse a link-shared sheet's CSV export (Workers-safe) ──
 // Extracted from the HTTP handler so the route, the daily cron sync and email-in can all call
 // it. Returns a { status, body } pair. Pure-JS CSV path only; the XLSX fallback (multi-tab
 // enumeration) needs a spreadsheet parser and still surfaces as a 501-style error.
@@ -345,7 +346,7 @@ export async function fetchGoogleSheetRows(
   }
 }
 
-// ── POST /api/import/googlesheet — fetch + parse a published sheet as CSV ──────
+// ── POST /api/import/googlesheet — fetch + parse a link-shared sheet's CSV export ──
 importRoutes.post('/api/import/googlesheet', requireAuth, async (c) => {
   const rl = await enforce(c, `import:${c.get('userId')}`, 30, 300);
   if (rl) return rl;
