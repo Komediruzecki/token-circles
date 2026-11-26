@@ -1,3 +1,18 @@
 packages:
   - "packages/*"
   - "frontend"
+
+# The same overrides as package.json's "pnpm.overrides", in the place pnpm 11 reads them.
+#
+# Dependabot writes lockfiles with pnpm 11, which no longer reads "pnpm" settings from package.json.
+# CI installs with pnpm 10, frozen, and refuses any lockfile whose overrides block does not match
+# the overrides it is configured with (ERR_PNPM_LOCKFILE_CONFIG_MISMATCH). Listing them in both
+# places gives both majors the same block. Keep the two lists identical:
+# frontend/src/__tests__/pnpmOverridesInSync.test.ts fails when they drift.
+overrides:
+  "dompurify@<3.4.17": "3.4.17"
+  "fast-uri@<3.1.9": "3.1.9"
+  "glob@>=9.0.0 <14.0.2": "14.0.2"
+  "serialize-javascript@<7.1.3": "7.1.3"
+  "seroval@<1.6.11": "1.6.11"
+  "seroval-plugins@<1.6.11": "1.6.11"

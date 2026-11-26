@@ -80,6 +80,7 @@ export async function navigateToRoute(page: any, route: string) {
     waitUntil: 'domcontentloaded',
     timeout: 30000,
   })
+  // eslint-disable-next-line sonarjs/no-fixed-wait-in-tests -- a short pause before settleOnShell, which does the real wait
   await page.waitForTimeout(500)
   await settleOnShell(page)
 }
